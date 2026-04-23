@@ -9,38 +9,167 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VendasRouteImport } from './routes/vendas'
+import { Route as EventosRouteImport } from './routes/eventos'
+import { Route as DrinksRouteImport } from './routes/drinks'
+import { Route as ContratosRouteImport } from './routes/contratos'
+import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PosEventoEventoIdRouteImport } from './routes/pos-evento.$eventoId'
+import { Route as EventosEventoIdRouteImport } from './routes/eventos.$eventoId'
 
+const VendasRoute = VendasRouteImport.update({
+  id: '/vendas',
+  path: '/vendas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EventosRoute = EventosRouteImport.update({
+  id: '/eventos',
+  path: '/eventos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DrinksRoute = DrinksRouteImport.update({
+  id: '/drinks',
+  path: '/drinks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContratosRoute = ContratosRouteImport.update({
+  id: '/contratos',
+  path: '/contratos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PosEventoEventoIdRoute = PosEventoEventoIdRouteImport.update({
+  id: '/pos-evento/$eventoId',
+  path: '/pos-evento/$eventoId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EventosEventoIdRoute = EventosEventoIdRouteImport.update({
+  id: '/$eventoId',
+  path: '/$eventoId',
+  getParentRoute: () => EventosRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/contratos': typeof ContratosRoute
+  '/drinks': typeof DrinksRoute
+  '/eventos': typeof EventosRouteWithChildren
+  '/vendas': typeof VendasRoute
+  '/eventos/$eventoId': typeof EventosEventoIdRoute
+  '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/contratos': typeof ContratosRoute
+  '/drinks': typeof DrinksRoute
+  '/eventos': typeof EventosRouteWithChildren
+  '/vendas': typeof VendasRoute
+  '/eventos/$eventoId': typeof EventosEventoIdRoute
+  '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/contratos': typeof ContratosRoute
+  '/drinks': typeof DrinksRoute
+  '/eventos': typeof EventosRouteWithChildren
+  '/vendas': typeof VendasRoute
+  '/eventos/$eventoId': typeof EventosEventoIdRoute
+  '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/configuracoes'
+    | '/contratos'
+    | '/drinks'
+    | '/eventos'
+    | '/vendas'
+    | '/eventos/$eventoId'
+    | '/pos-evento/$eventoId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/configuracoes'
+    | '/contratos'
+    | '/drinks'
+    | '/eventos'
+    | '/vendas'
+    | '/eventos/$eventoId'
+    | '/pos-evento/$eventoId'
+  id:
+    | '__root__'
+    | '/'
+    | '/configuracoes'
+    | '/contratos'
+    | '/drinks'
+    | '/eventos'
+    | '/vendas'
+    | '/eventos/$eventoId'
+    | '/pos-evento/$eventoId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ConfiguracoesRoute: typeof ConfiguracoesRoute
+  ContratosRoute: typeof ContratosRoute
+  DrinksRoute: typeof DrinksRoute
+  EventosRoute: typeof EventosRouteWithChildren
+  VendasRoute: typeof VendasRoute
+  PosEventoEventoIdRoute: typeof PosEventoEventoIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/vendas': {
+      id: '/vendas'
+      path: '/vendas'
+      fullPath: '/vendas'
+      preLoaderRoute: typeof VendasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/eventos': {
+      id: '/eventos'
+      path: '/eventos'
+      fullPath: '/eventos'
+      preLoaderRoute: typeof EventosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/drinks': {
+      id: '/drinks'
+      path: '/drinks'
+      fullPath: '/drinks'
+      preLoaderRoute: typeof DrinksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contratos': {
+      id: '/contratos'
+      path: '/contratos'
+      fullPath: '/contratos'
+      preLoaderRoute: typeof ContratosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/configuracoes': {
+      id: '/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof ConfiguracoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +177,42 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pos-evento/$eventoId': {
+      id: '/pos-evento/$eventoId'
+      path: '/pos-evento/$eventoId'
+      fullPath: '/pos-evento/$eventoId'
+      preLoaderRoute: typeof PosEventoEventoIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/eventos/$eventoId': {
+      id: '/eventos/$eventoId'
+      path: '/$eventoId'
+      fullPath: '/eventos/$eventoId'
+      preLoaderRoute: typeof EventosEventoIdRouteImport
+      parentRoute: typeof EventosRoute
+    }
   }
 }
 
+interface EventosRouteChildren {
+  EventosEventoIdRoute: typeof EventosEventoIdRoute
+}
+
+const EventosRouteChildren: EventosRouteChildren = {
+  EventosEventoIdRoute: EventosEventoIdRoute,
+}
+
+const EventosRouteWithChildren =
+  EventosRoute._addFileChildren(EventosRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ConfiguracoesRoute: ConfiguracoesRoute,
+  ContratosRoute: ContratosRoute,
+  DrinksRoute: DrinksRoute,
+  EventosRoute: EventosRouteWithChildren,
+  VendasRoute: VendasRoute,
+  PosEventoEventoIdRoute: PosEventoEventoIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

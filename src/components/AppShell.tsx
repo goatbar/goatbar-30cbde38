@@ -21,7 +21,7 @@ const nav: { to: string; label: string; icon: typeof LayoutDashboard; exact?: bo
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
-export function AppShell() {
+export function AppShell({ children }: { children?: ReactNode }) {
   const location = useLocation();
 
   return (
@@ -83,7 +83,7 @@ export function AppShell() {
 
       {/* MAIN */}
       <main className="flex-1 min-w-0 flex flex-col">
-        <Outlet />
+        {children ?? <Outlet />}
       </main>
     </div>
   );
@@ -92,7 +92,7 @@ export function AppShell() {
 interface PageHeaderProps {
   title: string;
   subtitle?: string;
-  breadcrumb?: string;
+  breadcrumb?: ReactNode;
   action?: ReactNode;
   periodo?: ReactNode;
 }
