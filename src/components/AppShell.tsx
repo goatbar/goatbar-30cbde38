@@ -1,4 +1,4 @@
-import { Link, Outlet, useLocation } from "@tanstack/react-router";
+import { Link, Outlet, useLocation, Navigate } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -9,8 +9,11 @@ import {
   Bell,
   Search,
   ChevronDown,
+  LogOut,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { useAuth } from "@/lib/auth-context";
+import logo from "@/assets/goatbar-logo.png";
 
 const nav: { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -23,6 +26,22 @@ const nav: { to: string; label: string; icon: typeof LayoutDashboard; exact?: bo
 
 export function AppShell({ children }: { children?: ReactNode }) {
   const location = useLocation();
+  const { session, loading, user, signOut } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Navigate to="/login" />;
+  }
+
+  const initials = (user?.email ?? "GB").slice(0, 2).toUpperCase();
+  const displayName = user?.email?.split("@")[0] ?? "Gestor";
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
@@ -30,11 +49,9 @@ export function AppShell({ children }: { children?: ReactNode }) {
       <aside className="hidden lg:flex flex-col w-64 shrink-0 bg-sidebar border-r border-sidebar-border">
         <div className="px-6 pt-7 pb-8">
           <Link to="/" className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg flex items-center justify-center bg-primary text-primary-foreground font-display font-bold text-lg">
-              G
-            </div>
+            <img src={logo} alt="GOAT BAR" className="h-10 w-auto" />
             <div>
-              <div className="font-display text-[15px] font-semibold tracking-tight leading-none">
+              <div className="font-display text-[13px] font-semibold tracking-[0.18em] leading-none">
                 GOAT BAR
               </div>
               <div className="label-eyebrow mt-1.5 leading-none">Management</div>
@@ -69,14 +86,20 @@ export function AppShell({ children }: { children?: ReactNode }) {
         {/* User card */}
         <div className="m-3 p-3 rounded-xl bg-sidebar-accent border border-sidebar-border">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-primary-foreground font-display font-semibold">
-              MR
+            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-primary-foreground font-display font-semibold text-xs">
+              {initials}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium truncate">Marina Rocha</div>
-              <div className="text-[11px] text-muted-foreground truncate">Gestora · Goat Bar</div>
+              <div className="text-sm font-medium truncate capitalize">{displayName}</div>
+              <div className="text-[11px] text-muted-foreground truncate">Gestor · Goat Bar</div>
             </div>
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            <button
+              onClick={signOut}
+              title="Sair"
+              className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </aside>
