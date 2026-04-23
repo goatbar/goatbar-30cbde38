@@ -12,14 +12,14 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-const nav = [
+const nav: { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/vendas", label: "Vendas", icon: ShoppingBag },
   { to: "/drinks", label: "Drinks", icon: Wine },
   { to: "/eventos", label: "Eventos", icon: CalendarRange },
   { to: "/contratos", label: "Contratos", icon: FileText },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
-] as const;
+];
 
 export function AppShell() {
   const location = useLocation();
