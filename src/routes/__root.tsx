@@ -30,8 +30,16 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Goat Bar Management System" },
-      { name: "description", content: "Gestão operacional, financeira e analítica da Goat Bar." },
+      { title: "Goat Bar" },
+      { name: "description", content: "Um grande evento merece um bar a altura" },
+      { property: "og:title", content: "Goat Bar" },
+      { name: "twitter:title", content: "Goat Bar" },
+      { property: "og:description", content: "Um grande evento merece um bar a altura" },
+      { name: "twitter:description", content: "Um grande evento merece um bar a altura" },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/cea038a9-d0e6-4c6b-b1ea-e23ebfa76e37/id-preview-368b7d76--3c8b8a79-f634-459d-8708-72a98a93de22.lovable.app-1776955259638.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/cea038a9-d0e6-4c6b-b1ea-e23ebfa76e37/id-preview-368b7d76--3c8b8a79-f634-459d-8708-72a98a93de22.lovable.app-1776955259638.png" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:type", content: "website" },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
