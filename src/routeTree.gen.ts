@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VendasRouteImport } from './routes/vendas'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as EventosRouteImport } from './routes/eventos'
 import { Route as DrinksRouteImport } from './routes/drinks'
 import { Route as ContratosRouteImport } from './routes/contratos'
@@ -21,6 +22,11 @@ import { Route as EventosEventoIdRouteImport } from './routes/eventos.$eventoId'
 const VendasRoute = VendasRouteImport.update({
   id: '/vendas',
   path: '/vendas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EventosRoute = EventosRouteImport.update({
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/contratos': typeof ContratosRoute
   '/drinks': typeof DrinksRoute
   '/eventos': typeof EventosRouteWithChildren
+  '/login': typeof LoginRoute
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/contratos': typeof ContratosRoute
   '/drinks': typeof DrinksRoute
   '/eventos': typeof EventosRouteWithChildren
+  '/login': typeof LoginRoute
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/contratos': typeof ContratosRoute
   '/drinks': typeof DrinksRoute
   '/eventos': typeof EventosRouteWithChildren
+  '/login': typeof LoginRoute
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/contratos'
     | '/drinks'
     | '/eventos'
+    | '/login'
     | '/vendas'
     | '/eventos/$eventoId'
     | '/pos-evento/$eventoId'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/contratos'
     | '/drinks'
     | '/eventos'
+    | '/login'
     | '/vendas'
     | '/eventos/$eventoId'
     | '/pos-evento/$eventoId'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/contratos'
     | '/drinks'
     | '/eventos'
+    | '/login'
     | '/vendas'
     | '/eventos/$eventoId'
     | '/pos-evento/$eventoId'
@@ -129,6 +141,7 @@ export interface RootRouteChildren {
   ContratosRoute: typeof ContratosRoute
   DrinksRoute: typeof DrinksRoute
   EventosRoute: typeof EventosRouteWithChildren
+  LoginRoute: typeof LoginRoute
   VendasRoute: typeof VendasRoute
   PosEventoEventoIdRoute: typeof PosEventoEventoIdRoute
 }
@@ -140,6 +153,13 @@ declare module '@tanstack/react-router' {
       path: '/vendas'
       fullPath: '/vendas'
       preLoaderRoute: typeof VendasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/eventos': {
@@ -211,9 +231,19 @@ const rootRouteChildren: RootRouteChildren = {
   ContratosRoute: ContratosRoute,
   DrinksRoute: DrinksRoute,
   EventosRoute: EventosRouteWithChildren,
+  LoginRoute: LoginRoute,
   VendasRoute: VendasRoute,
   PosEventoEventoIdRoute: PosEventoEventoIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
