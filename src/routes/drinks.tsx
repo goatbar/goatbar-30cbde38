@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, StatCard, PrimaryButton, StatusBadge } from "@/components/ui-bits";
-import { drinks, margem, fmtBRL2, fmtPct, fichaTecnica } from "@/lib/mock-data";
+import { drinks, fmtBRL2, fichaTecnica } from "@/lib/mock-data";
 import { Plus, Wine, TrendingUp, Layers, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/drinks")({
