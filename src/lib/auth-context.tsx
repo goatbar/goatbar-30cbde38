@@ -11,8 +11,8 @@ interface AuthContextValue {
 }
 
 const AUTH_KEY = "goatbar_auth";
-const ADMIN_EMAIL = "admin@goat.com";
-const ADMIN_PASSWORD = "123456";
+const ADMIN_EMAILS = ["admin@goat.com", "admin@goatbar.com"];
+const ADMIN_PASSWORDS = ["123456", "admin123"];
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -33,10 +33,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    if (email.toLowerCase() !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!ADMIN_EMAILS.includes(normalizedEmail) || !ADMIN_PASSWORDS.includes(password)) {
       return { error: "E-mail ou senha incorretos." };
     }
-    const nextUser = { email: ADMIN_EMAIL };
+    const nextUser = { email: normalizedEmail };
     localStorage.setItem(AUTH_KEY, JSON.stringify(nextUser));
     setUser(nextUser);
     return { error: null };
