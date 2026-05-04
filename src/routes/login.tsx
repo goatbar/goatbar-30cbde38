@@ -21,6 +21,7 @@ function LoginPage() {
   }
 
   const handleSubmit = async (e: FormEvent) => {
+    console.log("[Login] submit acionado", { email: email.trim() });
     e.preventDefault();
     setError(null);
     setLoading(true);
@@ -40,7 +41,7 @@ function LoginPage() {
     <div className="min-h-screen w-full flex bg-background text-foreground">
       <div className="hidden lg:flex flex-col justify-between flex-1 relative overflow-hidden border-r border-border bg-sidebar">
         <div
-          className="absolute inset-0 opacity-[0.04]"
+          className="absolute inset-0 opacity-[0.04] pointer-events-none"
           style={{
             backgroundImage:
               "radial-gradient(circle at 30% 20%, var(--primary) 0, transparent 45%), radial-gradient(circle at 70% 80%, var(--primary) 0, transparent 45%)",
@@ -61,7 +62,7 @@ function LoginPage() {
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
+      <div className="flex-1 flex items-center justify-center p-6 lg:p-12 relative z-10">
         <div className="w-full max-w-sm">
           <div className="flex lg:hidden items-center gap-3 mb-10">
             <img src={logo} alt="GOAT BAR" className="h-12 w-auto" />
