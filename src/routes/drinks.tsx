@@ -59,12 +59,22 @@ function DrinksPage() {
                   key={d.id}
                   className="group rounded-xl border border-border bg-background/40 hover:border-border-strong transition-all overflow-hidden"
                 >
-                  <div className="aspect-[5/3] bg-gradient-to-br from-primary/30 via-surface-2 to-background relative">
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Wine className="h-12 w-12 text-primary/60" strokeWidth={1.25} />
-                    </div>
+                  <div className="aspect-[5/3] bg-gradient-to-br from-primary/20 via-surface-2 to-background relative overflow-hidden">
+                    {d.imagem ? (
+                      <img
+                        src={d.imagem}
+                        alt={d.nome}
+                        loading="lazy"
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Wine className="h-12 w-12 text-primary/60" strokeWidth={1.25} />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-background/10 to-transparent" />
                     <div className="absolute top-3 left-3">
-                      <span className="label-eyebrow !text-foreground/90 px-2 py-1 rounded-md bg-background/60 backdrop-blur">
+                      <span className="label-eyebrow !text-foreground/90 px-2 py-1 rounded-md bg-background/70 backdrop-blur">
                         {d.categoria}
                       </span>
                     </div>
