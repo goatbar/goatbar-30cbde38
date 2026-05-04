@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { StatCard, SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
-import { vendas, vendasResumo, fmtBRL, fmtPct } from "@/lib/mock-data";
+import { drinks, fmtBRL, fmtPct } from "@/lib/mock-data";
+import { useAppStore } from "@/lib/app-store";
 import { Plus, Filter, Download, DollarSign, TrendingUp, Wine, BarChart3 } from "lucide-react";
 
 export const Route = createFileRoute("/vendas")({
@@ -13,7 +14,12 @@ export const Route = createFileRoute("/vendas")({
 });
 
 function VendasPage() {
-  const r = vendasResumo();
+  const { vendas, addVenda } = useAppStore();
+  const receita = vendas.reduce((a, v) => a + v.precoUnitario * v.quantidade, 0);
+  const custo = vendas.reduce((a, v) => a + v.custoUnitario * v.quantidade, 0);
+  const lucro = receita - custo;
+  const margem = receita ? (lucro / receita) * 100 : 0;
+  const r = { receita, lucro, margem, ticketMedio: vendas.length ? receita / vendas.length : 0 };
   const recentes = [...vendas]
     .sort((a, b) => +new Date(b.data) - +new Date(a.data))
     .slice(0, 25);
@@ -25,7 +31,19 @@ function VendasPage() {
         title="Vendas"
         subtitle="Lançamentos de 7Steakhouse e Goat Botequim."
         action={
-          <PrimaryButton>
+          <PrimaryButton onClick={() => {
+            const d = drinks.find((x) => x.status === "ativo") ?? drinks[0];
+            addVenda({
+              data: new Date().toISOString(),
+              unidade: "7Steakhouse",
+              drinkId: d.id,
+              drinkNome: d.nome,
+              quantidade: 1,
+              precoUnitario: d.precoVenda,
+              custoUnitario: d.custoUnitario,
+              observacoes: "Lançamento rápido via botão Nova venda",
+            });
+          }}>
             <Plus className="h-4 w-4" />
             Nova venda
           </PrimaryButton>

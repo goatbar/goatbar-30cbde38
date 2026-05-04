@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, StatusBadge, PrimaryButton, GhostButton } from "@/components/ui-bits";
-import { contratos, eventos, fmtBRL } from "@/lib/mock-data";
+import { fmtBRL } from "@/lib/mock-data";
+import { useAppStore } from "@/lib/app-store";
 import { Plus, Download, Save, FileText } from "lucide-react";
 import { useState } from "react";
 
@@ -14,9 +15,10 @@ export const Route = createFileRoute("/contratos")({
 });
 
 function ContratosPage() {
+  const { contratos, eventos, addContrato } = useAppStore();
   const [selectedId, setSelectedId] = useState(contratos[0]?.id);
-  const contrato = contratos.find((c) => c.id === selectedId)!;
-  const evento = eventos.find((e) => e.id === contrato.eventoId);
+  const contrato = contratos.find((c) => c.id === selectedId) ?? contratos[0];
+  const evento = eventos.find((e) => e.id === contrato?.eventoId);
 
   return (
     <>
@@ -25,7 +27,16 @@ function ContratosPage() {
         title="Contratos"
         subtitle="Templates, geração e acompanhamento de assinaturas."
         action={
-          <PrimaryButton>
+          <PrimaryButton onClick={() => {
+            const primeiroEvento = eventos[0];
+            if (!primeiroEvento) return;
+            addContrato({
+              eventoId: primeiroEvento.id,
+              cliente: primeiroEvento.cliente,
+              status: "rascunho",
+              template: "Padrão automático",
+            });
+          }}>
             <Plus className="h-4 w-4" /> Novo contrato
           </PrimaryButton>
         }
@@ -91,8 +102,8 @@ function ContratosPage() {
             subtitle={contrato.template}
             action={
               <div className="flex items-center gap-2">
-                <GhostButton><Save className="h-3.5 w-3.5" /> Salvar rascunho</GhostButton>
-                <PrimaryButton><Download className="h-4 w-4" /> Exportar PDF</PrimaryButton>
+                <GhostButton onClick={() => window.alert("Rascunho já persistido automaticamente no navegador.")}><Save className="h-3.5 w-3.5" /> Salvar rascunho</GhostButton>
+                <PrimaryButton onClick={() => window.print()}><Download className="h-4 w-4" /> Exportar PDF</PrimaryButton>
               </div>
             }
           >

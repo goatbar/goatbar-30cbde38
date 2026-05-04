@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton } from "@/components/ui-bits";
-import { parametros, tiposEvento } from "@/lib/mock-data";
+import { tiposEvento } from "@/lib/mock-data";
+import { useAppStore } from "@/lib/app-store";
+import { useMemo, useState } from "react";
 import { Save, Settings as SettingsIcon, Sliders, Calendar, Layers, FileText, Building2 } from "lucide-react";
 
 export const Route = createFileRoute("/configuracoes")({
@@ -21,7 +23,9 @@ const sections = [
 ];
 
 function ConfigPage() {
-  const grupos = Array.from(new Set(parametros.map((p) => p.grupo)));
+  const { parametros, updateParametros } = useAppStore();
+  const [draft, setDraft] = useState(parametros);
+  const grupos = useMemo(() => Array.from(new Set(draft.map((p) => p.grupo))), [draft]);
 
   return (
     <>
@@ -30,7 +34,7 @@ function ConfigPage() {
         title="Configurações"
         subtitle="Diretrizes editáveis aplicadas automaticamente em todos os cálculos."
         action={
-          <PrimaryButton>
+          <PrimaryButton onClick={() => { updateParametros(draft); window.alert("Configurações salvas com sucesso."); }}>
             <Save className="h-4 w-4" /> Salvar alterações
           </PrimaryButton>
         }
@@ -68,10 +72,11 @@ function ConfigPage() {
           {grupos.map((g) => (
             <SectionCard key={g} title={`Diretrizes · ${g}`} subtitle="Editáveis em tempo real">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {parametros
+                {draft
                   .filter((p) => p.grupo === g)
                   .map((p) => (
-                    <ParamField key={p.id} label={p.label} value={p.valor} unidade={p.unidade} hint={p.descricao} />
+                    <ParamField key={p.id} label={p.label} value={p.valor} unidade={p.unidade} hint={p.descricao}
+                      onChange={(next) => setDraft((prev) => prev.map((item) => item.id === p.id ? { ...item, valor: next } : item))} />
                   ))}
               </div>
             </SectionCard>
@@ -109,14 +114,15 @@ function ConfigPage() {
   );
 }
 
-function ParamField({ label, value, unidade, hint }: { label: string; value: number; unidade: string; hint?: string }) {
+function ParamField({ label, value, unidade, hint, onChange }: { label: string; value: number; unidade: string; hint?: string; onChange: (value: number) => void }) {
   return (
     <div>
       <label className="label-eyebrow">{label}</label>
       <div className="mt-2 flex items-center rounded-lg bg-input border border-border focus-within:border-primary transition-colors">
         <input
           type="number"
-          defaultValue={value}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
           className="flex-1 bg-transparent px-4 py-2.5 text-sm focus:outline-none"
         />
         <span className="px-3 text-xs text-muted-foreground border-l border-border">{unidade}</span>
