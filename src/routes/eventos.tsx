@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, StatCard, PrimaryButton, StatusBadge } from "@/components/ui-bits";
-import { eventos, calcularEvento, fmtBRL, fmtPct } from "@/lib/mock-data";
+import { calcularEvento, drinks, fmtBRL, fmtPct } from "@/lib/mock-data";
+import { useAppStore } from "@/lib/app-store";
 import { Plus, Calendar, Users, MapPin, TrendingUp, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/eventos")({
@@ -13,6 +14,7 @@ export const Route = createFileRoute("/eventos")({
 });
 
 function EventosPage() {
+  const { eventos, addEvento } = useAppStore();
   const principal = eventos.find((e) => e.status === "em_andamento") || eventos[0];
   const calc = calcularEvento(principal);
   const ativos = eventos.filter((e) => e.status !== "concluido");
@@ -25,7 +27,24 @@ function EventosPage() {
         title="Eventos"
         subtitle="Pipeline e performance de eventos contratados."
         action={
-          <PrimaryButton>
+          <PrimaryButton onClick={() => addEvento({
+            nome: `Novo evento ${eventos.length + 1}`,
+            cliente: "Cliente pendente",
+            telefone: "",
+            email: "",
+            data: new Date().toISOString().slice(0, 10),
+            horario: "20:00",
+            local: "A definir",
+            cidade: "São Paulo",
+            tipo: "Corporativo",
+            convidados: 100,
+            drinks: drinks.slice(0, 3).map((d) => d.id),
+            equipe: 4,
+            valorNegociado: 15000,
+            custoPrevisto: 7000,
+            observacoes: "Evento criado rapidamente para edição posterior.",
+            status: "rascunho",
+          })}>
             <Plus className="h-4 w-4" /> Novo evento
           </PrimaryButton>
         }
