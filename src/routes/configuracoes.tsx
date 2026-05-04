@@ -3,7 +3,7 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton } from "@/components/ui-bits";
 import { tiposEvento } from "@/lib/mock-data";
 import { useAppStore } from "@/lib/app-store";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Save, Settings as SettingsIcon, Sliders, Calendar, Layers, FileText, Building2 } from "lucide-react";
 
 export const Route = createFileRoute("/configuracoes")({
@@ -115,14 +115,23 @@ function ConfigPage() {
 }
 
 function ParamField({ label, value, unidade, hint, onChange }: { label: string; value: number; unidade: string; hint?: string; onChange: (value: number) => void }) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
   return (
     <div>
       <label className="label-eyebrow">{label}</label>
       <div className="mt-2 flex items-center rounded-lg bg-input border border-border focus-within:border-primary transition-colors">
         <input
-          type="number"
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
+          type="text"
+          inputMode="decimal"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => {
+            const normalized = draft.replace(",", ".");
+            const parsed = Number(normalized);
+            if (!Number.isNaN(parsed)) onChange(parsed);
+            setDraft(String(Number.isNaN(parsed) ? value : parsed));
+          }}
           className="flex-1 bg-transparent px-4 py-2.5 text-sm focus:outline-none"
         />
         <span className="px-3 text-xs text-muted-foreground border-l border-border">{unidade}</span>

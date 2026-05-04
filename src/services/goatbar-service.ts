@@ -1,3 +1,5 @@
+import { drinks as seedDrinks } from "@/lib/mock-data";
+
 type Drink = { id: string; name: string; cost: number; price: number; image: string };
 type Sale = { id: string; total_revenue: number; total_cost: number; date: string };
 type Event = { id: string; title: string; total_price: number; total_cost: number; date: string };
@@ -7,13 +9,13 @@ type Movement = { id: string; inventory_id: string; type: "in" | "out" | "loss";
 
 const STORAGE_KEY = "goatbar_mock_db_v1";
 
-const initialDrinks: Drink[] = [
-  { id: "d1", name: "Negroni", cost: 12, price: 35, image: "/drinks/d20.jpg" },
-  { id: "d2", name: "Moscow Mule", cost: 10, price: 32, image: "/drinks/d6.jpg" },
-  { id: "d3", name: "Aperol Spritz", cost: 11, price: 34, image: "/drinks/d16.jpg" },
-  { id: "d4", name: "Whisky Sour", cost: 13, price: 36, image: "/drinks/d19.jpg" },
-  { id: "d5", name: "Gin & Tônica", cost: 9, price: 30, image: "/drinks/d12.jpg" },
-];
+const initialDrinks: Drink[] = seedDrinks.map((d) => ({
+  id: d.id,
+  name: d.nome,
+  cost: d.custoUnitario,
+  price: d.precoVenda,
+  image: d.imagem?.startsWith("/") ? d.imagem : `/${d.imagem ?? "drinks/old-fashioned.jpg"}`,
+}));
 
 const seed = {
   drinks: initialDrinks,
@@ -26,13 +28,26 @@ const seed = {
   movements: [] as Movement[],
 };
 
+function needsMigration(db: any) {
+  return !Array.isArray(db?.drinks) || db.drinks.length < initialDrinks.length;
+}
+
 function readDb() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
     return structuredClone(seed);
   }
-  return JSON.parse(raw);
+  const parsed = JSON.parse(raw);
+  if (needsMigration(parsed)) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
+    return structuredClone(seed);
+  }
+  parsed.drinks = parsed.drinks.map((d: Drink) => ({
+    ...d,
+    image: d.image?.startsWith("/") ? d.image : `/${d.image}`,
+  }));
+  return parsed;
 }
 
 function writeDb(db: any) {
