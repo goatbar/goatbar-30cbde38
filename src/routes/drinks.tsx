@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, StatCard, PrimaryButton, StatusBadge } from "@/components/ui-bits";
-import { drinks, margem, fmtBRL2, fmtPct, fichaTecnica } from "@/lib/mock-data";
+import { drinks, fmtBRL2, fichaTecnica } from "@/lib/mock-data";
 import { Plus, Wine, TrendingUp, Layers, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/drinks")({
@@ -14,8 +14,7 @@ export const Route = createFileRoute("/drinks")({
 
 function DrinksPage() {
   const ativos = drinks.filter((d) => d.status === "ativo").length;
-  const margemMedia =
-    drinks.reduce((a, d) => a + margem(d), 0) / drinks.length;
+  const custoMedio = drinks.reduce((a, d) => a + d.custoUnitario, 0) / drinks.length;
   const categorias = Array.from(new Set(drinks.map((d) => d.categoria)));
 
   return (
@@ -23,7 +22,7 @@ function DrinksPage() {
       <PageHeader
         breadcrumb="Catálogo"
         title="Drinks"
-        subtitle="Mixologia da Goat Bar — custo, preço e disponibilidade por operação."
+        subtitle="Mixologia da Goat Bar — ficha técnica e custo de insumos por dose."
         action={
           <PrimaryButton>
             <Plus className="h-4 w-4" /> Novo drink
@@ -35,7 +34,7 @@ function DrinksPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
           <StatCard label="Total no catálogo" value={drinks.length.toString()} icon={<Wine className="h-4 w-4" />} />
           <StatCard label="Drinks ativos" value={ativos.toString()} icon={<Sparkles className="h-4 w-4" />} />
-          <StatCard label="Margem média" value={fmtPct(margemMedia)} delta={2.4} icon={<TrendingUp className="h-4 w-4" />} />
+          <StatCard label="Custo médio" value={fmtBRL2(custoMedio)} icon={<TrendingUp className="h-4 w-4" />} />
           <StatCard label="Categorias" value={categorias.length.toString()} icon={<Layers className="h-4 w-4" />} />
         </div>
 
@@ -52,10 +51,9 @@ function DrinksPage() {
           ))}
         </div>
 
-        <SectionCard title="Catálogo" subtitle={`${drinks.length} drinks · margem calculada automaticamente`}>
+        <SectionCard title="Catálogo" subtitle={`${drinks.length} drinks · custo de insumos por dose`}>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {drinks.map((d) => {
-              const m = margem(d);
               return (
                 <article
                   key={d.id}
@@ -88,28 +86,13 @@ function DrinksPage() {
                               <span className="font-medium tabular-nums">{fmtBRL2(ing.custo)}</span>
                             </li>
                           ))}
-                          <li className="flex items-center justify-between text-xs pt-1.5 mt-1.5 border-t border-border/60">
-                            <span className="font-medium">Custo total</span>
+                          <li className="flex items-center justify-between text-sm pt-2 mt-2 border-t border-border/60">
+                            <span className="font-semibold">Custo total</span>
                             <span className="font-semibold tabular-nums">{fmtBRL2(d.custoUnitario)}</span>
                           </li>
                         </ul>
                       </div>
                     )}
-
-                    <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-border">
-                      <div>
-                        <div className="label-eyebrow">Custo</div>
-                        <div className="text-sm font-medium mt-1">{fmtBRL2(d.custoUnitario)}</div>
-                      </div>
-                      <div>
-                        <div className="label-eyebrow">Preço</div>
-                        <div className="text-sm font-medium mt-1">{fmtBRL2(d.precoVenda)}</div>
-                      </div>
-                      <div>
-                        <div className="label-eyebrow">Margem</div>
-                        <div className="text-sm font-medium text-success mt-1">{fmtPct(m)}</div>
-                      </div>
-                    </div>
 
                     <div className="mt-4 flex flex-wrap gap-1.5">
                       {d.disponibilidade.map((u) => (
