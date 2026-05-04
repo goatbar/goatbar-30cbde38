@@ -1,41 +1,58 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+
+type MockUser = { email: string };
 
 interface AuthContextValue {
-  session: Session | null;
-  user: User | null;
+  session: { user: MockUser } | null;
+  user: MockUser | null;
   loading: boolean;
+  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
+
+const AUTH_KEY = "goatbar_auth";
+const ADMIN_EMAIL = "admin@goat.com";
+const ADMIN_PASSWORD = "123456";
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<MockUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    try {
+      const raw = localStorage.getItem(AUTH_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as MockUser;
+        if (parsed?.email) setUser(parsed);
+      }
+    } finally {
       setLoading(false);
-    });
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-    return () => sub.subscription.unsubscribe();
+    }
   }, []);
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
+  const signIn = async (email: string, password: string) => {
+    if (email.toLowerCase() !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+      return { error: "E-mail ou senha incorretos." };
+    }
+    const nextUser = { email: ADMIN_EMAIL };
+    localStorage.setItem(AUTH_KEY, JSON.stringify(nextUser));
+    setUser(nextUser);
+    return { error: null };
   };
 
-  return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signOut }}>
-      {children}
-    </AuthContext.Provider>
+  const signOut = async () => {
+    localStorage.removeItem(AUTH_KEY);
+    setUser(null);
+  };
+
+  const value = useMemo(
+    () => ({ session: user ? { user } : null, user, loading, signIn, signOut }),
+    [user, loading],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

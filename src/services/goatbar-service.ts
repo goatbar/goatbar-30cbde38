@@ -1,51 +1,90 @@
-import { supabase } from "@/integrations/supabase/client";
+type Drink = { id: string; name: string; cost: number; price: number; image: string };
+type Sale = { id: string; total_revenue: number; total_cost: number; date: string };
+type Event = { id: string; title: string; total_price: number; total_cost: number; date: string };
 
-const db = supabase as any;
+type Inventory = { id: string; name: string; quantity: number; unit?: string; updated_at?: string };
+type Movement = { id: string; inventory_id: string; type: "in" | "out" | "loss"; quantity: number; source: "event" | "sale" | "manual"; created_at: string };
+
+const STORAGE_KEY = "goatbar_mock_db_v1";
+
+const initialDrinks: Drink[] = [
+  { id: "d1", name: "Negroni", cost: 12, price: 35, image: "/drinks/d20.jpg" },
+  { id: "d2", name: "Moscow Mule", cost: 10, price: 32, image: "/drinks/d6.jpg" },
+  { id: "d3", name: "Aperol Spritz", cost: 11, price: 34, image: "/drinks/d16.jpg" },
+  { id: "d4", name: "Whisky Sour", cost: 13, price: 36, image: "/drinks/d19.jpg" },
+  { id: "d5", name: "Gin & Tônica", cost: 9, price: 30, image: "/drinks/d12.jpg" },
+];
+
+const seed = {
+  drinks: initialDrinks,
+  sales: [
+    { id: "s1", total_revenue: 4200, total_cost: 1680, date: new Date().toISOString() },
+    { id: "s2", total_revenue: 3500, total_cost: 1400, date: new Date().toISOString() },
+  ] satisfies Sale[],
+  events: [{ id: "e1", title: "Evento Corporativo", total_price: 6200, total_cost: 2800, date: new Date().toISOString() }] satisfies Event[],
+  inventory: [] as Inventory[],
+  movements: [] as Movement[],
+};
+
+function readDb() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
+    return structuredClone(seed);
+  }
+  return JSON.parse(raw);
+}
+
+function writeDb(db: any) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+}
 
 export const goatbarService = {
-  listDrinks: async () => (await db.from("drinks").select("*").order("created_at", { ascending: false })).data ?? [],
-  createDrink: async (payload: { name: string; cost: number; price: number }) => {
-    const { error } = await db.from("drinks").insert(payload);
-    if (error) throw error;
+  listDrinks: async () => readDb().drinks as Drink[],
+  createDrink: async (payload: { name: string; cost: number; price: number; image?: string }) => {
+    const db = readDb();
+    db.drinks.unshift({
+      id: crypto.randomUUID(),
+      name: payload.name,
+      cost: payload.cost,
+      price: payload.price,
+      image: payload.image ?? "/drinks/old-fashioned.jpg",
+    });
+    writeDb(db);
   },
-  listSales: async () => (await db.from("sales").select("*, sales_items(*, drinks(name))").order("date", { ascending: false })).data ?? [],
+  listSales: async () => readDb().sales as Sale[],
   createSale: async (payload: {
     location: "7steakhouse" | "goatbotequim";
     items: { drink_id: string; quantity: number; price: number; cost: number }[];
   }) => {
-    const totals = payload.items.reduce((acc, i) => ({
-      revenue: acc.revenue + i.price * i.quantity,
-      cost: acc.cost + i.cost * i.quantity,
-    }), { revenue: 0, cost: 0 });
-    const { data: sale, error } = await db.from("sales").insert({
-      location: payload.location,
-      total_revenue: totals.revenue,
-      total_cost: totals.cost,
-      total_profit: totals.revenue - totals.cost,
-    }).select("id").single();
-    if (error) throw error;
-    const items = payload.items.map((i) => ({ ...i, sale_id: sale.id }));
-    const { error: itemError } = await db.from("sales_items").insert(items);
-    if (itemError) throw itemError;
+    const totals = payload.items.reduce(
+      (acc, i) => ({ revenue: acc.revenue + i.price * i.quantity, cost: acc.cost + i.cost * i.quantity }),
+      { revenue: 0, cost: 0 },
+    );
+    const db = readDb();
+    db.sales.unshift({ id: crypto.randomUUID(), total_revenue: totals.revenue, total_cost: totals.cost, date: new Date().toISOString() });
+    writeDb(db);
   },
-  listEvents: async () => (await db.from("events").select("*").order("date", { ascending: false })).data ?? [],
+  listEvents: async () => readDb().events as Event[],
   createEvent: async (payload: any) => {
-    const { error } = await db.from("events").insert(payload);
-    if (error) throw error;
+    const db = readDb();
+    db.events.unshift({ id: crypto.randomUUID(), ...payload });
+    writeDb(db);
   },
-  listInventory: async () => (await db.from("inventory").select("*").order("updated_at", { ascending: false })).data ?? [],
+  listInventory: async () => readDb().inventory as Inventory[],
   createInventory: async (payload: any) => {
-    const { error } = await db.from("inventory").insert(payload);
-    if (error) throw error;
+    const db = readDb();
+    db.inventory.unshift({ id: crypto.randomUUID(), ...payload, updated_at: new Date().toISOString() });
+    writeDb(db);
   },
   updateInventoryQuantity: async (id: string, quantity: number, source: "event" | "sale" | "manual", type: "in" | "out" | "loss") => {
-    const { data: row, error } = await db.from("inventory").select("quantity").eq("id", id).single();
-    if (error) throw error;
-    const nextQty = type === "in" ? row.quantity + quantity : Math.max(0, row.quantity - quantity);
-    const { error: updateError } = await db.from("inventory").update({ quantity: nextQty }).eq("id", id);
-    if (updateError) throw updateError;
-    const { error: moveError } = await db.from("inventory_movements").insert({ inventory_id: id, type, quantity, source });
-    if (moveError) throw moveError;
+    const db = readDb();
+    const row = db.inventory.find((i: Inventory) => i.id === id);
+    if (!row) return;
+    row.quantity = type === "in" ? row.quantity + quantity : Math.max(0, row.quantity - quantity);
+    row.updated_at = new Date().toISOString();
+    db.movements.unshift({ id: crypto.randomUUID(), inventory_id: id, type, quantity, source, created_at: new Date().toISOString() });
+    writeDb(db);
   },
-  listInventoryMovements: async () => (await db.from("inventory_movements").select("*, inventory(name)").order("created_at", { ascending: false })).data ?? [],
+  listInventoryMovements: async () => readDb().movements as Movement[],
 };

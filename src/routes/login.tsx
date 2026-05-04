@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate, Navigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import logo from "@/assets/goatbar-logo.png";
 
@@ -11,8 +10,8 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { session, loading: sessionLoading } = useAuth();
-  const [email, setEmail] = useState("drinksgoatbar@gmail.com");
+  const { session, loading: sessionLoading, signIn } = useAuth();
+  const [email, setEmail] = useState("admin@goat.com");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,28 +25,10 @@ function LoginPage() {
     setError(null);
     setLoading(true);
 
-    // Try sign in first
-    let { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const result = await signIn(email.trim(), password);
 
-    // If user doesn't exist, attempt signup (auto-confirm enabled)
-    if (signInError && /Invalid login credentials/i.test(signInError.message)) {
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: window.location.origin },
-      });
-      if (!signUpError) {
-        const retry = await supabase.auth.signInWithPassword({ email, password });
-        signInError = retry.error;
-      } else if (!/already registered/i.test(signUpError.message)) {
-        setError(signUpError.message);
-        setLoading(false);
-        return;
-      }
-    }
-
-    if (signInError) {
-      setError("E-mail ou senha incorretos.");
+    if (result.error) {
+      setError(result.error);
       setLoading(false);
       return;
     }
@@ -57,7 +38,6 @@ function LoginPage() {
 
   return (
     <div className="min-h-screen w-full flex bg-background text-foreground">
-      {/* LEFT — branding */}
       <div className="hidden lg:flex flex-col justify-between flex-1 relative overflow-hidden border-r border-border bg-sidebar">
         <div
           className="absolute inset-0 opacity-[0.04]"
@@ -77,13 +57,10 @@ function LoginPage() {
             Hospitalidade premium,<br />
             <span className="text-muted-foreground">gestão de alta performance.</span>
           </p>
-          <p className="text-sm text-muted-foreground mt-4">
-            Eventos · 7Steakhouse · Goat Botequim
-          </p>
+          <p className="text-sm text-muted-foreground mt-4">Eventos · 7Steakhouse · Goat Botequim</p>
         </div>
       </div>
 
-      {/* RIGHT — form */}
       <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
         <div className="w-full max-w-sm">
           <div className="flex lg:hidden items-center gap-3 mb-10">
@@ -91,12 +68,8 @@ function LoginPage() {
           </div>
 
           <div className="label-eyebrow mb-3">Acesso interno</div>
-          <h1 className="font-display text-3xl font-semibold leading-tight">
-            Bem-vindo de volta
-          </h1>
-          <p className="text-sm text-muted-foreground mt-2">
-            Entre com suas credenciais para acessar o painel.
-          </p>
+          <h1 className="font-display text-3xl font-semibold leading-tight">Bem-vindo de volta</h1>
+          <p className="text-sm text-muted-foreground mt-2">Entre com suas credenciais para acessar o painel.</p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
             <div>
@@ -123,11 +96,7 @@ function LoginPage() {
               />
             </div>
 
-            {error && (
-              <div className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3">
-                {error}
-              </div>
-            )}
+            {error && <div className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3">{error}</div>}
 
             <button
               type="submit"
@@ -138,10 +107,6 @@ function LoginPage() {
               {loading ? "Entrando..." : "Entrar"}
             </button>
           </form>
-
-          <p className="mt-10 text-[11px] text-muted-foreground text-center tracking-wider uppercase">
-            © Goat Bar · Management System
-          </p>
         </div>
       </div>
     </div>
