@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, StatCard, PrimaryButton, StatusBadge } from "@/components/ui-bits";
-import { drinks, margem, fmtBRL2, fmtPct } from "@/lib/mock-data";
+import { drinks, margem, fmtBRL2, fmtPct, fichaTecnica } from "@/lib/mock-data";
 import { Plus, Wine, TrendingUp, Layers, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/drinks")({
@@ -78,7 +78,25 @@ function DrinksPage() {
                     <h3 className="font-display text-lg font-semibold">{d.nome}</h3>
                     <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">{d.descricao}</p>
 
-                    <div className="grid grid-cols-3 gap-3 mt-5 pt-5 border-t border-border">
+                    {fichaTecnica[d.id] && (
+                      <div className="mt-4 rounded-lg border border-border bg-background/40 p-3">
+                        <div className="label-eyebrow mb-2">Ficha técnica</div>
+                        <ul className="space-y-1">
+                          {fichaTecnica[d.id].map((ing, idx) => (
+                            <li key={idx} className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">{ing.nome}</span>
+                              <span className="font-medium tabular-nums">{fmtBRL2(ing.custo)}</span>
+                            </li>
+                          ))}
+                          <li className="flex items-center justify-between text-xs pt-1.5 mt-1.5 border-t border-border/60">
+                            <span className="font-medium">Custo total</span>
+                            <span className="font-semibold tabular-nums">{fmtBRL2(d.custoUnitario)}</span>
+                          </li>
+                        </ul>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-border">
                       <div>
                         <div className="label-eyebrow">Custo</div>
                         <div className="text-sm font-medium mt-1">{fmtBRL2(d.custoUnitario)}</div>
