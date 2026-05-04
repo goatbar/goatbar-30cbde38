@@ -139,6 +139,7 @@ export const drinks: Drink[] = drinkSeeds.map((s) => {
     precoVenda: s.precoVenda ?? precoSugerido(custo),
     status: s.status ?? "ativo",
     disponibilidade: s.disponibilidade ?? todasUnidades,
+    imagem: s.imagem,
   };
 });
 
