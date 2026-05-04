@@ -1,188 +1,23 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { SectionCard, StatCard, PrimaryButton, StatusBadge } from "@/components/ui-bits";
-import { calcularEvento, drinks, fmtBRL, fmtPct } from "@/lib/mock-data";
-import { useAppStore } from "@/lib/app-store";
-import { Plus, Calendar, Users, MapPin, TrendingUp, ArrowRight } from "lucide-react";
+import { StatCard, SectionCard, PrimaryButton } from "@/components/ui-bits";
+import { goatbarService } from "@/services/goatbar-service";
+import { fmtBRL } from "@/lib/format";
+import { Plus } from "lucide-react";
+import { useEffect, useState } from "react";
 
-export const Route = createFileRoute("/eventos")({
-  component: () => (
-    <AppShell>
-      <EventosPage />
-    </AppShell>
-  ),
-});
+export const Route = createFileRoute("/eventos")({ component: () => <AppShell><EventosPage /></AppShell> });
 
 function EventosPage() {
-  const { eventos, addEvento } = useAppStore();
-  const principal = eventos.find((e) => e.status === "em_andamento") || eventos[0];
-  const calc = calcularEvento(principal);
-  const ativos = eventos.filter((e) => e.status !== "concluido");
-  const totalReceita = eventos.reduce((a, e) => a + e.valorNegociado, 0);
-
-  return (
-    <>
-      <PageHeader
-        breadcrumb="Operação"
-        title="Eventos"
-        subtitle="Pipeline e performance de eventos contratados."
-        action={
-          <PrimaryButton onClick={() => addEvento({
-            nome: `Novo evento ${eventos.length + 1}`,
-            cliente: "Cliente pendente",
-            telefone: "",
-            email: "",
-            data: new Date().toISOString().slice(0, 10),
-            horario: "20:00",
-            local: "A definir",
-            cidade: "São Paulo",
-            tipo: "Corporativo",
-            convidados: 100,
-            drinks: drinks.slice(0, 3).map((d) => d.id),
-            equipe: 4,
-            valorNegociado: 15000,
-            custoPrevisto: 7000,
-            observacoes: "Evento criado rapidamente para edição posterior.",
-            status: "rascunho",
-          })}>
-            <Plus className="h-4 w-4" /> Novo evento
-          </PrimaryButton>
-        }
-      />
-
-      <div className="px-8 py-7 space-y-7">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-          <StatCard label="Eventos ativos" value={ativos.length.toString()} icon={<Calendar className="h-4 w-4" />} />
-          <StatCard label="Receita contratada" value={fmtBRL(totalReceita)} delta={18.3} icon={<TrendingUp className="h-4 w-4" />} />
-          <StatCard label="Convidados totais" value={eventos.reduce((a, e) => a + e.convidados, 0).toString()} icon={<Users className="h-4 w-4" />} />
-          <StatCard label="Margem média" value={fmtPct(calc.margemPct)} delta={3.6} />
-        </div>
-
-        {/* Hero do evento principal */}
-        <article className="card-premium overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-5">
-            <div className="lg:col-span-3 p-8 lg:p-10 relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/15 via-transparent to-transparent pointer-events-none" />
-              <div className="relative">
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="label-eyebrow">Evento em destaque</span>
-                  <StatusBadge status={principal.status} />
-                </div>
-                <h2 className="font-display text-4xl font-semibold tracking-tight leading-tight">
-                  {principal.nome}
-                </h2>
-                <p className="mt-3 text-muted-foreground max-w-lg">
-                  {principal.observacoes}
-                </p>
-
-                <div className="mt-7 grid grid-cols-2 sm:grid-cols-4 gap-5">
-                  <Info icon={<Calendar className="h-4 w-4" />} label="Data" value={new Date(principal.data).toLocaleDateString("pt-BR")} />
-                  <Info icon={<MapPin className="h-4 w-4" />} label="Local" value={principal.cidade} />
-                  <Info icon={<Users className="h-4 w-4" />} label="Convidados" value={principal.convidados.toString()} />
-                  <Info icon={<TrendingUp className="h-4 w-4" />} label="Margem" value={fmtPct(calc.margemPct)} />
-                </div>
-
-                <div className="mt-8 flex items-center gap-3">
-                  <Link
-                    to="/eventos/$eventoId"
-                    params={{ eventoId: principal.id }}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:brightness-110 transition-all"
-                  >
-                    Abrir interna do evento <ArrowRight className="h-4 w-4" />
-                  </Link>
-                  <Link
-                    to="/contratos"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-surface text-sm hover:border-border-strong transition-all"
-                  >
-                    Ver contrato
-                  </Link>
-                </div>
-              </div>
-            </div>
-
-            <div className="lg:col-span-2 bg-background/60 border-l border-border p-8 lg:p-10">
-              <div className="label-eyebrow">Resumo financeiro previsto</div>
-              <div className="mt-3 font-display text-3xl font-semibold">
-                {fmtBRL(principal.valorNegociado)}
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">Valor negociado</div>
-
-              <dl className="mt-6 space-y-3 text-sm">
-                <Row k="Custo previsto" v={fmtBRL(calc.custoTotal)} />
-                <Row k="Repasse" v={fmtBRL(calc.repasse)} />
-                <Row k="Lucro estimado" v={fmtBRL(calc.lucro)} highlight />
-                <Row k="Bebidas estimadas" v={`${calc.dosesEstimadas} doses`} />
-                <Row k="Gelo estimado" v={`${calc.geloKg} kg`} />
-                <Row k="Equipe necessária" v={`${calc.equipeNec} pessoas`} />
-              </dl>
-            </div>
-          </div>
-        </article>
-
-        <SectionCard title="Pipeline de eventos" subtitle={`${eventos.length} eventos cadastrados`}>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {eventos.map((e) => {
-              const c = calcularEvento(e);
-              return (
-                <Link
-                  key={e.id}
-                  to="/eventos/$eventoId"
-                  params={{ eventoId: e.id }}
-                  className="group rounded-xl border border-border bg-background/40 hover:border-border-strong transition-all p-5"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="label-eyebrow">{e.tipo}</div>
-                    <StatusBadge status={e.status} />
-                  </div>
-                  <h3 className="font-display text-lg font-semibold leading-snug">{e.nome}</h3>
-                  <p className="text-xs text-muted-foreground mt-1">{e.cliente}</p>
-
-                  <div className="mt-5 flex items-center gap-4 text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {new Date(e.data).toLocaleDateString("pt-BR")}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <Users className="h-3.5 w-3.5" /> {e.convidados}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <MapPin className="h-3.5 w-3.5" /> {e.cidade}
-                    </span>
-                  </div>
-
-                  <div className="mt-5 pt-5 border-t border-border flex items-center justify-between">
-                    <div>
-                      <div className="label-eyebrow">Receita</div>
-                      <div className="font-medium mt-1">{fmtBRL(e.valorNegociado)}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="label-eyebrow">Margem</div>
-                      <div className="font-medium text-success mt-1">{fmtPct(c.margemPct)}</div>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </SectionCard>
-      </div>
-    </>
-  );
-}
-
-function Info({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div>
-      <div className="label-eyebrow flex items-center gap-1.5">{icon} {label}</div>
-      <div className="font-display text-base font-medium mt-1.5">{value}</div>
-    </div>
-  );
-}
-function Row({ k, v, highlight }: { k: string; v: string; highlight?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between border-b border-border/60 pb-2">
-      <dt className="text-xs text-muted-foreground">{k}</dt>
-      <dd className={`text-sm ${highlight ? "text-success font-semibold" : "font-medium"}`}>{v}</dd>
-    </div>
-  );
+  const [events, setEvents] = useState<any[]>([]);
+  const load = async () => setEvents(await goatbarService.listEvents());
+  useEffect(()=>{load();},[]);
+  const totalPrice = events.reduce((a,e)=>a+e.total_price,0);
+  const totalCost = events.reduce((a,e)=>a+e.total_cost,0);
+  return <><PageHeader title="Eventos" action={<PrimaryButton onClick={async ()=>{
+    await goatbarService.createEvent({ client_name:"Cliente", event_type:"Corporativo", date:new Date().toISOString().slice(0,10), guests:100, duration:6, total_cost:3000, total_price:9000, total_profit:6000 });
+    await load();
+  }}><Plus className="h-4 w-4" /> Create event</PrimaryButton>} />
+  <div className="px-8 py-7 space-y-7"><div className="grid grid-cols-3 gap-5"><StatCard label="Eventos" value={String(events.length)} /><StatCard label="Receita" value={fmtBRL(totalPrice)} /><StatCard label="Lucro" value={fmtBRL(totalPrice-totalCost)} /></div>
+  <SectionCard title="Pipeline">{events.map((e)=><div className="p-3 border rounded mb-2" key={e.id}>{e.client_name} · {e.event_type} · {new Date(e.date).toLocaleDateString("pt-BR")}</div>)}</SectionCard></div></>;
 }
