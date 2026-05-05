@@ -15,6 +15,7 @@ function Dashboard() {
   const custo = vendas.reduce((a, v) => a + v.custoUnitario * v.quantidade, 0);
   const lucro = receita - custo;
   const margem = receita > 0 ? ((lucro / receita) * 100).toFixed(1) : "0.0";
+  const topDrinks = rankingDrinks().slice(0, 5);
 
   const eventosAtivos = eventos.filter((e) => !["cancelado", "proposta_recusada"].includes(e.status));
   const proximosEventos = [...eventosAtivos].sort((a, b) => new Date(a.data || 0).getTime() - new Date(b.data || 0).getTime()).filter(e => new Date(e.data || 0).getTime() >= new Date().setHours(0,0,0,0)).slice(0, 5);
