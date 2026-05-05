@@ -112,7 +112,7 @@ function EventosPage() {
                     <div className="hidden sm:flex items-center gap-3 shrink-0">
                       <div className="text-right">
                         <div className="text-sm font-medium">{calc.valorTotalOrcamento > 0 ? fmtBRL(calc.valorTotalOrcamento) : "--"}</div>
-                        <div className="text-[11px] text-muted-foreground">{calc.valorTotalOrcamento > 0 ? \`\${fmtBRL(calc.mediaPorPessoa)}/pessoa\` : "Orçamento em aberto"}</div>
+                        <div className="text-[11px] text-muted-foreground">{calc.valorTotalOrcamento > 0 ? `${fmtBRL(calc.mediaPorPessoa)}/pessoa` : "Orçamento em aberto"}</div>
                       </div>
                       <StatusBadge status={e.status} />
                       <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
