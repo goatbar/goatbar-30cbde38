@@ -173,9 +173,14 @@ function DrinkCard({ drink: d, onEdit }: { drink: Drink, onEdit: () => void }) {
 }
 
 function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => void, onSave: (id: string, payload: Partial<Drink>) => void }) {
+  const [nome, setNome] = useState(drink.nome);
+  const [categoria, setCategoria] = useState(drink.categoria);
   const [steak, setSteak] = useState(drink.precoVenda7Steakhouse);
   const [bot, setBot] = useState(drink.precoVendaGoatBotequim);
   const [ingredientes, setIngredientes] = useState([...drink.ingredientes]);
+
+  const CATEGORIAS_SUGERIDAS = ["Whiskey", "Rum", "Vodka", "Campari", "Cachaça", "Espumante", "Mocktail", "Gin", "Caipirinhas", "Mules", "Refrescantes", "Autoral", "Clássico", "Aperitivo", "Sour", "Sem álcool"];
+  const allCategories = Array.from(new Set([drink.categoria, ...CATEGORIAS_SUGERIDAS]));
 
   const addIngredient = () => {
     setIngredientes([...ingredientes, { nome: "", custo: 0 }]);
@@ -206,6 +211,30 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
         </div>
         
         <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+          {/* Informações Básicas */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label-eyebrow block mb-2">Nome do Drink</label>
+              <input
+                type="text"
+                value={nome}
+                onChange={e => setNome(e.target.value)}
+                className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
+              />
+            </div>
+            <div>
+              <label className="label-eyebrow block mb-2">Categoria</label>
+              <select
+                value={categoria}
+                onChange={e => setCategoria(e.target.value)}
+                className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
+              >
+                {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <hr className="border-border" />
           {/* Ficha Técnica e Custos */}
           <div>
             <h3 className="text-sm font-semibold mb-3 flex items-center justify-between">
@@ -227,6 +256,7 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
                     <span className="absolute left-3 top-2 text-muted-foreground text-xs">R$</span>
                     <input 
                       type="number" 
+                      step="0.01"
                       value={ing.custo} 
                       onChange={e => updateIngredient(idx, "custo", Number(e.target.value))} 
                       className="w-full h-9 pl-8 pr-2 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none" 
@@ -254,6 +284,7 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
                 <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">R$</span>
                 <input
                   type="number"
+                  step="0.01"
                   value={steak}
                   onChange={e => setSteak(Number(e.target.value))}
                   className="w-full h-10 pl-9 pr-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
@@ -270,6 +301,7 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
                 <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">R$</span>
                 <input
                   type="number"
+                  step="0.01"
                   value={bot}
                   onChange={e => setBot(Number(e.target.value))}
                   className="w-full h-10 pl-9 pr-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
@@ -284,7 +316,7 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
         </div>
         <div className="flex items-center justify-end gap-3 px-6 py-4 bg-background/50 border-t border-border sticky bottom-0 z-10">
           <GhostButton onClick={onClose}>Cancelar</GhostButton>
-          <PrimaryButton onClick={() => onSave(drink.id, { ingredientes, precoVenda7Steakhouse: steak, precoVendaGoatBotequim: bot })}>Salvar Alterações</PrimaryButton>
+          <PrimaryButton onClick={() => onSave(drink.id, { nome, categoria, ingredientes, precoVenda7Steakhouse: steak, precoVendaGoatBotequim: bot })}>Salvar Alterações</PrimaryButton>
         </div>
       </div>
     </div>
