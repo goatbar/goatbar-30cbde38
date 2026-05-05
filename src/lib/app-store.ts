@@ -134,6 +134,19 @@ export function useAppStore() {
           }),
         }));
       },
+      addDrink(input: Omit<Drink, "id">) {
+        setStore((prev) => {
+          const newDrink = {
+            ...input,
+            id: `d${Date.now()}`,
+            custoUnitario: Number(input.ingredientes.reduce((a, i) => a + i.custo, 0).toFixed(2))
+          };
+          return {
+            ...prev,
+            drinks: [newDrink, ...prev.drinks],
+          };
+        });
+      },
       addEventContract(input: Omit<EventContract, "id">) {
         setStore((prev) => ({
           ...prev,

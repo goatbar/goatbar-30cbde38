@@ -10,11 +10,24 @@ import { useAppStore } from "@/lib/app-store";
 export const Route = createFileRoute("/drinks")({ component: () => <AppShell><DrinksPage /></AppShell> });
 
 function DrinksPage() {
-  const { drinks: allDrinks, updateDrink } = useAppStore();
+  const { drinks: allDrinks, updateDrink, addDrink } = useAppStore();
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState("Todas");
   const [statusFilter, setStatusFilter] = useState<"todos" | "ativo" | "inativo">("ativo");
   const [editingDrink, setEditingDrink] = useState<Drink | null>(null);
+
+  const blankDrink: Drink = {
+    id: "new",
+    nome: "",
+    categoria: "Whiskey",
+    descricao: "Novo drink cadastrado manualmente.",
+    ingredientes: [],
+    custoUnitario: 0,
+    precoVenda7Steakhouse: 0,
+    precoVendaGoatBotequim: 0,
+    status: "ativo",
+    disponibilidade: ["Eventos", "7Steakhouse", "Goat Botequim"]
+  };
 
   const CATEGORIAS = ["Todas", ...Array.from(new Set(allDrinks.map((d) => d.categoria)))];
 
@@ -30,13 +43,21 @@ function DrinksPage() {
   const margemMedia = ativos.length ? ativos.reduce((a, d) => a + ((d.precoVenda7Steakhouse - d.custoUnitario) / d.precoVenda7Steakhouse) * 100, 0) / ativos.length : 0;
 
   const handleSaveDrink = (id: string, updatePayload: Partial<Drink>) => {
-    updateDrink(id, updatePayload);
+    if (id === "new") {
+      addDrink({ ...blankDrink, ...updatePayload } as Omit<Drink, "id">);
+    } else {
+      updateDrink(id, updatePayload);
+    }
     setEditingDrink(null);
   };
 
   return (
     <>
-      <PageHeader title="Drinks" subtitle="Catálogo completo com fichas técnicas e precificação." />
+      <PageHeader 
+        title="Drinks" 
+        subtitle="Catálogo completo com fichas técnicas e precificação."
+        action={<PrimaryButton onClick={() => setEditingDrink(blankDrink)}><Plus className="h-4 w-4 mr-2" /> Novo Drink</PrimaryButton>}
+      />
 
       <div className="px-8 py-7 space-y-7">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
@@ -179,8 +200,8 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
   const [bot, setBot] = useState(drink.precoVendaGoatBotequim);
   const [ingredientes, setIngredientes] = useState([...drink.ingredientes]);
 
-  const CATEGORIAS_SUGERIDAS = ["Whiskey", "Rum", "Vodka", "Campari", "Cachaça", "Espumante", "Mocktail", "Gin", "Caipirinhas", "Mules", "Refrescantes", "Autoral", "Clássico", "Aperitivo", "Sour", "Sem álcool"];
-  const allCategories = Array.from(new Set([drink.categoria, ...CATEGORIAS_SUGERIDAS]));
+  const CATEGORIAS_SUGERIDAS = ["Whiskey", "Rum", "Vodka", "Campari", "Cachaça", "Espumante", "Mocktail"];
+  const allCategories = Array.from(new Set([...CATEGORIAS_SUGERIDAS]));
 
   const addIngredient = () => {
     setIngredientes([...ingredientes, { nome: "", custo: 0 }]);
@@ -204,8 +225,8 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
       <div className="w-full max-w-lg bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden my-auto">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border sticky top-0 bg-surface z-10">
           <div>
-            <h2 className="font-display text-lg font-semibold">Custo e Precificação</h2>
-            <p className="text-xs text-muted-foreground">{drink.nome}</p>
+            <h2 className="font-display text-lg font-semibold">{drink.id === "new" ? "Cadastrar Novo Drink" : "Custo e Precificação"}</h2>
+            <p className="text-xs text-muted-foreground">{drink.id === "new" ? "Preencha as informações abaixo" : drink.nome}</p>
           </div>
           <button onClick={onClose} className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"><X className="h-4 w-4" /></button>
         </div>
@@ -229,6 +250,9 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
                 onChange={e => setCategoria(e.target.value)}
                 className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
               >
+                {!allCategories.includes(drink.categoria) && (
+                  <option value={drink.categoria} disabled>{drink.categoria} (Antiga)</option>
+                )}
                 {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
