@@ -1,4 +1,4 @@
-import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { Outlet, Link, createRootRoute } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth-context";
 
 import appCss from "../styles.css?url";
@@ -26,50 +26,9 @@ function NotFoundComponent() {
 }
 
 export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Goat Bar" },
-      { name: "description", content: "Um grande evento merece um bar a altura" },
-      { property: "og:title", content: "Goat Bar" },
-      { name: "twitter:title", content: "Goat Bar" },
-      { property: "og:description", content: "Um grande evento merece um bar a altura" },
-      { name: "twitter:description", content: "Um grande evento merece um bar a altura" },
-      { property: "og:image", content: "/favicon.ico" },
-      { name: "twitter:image", content: "/favicon.ico" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { property: "og:type", content: "website" },
-    ],
-    links: [
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Epilogue:wght@400;500;600;700;800&family=Manrope:wght@300;400;500;600;700&display=swap",
-      },
-      { rel: "icon", href: "/favicon.ico" },
-      { rel: "stylesheet", href: appCss },
-    ],
-  }),
-  shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
 });
-
-function RootShell({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="pt-BR" className="dark">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  );
-}
 
 function RootComponent() {
   return (
