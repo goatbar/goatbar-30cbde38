@@ -196,11 +196,12 @@ function DrinkCard({ drink: d, onEdit }: { drink: Drink, onEdit: () => void }) {
 function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => void, onSave: (id: string, payload: Partial<Drink>) => void }) {
   const [nome, setNome] = useState(drink.nome);
   const [categoria, setCategoria] = useState(drink.categoria);
+  const [imagem, setImagem] = useState(drink.imagem || "");
   const [steak, setSteak] = useState(drink.precoVenda7Steakhouse);
   const [bot, setBot] = useState(drink.precoVendaGoatBotequim);
   const [ingredientes, setIngredientes] = useState([...drink.ingredientes]);
 
-  const CATEGORIAS_SUGERIDAS = ["Whiskey", "Rum", "Vodka", "Campari", "Cachaça", "Espumante", "Mocktail", "Gin"];
+  const CATEGORIAS_SUGERIDAS = ["Whisky", "Rum", "Vodka", "Campari", "Cachaça", "Espumante", "Mocktail", "Gin", "Tequila"];
   const allCategories = Array.from(new Set([...CATEGORIAS_SUGERIDAS]));
 
   const addIngredient = () => {
@@ -255,6 +256,16 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
                 )}
                 {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label-eyebrow block mb-2">URL da Imagem</label>
+              <input
+                type="text"
+                value={imagem}
+                onChange={e => setImagem(e.target.value)}
+                placeholder="Ex: https://exemplo.com/foto.jpg"
+                className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
+              />
             </div>
           </div>
 
@@ -340,7 +351,7 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
         </div>
         <div className="flex items-center justify-end gap-3 px-6 py-4 bg-background/50 border-t border-border sticky bottom-0 z-10">
           <GhostButton onClick={onClose}>Cancelar</GhostButton>
-          <PrimaryButton onClick={() => onSave(drink.id, { nome, categoria, ingredientes, precoVenda7Steakhouse: steak, precoVendaGoatBotequim: bot })}>Salvar Alterações</PrimaryButton>
+          <PrimaryButton onClick={() => onSave(drink.id, { nome, categoria, imagem, ingredientes, precoVenda7Steakhouse: steak, precoVendaGoatBotequim: bot })}>Salvar Alterações</PrimaryButton>
         </div>
       </div>
     </div>
