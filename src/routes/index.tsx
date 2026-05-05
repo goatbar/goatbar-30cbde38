@@ -17,5 +17,5 @@ function Dashboard() {
   const profit = revenue-cost;
   return <><PageHeader title="Dashboard" subtitle="Dados locais (modo mock)" />
   <div className="px-8 py-7 space-y-7"><div className="grid grid-cols-4 gap-5"><StatCard label="Total revenue" value={fmtBRL(revenue)} /><StatCard label="Total cost" value={fmtBRL(cost)} /><StatCard label="Total profit" value={fmtBRL(profit)} /><StatCard label="Eventos ativos" value={String(events.length)} /></div>
-  <SectionCard title="Most profitable drinks">{drinks.sort((a,b)=>(b.price-b.cost)-(a.price-a.cost)).slice(0,5).map((d)=><div key={d.id} className="p-2 flex items-center justify-between"><div className="flex items-center gap-3"><img src={d.image} alt={d.name} className="h-10 w-10 rounded object-cover" /><span>{d.name}</span></div><span>{fmtBRL(d.price-d.cost)}</span></div>)}</SectionCard></div></>;
+  <SectionCard title="Most profitable drinks">{[...drinks].sort((a,b)=>(b.price-b.cost)-(a.price-a.cost)).slice(0,5).map((d)=><div key={d.id} className="p-2 flex items-center justify-between"><div className="flex items-center gap-3"><img src={d.image} alt={d.name} className="h-10 w-10 rounded object-cover" onError={(e)=>{ e.currentTarget.src = "/drinks/old-fashioned.jpg"; }} /><span>{d.name}</span></div><span>{fmtBRL(d.price-d.cost)}</span></div>)}</SectionCard></div></>;
 }

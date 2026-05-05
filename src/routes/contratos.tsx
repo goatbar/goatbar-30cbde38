@@ -4,7 +4,8 @@ import { SectionCard, StatusBadge, PrimaryButton, GhostButton } from "@/componen
 import { fmtBRL } from "@/lib/mock-data";
 import { useAppStore } from "@/lib/app-store";
 import { Plus, Download, Save, FileText } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import logo from "@/assets/goatbar-logo.png";
 
 export const Route = createFileRoute("/contratos")({
   component: () => (
@@ -19,6 +20,45 @@ function ContratosPage() {
   const [selectedId, setSelectedId] = useState(contratos[0]?.id);
   const contrato = contratos.find((c) => c.id === selectedId) ?? contratos[0];
   const evento = eventos.find((e) => e.id === contrato?.eventoId);
+  const [clausulasEditaveis, setClausulasEditaveis] = useState<Record<string, string>>({});
+
+  const contratoStorageKey = useMemo(
+    () => (contrato ? `goatbar-contrato-texto-${contrato.id}` : ""),
+    [contrato],
+  );
+
+  useEffect(() => {
+    if (!contratoStorageKey) return;
+    const salvo = window.localStorage.getItem(contratoStorageKey);
+    if (!salvo) {
+      setClausulasEditaveis({});
+      return;
+    }
+    try {
+      const parsed = JSON.parse(salvo) as Record<string, string>;
+      setClausulasEditaveis(parsed);
+    } catch {
+      setClausulasEditaveis({});
+    }
+  }, [contratoStorageKey]);
+
+  useEffect(() => {
+    if (!contratoStorageKey) return;
+    window.localStorage.setItem(contratoStorageKey, JSON.stringify(clausulasEditaveis));
+  }, [clausulasEditaveis, contratoStorageKey]);
+
+  if (!contrato) {
+    return (
+      <>
+        <PageHeader breadcrumb="Documentos" title="Contratos" subtitle="Templates, geração e acompanhamento de assinaturas." />
+        <div className="px-8 py-7">
+          <SectionCard title="Sem contratos" subtitle="Cadastre um evento para começar.">
+            <p className="text-sm text-muted-foreground">Nenhum contrato disponível no momento.</p>
+          </SectionCard>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -98,8 +138,8 @@ function ContratosPage() {
         {/* Preview direita */}
         <div className="xl:col-span-8">
           <SectionCard
-            title={`Contrato — ${contrato.cliente}`}
-            subtitle={contrato.template}
+            title={`Contrato — ${contrato?.cliente ?? "Sem cliente"}`}
+            subtitle={contrato?.template ?? "Sem template"}
             action={
               <div className="flex items-center gap-2">
                 <GhostButton onClick={() => window.alert("Rascunho já persistido automaticamente no navegador.")}><Save className="h-3.5 w-3.5" /> Salvar rascunho</GhostButton>
@@ -109,6 +149,7 @@ function ContratosPage() {
           >
             <div className="rounded-xl bg-foreground/[0.04] border border-border p-10 font-sans text-sm leading-relaxed text-foreground/85 max-h-[640px] overflow-y-auto">
               <div className="text-center mb-8">
+                <img src={logo} alt="Goat Bar" className="h-14 w-auto mx-auto mb-4" />
                 <div className="label-eyebrow">Goat Bar · Hospitalidade Premium</div>
                 <h2 className="font-display text-2xl font-semibold mt-3">
                   CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE BAR
@@ -123,38 +164,39 @@ function ContratosPage() {
               </p>
 
               <h3 className="font-display text-base font-semibold mt-6 mb-2">CLÁUSULA 1ª — DO OBJETO</h3>
-              <p>
-                A CONTRATADA se compromete a prestar serviços de bar para o evento{" "}
-                <strong>{evento?.nome ?? "—"}</strong>, a ser realizado em{" "}
-                <strong>{evento ? new Date(evento.data).toLocaleDateString("pt-BR") : "—"}</strong>, no
-                local <strong>{evento?.local}, {evento?.cidade}</strong>, com previsão de{" "}
-                <strong>{evento?.convidados} convidados</strong>.
-              </p>
+              <EditableClause
+                value={clausulasEditaveis.objeto}
+                defaultValue={`A CONTRATADA se compromete a prestar serviços de bar para o evento ${evento?.nome ?? "—"}, a ser realizado em ${evento ? new Date(evento.data).toLocaleDateString("pt-BR") : "—"}, no local ${evento?.local}, ${evento?.cidade}, com previsão de ${evento?.convidados ?? "—"} convidados.`}
+                onChange={(text) => setClausulasEditaveis((prev) => ({ ...prev, objeto: text }))}
+              />
 
               <h3 className="font-display text-base font-semibold mt-6 mb-2">CLÁUSULA 2ª — DO VALOR</h3>
-              <p>
-                O valor total dos serviços contratados é de{" "}
-                <strong>{evento ? fmtBRL(evento.valorNegociado) : "—"}</strong>, a ser pago conforme
-                condições comerciais acordadas em proposta anexa.
-              </p>
+              <EditableClause
+                value={clausulasEditaveis.valor}
+                defaultValue={`O valor total dos serviços contratados é de ${evento ? fmtBRL(evento.valorNegociado) : "—"}, a ser pago conforme condições comerciais acordadas em proposta anexa.`}
+                onChange={(text) => setClausulasEditaveis((prev) => ({ ...prev, valor: text }))}
+              />
 
               <h3 className="font-display text-base font-semibold mt-6 mb-2">CLÁUSULA 3ª — DO MENU</h3>
-              <p>
-                Os drinks contratados compõem o menu da operação e poderão ser ajustados em comum acordo
-                até 7 (sete) dias antes do evento.
-              </p>
+              <EditableClause
+                value={clausulasEditaveis.menu}
+                defaultValue="Os drinks contratados compõem o menu da operação e poderão ser ajustados em comum acordo até 7 (sete) dias antes do evento."
+                onChange={(text) => setClausulasEditaveis((prev) => ({ ...prev, menu: text }))}
+              />
 
               <h3 className="font-display text-base font-semibold mt-6 mb-2">CLÁUSULA 4ª — DA EQUIPE</h3>
-              <p>
-                A CONTRATADA disponibilizará equipe técnica composta por bartenders, apoio e supervisão
-                operacional, dimensionada de acordo com o número de convidados.
-              </p>
+              <EditableClause
+                value={clausulasEditaveis.equipe}
+                defaultValue="A CONTRATADA disponibilizará equipe técnica composta por bartenders, apoio e supervisão operacional, dimensionada de acordo com o número de convidados."
+                onChange={(text) => setClausulasEditaveis((prev) => ({ ...prev, equipe: text }))}
+              />
 
               <h3 className="font-display text-base font-semibold mt-6 mb-2">CLÁUSULA 5ª — DAS OBRIGAÇÕES</h3>
-              <p>
-                Cabe à CONTRATADA o fornecimento dos insumos, equipamentos e estrutura de bar acordados.
-                Cabe à CONTRATANTE garantir acesso ao local com antecedência mínima de 4 (quatro) horas.
-              </p>
+              <EditableClause
+                value={clausulasEditaveis.obrigacoes}
+                defaultValue="Cabe à CONTRATADA o fornecimento dos insumos, equipamentos e estrutura de bar acordados. Cabe à CONTRATANTE garantir acesso ao local com antecedência mínima de 4 (quatro) horas."
+                onChange={(text) => setClausulasEditaveis((prev) => ({ ...prev, obrigacoes: text }))}
+              />
 
               <p className="mt-10 text-center text-muted-foreground">
                 São Paulo, {new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
@@ -175,5 +217,23 @@ function ContratosPage() {
         </div>
       </div>
     </>
+  );
+}
+
+function EditableClause({
+  value,
+  defaultValue,
+  onChange,
+}: {
+  value?: string;
+  defaultValue: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <textarea
+      className="w-full resize-y min-h-[84px] rounded-lg border border-border bg-background/70 px-3 py-2.5 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary"
+      value={value ?? defaultValue}
+      onChange={(e) => onChange(e.target.value)}
+    />
   );
 }

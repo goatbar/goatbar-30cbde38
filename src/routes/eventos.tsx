@@ -19,5 +19,5 @@ function EventosPage() {
     await load();
   }}><Plus className="h-4 w-4" /> Create event</PrimaryButton>} />
   <div className="px-8 py-7 space-y-7"><div className="grid grid-cols-3 gap-5"><StatCard label="Eventos" value={String(events.length)} /><StatCard label="Receita" value={fmtBRL(totalPrice)} /><StatCard label="Lucro" value={fmtBRL(totalPrice-totalCost)} /></div>
-  <SectionCard title="Pipeline">{events.map((e)=><div className="p-3 border rounded mb-2" key={e.id}>{e.client_name} · {e.event_type} · {new Date(e.date).toLocaleDateString("pt-BR")}</div>)}</SectionCard></div></>;
+  <SectionCard title="Pipeline">{events.map((e)=><div className="p-3 border rounded mb-2" key={e.id}>{e.client_name ?? "Cliente"} · {e.event_type ?? "Evento"} · {new Date(e.date).toLocaleDateString("pt-BR")}</div>)}</SectionCard></div></>;
 }

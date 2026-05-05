@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useAuth } from "@/lib/auth-context";
-import logo from "@/assets/goatbar-icon.png";
+import logo from "@/assets/goatbar-logo.png";
 
 const nav: { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -51,7 +51,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
       <aside className="hidden lg:flex flex-col w-64 shrink-0 bg-sidebar border-r border-sidebar-border">
         <div className="px-6 pt-7 pb-8">
           <Link to="/" className="flex items-center gap-3">
-            <img src={logo} alt="GOAT BAR" className="h-10 w-auto" />
+            <img src={logo} alt="GOAT BAR" className="h-12 w-auto" />
             <div>
               <div className="font-display text-[13px] font-semibold tracking-[0.18em] leading-none">
                 GOAT BAR
