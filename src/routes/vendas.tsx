@@ -24,13 +24,15 @@ function VendasPage() {
   const handleCreate = () => {
     const drink = allDrinks.find((d) => d.id === selectedDrink);
     if (!drink) return;
+    const preco = unidade === "7Steakhouse" ? drink.precoVenda7Steakhouse : drink.precoVendaGoatBotequim;
+    
     addVenda({
       data: new Date().toISOString(),
       unidade,
       drinkId: drink.id,
       drinkNome: drink.nome,
       quantidade: qty,
-      precoUnitario: drink.precoVenda,
+      precoUnitario: preco,
       custoUnitario: drink.custoUnitario,
     });
     setShowModal(false);
@@ -130,11 +132,12 @@ function VendasPage() {
               {selectedDrink && (() => {
                 const d = allDrinks.find((x) => x.id === selectedDrink);
                 if (!d) return null;
+                const preco = unidade === "7Steakhouse" ? d.precoVenda7Steakhouse : d.precoVendaGoatBotequim;
                 return (
                   <div className="rounded-lg bg-background/60 border border-border p-4 text-sm space-y-1.5">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Receita</span><span className="font-medium">{fmtBRL(d.precoVenda * qty)}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Receita</span><span className="font-medium">{fmtBRL(preco * qty)}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Custo</span><span>{fmtBRL(d.custoUnitario * qty)}</span></div>
-                    <div className="flex justify-between text-success"><span>Lucro</span><span className="font-semibold">{fmtBRL((d.precoVenda - d.custoUnitario) * qty)}</span></div>
+                    <div className="flex justify-between text-success"><span>Lucro</span><span className="font-semibold">{fmtBRL((preco - d.custoUnitario) * qty)}</span></div>
                   </div>
                 );
               })()}

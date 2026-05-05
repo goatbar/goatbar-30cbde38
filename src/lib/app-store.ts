@@ -10,7 +10,7 @@ import {
   type Venda,
 } from "@/lib/mock-data";
 
-const STORAGE_KEY = "goatbar-functional-store-v1";
+const STORAGE_KEY = "goatbar-functional-store-v2";
 
 type AppStore = {
   vendas: Venda[];

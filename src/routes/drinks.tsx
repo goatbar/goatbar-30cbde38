@@ -24,7 +24,7 @@ function DrinksPage() {
 
   const ativos = allDrinks.filter((d) => d.status === "ativo");
   const custoMedio = ativos.length ? ativos.reduce((a, d) => a + d.custoUnitario, 0) / ativos.length : 0;
-  const margemMedia = ativos.length ? ativos.reduce((a, d) => a + ((d.precoVenda - d.custoUnitario) / d.precoVenda) * 100, 0) / ativos.length : 0;
+  const margemMedia = ativos.length ? ativos.reduce((a, d) => a + ((d.precoVenda7Steakhouse - d.custoUnitario) / d.precoVenda7Steakhouse) * 100, 0) / ativos.length : 0;
 
   return (
     <>
@@ -85,7 +85,9 @@ function DrinksPage() {
 }
 
 function DrinkCard({ drink: d }: { drink: Drink }) {
-  const margem = ((d.precoVenda - d.custoUnitario) / d.precoVenda) * 100;
+  const margemEventos = ((d.precoVendaEventos - d.custoUnitario) / d.precoVendaEventos) * 100;
+  const margem7S = ((d.precoVenda7Steakhouse - d.custoUnitario) / d.precoVenda7Steakhouse) * 100;
+  const margemGB = ((d.precoVendaGoatBotequim - d.custoUnitario) / d.precoVendaGoatBotequim) * 100;
   return (
     <div className={`rounded-xl border transition-all ${d.status === "inativo" ? "border-border opacity-60" : "border-border hover:border-border-strong"} bg-surface/50`}>
       {d.imagem ? (
@@ -111,19 +113,27 @@ function DrinkCard({ drink: d }: { drink: Drink }) {
           </span>
         </div>
         <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{d.descricao}</p>
-        <div className="mt-3 pt-3 border-t border-border/60 grid grid-cols-3 gap-2 text-xs">
+        <div className="mt-3 pt-3 border-t border-border/60 grid grid-cols-2 gap-y-3 gap-x-2 text-xs">
           <div>
             <div className="text-muted-foreground">Custo</div>
             <div className="font-medium mt-0.5">{fmtBRL(d.custoUnitario)}</div>
           </div>
           <div>
-            <div className="text-muted-foreground">Preço</div>
-            <div className="font-medium mt-0.5">{fmtBRL(d.precoVenda)}</div>
+            <div className="text-muted-foreground">Eventos</div>
+            <div className="font-medium mt-0.5 flex gap-1 items-center">
+              {fmtBRL(d.precoVendaEventos)} <span className={`text-[9px] ${margemEventos >= 50 ? "text-success" : margemEventos >= 35 ? "text-warning" : "text-destructive"}`}>({margemEventos.toFixed(0)}%)</span>
+            </div>
           </div>
           <div>
-            <div className="text-muted-foreground">Margem</div>
-            <div className={`font-medium mt-0.5 ${margem >= 50 ? "text-success" : margem >= 35 ? "text-warning" : "text-destructive"}`}>
-              {margem.toFixed(0)}%
+            <div className="text-muted-foreground">7Steakhouse</div>
+            <div className="font-medium mt-0.5 flex gap-1 items-center">
+              {fmtBRL(d.precoVenda7Steakhouse)} <span className={`text-[9px] ${margem7S >= 50 ? "text-success" : margem7S >= 35 ? "text-warning" : "text-destructive"}`}>({margem7S.toFixed(0)}%)</span>
+            </div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Goat Botequim</div>
+            <div className="font-medium mt-0.5 flex gap-1 items-center">
+              {fmtBRL(d.precoVendaGoatBotequim)} <span className={`text-[9px] ${margemGB >= 50 ? "text-success" : margemGB >= 35 ? "text-warning" : "text-destructive"}`}>({margemGB.toFixed(0)}%)</span>
             </div>
           </div>
         </div>

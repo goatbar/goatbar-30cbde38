@@ -10,7 +10,9 @@ export interface Drink {
   descricao: string;
   ingredientes: string[];
   custoUnitario: number;
-  precoVenda: number;
+  precoVendaEventos: number;
+  precoVenda7Steakhouse: number;
+  precoVendaGoatBotequim: number;
   status: "ativo" | "inativo";
   disponibilidade: Unidade[];
   imagem?: string;
@@ -91,7 +93,9 @@ interface DrinkSeed {
   ingredientes: { nome: string; custo: number }[];
   status?: "ativo" | "inativo";
   disponibilidade?: Unidade[];
-  precoVenda?: number;
+  precoVendaEventos?: number;
+  precoVenda7Steakhouse?: number;
+  precoVendaGoatBotequim?: number;
   imagem?: string;
 }
 
@@ -136,7 +140,9 @@ export const drinks: Drink[] = drinkSeeds.map((s) => {
     descricao: s.descricao,
     ingredientes: s.ingredientes.map((i) => i.nome),
     custoUnitario: custo,
-    precoVenda: s.precoVenda ?? precoSugerido(custo),
+    precoVendaEventos: s.precoVendaEventos ?? Math.max(18, Math.round((custo * 3.5) / 2) * 2),
+    precoVenda7Steakhouse: s.precoVenda7Steakhouse ?? Math.max(18, Math.round((custo * 3.0) / 2) * 2),
+    precoVendaGoatBotequim: s.precoVendaGoatBotequim ?? Math.max(15, Math.round((custo * 2.8) / 2) * 2),
     status: s.status ?? "ativo",
     disponibilidade: s.disponibilidade ?? todasUnidades,
     imagem: s.imagem,
@@ -147,66 +153,30 @@ export const fichaTecnica = Object.fromEntries(
   drinkSeeds.map((s) => [s.id, s.ingredientes]),
 );
 
-export const margem = (d: Drink) => ((d.precoVenda - d.custoUnitario) / d.precoVenda) * 100;
+export const margem = (precoVenda: number, custo: number) => ((precoVenda - custo) / precoVenda) * 100;
 
 // ─── Vendas (90 dias) ─────────────────────────────────────────────────────
-function geraVendas(): Venda[] {
-  const out: Venda[] = [];
-  const hoje = new Date();
-  const ativas = drinks.filter((d) => d.status === "ativo");
-  for (let i = 0; i < 90; i++) {
-    const data = new Date(hoje);
-    data.setDate(hoje.getDate() - i);
-    const numLanc = 6 + Math.floor(Math.random() * 8);
-    for (let j = 0; j < numLanc; j++) {
-      const d = ativas[Math.floor(Math.random() * ativas.length)];
-      const unidades = d.disponibilidade.filter((u) => u !== "Eventos");
-      const u: Unidade = unidades.length ? unidades[Math.floor(Math.random() * unidades.length)] : "7Steakhouse";
-      const qtd = 1 + Math.floor(Math.random() * 6);
-      out.push({
-        id: `v${i}-${j}`,
-        data: data.toISOString(),
-        unidade: u,
-        drinkId: d.id,
-        drinkNome: d.nome,
-        quantidade: qtd,
-        precoUnitario: d.precoVenda,
-        custoUnitario: d.custoUnitario,
-      });
-    }
-  }
-  return out;
-}
-export const vendas: Venda[] = geraVendas();
+export const vendas: Venda[] = [];
 
 // ─── Eventos ──────────────────────────────────────────────────────────────
-export const eventos: Evento[] = [
-  { id: "e1", nome: "Casamento Helena & Rafael", cliente: "Helena Vasconcellos", telefone: "(11) 98765-4321", email: "helena@email.com", data: "2026-05-12", horario: "19:00", local: "Villa Bisutti", cidade: "São Paulo", tipo: "Casamento", convidados: 220, drinks: ["d1", "d3", "d7", "d10"], equipe: 9, valorNegociado: 48000, custoPrevisto: 18500, observacoes: "Bar principal + ilha de drinks autorais.", status: "confirmado", contratoId: "c1" },
-  { id: "e2", nome: "Corporativo Itaú BBA", cliente: "Itaú BBA", telefone: "(11) 3000-1000", email: "eventos@itaubba.com", data: "2026-04-29", horario: "18:30", local: "Auditório Faria Lima", cidade: "São Paulo", tipo: "Corporativo", convidados: 320, drinks: ["d4", "d10", "d8"], equipe: 12, valorNegociado: 62000, custoPrevisto: 24000, observacoes: "Coquetel de lançamento.", status: "em_andamento", contratoId: "c2" },
-  { id: "e3", nome: "Aniversário 40 — Marcelo", cliente: "Marcelo Andrade", telefone: "(11) 99999-1111", email: "marcelo@email.com", data: "2026-06-08", horario: "21:00", local: "Casa do Cliente", cidade: "Alphaville", tipo: "Aniversário", convidados: 90, drinks: ["d1", "d2", "d6"], equipe: 4, valorNegociado: 19500, custoPrevisto: 7800, observacoes: "Whisky bar temático.", status: "confirmado" },
-  { id: "e4", nome: "Casamento Bárbara & Tiago", cliente: "Bárbara Lima", telefone: "(11) 91234-5678", email: "barbara@email.com", data: "2026-03-15", horario: "20:00", local: "Fazenda 7 Lagos", cidade: "Itu", tipo: "Casamento", convidados: 180, drinks: ["d3", "d5", "d10"], equipe: 8, valorNegociado: 42000, custoPrevisto: 16200, observacoes: "Bar com identidade rústica.", status: "concluido" },
-  { id: "e5", nome: "Lançamento Porsche Cayenne", cliente: "Porsche Center", telefone: "(11) 4000-5555", email: "marketing@porsche.com.br", data: "2026-05-22", horario: "19:30", local: "Showroom Berrini", cidade: "São Paulo", tipo: "Corporativo", convidados: 140, drinks: ["d2", "d6", "d11"], equipe: 6, valorNegociado: 35000, custoPrevisto: 13800, observacoes: "VIP, foco em destilados premium.", status: "rascunho" },
-];
+export const eventos: Evento[] = [];
 
 // ─── Contratos ────────────────────────────────────────────────────────────
-export const contratos: Contrato[] = [
-  { id: "c1", eventoId: "e1", cliente: "Helena Vasconcellos", status: "assinado", criadoEm: "2026-01-15", template: "Casamento Padrão" },
-  { id: "c2", eventoId: "e2", cliente: "Itaú BBA", status: "enviado", criadoEm: "2026-02-02", template: "Corporativo" },
-  { id: "c3", eventoId: "e3", cliente: "Marcelo Andrade", status: "rascunho", criadoEm: "2026-02-20", template: "Aniversário" },
-];
+export const contratos: Contrato[] = [];
 
 // ─── Parâmetros de cálculo ────────────────────────────────────────────────
-export const parametros: ParametroCalculo[] = [
   { id: "p1", chave: "repasse_percentual", label: "Percentual de repasse", valor: 15, unidade: "%", grupo: "Repasse", descricao: "Aplicado sobre receita líquida" },
   { id: "p2", chave: "custo_equipe_hora", label: "Custo de equipe por hora", valor: 65, unidade: "R$", grupo: "Custos" },
   { id: "p3", chave: "custo_operacional_evento", label: "Custo operacional fixo por evento", valor: 850, unidade: "R$", grupo: "Custos" },
   { id: "p4", chave: "margem_minima", label: "Margem mínima aceitável", valor: 35, unidade: "%", grupo: "Operacional" },
-  { id: "p5", chave: "markup_padrao", label: "Markup padrão", valor: 3.2, unidade: "x", grupo: "Operacional" },
-  { id: "p6", chave: "perda_estimada", label: "Perdas estimadas", valor: 4, unidade: "%", grupo: "Operacional" },
-  { id: "p7", chave: "quebra_copos", label: "Quebra de copos por 100 convidados", valor: 6, unidade: "un", grupo: "Operacional" },
-  { id: "p8", chave: "consumo_medio_pessoa", label: "Consumo médio por convidado", valor: 4.5, unidade: "doses", grupo: "Consumo" },
-  { id: "p9", chave: "gelo_kg_pessoa", label: "Gelo por convidado", valor: 1.2, unidade: "kg", grupo: "Consumo" },
-  { id: "p10", chave: "insumos_pessoa", label: "Insumos por convidado", valor: 4.5, unidade: "R$", grupo: "Consumo" },
+  { id: "p5", chave: "perda_estimada", label: "Perdas estimadas", valor: 4, unidade: "%", grupo: "Operacional" },
+  { id: "p6", chave: "quebra_copos", label: "Quebra de copos por 100 convidados", valor: 6, unidade: "un", grupo: "Operacional" },
+  { id: "p7", chave: "consumo_medio_pessoa", label: "Consumo médio por convidado", valor: 4.5, unidade: "doses", grupo: "Consumo" },
+  { id: "p8", chave: "gelo_kg_pessoa", label: "Gelo por convidado", valor: 1.2, unidade: "kg", grupo: "Consumo" },
+  { id: "p9", chave: "insumos_pessoa", label: "Insumos por convidado", valor: 4.5, unidade: "R$", grupo: "Consumo" },
+  { id: "p10", chave: "markup_eventos", label: "Markup Eventos", valor: 3.5, unidade: "x", grupo: "Precificação" },
+  { id: "p11", chave: "markup_7steakhouse", label: "Markup 7Steakhouse", valor: 3.0, unidade: "x", grupo: "Precificação" },
+  { id: "p12", chave: "markup_goatbotequim", label: "Markup Goat Botequim", valor: 2.8, unidade: "x", grupo: "Precificação" },
 ];
 
 export const tiposEvento: TipoEvento[] = [
