@@ -200,7 +200,7 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
   const [bot, setBot] = useState(drink.precoVendaGoatBotequim);
   const [ingredientes, setIngredientes] = useState([...drink.ingredientes]);
 
-  const CATEGORIAS_SUGERIDAS = ["Whiskey", "Rum", "Vodka", "Campari", "Cachaça", "Espumante", "Mocktail"];
+  const CATEGORIAS_SUGERIDAS = ["Whiskey", "Rum", "Vodka", "Campari", "Cachaça", "Espumante", "Mocktail", "Gin"];
   const allCategories = Array.from(new Set([...CATEGORIAS_SUGERIDAS]));
 
   const addIngredient = () => {
