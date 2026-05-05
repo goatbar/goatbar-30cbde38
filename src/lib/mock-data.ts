@@ -30,6 +30,28 @@ export interface Venda {
   observacoes?: string;
 }
 
+export interface GastoDiverso {
+  id: string;
+  descricao: string;
+  valor: number;
+}
+
+export interface EventoHistoricoAlteracao {
+  data: string; // ISO
+  usuario?: string;
+  camposAlterados: string[];
+  valorAntigo: string;
+  valorNovo: string;
+}
+
+export interface EventoHistoricoNegociacao {
+  data: string;
+  status: string;
+  observacao: string;
+}
+
+export type EventoStatus = "novo_orcamento" | "esperando_envio" | "orcamento_enviado" | "aguardando_retorno" | "fazer_contato" | "dados_solicitados" | "em_assinatura" | "proposta_aceita" | "proposta_recusada" | "confirmado" | "realizado" | "cancelado" | "rascunho" | "em_andamento" | "concluido";
+
 export interface Evento {
   id: string;
   nome: string;
@@ -43,12 +65,33 @@ export interface Evento {
   tipo: string;
   convidados: number;
   drinks: string[]; // drink ids
-  equipe: number;
+  observacoes: string;
+  status: EventoStatus;
+  contratoId?: string;
+
+  // Novos campos de orçamento
+  drinksPorPessoa: number;
+  markupAdicionalDrinks: number;
+  equipe: {
+    bartender: { qtd: number; valorUnitario: number };
+    keeper: { qtd: number; valorUnitario: number };
+    copeira: { qtd: number; valorUnitario: number };
+  };
+  gelo: { pacotesEstimados?: number; pacotesOverride?: number; valorUnitario: number };
+  viagem: { incluir: boolean; valor: number };
+  gastosDiversos: GastoDiverso[];
+  lucroDesejado: number;
+  pagamento: {
+    formaPagamento: string;
+    percentualPago: number;
+    dataPagamento?: string;
+  };
+  historicoAlteracoes: EventoHistoricoAlteracao[];
+  historicoNegociacao: EventoHistoricoNegociacao[];
+  
+  // Legacy (can be synced with calculation)
   valorNegociado: number;
   custoPrevisto: number;
-  observacoes: string;
-  status: "rascunho" | "confirmado" | "em_andamento" | "concluido" | "cancelado";
-  contratoId?: string;
 }
 
 export interface Contrato {
@@ -222,6 +265,78 @@ export function calcularEvento(evento: Evento) {
     lucro,
     margemPct,
     rentabilidadePorConvidado: lucro / evento.convidados,
+  };
+}
+
+export function calcularOrcamentoEvento(evento: Evento) {
+  // 1 & 2 & 3. Média de custo dos drinks selecionados
+  let mediaCustoDrinks = 0;
+  if (evento.drinks.length > 0) {
+    const drinksData = evento.drinks.map((id) => drinks.find((d) => d.id === id)).filter(Boolean) as typeof drinks;
+    const somaCustoDrinks = drinksData.reduce((acc, d) => acc + d.custoUnitario, 0);
+    mediaCustoDrinks = somaCustoDrinks / drinksData.length;
+  }
+
+  // 4 & 5. Custo base dos drinks
+  const drinksPorPessoa = evento.drinksPorPessoa || 0;
+  const custoBaseDrinks = mediaCustoDrinks * drinksPorPessoa * evento.convidados;
+
+  // 6 & 7. Valor final dos drinks
+  const percentualAdicional = evento.markupAdicionalDrinks || 0;
+  const valorDrinksEvento = custoBaseDrinks * (1 + percentualAdicional / 100);
+
+  // Equipe
+  const valorEquipe = 
+    ((evento.equipe?.bartender?.qtd || 0) * (evento.equipe?.bartender?.valorUnitario || 200)) +
+    ((evento.equipe?.keeper?.qtd || 0) * (evento.equipe?.keeper?.valorUnitario || 200)) +
+    ((evento.equipe?.copeira?.qtd || 0) * (evento.equipe?.copeira?.valorUnitario || 200));
+
+  // Gelo
+  const pacotesCalculados = Math.ceil((evento.convidados / 100) * 35);
+  const pacotesFinais = evento.gelo?.pacotesOverride !== undefined ? evento.gelo.pacotesOverride : pacotesCalculados;
+  const valorGelo = pacotesFinais * (evento.gelo?.valorUnitario || 6);
+
+  // Gasolina
+  const valorGasolina = evento.viagem?.incluir ? (evento.viagem?.valor || 0) : 0;
+
+  // Gastos diversos
+  const valorGastosDiversos = (evento.gastosDiversos || []).reduce((acc, item) => acc + (item.valor || 0), 0);
+
+  // Lucro
+  const lucro = evento.lucroDesejado || 0;
+
+  // Resumo final
+  const valorTotalOrcamento = valorDrinksEvento + valorEquipe + valorGelo + valorGasolina + valorGastosDiversos + lucro;
+  const mediaPorPessoa = evento.convidados > 0 ? valorTotalOrcamento / evento.convidados : 0;
+  const custoTotalOrcamento = custoBaseDrinks + valorEquipe + valorGelo + valorGasolina + valorGastosDiversos;
+
+  // Pagamento
+  const percPago = evento.pagamento?.percentualPago || 0;
+  const valorPago = valorTotalOrcamento * (percPago / 100);
+  const valorPendente = valorTotalOrcamento - valorPago;
+  const percPendente = 100 - percPago;
+  
+  let statusPagamento = "Não pago";
+  if (percPago === 100) statusPagamento = "Pago integralmente";
+  else if (percPago > 0) statusPagamento = "Parcialmente pago";
+
+  return {
+    mediaCustoDrinks,
+    custoBaseDrinks,
+    valorDrinksEvento,
+    valorEquipe,
+    pacotesGelo: pacotesFinais,
+    valorGelo,
+    valorGasolina,
+    valorGastosDiversos,
+    lucro,
+    valorTotalOrcamento,
+    custoTotalOrcamento,
+    mediaPorPessoa,
+    valorPago,
+    valorPendente,
+    percPendente,
+    statusPagamento,
   };
 }
 

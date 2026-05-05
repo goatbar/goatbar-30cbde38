@@ -10,7 +10,7 @@ import {
   type Venda,
 } from "@/lib/mock-data";
 
-const STORAGE_KEY = "goatbar-functional-store-v2";
+const STORAGE_KEY = "goatbar-functional-store-v3";
 
 type AppStore = {
   vendas: Venda[];
@@ -70,6 +70,12 @@ export function useAppStore() {
         setStore((prev) => ({
           ...prev,
           contratos: [{ ...input, id: `c${Date.now()}`, criadoEm: new Date().toISOString() }, ...prev.contratos],
+        }));
+      },
+      updateEvento(id: string, payload: Partial<Evento>) {
+        setStore((prev) => ({
+          ...prev,
+          eventos: prev.eventos.map((e) => (e.id === id ? { ...e, ...payload } : e)),
         }));
       },
       updateParametros(updated: ParametroCalculo[]) {

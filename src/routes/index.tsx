@@ -4,7 +4,7 @@ import { StatCard, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
 import { TrendingUp, ShoppingBag, CalendarRange, Wine, ChevronRight } from "lucide-react";
 import { useAppStore } from "@/lib/app-store";
-import { drinks as allDrinks, rankingDrinks } from "@/lib/mock-data";
+import { drinks as allDrinks, rankingDrinks, calcularOrcamentoEvento } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/")({ component: () => <AppShell><Dashboard /></AppShell> });
 
@@ -16,12 +16,23 @@ function Dashboard() {
   const lucro = receita - custo;
   const margem = receita > 0 ? ((lucro / receita) * 100).toFixed(1) : "0.0";
 
-  const receitaEventos = eventos.reduce((a, e) => a + e.valorNegociado, 0);
-  const receitaTotal = receita + receitaEventos;
+  const eventosAtivos = eventos.filter((e) => !["cancelado", "proposta_recusada"].includes(e.status));
+  const proximosEventos = [...eventosAtivos].sort((a, b) => new Date(a.data || 0).getTime() - new Date(b.data || 0).getTime()).filter(e => new Date(e.data || 0).getTime() >= new Date().setHours(0,0,0,0)).slice(0, 5);
 
-  const topDrinks = rankingDrinks().slice(0, 5);
-  const eventosAtivos = eventos.filter((e) => ["confirmado", "em_andamento", "rascunho"].includes(e.status));
-  const proximosEventos = [...eventosAtivos].sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime()).slice(0, 5);
+  const mesAtual = new Date().getMonth();
+  const eventosMes = eventos.filter(e => new Date(e.data || 0).getMonth() === mesAtual);
+  
+  const orcadosMes = eventosMes.length;
+  const confirmadosMes = eventosMes.filter(e => ["confirmado", "realizado", "proposta_aceita"].includes(e.status)).length;
+  
+  const valorEnviados = eventosAtivos.filter(e => ["orcamento_enviado", "aguardando_retorno", "em_assinatura"].includes(e.status)).reduce((a, e) => a + calcularOrcamentoEvento(e).valorTotalOrcamento, 0);
+  const valorConfirmados = eventosAtivos.filter(e => ["confirmado", "realizado", "proposta_aceita"].includes(e.status)).reduce((a, e) => a + calcularOrcamentoEvento(e).valorTotalOrcamento, 0);
+  
+  const ticketMedio = eventosAtivos.length ? eventosAtivos.reduce((a, e) => a + calcularOrcamentoEvento(e).valorTotalOrcamento, 0) / eventosAtivos.length : 0;
+  const mediaPorPessoa = eventosAtivos.length ? eventosAtivos.reduce((a, e) => a + calcularOrcamentoEvento(e).mediaPorPessoa, 0) / eventosAtivos.length : 0;
+  
+  const aguardandoRetorno = eventosAtivos.filter(e => e.status === "aguardando_retorno").length;
+  const pagamentoPendente = eventosAtivos.filter(e => ["confirmado", "proposta_aceita"].includes(e.status) && calcularOrcamentoEvento(e).percPendente > 0).length;
 
   return (
     <>
@@ -33,26 +44,17 @@ function Dashboard() {
       <div className="px-8 py-7 space-y-7">
         {/* Stats */}
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
-          <StatCard
-            label="Receita total"
-            value={fmtBRL(receitaTotal)}
-            icon={<TrendingUp className="h-4 w-4" />}
-          />
-          <StatCard
-            label="Lucro (vendas)"
-            value={fmtBRL(lucro)}
-            icon={<ShoppingBag className="h-4 w-4" />}
-          />
-          <StatCard
-            label="Margem média"
-            value={`${margem}%`}
-            icon={<Wine className="h-4 w-4" />}
-          />
-          <StatCard
-            label="Eventos ativos"
-            value={String(eventosAtivos.length)}
-            icon={<CalendarRange className="h-4 w-4" />}
-          />
+          <StatCard label="Orçados no Mês" value={String(orcadosMes)} icon={<CalendarRange className="h-4 w-4" />} />
+          <StatCard label="Confirmados no Mês" value={String(confirmadosMes)} icon={<CalendarRange className="h-4 w-4" />} />
+          <StatCard label="Valor Enviado" value={fmtBRL(valorEnviados)} icon={<TrendingUp className="h-4 w-4" />} />
+          <StatCard label="Valor Confirmado" value={fmtBRL(valorConfirmados)} icon={<TrendingUp className="h-4 w-4" />} />
+        </div>
+
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
+          <StatCard label="Ticket Médio" value={fmtBRL(ticketMedio)} />
+          <StatCard label="Média / Pessoa" value={fmtBRL(mediaPorPessoa)} />
+          <StatCard label="Aguardando Retorno" value={String(aguardandoRetorno)} />
+          <StatCard label="Pagamento Pendente" value={String(pagamentoPendente)} />
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
@@ -132,21 +134,19 @@ function Dashboard() {
               </div>
             </div>
             <div>
-              <div className="label-eyebrow">Eventos</div>
+              <div className="label-eyebrow">Eventos (Confirmados)</div>
               <div className="mt-3 space-y-2 text-sm">
-                <Row k="Receita prevista" v={fmtBRL(receitaEventos)} />
-                <Row k="Custo previsto" v={fmtBRL(eventos.reduce((a, e) => a + e.custoPrevisto, 0))} />
-                <Row k="Lucro previsto" v={fmtBRL(receitaEventos - eventos.reduce((a, e) => a + e.custoPrevisto, 0))} highlight />
-                <Row k="Total eventos" v={String(eventos.length)} />
+                <Row k="Receita confirmada" v={fmtBRL(valorConfirmados)} highlight />
+                <Row k="Ticket médio" v={fmtBRL(ticketMedio)} />
+                <Row k="Média por pessoa" v={fmtBRL(mediaPorPessoa)} />
+                <Row k="Total em pipeline" v={String(eventosAtivos.length)} />
               </div>
             </div>
             <div>
-              <div className="label-eyebrow">Consolidado</div>
+              <div className="label-eyebrow">Ações Necessárias</div>
               <div className="mt-3 space-y-2 text-sm">
-                <Row k="Receita total" v={fmtBRL(receitaTotal)} />
-                <Row k="Total transações" v={String(vendas.length)} />
-                <Row k="Drinks no catálogo" v={String(allDrinks.length)} />
-                <Row k="Drinks ativos" v={String(allDrinks.filter((d) => d.status === "ativo").length)} />
+                <Row k="Aguardando retorno" v={String(aguardandoRetorno)} />
+                <Row k="Pagamentos pendentes" v={String(pagamentoPendente)} />
               </div>
             </div>
           </div>
