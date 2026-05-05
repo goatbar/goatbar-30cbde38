@@ -19,8 +19,8 @@ function DrinksPage() {
   const blankDrink: Drink = {
     id: "new",
     nome: "",
-    categoria: "Whiskey",
-    descricao: "Novo drink cadastrado manualmente.",
+    categoria: "Whisky",
+    descricao: "",
     ingredientes: [],
     custoUnitario: 0,
     precoVenda7Steakhouse: 0,
@@ -196,6 +196,7 @@ function DrinkCard({ drink: d, onEdit }: { drink: Drink, onEdit: () => void }) {
 function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => void, onSave: (id: string, payload: Partial<Drink>) => void }) {
   const [nome, setNome] = useState(drink.nome);
   const [categoria, setCategoria] = useState(drink.categoria);
+  const [descricao, setDescricao] = useState(drink.descricao || "");
   const [imagem, setImagem] = useState(drink.imagem || "");
   const [steak, setSteak] = useState(drink.precoVenda7Steakhouse);
   const [bot, setBot] = useState(drink.precoVendaGoatBotequim);
@@ -203,6 +204,17 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
 
   const CATEGORIAS_SUGERIDAS = ["Whisky", "Rum", "Vodka", "Campari", "Cachaça", "Espumante", "Mocktail", "Gin", "Tequila"];
   const allCategories = Array.from(new Set([...CATEGORIAS_SUGERIDAS]));
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagem(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const addIngredient = () => {
     setIngredientes([...ingredientes, { nome: "", custo: 0 }]);
@@ -258,14 +270,38 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
               </select>
             </div>
             <div className="sm:col-span-2">
-              <label className="label-eyebrow block mb-2">URL da Imagem</label>
-              <input
-                type="text"
-                value={imagem}
-                onChange={e => setImagem(e.target.value)}
-                placeholder="Ex: https://exemplo.com/foto.jpg"
-                className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
+              <label className="label-eyebrow block mb-2">Descrição do Drink</label>
+              <textarea
+                value={descricao}
+                onChange={e => setDescricao(e.target.value)}
+                rows={2}
+                placeholder="Descreva brevemente o drink..."
+                className="w-full px-4 py-2 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors resize-none"
               />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label-eyebrow block mb-2">Imagem do Drink</label>
+              <div className="flex items-center gap-4">
+                {imagem && (
+                  <img src={imagem} alt="Preview" className="h-16 w-16 rounded-lg object-cover border border-border" />
+                )}
+                <div className="flex-1">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                    id="drink-image-upload"
+                  />
+                  <label
+                    htmlFor="drink-image-upload"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-surface text-sm font-medium hover:border-border-strong transition-colors cursor-pointer"
+                  >
+                    Selecionar Arquivo
+                  </label>
+                  <p className="text-[10px] text-muted-foreground mt-1">PNG ou JPG (Tamanho sugerido: 400x400)</p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -351,7 +387,7 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
         </div>
         <div className="flex items-center justify-end gap-3 px-6 py-4 bg-background/50 border-t border-border sticky bottom-0 z-10">
           <GhostButton onClick={onClose}>Cancelar</GhostButton>
-          <PrimaryButton onClick={() => onSave(drink.id, { nome, categoria, imagem, ingredientes, precoVenda7Steakhouse: steak, precoVendaGoatBotequim: bot })}>Salvar Alterações</PrimaryButton>
+          <PrimaryButton onClick={() => onSave(drink.id, { nome, categoria, imagem, descricao, ingredientes, precoVenda7Steakhouse: steak, precoVendaGoatBotequim: bot })}>Salvar Alterações</PrimaryButton>
         </div>
       </div>
     </div>
