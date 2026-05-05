@@ -89,7 +89,14 @@ export function useAppStore() {
   const [store, setStore] = useState<AppStore>(() => readStore());
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    } catch (e) {
+      if (e instanceof Error && e.name === "QuotaExceededError") {
+        console.error("LocalStorage quota exceeded!");
+        alert("Erro: Espaço de armazenamento cheio. Tente usar imagens menores ou remover alguns registros.");
+      }
+    }
   }, [store]);
 
   const actions = useMemo(

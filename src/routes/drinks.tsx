@@ -210,7 +210,36 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setImagem(reader.result as string);
+        const img = new Image();
+        img.onload = () => {
+          // Resize image to max 300px width/height
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 300;
+
+          if (width > height) {
+            if (width > maxDim) {
+              height *= maxDim / width;
+              width = maxDim;
+            }
+          } else {
+            if (height > maxDim) {
+              width *= maxDim / height;
+              height = maxDim;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, width, height);
+          
+          // Use lower quality to save space
+          const resizedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+          setImagem(resizedBase64);
+        };
+        img.src = reader.result as string;
       };
       reader.readAsDataURL(file);
     }
