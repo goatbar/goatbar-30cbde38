@@ -11,8 +11,8 @@ interface AuthContextValue {
 }
 
 const AUTH_KEY = "goatbar_auth";
-const ADMIN_EMAILS = ["admin@goat.com", "admin@goatbar.com"];
-const ADMIN_PASSWORDS = ["123456", "admin123"];
+const ADMIN_EMAILS = ["drinksgoatbar@gmail.com"];
+const ADMIN_PASSWORDS = ["Goatbar@1234"];
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
