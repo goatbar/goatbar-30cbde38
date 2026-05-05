@@ -2,7 +2,17 @@ import { drinks as seedDrinks } from "@/lib/mock-data";
 
 type Drink = { id: string; name: string; cost: number; price: number; image: string };
 type Sale = { id: string; total_revenue: number; total_cost: number; date: string };
-type Event = { id: string; title: string; total_price: number; total_cost: number; date: string };
+type Event = {
+  id: string;
+  client_name: string;
+  event_type: string;
+  total_price: number;
+  total_cost: number;
+  date: string;
+  guests?: number;
+  duration?: number;
+  total_profit?: number;
+};
 
 type Inventory = { id: string; name: string; quantity: number; unit?: string; updated_at?: string };
 type Movement = { id: string; inventory_id: string; type: "in" | "out" | "loss"; quantity: number; source: "event" | "sale" | "manual"; created_at: string };
@@ -23,7 +33,7 @@ const seed = {
     { id: "s1", total_revenue: 4200, total_cost: 1680, date: new Date().toISOString() },
     { id: "s2", total_revenue: 3500, total_cost: 1400, date: new Date().toISOString() },
   ] satisfies Sale[],
-  events: [{ id: "e1", title: "Evento Corporativo", total_price: 6200, total_cost: 2800, date: new Date().toISOString() }] satisfies Event[],
+  events: [{ id: "e1", client_name: "Cliente Seed", event_type: "Corporativo", total_price: 6200, total_cost: 2800, date: new Date().toISOString() }] satisfies Event[],
   inventory: [] as Inventory[],
   movements: [] as Movement[],
 };

@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Navigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import logo from "@/assets/goatbar-icon.png";
+import logo from "@/assets/goatbar-logo.png";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -21,7 +21,6 @@ function LoginPage() {
   }
 
   const handleSubmit = async (e: FormEvent) => {
-    console.log("[Login] submit acionado", { email: email.trim() });
     e.preventDefault();
     setError(null);
     setLoading(true);
@@ -71,6 +70,9 @@ function LoginPage() {
           <div className="label-eyebrow mb-3">Acesso interno</div>
           <h1 className="font-display text-3xl font-semibold leading-tight">Bem-vindo de volta</h1>
           <p className="text-sm text-muted-foreground mt-2">Entre com suas credenciais para acessar o painel.</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            Acesso demo: <strong>admin@goat.com</strong> / <strong>123456</strong>
+          </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
             <div>

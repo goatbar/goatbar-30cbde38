@@ -25,7 +25,7 @@ function DrinksPage() {
         <StatCard label="Margem média" value={`${drinks.length ? ((drinks.reduce((a,d)=>a+((d.price-d.cost)/d.price),0)/drinks.length)*100).toFixed(1) : "0.0"}%`} icon={<TrendingUp className="h-4 w-4" />} />
       </div>
       <SectionCard title="Catálogo">
-        <div className="space-y-2">{drinks.map((d)=><div key={d.id} className="p-3 border rounded flex items-center justify-between gap-3"><div className="flex items-center gap-3"><img src={d.image} alt={d.name} className="h-10 w-10 rounded object-cover" /><span>{d.name}</span></div><span>{fmtBRL2(d.price)} · custo {fmtBRL2(d.cost)}</span></div>)}</div>
+        <div className="space-y-2">{drinks.map((d)=><div key={d.id} className="p-3 border rounded flex items-center justify-between gap-3"><div className="flex items-center gap-3"><img src={d.image} alt={d.name} className="h-10 w-10 rounded object-cover" onError={(e)=>{ e.currentTarget.src = "/drinks/old-fashioned.jpg"; }} /><span>{d.name}</span></div><span>{fmtBRL2(d.price)} · custo {fmtBRL2(d.cost)}</span></div>)}</div>
       </SectionCard>
     </div>
   </>;
