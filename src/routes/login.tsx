@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Navigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import logo from "@/assets/goatbar-logo.png";
+import logo from "@/assets/goatbar-icon.png";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -62,8 +62,8 @@ function LoginPage() {
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-12 relative z-10">
-        <div className="w-full max-w-sm">
+      <div className="flex-1 flex items-center justify-center p-6 lg:p-12 relative z-20 pointer-events-auto">
+        <div className="w-full max-w-sm relative z-20 pointer-events-auto">
           <div className="flex lg:hidden items-center gap-3 mb-10">
             <img src={logo} alt="GOAT BAR" className="h-12 w-auto" />
           </div>
