@@ -19,6 +19,7 @@ import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PosEventoEventoIdRouteImport } from './routes/pos-evento.$eventoId'
 import { Route as EventosEventoIdRouteImport } from './routes/eventos.$eventoId'
+import { Route as ContratoFormEventoIdRouteImport } from './routes/contrato.form.$eventoId'
 
 const VendasRoute = VendasRouteImport.update({
   id: '/vendas',
@@ -70,6 +71,11 @@ const EventosEventoIdRoute = EventosEventoIdRouteImport.update({
   path: '/$eventoId',
   getParentRoute: () => EventosRoute,
 } as any)
+const ContratoFormEventoIdRoute = ContratoFormEventoIdRouteImport.update({
+  id: '/contrato/form/$eventoId',
+  path: '/contrato/form/$eventoId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
+  '/contrato/form/$eventoId': typeof ContratoFormEventoIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
+  '/contrato/form/$eventoId': typeof ContratoFormEventoIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -107,6 +115,7 @@ export interface FileRoutesById {
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
+  '/contrato/form/$eventoId': typeof ContratoFormEventoIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -121,6 +130,7 @@ export interface FileRouteTypes {
     | '/vendas'
     | '/eventos/$eventoId'
     | '/pos-evento/$eventoId'
+    | '/contrato/form/$eventoId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -133,6 +143,7 @@ export interface FileRouteTypes {
     | '/vendas'
     | '/eventos/$eventoId'
     | '/pos-evento/$eventoId'
+    | '/contrato/form/$eventoId'
   id:
     | '__root__'
     | '/'
@@ -145,6 +156,7 @@ export interface FileRouteTypes {
     | '/vendas'
     | '/eventos/$eventoId'
     | '/pos-evento/$eventoId'
+    | '/contrato/form/$eventoId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -157,6 +169,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   VendasRoute: typeof VendasRoute
   PosEventoEventoIdRoute: typeof PosEventoEventoIdRoute
+  ContratoFormEventoIdRoute: typeof ContratoFormEventoIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -231,6 +244,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EventosEventoIdRouteImport
       parentRoute: typeof EventosRoute
     }
+    '/contrato/form/$eventoId': {
+      id: '/contrato/form/$eventoId'
+      path: '/contrato/form/$eventoId'
+      fullPath: '/contrato/form/$eventoId'
+      preLoaderRoute: typeof ContratoFormEventoIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -255,6 +275,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   VendasRoute: VendasRoute,
   PosEventoEventoIdRoute: PosEventoEventoIdRoute,
+  ContratoFormEventoIdRoute: ContratoFormEventoIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

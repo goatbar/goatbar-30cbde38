@@ -142,11 +142,11 @@ export function PageHeader({ title, subtitle, breadcrumb, action, periodo }: Pag
             </button>
           )}
 
-          <button className="hidden md:inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-surface hover:border-border-strong transition-colors">
+          <button onClick={() => window.alert("Busca global em desenvolvimento.")} className="hidden md:inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-surface hover:border-border-strong transition-colors">
             <Search className="h-4 w-4 text-muted-foreground" />
           </button>
 
-          <button className="relative h-10 w-10 inline-flex items-center justify-center rounded-lg border border-border bg-surface hover:border-border-strong transition-colors">
+          <button onClick={() => window.alert("Central de notificações em desenvolvimento.")} className="relative h-10 w-10 inline-flex items-center justify-center rounded-lg border border-border bg-surface hover:border-border-strong transition-colors">
             <Bell className="h-4 w-4 text-muted-foreground" />
             <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-primary" />
           </button>

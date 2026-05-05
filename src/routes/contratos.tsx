@@ -1,11 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, StatusBadge, PrimaryButton, GhostButton } from "@/components/ui-bits";
-import { fmtBRL } from "@/lib/mock-data";
+import { fmtBRL } from "@/lib/format";
 import { useAppStore } from "@/lib/app-store";
-import { Plus, Download, Save, FileText } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import logo from "@/assets/goatbar-logo.png";
+import { Plus, Download, FileText, Wine, Users, CheckCircle2 } from "lucide-react";
+import { useState } from "react";
 
 export const Route = createFileRoute("/contratos")({
   component: () => (
@@ -15,225 +14,155 @@ export const Route = createFileRoute("/contratos")({
   ),
 });
 
+const tabs = [
+  { id: "contratos", label: "Contratos Gerados", icon: FileText },
+  { id: "templates", label: "Templates", icon: FileText },
+  { id: "socios", label: "Sócios Assinantes", icon: Users },
+  { id: "copos", label: "Copos / Utensílios", icon: Wine },
+];
+
 function ContratosPage() {
-  const { contratos, eventos, addContrato } = useAppStore();
-  const [selectedId, setSelectedId] = useState(contratos[0]?.id);
-  const contrato = contratos.find((c) => c.id === selectedId) ?? contratos[0];
-  const evento = eventos.find((e) => e.id === contrato?.eventoId);
-  const [clausulasEditaveis, setClausulasEditaveis] = useState<Record<string, string>>({});
-
-  const contratoStorageKey = useMemo(
-    () => (contrato ? `goatbar-contrato-texto-${contrato.id}` : ""),
-    [contrato],
-  );
-
-  useEffect(() => {
-    if (!contratoStorageKey) return;
-    const salvo = window.localStorage.getItem(contratoStorageKey);
-    if (!salvo) {
-      setClausulasEditaveis({});
-      return;
-    }
-    try {
-      const parsed = JSON.parse(salvo) as Record<string, string>;
-      setClausulasEditaveis(parsed);
-    } catch {
-      setClausulasEditaveis({});
-    }
-  }, [contratoStorageKey]);
-
-  useEffect(() => {
-    if (!contratoStorageKey) return;
-    window.localStorage.setItem(contratoStorageKey, JSON.stringify(clausulasEditaveis));
-  }, [clausulasEditaveis, contratoStorageKey]);
-
-  if (!contrato) {
-    return (
-      <>
-        <PageHeader breadcrumb="Documentos" title="Contratos" subtitle="Templates, geração e acompanhamento de assinaturas." />
-        <div className="px-8 py-7">
-          <SectionCard title="Sem contratos" subtitle="Cadastre um evento para começar.">
-            <p className="text-sm text-muted-foreground">Nenhum contrato disponível no momento.</p>
-          </SectionCard>
-        </div>
-      </>
-    );
-  }
+  const [activeTab, setActiveTab] = useState("contratos");
+  const { eventContracts, contractTemplates, contractSigners, glasswares, eventos, eventContractClientDatas } = useAppStore();
 
   return (
     <>
       <PageHeader
         breadcrumb="Documentos"
         title="Contratos"
-        subtitle="Templates, geração e acompanhamento de assinaturas."
-        action={
-          <PrimaryButton onClick={() => {
-            const primeiroEvento = eventos[0];
-            if (!primeiroEvento) return;
-            addContrato({
-              eventoId: primeiroEvento.id,
-              cliente: primeiroEvento.cliente,
-              status: "rascunho",
-              template: "Padrão automático",
-            });
-          }}>
-            <Plus className="h-4 w-4" /> Novo contrato
-          </PrimaryButton>
-        }
+        subtitle="Gestão de modelos, assinaturas e utilitários de contrato."
       />
 
       <div className="px-8 py-7 grid grid-cols-1 xl:grid-cols-12 gap-5">
-        {/* Lista esquerda */}
-        <div className="xl:col-span-4 space-y-5">
-          <SectionCard title="Contratos" subtitle={`${contratos.length} documentos`}>
-            <ul className="space-y-2">
-              {contratos.map((c) => {
-                const e = eventos.find((x) => x.id === c.eventoId);
-                const active = c.id === selectedId;
-                return (
-                  <li key={c.id}>
-                    <button
-                      onClick={() => setSelectedId(c.id)}
-                      className={`w-full text-left p-4 rounded-lg border transition-all ${
-                        active ? "border-primary bg-primary/10" : "border-border hover:border-border-strong"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="font-medium text-sm truncate">{c.cliente}</div>
-                          <div className="text-xs text-muted-foreground truncate mt-0.5">
-                            {e?.nome ?? "—"}
+        {/* Sidebar */}
+        <aside className="xl:col-span-3 space-y-2">
+          {tabs.map((s) => {
+            const Icon = s.icon;
+            return (
+              <button
+                key={s.id}
+                onClick={() => setActiveTab(s.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border text-sm transition-all ${
+                  activeTab === s.id
+                    ? "bg-primary/10 border-primary text-foreground"
+                    : "border-border bg-surface text-muted-foreground hover:border-border-strong hover:text-foreground"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {s.label}
+              </button>
+            );
+          })}
+        </aside>
+
+        {/* Conteúdo */}
+        <div className="xl:col-span-9 space-y-5">
+          {activeTab === "contratos" && (
+            <SectionCard title="Contratos Gerados" subtitle="Histórico de contratos vinculados aos eventos">
+              {eventContracts.length === 0 ? (
+                <div className="p-12 text-center text-muted-foreground text-sm border border-dashed border-border rounded-xl">
+                  Nenhum contrato gerado ainda. Acesse um evento para gerar o primeiro contrato.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {eventContracts.map(ec => {
+                    const evento = eventos.find(e => e.id === ec.eventId);
+                    const client = eventContractClientDatas.find(c => c.eventId === ec.eventId);
+                    const template = contractTemplates.find(t => t.id === ec.templateId);
+                    
+                    return (
+                      <div key={ec.id} className="p-5 border border-border bg-surface rounded-xl flex flex-col md:flex-row justify-between gap-5">
+                        <div>
+                          <div className="flex items-center gap-3 mb-1">
+                            <span className="font-medium">{client?.clientName || "Cliente Desconhecido"}</span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-medium tracking-wider ${ec.status === "assinado" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}>{ec.status.replace("_", " ")}</span>
                           </div>
+                          <div className="text-sm text-muted-foreground">{evento?.nome} • {new Date(evento?.data || "").toLocaleDateString("pt-BR")}</div>
+                          <div className="text-xs text-muted-foreground mt-2">Template: {template?.name} (v{ec.version})</div>
                         </div>
-                        <StatusBadge status={c.status} />
+                        <div className="flex flex-col gap-2 justify-center">
+                          <GhostButton className="h-8 text-xs"><Download className="h-3 w-3" /> Contrato PDF</GhostButton>
+                          {ec.status === "assinado" && <GhostButton className="h-8 text-xs text-success hover:bg-success/10"><CheckCircle2 className="h-3 w-3" /> Certificado</GhostButton>}
+                        </div>
                       </div>
-                      <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                        <span>{c.template}</span>
-                        <span>{new Date(c.criadoEm).toLocaleDateString("pt-BR")}</span>
-                      </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </SectionCard>
+                    );
+                  })}
+                </div>
+              )}
+            </SectionCard>
+          )}
 
-          <SectionCard title="Templates" subtitle="Modelos disponíveis">
-            <ul className="space-y-2">
-              {["Casamento Padrão", "Corporativo", "Aniversário", "Eventos Sociais"].map((t) => (
-                <li
-                  key={t}
-                  className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-border-strong transition-colors cursor-pointer"
-                >
-                  <div className="h-9 w-9 rounded-md bg-primary/15 flex items-center justify-center">
-                    <FileText className="h-4 w-4 text-primary" />
+          {activeTab === "templates" && (
+            <SectionCard title="Templates de Contrato" subtitle="Modelos base para geração" action={<PrimaryButton className="h-9 px-3 text-sm"><Plus className="h-4 w-4" /> Novo Template</PrimaryButton>}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {contractTemplates.map(t => (
+                  <div key={t.id} className="p-4 border border-border rounded-xl bg-surface">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="font-medium text-sm">{t.name}</div>
+                      {t.isDefault && <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded">Padrão</span>}
+                    </div>
+                    <div className="text-xs text-muted-foreground uppercase">{t.fileType}</div>
+                    <div className="mt-3 flex gap-1 flex-wrap">
+                      {t.variablesSchema.slice(0, 3).map(v => <span key={v} className="text-[10px] px-1.5 py-0.5 bg-background border border-border rounded">{v}</span>)}
+                      {t.variablesSchema.length > 3 && <span className="text-[10px] px-1.5 py-0.5 bg-background border border-border rounded">+{t.variablesSchema.length - 3}</span>}
+                    </div>
                   </div>
-                  <div className="flex-1 text-sm font-medium">{t}</div>
-                </li>
-              ))}
-            </ul>
-          </SectionCard>
-        </div>
-
-        {/* Preview direita */}
-        <div className="xl:col-span-8">
-          <SectionCard
-            title={`Contrato — ${contrato?.cliente ?? "Sem cliente"}`}
-            subtitle={contrato?.template ?? "Sem template"}
-            action={
-              <div className="flex items-center gap-2">
-                <GhostButton onClick={() => window.alert("Rascunho já persistido automaticamente no navegador.")}><Save className="h-3.5 w-3.5" /> Salvar rascunho</GhostButton>
-                <PrimaryButton onClick={() => window.print()}><Download className="h-4 w-4" /> Exportar PDF</PrimaryButton>
+                ))}
               </div>
-            }
-          >
-            <div className="rounded-xl bg-foreground/[0.04] border border-border p-10 font-sans text-sm leading-relaxed text-foreground/85 max-h-[640px] overflow-y-auto">
-              <div className="text-center mb-8">
-                <img src={logo} alt="Goat Bar" className="h-14 w-auto mx-auto mb-4" />
-                <div className="label-eyebrow">Goat Bar · Hospitalidade Premium</div>
-                <h2 className="font-display text-2xl font-semibold mt-3">
-                  CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE BAR
-                </h2>
+            </SectionCard>
+          )}
+
+          {activeTab === "socios" && (
+            <SectionCard title="Sócios Assinantes" subtitle="Representantes autorizados pela GOAT Bar" action={<PrimaryButton className="h-9 px-3 text-sm"><Plus className="h-4 w-4" /> Novo Sócio</PrimaryButton>}>
+              <div className="space-y-3">
+                {contractSigners.map(s => (
+                  <div key={s.id} className={`p-4 border rounded-xl flex justify-between items-center ${s.isActive ? 'border-border bg-surface' : 'border-border/50 bg-background opacity-60'}`}>
+                    <div>
+                      <div className="font-medium text-sm flex items-center gap-2">
+                        {s.name} <span className="text-xs font-normal text-muted-foreground">({s.role})</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">{s.email} • {s.phone}</div>
+                    </div>
+                    <div>
+                      <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded ${s.isActive ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>{s.isActive ? "Ativo" : "Inativo"}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
+            </SectionCard>
+          )}
 
-              <p>
-                Pelo presente instrumento particular, de um lado <strong>{contrato.cliente}</strong>,
-                doravante denominado(a) <strong>CONTRATANTE</strong>, e de outro lado{" "}
-                <strong>GOAT BAR LTDA</strong>, inscrita no CNPJ sob o nº 00.000.000/0001-00, doravante
-                denominada <strong>CONTRATADA</strong>, têm entre si justo e contratado o seguinte:
-              </p>
-
-              <h3 className="font-display text-base font-semibold mt-6 mb-2">CLÁUSULA 1ª — DO OBJETO</h3>
-              <EditableClause
-                value={clausulasEditaveis.objeto}
-                defaultValue={`A CONTRATADA se compromete a prestar serviços de bar para o evento ${evento?.nome ?? "—"}, a ser realizado em ${evento ? new Date(evento.data).toLocaleDateString("pt-BR") : "—"}, no local ${evento?.local}, ${evento?.cidade}, com previsão de ${evento?.convidados ?? "—"} convidados.`}
-                onChange={(text) => setClausulasEditaveis((prev) => ({ ...prev, objeto: text }))}
-              />
-
-              <h3 className="font-display text-base font-semibold mt-6 mb-2">CLÁUSULA 2ª — DO VALOR</h3>
-              <EditableClause
-                value={clausulasEditaveis.valor}
-                defaultValue={`O valor total dos serviços contratados é de ${evento ? fmtBRL(evento.valorNegociado) : "—"}, a ser pago conforme condições comerciais acordadas em proposta anexa.`}
-                onChange={(text) => setClausulasEditaveis((prev) => ({ ...prev, valor: text }))}
-              />
-
-              <h3 className="font-display text-base font-semibold mt-6 mb-2">CLÁUSULA 3ª — DO MENU</h3>
-              <EditableClause
-                value={clausulasEditaveis.menu}
-                defaultValue="Os drinks contratados compõem o menu da operação e poderão ser ajustados em comum acordo até 7 (sete) dias antes do evento."
-                onChange={(text) => setClausulasEditaveis((prev) => ({ ...prev, menu: text }))}
-              />
-
-              <h3 className="font-display text-base font-semibold mt-6 mb-2">CLÁUSULA 4ª — DA EQUIPE</h3>
-              <EditableClause
-                value={clausulasEditaveis.equipe}
-                defaultValue="A CONTRATADA disponibilizará equipe técnica composta por bartenders, apoio e supervisão operacional, dimensionada de acordo com o número de convidados."
-                onChange={(text) => setClausulasEditaveis((prev) => ({ ...prev, equipe: text }))}
-              />
-
-              <h3 className="font-display text-base font-semibold mt-6 mb-2">CLÁUSULA 5ª — DAS OBRIGAÇÕES</h3>
-              <EditableClause
-                value={clausulasEditaveis.obrigacoes}
-                defaultValue="Cabe à CONTRATADA o fornecimento dos insumos, equipamentos e estrutura de bar acordados. Cabe à CONTRATANTE garantir acesso ao local com antecedência mínima de 4 (quatro) horas."
-                onChange={(text) => setClausulasEditaveis((prev) => ({ ...prev, obrigacoes: text }))}
-              />
-
-              <p className="mt-10 text-center text-muted-foreground">
-                São Paulo, {new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
-              </p>
-
-              <div className="mt-10 grid grid-cols-2 gap-12 text-center">
-                <div>
-                  <div className="border-t border-foreground/30 pt-2 text-xs">{contrato.cliente}</div>
-                  <div className="text-[11px] text-muted-foreground">CONTRATANTE</div>
-                </div>
-                <div>
-                  <div className="border-t border-foreground/30 pt-2 text-xs">Goat Bar Ltda</div>
-                  <div className="text-[11px] text-muted-foreground">CONTRATADA</div>
-                </div>
+          {activeTab === "copos" && (
+            <SectionCard title="Copos e Utensílios" subtitle="Tabela de valores de reposição para quebras" action={<PrimaryButton className="h-9 px-3 text-sm"><Plus className="h-4 w-4" /> Novo Copo</PrimaryButton>}>
+              <div className="overflow-x-auto -mx-6">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left">
+                      <th className="label-eyebrow px-6 py-3 border-y border-border">Nome</th>
+                      <th className="label-eyebrow px-6 py-3 border-y border-border">Tipo</th>
+                      <th className="label-eyebrow px-6 py-3 border-y border-border">Reposição</th>
+                      <th className="label-eyebrow px-6 py-3 border-y border-border">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {glasswares.map((g) => (
+                      <tr key={g.id} className="border-b border-border/60">
+                        <td className="px-6 py-3.5 font-medium">{g.name}</td>
+                        <td className="px-6 py-3.5">{g.type}</td>
+                        <td className="px-6 py-3.5">{fmtBRL(g.replacementValue)}</td>
+                        <td className="px-6 py-3.5">
+                          <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded ${g.isActive ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>{g.isActive ? "Ativo" : "Inativo"}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </div>
-          </SectionCard>
+            </SectionCard>
+          )}
+
         </div>
       </div>
     </>
-  );
-}
-
-function EditableClause({
-  value,
-  defaultValue,
-  onChange,
-}: {
-  value?: string;
-  defaultValue: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <textarea
-      className="w-full resize-y min-h-[84px] rounded-lg border border-border bg-background/70 px-3 py-2.5 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary"
-      value={value ?? defaultValue}
-      onChange={(e) => onChange(e.target.value)}
-    />
   );
 }

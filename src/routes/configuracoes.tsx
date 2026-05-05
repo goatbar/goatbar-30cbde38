@@ -25,6 +25,7 @@ const sections = [
 function ConfigPage() {
   const { parametros, updateParametros } = useAppStore();
   const [draft, setDraft] = useState(parametros);
+  const [activeTab, setActiveTab] = useState("diretrizes");
   const grupos = useMemo(() => Array.from(new Set(draft.map((p) => p.grupo))), [draft]);
 
   return (
@@ -48,8 +49,9 @@ function ConfigPage() {
             return (
               <button
                 key={s.id}
+                onClick={() => setActiveTab(s.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border text-sm transition-all ${
-                  s.active
+                  activeTab === s.id
                     ? "bg-primary/10 border-primary text-foreground"
                     : "border-border bg-surface text-muted-foreground hover:border-border-strong hover:text-foreground"
                 }`}
@@ -69,7 +71,7 @@ function ConfigPage() {
         </aside>
 
         <div className="xl:col-span-9 space-y-5">
-          {grupos.map((g) => (
+          {activeTab === "diretrizes" && grupos.map((g) => (
             <SectionCard key={g} title={`Diretrizes · ${g}`} subtitle="Editáveis em tempo real">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {draft
@@ -82,32 +84,42 @@ function ConfigPage() {
             </SectionCard>
           ))}
 
-          <SectionCard title="Tipos de evento" subtitle="Parâmetros de consumo por categoria">
-            <div className="overflow-x-auto -mx-6">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left">
-                    {["Tipo", "Doses/pessoa", "Gelo (kg)/pessoa", "Insumos R$/pessoa", "Equipe/50 pessoas"].map((h) => (
-                      <th key={h} className="label-eyebrow px-6 py-3 border-y border-border">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {tiposEvento.map((t) => (
-                    <tr key={t.id} className="border-b border-border/60">
-                      <td className="px-6 py-3.5 font-medium">{t.nome}</td>
-                      <td className="px-6 py-3.5">{t.consumoBebidaPessoa}</td>
-                      <td className="px-6 py-3.5">{t.geloKgPessoa}</td>
-                      <td className="px-6 py-3.5">R$ {t.insumosPessoa.toFixed(2)}</td>
-                      <td className="px-6 py-3.5">{t.equipePor50}</td>
+          {activeTab === "tipos" && (
+            <SectionCard title="Tipos de evento" subtitle="Parâmetros de consumo por categoria">
+              <div className="overflow-x-auto -mx-6">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left">
+                      {["Tipo", "Doses/pessoa", "Gelo (kg)/pessoa", "Insumos R$/pessoa", "Equipe/50 pessoas"].map((h) => (
+                        <th key={h} className="label-eyebrow px-6 py-3 border-y border-border">
+                          {h}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </SectionCard>
+                  </thead>
+                  <tbody>
+                    {tiposEvento.map((t) => (
+                      <tr key={t.id} className="border-b border-border/60">
+                        <td className="px-6 py-3.5 font-medium">{t.nome}</td>
+                        <td className="px-6 py-3.5">{t.consumoBebidaPessoa}</td>
+                        <td className="px-6 py-3.5">{t.geloKgPessoa}</td>
+                        <td className="px-6 py-3.5">R$ {t.insumosPessoa.toFixed(2)}</td>
+                        <td className="px-6 py-3.5">{t.equipePor50}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </SectionCard>
+          )}
+
+          {["categorias", "templates", "unidades"].includes(activeTab) && (
+            <SectionCard title={sections.find(s => s.id === activeTab)?.label || ""} subtitle="Em desenvolvimento">
+              <div className="py-12 text-center text-muted-foreground text-sm">
+                Módulo em construção. Disponível na próxima versão.
+              </div>
+            </SectionCard>
+          )}
         </div>
       </div>
     </>
