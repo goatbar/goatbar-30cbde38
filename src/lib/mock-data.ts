@@ -8,8 +8,7 @@ export interface Drink {
   nome: string;
   categoria: string;
   descricao: string;
-  ingredientes: string[];
-  custoUnitario: number;
+  ingredientes: { nome: string; custo: number }[];
   custoUnitario: number;
   precoVenda7Steakhouse: number;
   precoVendaGoatBotequim: number;
@@ -230,35 +229,35 @@ interface DrinkSeed {
 }
 
 const drinkSeeds: DrinkSeed[] = [
-  { id: "d1", nome: "Caipivodka Limão", categoria: "Caipirinhas", descricao: "Vodka e limão.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Limão", custo: 0.2 }], imagem: "/drinks/d1.jpg" },
-  { id: "d2", nome: "Caipivodka limão cravo e mel", categoria: "Caipirinhas", descricao: "Vodka, limão cravo e mel.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Limão", custo: 0.2 }, { nome: "Cravo", custo: 0.1 }, { nome: "Mel", custo: 0.4 }], imagem: "/drinks/d2.jpg" },
-  { id: "d3", nome: "Caipivodka Morango", categoria: "Caipirinhas", descricao: "Vodka e morango.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Morango", custo: 1.6 }], imagem: "/drinks/d3.jpg" },
-  { id: "d4", nome: "Caipivodka Abacaxi", categoria: "Caipirinhas", descricao: "Vodka, abacaxi e raspas.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Abacaxi", custo: 0.5 }, { nome: "Raspas", custo: 0.3 }], imagem: "/drinks/d4.jpg" },
-  { id: "d5", nome: "Caip Maracujá com baunilha", categoria: "Caipirinhas", descricao: "Vodka, maracujá e açúcar de baunilha.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Maracujá", custo: 0.9 }, { nome: "Açúcar Baunilha", custo: 0.3 }], imagem: "/drinks/d5.jpg" },
-  { id: "d6", nome: "Moscow Mule", categoria: "Mules", descricao: "Vodka, limão e sifão.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Limão", custo: 0.2 }, { nome: "Sifão", custo: 0.9 }], imagem: "/drinks/d6.jpg" },
-  { id: "d7", nome: "London Mule", categoria: "Mules", descricao: "Gin, limão e sifão.", ingredientes: [{ nome: "Gin", custo: 4.66 }, { nome: "Limão", custo: 0.2 }, { nome: "Sifão", custo: 0.9 }], imagem: "/drinks/d7.jpg" },
-  { id: "d8", nome: "Mojito", categoria: "Refrescantes", descricao: "Vodka, limão, hortelã e água com gás.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Limão", custo: 0.2 }, { nome: "Hortelã", custo: 0.5 }, { nome: "Água com gás", custo: 0.3 }], imagem: "/drinks/d8.jpg" },
-  { id: "d9", nome: "Aquario", categoria: "Autoral", descricao: "Vodka, limão, curaçao, alecrim, açúcar e água com gás.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Limão", custo: 0.2 }, { nome: "Curaçao", custo: 1.0 }, { nome: "Alecrim", custo: 0.25 }, { nome: "Açúcar", custo: 0.5 }, { nome: "Agua com gas", custo: 0.3 }], imagem: "/drinks/d9.jpg" },
-  { id: "d10", nome: "Sex on The Beach", categoria: "Tropicais", descricao: "Vodka, suco de laranja, xarope pêssego, grenadine e jujuba.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Suco laranja", custo: 0.8 }, { nome: "Xarope pêssego", custo: 2.64 }, { nome: "Grenadine", custo: 0.88 }, { nome: "Jujuba", custo: 0.3 }], imagem: "/drinks/d10.jpg" },
-  { id: "d11", nome: "Bossa Nova", categoria: "Tropicais", descricao: "Vodka, uva e água de coco.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Uva", custo: 1.0 }, { nome: "Água de coco", custo: 1.0 }], imagem: "/drinks/d11.jpg" },
-  { id: "d12", nome: "Gin tônica", categoria: "Gin", descricao: "Gin, tônica, limão siciliano e especiaria.", ingredientes: [{ nome: "Gin", custo: 4.66 }, { nome: "Tônica", custo: 1.5 }, { nome: "Limão siciliano", custo: 0.3 }, { nome: "Especiaria", custo: 0.25 }], imagem: "/drinks/d12.jpg" },
-  { id: "d13", nome: "Tom Collins", categoria: "Clássico", descricao: "Gin, limão, água com gás e cereja.", ingredientes: [{ nome: "Gin", custo: 4.66 }, { nome: "Limão", custo: 0.2 }, { nome: "Água com gás", custo: 0.3 }, { nome: "Cereja", custo: 0.75 }], imagem: "/drinks/d13.jpg" },
-  { id: "d14", nome: "Fitzgerald", categoria: "Clássico", descricao: "Gin, limão, angostura e twist.", ingredientes: [{ nome: "Gin", custo: 4.0 }, { nome: "Limão", custo: 0.2 }, { nome: "Angostura", custo: 2.83 }, { nome: "Twist", custo: 0.2 }], imagem: "/drinks/d14.jpg" },
-  { id: "d15", nome: "Bramble", categoria: "Gin", descricao: "Gin, limão, xarope de amora e guarnição.", ingredientes: [{ nome: "Gin", custo: 4.66 }, { nome: "Limão", custo: 0.2 }, { nome: "Xarope amora", custo: 1.4 }, { nome: "Guarnicao", custo: 0.8 }], imagem: "/drinks/bramble.jpg" },
-  { id: "d16", nome: "Aperol Spritz", categoria: "Aperitivo", descricao: "Aperol, champanhe, laranja e água com gás.", ingredientes: [{ nome: "Aperol", custo: 4.0 }, { nome: "Champanhe", custo: 6.0 }, { nome: "Laranja", custo: 0.2 }, { nome: "Água com gás", custo: 0.3 }], imagem: "/drinks/d16.jpg" },
-  { id: "d17", nome: "Cest Lá Vie", categoria: "Autoral", descricao: "Xarope, limão, champanhe, água com gás e gelo.", ingredientes: [{ nome: "Xarope", custo: 2.64 }, { nome: "Limão", custo: 0.2 }, { nome: "Champanhe", custo: 6.0 }, { nome: "Água com gás", custo: 0.3 }, { nome: "Gelo", custo: 0.37 }], imagem: "/drinks/d17.jpg" },
-  { id: "d18", nome: "Mint Jullep", categoria: "Whisky", descricao: "Whisky, limão e hortelã.", ingredientes: [{ nome: "Whisky", custo: 5.0 }, { nome: "Limão", custo: 0.2 }, { nome: "Hortelã", custo: 0.3 }], imagem: "/drinks/d18.jpg" },
-  { id: "d19", nome: "Whisky Sour", categoria: "Sour", descricao: "Whisky, limão, proteina e guarnicao.", ingredientes: [{ nome: "Whisky", custo: 5.0 }, { nome: "Limão", custo: 0.2 }, { nome: "Proteina", custo: 0.3 }, { nome: "Guarnicao", custo: 0.3 }], imagem: "/drinks/d19.jpg" },
-  { id: "d20", nome: "Negroni", categoria: "Clássico", descricao: "Vermute, gin e campari.", ingredientes: [{ nome: "Vermute", custo: 2.2 }, { nome: "Gin", custo: 4.0 }, { nome: "Campari", custo: 3.5 }], imagem: "/drinks/d20.jpg" },
-  { id: "d21", nome: "Campari Tônica", categoria: "Aperitivo", descricao: "Tônica, campari e twist laranja.", ingredientes: [{ nome: "Tônica", custo: 1.5 }, { nome: "Campari", custo: 8.0 }, { nome: "Twist laranja", custo: 0.2 }] },
-  { id: "d22", nome: "Raspberry", categoria: "Autoral", descricao: "Vodka, coulis e espuma.", ingredientes: [{ nome: "Vodka", custo: 4.0 }, { nome: "Coulis", custo: 0 }, { nome: "Espuma", custo: 0 }], status: "inativo" },
-  { id: "d23", nome: "Stamping", categoria: "Autoral", descricao: "Vodka, maracuja, limão, açúcar baunilha e tabasco.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Maracuja", custo: 0.9 }, { nome: "Limão", custo: 0.2 }, { nome: "Açúcar baunilha", custo: 0.3 }, { nome: "Tabasco", custo: 0.4 }], imagem: "/drinks/d23.jpg" },
-  { id: "d24", nome: "Olho Grego", categoria: "Autoral", descricao: "Vodka, limão, xarope amendoas e xarope curaçao.", ingredientes: [{ nome: "Vodka", custo: 4.0 }, { nome: "Limão", custo: 0.2 }, { nome: "Xorape amendoas", custo: 1.4 }, { nome: "Xarope curaçao", custo: 1.4 }], imagem: "/drinks/olho-grego.jpg" },
-  { id: "d25", nome: "Cosmopolitan", categoria: "Clássico", descricao: "Vodka, xarope cramberry, limão e cointreau.", ingredientes: [{ nome: "Vodka", custo: 4.0 }, { nome: "Xarope Cramberry", custo: 2.1 }, { nome: "Limão", custo: 0.2 }, { nome: "Cointreau", custo: 2.57 }], imagem: "/drinks/cosmopolitan.jpg" },
-  { id: "d26", nome: "Apple Martini", categoria: "Martini", descricao: "Xarope e vodka.", ingredientes: [{ nome: "Xarope", custo: 2.2 }, { nome: "Vodka", custo: 2.0 }], imagem: "/drinks/d26.jpg" },
-  { id: "d27", nome: "Expresso Martini", categoria: "Martini", descricao: "Vodka, açúcar baunilha, baileys e café.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Açúcar baunilha", custo: 0.5 }, { nome: "Bailays", custo: 1.86 }, { nome: "Café", custo: 0.5 }], imagem: "/drinks/d27.jpg" },
-  { id: "d28", nome: "Paloma", categoria: "Tequila", descricao: "Tequila, xarope grapefruit, limão e grapefruit.", ingredientes: [{ nome: "Tequila", custo: 10.73 }, { nome: "Xarope grapefruit", custo: 2.8 }, { nome: "Limão", custo: 0.2 }, { nome: "Grapefruit", custo: 0.25 }], imagem: "/drinks/paloma.jpg" },
-  { id: "d29", nome: "Soda Italiana", categoria: "Sem álcool", descricao: "Xarope e água com gás.", ingredientes: [{ nome: "Xarope", custo: 2.64 }, { nome: "Água com gás", custo: 0.7 }] },
+  { id: "d1", nome: "Caipivodka Limão", categoria: "Caipirinhas", descricao: "Vodka e limão.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Limão", custo: 0.20 }], imagem: "/drinks/d1.jpg" },
+  { id: "d2", nome: "Caipivodka Limão Cravo e Mel", categoria: "Caipirinhas", descricao: "Vodka, limão cravo e mel.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Limão", custo: 0.20 }, { nome: "Cravo", custo: 0.10 }, { nome: "Mel", custo: 0.40 }], imagem: "/drinks/d2.jpg" },
+  { id: "d3", nome: "Caipivodka Morango", categoria: "Caipirinhas", descricao: "Vodka e morango.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Morango", custo: 1.60 }], imagem: "/drinks/d3.jpg" },
+  { id: "d4", nome: "Caipivodka Abacaxi", categoria: "Caipirinhas", descricao: "Vodka, abacaxi e raspas.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Abacaxi", custo: 0.50 }, { nome: "Raspas", custo: 0.30 }], imagem: "/drinks/d4.jpg" },
+  { id: "d5", nome: "Caip Maracujá com Baunilha", categoria: "Caipirinhas", descricao: "Vodka, maracujá e açúcar de baunilha.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Maracujá", custo: 0.90 }, { nome: "Açúcar Baunilha", custo: 0.30 }], imagem: "/drinks/d5.jpg" },
+  { id: "d6", nome: "Moscow Mule", categoria: "Mules", descricao: "Vodka, limão e sifão.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Limão", custo: 0.20 }, { nome: "Sifão", custo: 0.90 }], imagem: "/drinks/d6.jpg" },
+  { id: "d7", nome: "London Mule", categoria: "Mules", descricao: "Gin, limão e sifão.", ingredientes: [{ nome: "Gin", custo: 4.66 }, { nome: "Limão", custo: 0.20 }, { nome: "Sifão", custo: 0.90 }], imagem: "/drinks/d7.jpg" },
+  { id: "d8", nome: "Mojito", categoria: "Refrescantes", descricao: "Vodka, limão, hortelã e água com gás.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Limão", custo: 0.20 }, { nome: "Hortelã", custo: 0.50 }, { nome: "Água com gás", custo: 0.30 }], imagem: "/drinks/d8.jpg" },
+  { id: "d9", nome: "Aquário", categoria: "Autoral", descricao: "Vodka, limão, curaçao, alecrim, açúcar e água com gás.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Limão", custo: 0.20 }, { nome: "Curaçao", custo: 1.00 }, { nome: "Alecrim", custo: 0.25 }, { nome: "Açúcar", custo: 0.50 }, { nome: "Água com gás", custo: 0.30 }], imagem: "/drinks/d9.jpg" },
+  { id: "d10", nome: "Sex on The Beach", categoria: "Tropicais", descricao: "Vodka, suco de laranja, xarope pêssego, grenadine e jujuba.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Suco laranja", custo: 0.80 }, { nome: "Xarope pêssego", custo: 2.64 }, { nome: "Grenadine", custo: 0.88 }, { nome: "Jujuba", custo: 0.30 }], imagem: "/drinks/d10.jpg" },
+  { id: "d11", nome: "Bossa Nova", categoria: "Tropicais", descricao: "Vodka, uva e água de coco.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Uva", custo: 1.00 }, { nome: "Água de coco", custo: 1.00 }], imagem: "/drinks/d11.jpg" },
+  { id: "d12", nome: "Gin Tônica", categoria: "Gin", descricao: "Gin, tônica, limão siciliano e especiaria.", ingredientes: [{ nome: "Gin", custo: 4.66 }, { nome: "Tônica", custo: 1.50 }, { nome: "Limão siciliano", custo: 0.30 }, { nome: "Especiaria", custo: 0.25 }], imagem: "/drinks/d12.jpg" },
+  { id: "d13", nome: "Tom Collins", categoria: "Clássico", descricao: "Gin, limão, água com gás e cereja.", ingredientes: [{ nome: "Gin", custo: 4.66 }, { nome: "Limão", custo: 0.20 }, { nome: "Água com gás", custo: 0.30 }, { nome: "Cereja", custo: 0.75 }], imagem: "/drinks/d13.jpg" },
+  { id: "d14", nome: "Fitzgerald", categoria: "Clássico", descricao: "Gin, limão, angostura e twist.", ingredientes: [{ nome: "Gin", custo: 4.00 }, { nome: "Limão", custo: 0.20 }, { nome: "Angostura", custo: 2.83 }, { nome: "Twist", custo: 0.20 }], imagem: "/drinks/d14.jpg" },
+  { id: "d15", nome: "Bramble", categoria: "Gin", descricao: "Gin, limão, xarope amora e guarnição.", ingredientes: [{ nome: "Gin", custo: 4.66 }, { nome: "Limão", custo: 0.20 }, { nome: "Xarope amora", custo: 1.40 }, { nome: "Guarnição", custo: 0.80 }], imagem: "/drinks/bramble.jpg" },
+  { id: "d16", nome: "Aperol Spritz", categoria: "Aperitivo", descricao: "Aperol, champanhe, laranja e água com gás.", ingredientes: [{ nome: "Aperol", custo: 4.00 }, { nome: "Champanhe", custo: 6.00 }, { nome: "Laranja", custo: 0.20 }, { nome: "Água com gás", custo: 0.30 }], imagem: "/drinks/d16.jpg" },
+  { id: "d17", nome: "Cest Lá Vie", categoria: "Autoral", descricao: "Xarope, limão, champanhe, água com gás e gelo.", ingredientes: [{ nome: "Xarope", custo: 2.64 }, { nome: "Limão", custo: 0.20 }, { nome: "Champanhe", custo: 6.00 }, { nome: "Água com gás", custo: 0.30 }, { nome: "Gelo", custo: 0.37 }], imagem: "/drinks/d17.jpg" },
+  { id: "d18", nome: "Mint Julep", categoria: "Whisky", descricao: "Whisky, limão e hortelã.", ingredientes: [{ nome: "Whisky", custo: 5.00 }, { nome: "Limão", custo: 0.20 }, { nome: "Hortelã", custo: 0.30 }], imagem: "/drinks/d18.jpg" },
+  { id: "d19", nome: "Whisky Sour", categoria: "Sour", descricao: "Whisky, limão, proteína e guarnição.", ingredientes: [{ nome: "Whisky", custo: 5.00 }, { nome: "Limão", custo: 0.20 }, { nome: "Proteína", custo: 0.30 }, { nome: "Guarnição", custo: 0.30 }], imagem: "/drinks/d19.jpg" },
+  { id: "d20", nome: "Negroni", categoria: "Clássico", descricao: "Vermute, gin e campari.", ingredientes: [{ nome: "Vermute", custo: 2.20 }, { nome: "Gin", custo: 4.00 }, { nome: "Campari", custo: 3.50 }], imagem: "/drinks/d20.jpg" },
+  { id: "d21", nome: "Campari Tônica", categoria: "Aperitivo", descricao: "Tônica, campari e twist laranja.", ingredientes: [{ nome: "Tônica", custo: 1.50 }, { nome: "Campari", custo: 8.00 }, { nome: "Twist laranja", custo: 0.20 }] },
+  { id: "d22", nome: "Raspberry", categoria: "Autoral", descricao: "Vodka, coulis e espuma.", ingredientes: [{ nome: "Vodka", custo: 4.00 }, { nome: "Coulis", custo: 0.00 }, { nome: "Espuma", custo: 0.00 }], status: "inativo" },
+  { id: "d23", nome: "Stamping", categoria: "Autoral", descricao: "Vodka, maracujá, limão, açúcar baunilha e tabasco.", ingredientes: [{ nome: "Vodka", custo: 2.00 }, { nome: "Maracujá", custo: 0.90 }, { nome: "Limão", custo: 0.20 }, { nome: "Açúcar baunilha", custo: 0.30 }, { nome: "Tabasco", custo: 0.40 }], imagem: "/drinks/d23.jpg" },
+  { id: "d24", nome: "Olho Grego", categoria: "Autoral", descricao: "Vodka, limão, xarope amêndoas e xarope curaçao.", ingredientes: [{ nome: "Vodka", custo: 4.00 }, { nome: "Limão", custo: 0.20 }, { nome: "Xarope amêndoas", custo: 1.40 }, { nome: "Xarope curaçao", custo: 1.40 }], imagem: "/drinks/olho-grego.jpg" },
+  { id: "d25", nome: "Cosmopolitan", categoria: "Clássico", descricao: "Vodka, xarope cranberry, limão e cointreau.", ingredientes: [{ nome: "Vodka", custo: 4.00 }, { nome: "Xarope Cranberry", custo: 2.10 }, { nome: "Limão", custo: 0.20 }, { nome: "Cointreau", custo: 2.57 }], imagem: "/drinks/cosmopolitan.jpg" },
+  { id: "d26", nome: "Apple Martini", categoria: "Martini", descricao: "Xarope e vodka.", ingredientes: [{ nome: "Xarope", custo: 1.70 }, { nome: "Vodka", custo: 2.00 }], imagem: "/drinks/d26.jpg" },
+  { id: "d27", nome: "Expresso Martini", categoria: "Martini", descricao: "Vodka, açúcar baunilha, baileys e café.", ingredientes: [{ nome: "Vodka", custo: 2.00 }, { nome: "Açúcar baunilha", custo: 0.50 }, { nome: "Baileys", custo: 1.86 }, { nome: "Café", custo: 0.50 }], imagem: "/drinks/d27.jpg" },
+  { id: "d28", nome: "Paloma", categoria: "Tequila", descricao: "Tequila, xarope grapefruit, limão e grapefruit.", ingredientes: [{ nome: "Tequila", custo: 10.73 }, { nome: "Xarope grapefruit", custo: 2.80 }, { nome: "Limão", custo: 0.20 }, { nome: "Grapefruit", custo: 0.25 }], imagem: "/drinks/paloma.jpg" },
+  { id: "d29", nome: "Soda Italiana", categoria: "Sem álcool", descricao: "Xarope e água com gás.", ingredientes: [{ nome: "Xarope", custo: 2.64 }, { nome: "Água com gás", custo: 0.70 }] },
 ];
 
 export const drinks: Drink[] = drinkSeeds.map((s) => {
@@ -268,7 +267,7 @@ export const drinks: Drink[] = drinkSeeds.map((s) => {
     nome: s.nome,
     categoria: s.categoria,
     descricao: s.descricao,
-    ingredientes: s.ingredientes.map((i) => i.nome),
+    ingredientes: s.ingredientes,
     custoUnitario: custo,
     precoVenda7Steakhouse: s.precoVenda7Steakhouse ?? Math.max(18, Math.round((custo * 3.0) / 2) * 2),
     precoVendaGoatBotequim: s.precoVendaGoatBotequim ?? Math.max(15, Math.round((custo * 2.8) / 2) * 2),

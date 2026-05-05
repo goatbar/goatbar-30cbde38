@@ -11,8 +11,9 @@ import {
   Search,
   ChevronDown,
   LogOut,
+  Inbox
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import logo from "@/assets/goatbar-logo.png";
 
@@ -142,18 +143,46 @@ export function PageHeader({ title, subtitle, breadcrumb, action, periodo }: Pag
             </button>
           )}
 
-          <button onClick={() => window.alert("Busca global em desenvolvimento.")} className="hidden md:inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-surface hover:border-border-strong transition-colors">
+          <button className="hidden md:inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-surface hover:border-border-strong transition-colors">
             <Search className="h-4 w-4 text-muted-foreground" />
           </button>
 
-          <button onClick={() => window.alert("Central de notificações em desenvolvimento.")} className="relative h-10 w-10 inline-flex items-center justify-center rounded-lg border border-border bg-surface hover:border-border-strong transition-colors">
-            <Bell className="h-4 w-4 text-muted-foreground" />
-            <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-primary" />
-          </button>
+          <NotificationsDropdown />
 
           {action}
         </div>
       </div>
     </header>
+  );
+}
+
+function NotificationsDropdown() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button 
+        onClick={() => setOpen(!open)}
+        onBlur={() => setTimeout(() => setOpen(false), 200)}
+        className="relative h-10 w-10 inline-flex items-center justify-center rounded-lg border border-border bg-surface hover:border-border-strong transition-colors"
+      >
+        <Bell className="h-4 w-4 text-muted-foreground" />
+      </button>
+
+      {open && (
+        <div className="absolute top-full right-0 mt-2 w-80 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-top-2 fade-in">
+          <div className="p-4 border-b border-border bg-background/50">
+            <h3 className="font-semibold text-sm">Notificações</h3>
+          </div>
+          <div className="p-8 flex flex-col items-center justify-center text-center">
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+              <Inbox className="h-5 w-5 text-primary" />
+            </div>
+            <p className="text-sm font-medium">Nenhuma notificação</p>
+            <p className="text-xs text-muted-foreground mt-1">Você ainda não possui notificações pendentes.</p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

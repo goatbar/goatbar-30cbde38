@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, StatCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
-import { Wine, TrendingUp, Search, Edit3, X } from "lucide-react";
+import { Wine, TrendingUp, Search, Edit3, X, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { type Drink } from "@/lib/mock-data";
 import { useAppStore } from "@/lib/app-store";
@@ -29,8 +29,8 @@ function DrinksPage() {
   const custoMedio = ativos.length ? ativos.reduce((a, d) => a + d.custoUnitario, 0) / ativos.length : 0;
   const margemMedia = ativos.length ? ativos.reduce((a, d) => a + ((d.precoVenda7Steakhouse - d.custoUnitario) / d.precoVenda7Steakhouse) * 100, 0) / ativos.length : 0;
 
-  const handleSavePrice = (id: string, steakhouse: number, botequim: number) => {
-    updateDrink(id, { precoVenda7Steakhouse: steakhouse, precoVendaGoatBotequim: botequim });
+  const handleSaveDrink = (id: string, updatePayload: Partial<Drink>) => {
+    updateDrink(id, updatePayload);
     setEditingDrink(null);
   };
 
@@ -81,9 +81,9 @@ function DrinksPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtrados.map((d) => <DrinkCard key={d.id} drink={d} onEdit={() => setEditingDrink(d)} />)}
             {filtrados.length === 0 && (
-              <div className="col-span-full text-center py-10 text-sm text-muted-foreground">
-                Nenhum drink encontrado com os filtros atuais.
-              </div>
+               <div className="col-span-full text-center py-10 text-sm text-muted-foreground border border-dashed border-border rounded-xl">
+                 Nenhum drink encontrado com os filtros atuais.
+               </div>
             )}
           </div>
         </SectionCard>
@@ -93,7 +93,7 @@ function DrinksPage() {
         <EditModal 
           drink={editingDrink} 
           onClose={() => setEditingDrink(null)} 
-          onSave={handleSavePrice} 
+          onSave={handleSaveDrink} 
         />
       )}
     </>
@@ -155,9 +155,9 @@ function DrinkCard({ drink: d, onEdit }: { drink: Drink, onEdit: () => void }) {
         </div>
         {d.ingredientes.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-1">
-            {d.ingredientes.slice(0, 3).map((ing) => (
-              <span key={ing} className="px-2 py-0.5 rounded bg-primary/10 text-[10px] text-primary font-medium">
-                {ing}
+            {d.ingredientes.slice(0, 3).map((ing, i) => (
+              <span key={i} className="px-2 py-0.5 rounded bg-primary/10 text-[10px] text-primary font-medium">
+                {ing.nome}
               </span>
             ))}
             {d.ingredientes.length > 3 && (
@@ -172,62 +172,119 @@ function DrinkCard({ drink: d, onEdit }: { drink: Drink, onEdit: () => void }) {
   );
 }
 
-function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => void, onSave: (id: string, s: number, b: number) => void }) {
+function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => void, onSave: (id: string, payload: Partial<Drink>) => void }) {
   const [steak, setSteak] = useState(drink.precoVenda7Steakhouse);
   const [bot, setBot] = useState(drink.precoVendaGoatBotequim);
+  const [ingredientes, setIngredientes] = useState([...drink.ingredientes]);
+
+  const addIngredient = () => {
+    setIngredientes([...ingredientes, { nome: "", custo: 0 }]);
+  };
+
+  const removeIngredient = (idx: number) => {
+    setIngredientes(ingredientes.filter((_, i) => i !== idx));
+  };
+
+  const updateIngredient = (idx: number, field: "nome" | "custo", val: any) => {
+    const copy = [...ingredientes];
+    if (field === "custo") copy[idx].custo = val < 0 ? 0 : val;
+    else copy[idx].nome = val;
+    setIngredientes(copy);
+  };
+
+  const totalCusto = ingredientes.reduce((acc, curr) => acc + curr.custo, 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-sm bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="w-full max-w-lg bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden my-auto">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border sticky top-0 bg-surface z-10">
           <div>
-            <h2 className="font-display text-lg font-semibold">Editar Precificação</h2>
+            <h2 className="font-display text-lg font-semibold">Custo e Precificação</h2>
             <p className="text-xs text-muted-foreground">{drink.nome}</p>
           </div>
           <button onClick={onClose} className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"><X className="h-4 w-4" /></button>
         </div>
-        <div className="p-6 space-y-5">
-          <div className="p-3 rounded-lg bg-background/50 border border-border text-sm flex justify-between">
-            <span className="text-muted-foreground">Custo Fixo do Drink</span>
-            <span className="font-medium">{fmtBRL(drink.custoUnitario)}</span>
+        
+        <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+          {/* Ficha Técnica e Custos */}
+          <div>
+            <h3 className="text-sm font-semibold mb-3 flex items-center justify-between">
+              Ficha Técnica (Ingredientes)
+              <GhostButton onClick={addIngredient} className="h-7 text-xs px-2"><Plus className="h-3 w-3" /> Adicionar</GhostButton>
+            </h3>
+            <div className="space-y-2">
+              {ingredientes.length === 0 && <p className="text-xs text-muted-foreground py-2 text-center border border-dashed border-border rounded-lg">Nenhum ingrediente cadastrado.</p>}
+              {ingredientes.map((ing, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <input 
+                    type="text" 
+                    value={ing.nome} 
+                    onChange={e => updateIngredient(idx, "nome", e.target.value)} 
+                    placeholder="Nome do ingrediente"
+                    className="flex-1 h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none" 
+                  />
+                  <div className="relative w-28 shrink-0">
+                    <span className="absolute left-3 top-2 text-muted-foreground text-xs">R$</span>
+                    <input 
+                      type="number" 
+                      value={ing.custo} 
+                      onChange={e => updateIngredient(idx, "custo", Number(e.target.value))} 
+                      className="w-full h-9 pl-8 pr-2 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none" 
+                    />
+                  </div>
+                  <button onClick={() => removeIngredient(idx)} className="h-9 w-9 flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-md shrink-0">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="p-3 mt-4 rounded-lg bg-primary/5 border border-primary/20 text-sm flex justify-between items-center text-primary">
+              <span className="font-medium">Custo Total Atualizado</span>
+              <span className="font-semibold text-lg">{fmtBRL(totalCusto)}</span>
+            </div>
           </div>
 
-          <div>
-            <label className="label-eyebrow block mb-2">Preço de Venda (7Steakhouse)</label>
-            <div className="relative">
-              <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">R$</span>
-              <input
-                type="number"
-                value={steak}
-                onChange={e => setSteak(Number(e.target.value))}
-                className="w-full h-10 pl-9 pr-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
-              />
-            </div>
-            <div className="text-xs text-muted-foreground mt-1 text-right">
-              Margem projetada: {steak > 0 ? (((steak - drink.custoUnitario) / steak) * 100).toFixed(1) : 0}%
-            </div>
-          </div>
+          <hr className="border-border" />
 
-          <div>
-            <label className="label-eyebrow block mb-2">Preço de Venda (Goat Botequim)</label>
-            <div className="relative">
-              <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">R$</span>
-              <input
-                type="number"
-                value={bot}
-                onChange={e => setBot(Number(e.target.value))}
-                className="w-full h-10 pl-9 pr-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
-              />
+          {/* Venda Units */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label-eyebrow block mb-2">Venda (7Steakhouse)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">R$</span>
+                <input
+                  type="number"
+                  value={steak}
+                  onChange={e => setSteak(Number(e.target.value))}
+                  className="w-full h-10 pl-9 pr-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
+                />
+              </div>
+              <div className="text-xs text-muted-foreground mt-1 text-right">
+                Margem: {steak > 0 ? (((steak - totalCusto) / steak) * 100).toFixed(1) : 0}%
+              </div>
             </div>
-            <div className="text-xs text-muted-foreground mt-1 text-right">
-              Margem projetada: {bot > 0 ? (((bot - drink.custoUnitario) / bot) * 100).toFixed(1) : 0}%
+
+            <div>
+              <label className="label-eyebrow block mb-2">Venda (Goat Botequim)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">R$</span>
+                <input
+                  type="number"
+                  value={bot}
+                  onChange={e => setBot(Number(e.target.value))}
+                  className="w-full h-10 pl-9 pr-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
+                />
+              </div>
+              <div className="text-xs text-muted-foreground mt-1 text-right">
+                Margem: {bot > 0 ? (((bot - totalCusto) / bot) * 100).toFixed(1) : 0}%
+              </div>
             </div>
           </div>
           
         </div>
-        <div className="flex items-center justify-end gap-3 px-6 py-4 bg-background/50 border-t border-border">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 bg-background/50 border-t border-border sticky bottom-0 z-10">
           <GhostButton onClick={onClose}>Cancelar</GhostButton>
-          <PrimaryButton onClick={() => onSave(drink.id, steak, bot)}>Salvar</PrimaryButton>
+          <PrimaryButton onClick={() => onSave(drink.id, { ingredientes, precoVenda7Steakhouse: steak, precoVendaGoatBotequim: bot })}>Salvar Alterações</PrimaryButton>
         </div>
       </div>
     </div>

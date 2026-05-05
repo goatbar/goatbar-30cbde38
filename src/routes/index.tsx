@@ -4,18 +4,52 @@ import { StatCard, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
 import { TrendingUp, ShoppingBag, CalendarRange, Wine, ChevronRight } from "lucide-react";
 import { useAppStore } from "@/lib/app-store";
-import { drinks as allDrinks, rankingDrinks, calcularOrcamentoEvento } from "@/lib/mock-data";
+import { drinks as allDrinks, calcularOrcamentoEvento } from "@/lib/mock-data";
+import { useState, useMemo } from "react";
 
 export const Route = createFileRoute("/")({ component: () => <AppShell><Dashboard /></AppShell> });
 
 function Dashboard() {
-  const { vendas, eventos } = useAppStore();
+  const { vendas: todasVendas, eventos: todosEventos } = useAppStore();
+  const [periodoDias, setPeriodoDias] = useState<number>(30);
+
+  // Filtros Globais Baseados no Período Selecionado
+  const limiteData = useMemo(() => {
+    if (periodoDias === 0) return new Date(0); // All time
+    const d = new Date();
+    d.setDate(d.getDate() - periodoDias);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, [periodoDias]);
+
+  const vendas = useMemo(() => {
+    return todasVendas.filter(v => new Date(v.data).getTime() >= limiteData.getTime());
+  }, [todasVendas, limiteData]);
+
+  const eventos = useMemo(() => {
+    return todosEventos.filter(e => new Date(e.data || 0).getTime() >= limiteData.getTime());
+  }, [todosEventos, limiteData]);
 
   const receita = vendas.reduce((a, v) => a + v.precoUnitario * v.quantidade, 0);
   const custo = vendas.reduce((a, v) => a + v.custoUnitario * v.quantidade, 0);
   const lucro = receita - custo;
   const margem = receita > 0 ? ((lucro / receita) * 100).toFixed(1) : "0.0";
-  const topDrinks = rankingDrinks().slice(0, 5);
+  
+  const rankingDrinks = useMemo(() => {
+    const map = new Map<string, { nome: string; qtd: number; receita: number; lucro: number }>();
+    vendas.forEach((v) => {
+      const cur = map.get(v.drinkId) || { nome: v.drinkNome, qtd: 0, receita: 0, lucro: 0 };
+      cur.qtd += v.quantidade;
+      cur.receita += v.precoUnitario * v.quantidade;
+      cur.lucro += (v.precoUnitario - v.custoUnitario) * v.quantidade;
+      map.set(v.drinkId, cur);
+    });
+    return Array.from(map.entries())
+      .map(([id, v]) => ({ id, ...v }))
+      .sort((a, b) => b.receita - a.receita);
+  }, [vendas]);
+
+  const topDrinks = rankingDrinks.slice(0, 5);
 
   const eventosAtivos = eventos.filter((e) => !["cancelado", "proposta_recusada"].includes(e.status));
   const proximosEventos = [...eventosAtivos].sort((a, b) => new Date(a.data || 0).getTime() - new Date(b.data || 0).getTime()).filter(e => new Date(e.data || 0).getTime() >= new Date().setHours(0,0,0,0)).slice(0, 5);
@@ -40,6 +74,21 @@ function Dashboard() {
       <PageHeader
         title="Dashboard"
         subtitle="Visão geral consolidada do Goat Bar Management System."
+        periodo={
+          <div className="relative">
+            <select
+              value={periodoDias}
+              onChange={(e) => setPeriodoDias(Number(e.target.value))}
+              className="appearance-none inline-flex items-center gap-2 pl-4 pr-10 py-2 rounded-lg border border-border bg-surface text-sm font-medium hover:border-border-strong transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value={7}>Últimos 7 dias</option>
+              <option value={30}>Últimos 30 dias</option>
+              <option value={90}>Últimos 90 dias</option>
+              <option value={0}>Todo o período</option>
+            </select>
+            <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none rotate-90" />
+          </div>
+        }
       />
 
       <div className="px-8 py-7 space-y-7">

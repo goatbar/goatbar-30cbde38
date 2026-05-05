@@ -124,7 +124,14 @@ export function useAppStore() {
       updateDrink(id: string, payload: Partial<Drink>) {
         setStore((prev) => ({
           ...prev,
-          drinks: prev.drinks.map((d) => (d.id === id ? { ...d, ...payload } : d)),
+          drinks: prev.drinks.map((d) => {
+            if (d.id !== id) return d;
+            const updated = { ...d, ...payload };
+            if (payload.ingredientes) {
+              updated.custoUnitario = Number(payload.ingredientes.reduce((a, i) => a + i.custo, 0).toFixed(2));
+            }
+            return updated;
+          }),
         }));
       },
       addEventContract(input: Omit<EventContract, "id">) {
