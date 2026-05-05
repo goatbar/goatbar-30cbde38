@@ -26,7 +26,7 @@ import {
   type ContractSignatureHistory,
 } from "@/lib/mock-data";
 
-const STORAGE_KEY = "goatbar-functional-store-v5";
+const STORAGE_KEY = "goatbar-functional-store-v6";
 
 type AppStore = {
   vendas: Venda[];
