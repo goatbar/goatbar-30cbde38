@@ -208,6 +208,7 @@ export const eventos: Evento[] = [];
 export const contratos: Contrato[] = [];
 
 // ─── Parâmetros de cálculo ────────────────────────────────────────────────
+export const parametros: ParametroCalculo[] = [
   { id: "p1", chave: "repasse_percentual", label: "Percentual de repasse", valor: 15, unidade: "%", grupo: "Repasse", descricao: "Aplicado sobre receita líquida" },
   { id: "p2", chave: "custo_equipe_hora", label: "Custo de equipe por hora", valor: 65, unidade: "R$", grupo: "Custos" },
   { id: "p3", chave: "custo_operacional_evento", label: "Custo operacional fixo por evento", valor: 850, unidade: "R$", grupo: "Custos" },
