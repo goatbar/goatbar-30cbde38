@@ -16,7 +16,7 @@ import {
 } from "@/services/contract-service";
 
 import { eventBudgetService, type Event as RealEvent, type BudgetVersion, type BudgetHistory, type NegotiationHistory } from "@/services/event-budget-service";
-import { Loader2, History, Copy, Clock } from "lucide-react";
+import { Loader2, History, Copy, Clock, Trash2, Megaphone, UserPlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
@@ -317,6 +317,18 @@ function EventoInterna() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!confirm("Tem certeza que deseja excluir este evento e todos os dados relacionados?")) return;
+    try {
+      setSaving(true);
+      await eventBudgetService.deleteEvent(eventoId);
+      navigate({ to: "/eventos" });
+    } catch (e) {
+      alert("Erro ao excluir evento.");
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <AppShell>
@@ -352,6 +364,9 @@ function EventoInterna() {
         subtitle={`${draft.tipo} · Versão ${currentBudget?.version_number || 1}`}
         action={
           <div className="flex items-center gap-2">
+            <button onClick={handleDelete} className="h-10 w-10 flex items-center justify-center rounded-lg border border-destructive/20 text-destructive hover:bg-destructive/10 transition-colors" title="Excluir Evento">
+              <Trash2 className="h-4 w-4" />
+            </button>
             <GhostButton onClick={() => handleSave(true)} disabled={saving}>
               <Copy className="h-4 w-4" /> Salvar Nova Versão
             </GhostButton>
@@ -392,6 +407,38 @@ function EventoInterna() {
             <Info icon={<Calendar className="h-4 w-4 text-primary" />} label="Data" value={draft.data ? new Date(draft.data).toLocaleDateString("pt-BR") : "A definir"} />
             <Info icon={<Users className="h-4 w-4 text-primary" />} label="Convidados" value={draft.convidados.toString()} />
             <Info icon={<MapPin className="h-4 w-4 text-primary" />} label="Local" value={draft.local || "A definir"} />
+            
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-px bg-border mx-2 hidden md:block" />
+              <div className="space-y-1">
+                 <div className="label-eyebrow flex items-center gap-1"><Megaphone className="h-3 w-3" /> Origem</div>
+                 <select 
+                   value={draft.lead_source || ""} 
+                   onChange={e => setDraft(p => p ? ({...p, lead_source: e.target.value}) : null)}
+                   className="bg-transparent border-0 outline-none text-xs font-bold text-foreground cursor-pointer hover:text-primary transition-colors p-0 h-auto min-w-[100px]"
+                 >
+                   <option value="">A definir</option>
+                   <option value="Instagram">Instagram</option>
+                   <option value="Google">Google</option>
+                   <option value="WhatsApp">WhatsApp</option>
+                   <option value="Indicação">Indicação</option>
+                   <option value="Site">Site</option>
+                 </select>
+              </div>
+            </div>
+
+            {draft.lead_source === "Indicação" && (
+              <div className="space-y-1 animate-in fade-in slide-in-from-left-2">
+                 <div className="label-eyebrow flex items-center gap-1"><UserPlus className="h-3 w-3" /> Referência</div>
+                 <input 
+                   type="text" 
+                   placeholder="Nome de quem indicou"
+                   value={draft.referral_name || ""} 
+                   onChange={e => setDraft(p => p ? ({...p, referral_name: e.target.value}) : null)}
+                   className="bg-transparent border-0 outline-none text-xs font-bold text-foreground placeholder:text-muted-foreground focus:text-primary transition-colors p-0 h-auto"
+                 />
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-6">
             <div className="text-right">
@@ -451,21 +498,34 @@ function EventoInterna() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="label-eyebrow block mb-2">Drinks por pessoa</label>
-                      <input type="number" value={draft.drinksPorPessoa} onChange={e => setDraft(p => p ? ({...p, drinksPorPessoa: Number(e.target.value)}) : null)} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none" />
+                      <input type="number" value={draft.drinksPorPessoa || ""} onChange={e => setDraft(p => p ? ({...p, drinksPorPessoa: e.target.value === "" ? 0 : Number(e.target.value)}) : null)} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none" />
                     </div>
                     <div>
                       <label className="label-eyebrow block mb-2">Markup adicional (%)</label>
-                      <input type="number" value={draft.markupAdicionalDrinks} onChange={e => setDraft(p => p ? ({...p, markupAdicionalDrinks: Number(e.target.value)}) : null)} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none" />
+                      <input type="number" value={draft.markupAdicionalDrinks || ""} onChange={e => setDraft(p => p ? ({...p, markupAdicionalDrinks: e.target.value === "" ? 0 : Number(e.target.value)}) : null)} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none" />
                     </div>
                   </div>
                   
                   <div>
-                    <label className="label-eyebrow block mb-2">Selecione os drinks ({draft.drinks.length} selecionados)</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[300px] overflow-y-auto p-2 border border-border rounded-lg bg-background/30 scrollbar-thin">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-[450px] overflow-y-auto p-2 scrollbar-thin">
                       {allDrinks.map(d => (
-                        <div key={d.id} onClick={() => toggleDrink(d.id)} className={`p-3 rounded-lg border text-sm cursor-pointer transition-all flex items-center justify-between group ${draft.drinks.includes(d.id) ? "bg-primary/10 border-primary shadow-sm" : "bg-surface border-border hover:border-primary/40"}`}>
-                          <span className={`font-medium truncate ${draft.drinks.includes(d.id) ? "text-primary" : ""}`}>{d.nome}</span>
-                          <span className="text-[10px] text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">{fmtBRL(d.custoUnitario)}</span>
+                        <div key={d.id} onClick={() => toggleDrink(d.id)} className={`relative overflow-hidden rounded-xl border-2 transition-all cursor-pointer group flex flex-col ${draft.drinks.includes(d.id) ? "border-primary bg-primary/5 shadow-md scale-[0.98]" : "border-border bg-surface hover:border-primary/40 hover:scale-[1.02]"}`}>
+                          <div className="h-24 overflow-hidden relative">
+                             <img src={d.imagem} alt={d.nome} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60" />
+                             {draft.drinks.includes(d.id) && (
+                               <div className="absolute top-2 right-2 h-5 w-5 bg-primary rounded-full flex items-center justify-center text-white shadow-lg">
+                                  <Check className="h-3 w-3 stroke-[4px]" />
+                               </div>
+                             )}
+                          </div>
+                          <div className="p-3 space-y-1">
+                             <div className={`font-bold text-[11px] uppercase tracking-tighter truncate ${draft.drinks.includes(d.id) ? "text-primary" : "text-foreground"}`}>{d.nome}</div>
+                             <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-muted-foreground">Custo: <span className="font-bold text-foreground">{fmtBRL(d.custoUnitario)}</span></span>
+                             </div>
+                             <div className="text-[9px] font-bold text-primary/80">Sugerido: {fmtBRL(d.modalityConfig.steakhouse.price || 0)}</div>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -520,13 +580,13 @@ function EventoInterna() {
                         <div className="flex-1">
                           <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">{key}</label>
                           <div className="flex items-center gap-2">
-                             <input type="number" value={prof.qtd} onChange={e => setDraft(p => p ? ({...p, equipe: { ...p.equipe, [key]: { ...prof, qtd: Number(e.target.value) }}}) : null)} className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm font-bold" />
+                             <input type="number" value={prof.qtd || ""} onChange={e => setDraft(p => p ? ({...p, equipe: { ...p.equipe, [key]: { ...prof, qtd: e.target.value === "" ? 0 : Number(e.target.value) }}}) : null)} className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm font-bold" />
                              <span className="text-xs text-muted-foreground">und</span>
                           </div>
                         </div>
                         <div className="flex-1">
                           <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Valor (R$)</label>
-                          <input type="number" value={prof.valorUnitario} onChange={e => setDraft(p => p ? ({...p, equipe: { ...p.equipe, [key]: { ...prof, valorUnitario: Number(e.target.value) }}}) : null)} className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm" />
+                          <input type="number" value={prof.valorUnitario || ""} onChange={e => setDraft(p => p ? ({...p, equipe: { ...p.equipe, [key]: { ...prof, valorUnitario: e.target.value === "" ? 0 : Number(e.target.value) }}}) : null)} className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm" />
                         </div>
                       </div>
                     ))}
@@ -546,7 +606,7 @@ function EventoInterna() {
                           </div>
                           <span className="text-muted-foreground text-sm">x</span>
                           <div className="flex-1">
-                             <input type="number" value={draft.gelo.valorUnitario} onChange={e => setDraft(p => p ? ({...p, gelo: { ...p.gelo, valorUnitario: Number(e.target.value) }}) : null)} className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm" />
+                             <input type="number" value={draft.gelo.valorUnitario || ""} onChange={e => setDraft(p => p ? ({...p, gelo: { ...p.gelo, valorUnitario: e.target.value === "" ? 0 : Number(e.target.value) }}) : null)} className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm" />
                           </div>
                        </div>
                        <div className="mt-2 text-[10px] text-muted-foreground italic">* Estimativa de 35 pacotes a cada 100 convidados</div>
@@ -562,7 +622,7 @@ function EventoInterna() {
                       </label>
                       {draft.viagem.incluir && (
                         <div className="animate-in slide-in-from-top-2 duration-300">
-                          <input type="number" value={draft.viagem.valor} onChange={e => setDraft(p => p ? ({...p, viagem: { ...p.viagem, valor: Number(e.target.value) }}) : null)} className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm" placeholder="Valor total (R$)" />
+                          <input type="number" value={draft.viagem.valor || ""} onChange={e => setDraft(p => p ? ({...p, viagem: { ...p.viagem, valor: e.target.value === "" ? 0 : Number(e.target.value) }}) : null)} className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm" placeholder="Valor total (R$)" />
                         </div>
                       )}
                     </div>
@@ -587,9 +647,9 @@ function EventoInterna() {
                           arr[i].descricao = e.target.value;
                           setDraft(p => p ? ({...p, gastosDiversos: arr}) : null);
                         }} className="flex-1 h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary outline-none transition-colors" placeholder="Descrição do item" />
-                        <input type="number" value={g.valor} onChange={e => {
+                        <input type="number" value={g.valor || ""} onChange={e => {
                           const arr = [...draft.gastosDiversos];
-                          arr[i].valor = Number(e.target.value);
+                          arr[i].valor = e.target.value === "" ? 0 : Number(e.target.value);
                           setDraft(p => p ? ({...p, gastosDiversos: arr}) : null);
                         }} className="w-24 h-10 px-3 rounded-lg bg-input border border-border text-sm font-bold text-primary" />
                         <button onClick={() => {
@@ -608,7 +668,7 @@ function EventoInterna() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="p-4 rounded-xl border border-border bg-surface">
                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">Valor do Desconto (R$)</label>
-                           <input type="number" value={draft.desconto || ""} onChange={e => setDraft(p => p ? ({...p, desconto: Number(e.target.value)}) : null)} className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm font-bold text-destructive" placeholder="0,00" />
+                           <input type="number" value={draft.desconto || ""} onChange={e => setDraft(p => p ? ({...p, desconto: e.target.value === "" ? 0 : Number(e.target.value)}) : null)} className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm font-bold text-destructive" placeholder="0,00" />
                         </div>
                         <div className="p-4 rounded-xl border border-border bg-surface">
                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">Motivo do Desconto</label>
@@ -620,7 +680,7 @@ function EventoInterna() {
                       <label className="text-[10px] font-bold text-primary uppercase tracking-widest block mb-3 text-center">Lucro Líquido Desejado</label>
                       <div className="flex items-center gap-3">
                          <span className="text-2xl font-display text-primary">R$</span>
-                         <input type="number" value={draft.lucroDesejado} onChange={e => setDraft(p => p ? ({...p, lucroDesejado: Number(e.target.value)}) : null)} className="w-full h-14 text-3xl font-display font-bold bg-transparent border-0 focus:ring-0 text-primary placeholder:text-primary/20" placeholder="0,00" />
+                         <input type="number" value={draft.lucroDesejado || ""} onChange={e => setDraft(p => p ? ({...p, lucroDesejado: e.target.value === "" ? 0 : Number(e.target.value)}) : null)} className="w-full h-14 text-3xl font-display font-bold bg-transparent border-0 focus:ring-0 text-primary placeholder:text-primary/20" placeholder="0,00" />
                       </div>
                     </div>
                   </div>
@@ -632,47 +692,104 @@ function EventoInterna() {
             {/* Direita: Resumo */}
             <div className="xl:col-span-4">
               <div className="sticky top-6 space-y-6">
-                <SectionCard title="DRE do Evento" className="border-primary/30 shadow-2xl shadow-primary/10 bg-surface/80 backdrop-blur-sm overflow-hidden">
-                  <div className="absolute top-0 right-0 p-3">
-                     <div className="bg-primary/20 text-primary text-[10px] font-bold px-2 py-1 rounded">ESTIMATIVA REAL</div>
-                  </div>
-                  <div className="space-y-4 text-sm mt-2">
-                    <Row k="Serviço de Drinks" v={fmtBRL(calc.valorDrinksEvento)} />
-                    <Row k="Equipe Operacional" v={fmtBRL(calc.valorEquipe)} />
-                    <Row k="Insumos (Gelo/Outros)" v={fmtBRL(calc.valorGelo)} />
-                    {draft.viagem.incluir && <Row k="Logística/Gasolina" v={fmtBRL(calc.valorGasolina)} />}
-                    {draft.gastosDiversos.length > 0 && <Row k="Itens Diversos" v={fmtBRL(calc.valorGastosDiversos)} />}
+                <SectionCard title="Detalhamento da Proposta" className="border-primary/30 shadow-2xl shadow-primary/10 bg-surface/80 backdrop-blur-sm">
+                  <div className="space-y-6 text-xs">
                     
-                    <div className="border-t border-border/60 my-4 pt-4">
-                       <Row k="Subtotal (Custo + Lucro)" v={fmtBRL(calc.valorTotalSemDesconto)} />
-                       {calc.valorDesconto > 0 && (
-                         <div className="flex justify-between items-center py-1 text-destructive animate-in slide-in-from-right-2">
-                           <span className="text-[10px] font-bold uppercase tracking-widest">Desconto Aplicado</span>
-                           <span className="font-bold">- {fmtBRL(calc.valorDesconto)}</span>
-                         </div>
-                       )}
-                       <Row k="Margem de Contribuição" v={fmtBRL(calc.lucro)} highlight />
+                    {/* DRINKS section */}
+                    <div className="space-y-2">
+                      <div className="font-bold text-primary flex items-center gap-2 uppercase tracking-tighter">
+                        <div className="h-1 w-1 bg-primary rounded-full" /> DRINKS SELECIONADOS:
+                      </div>
+                      <div className="pl-3 space-y-1 text-muted-foreground font-medium uppercase tracking-tight">
+                        {draft.drinks.length === 0 && <div className="italic">Nenhum drink selecionado</div>}
+                        {draft.drinks.map(dId => {
+                          const drink = allDrinks.find(d => d.id === dId);
+                          return <div key={dId} className="flex justify-between"><span>- {drink?.nome}</span></div>;
+                        })}
+                      </div>
+                      <div className="pt-2 flex justify-between font-bold border-t border-border/40">
+                         <span>VALOR TOTAL SERVIÇO DE DRINKS</span>
+                         <span className="text-foreground">{fmtBRL(calc.valorDrinksEvento)}</span>
+                      </div>
                     </div>
 
-                    <div className="bg-primary p-6 rounded-2xl text-primary-foreground shadow-lg shadow-primary/20 relative overflow-hidden">
-                       <div className="absolute -right-4 -bottom-4 opacity-10 rotate-12">
-                          <Save className="h-24 w-24" />
+                    {/* EQUIPE section */}
+                    <div className="space-y-2">
+                      <div className="font-bold text-primary flex items-center gap-2 uppercase tracking-tighter">
+                        <div className="h-1 w-1 bg-primary rounded-full" /> EQUIPE OPERACIONAL:
+                      </div>
+                      <div className="pl-3 space-y-1 text-muted-foreground font-medium uppercase tracking-tight">
+                        {Object.entries(draft.equipe).filter(([_, p]) => p.qtd > 0).map(([key, p]) => (
+                          <div key={key}>- {p.qtd} {key.toUpperCase()}{p.qtd > 1 ? 'S' : ''}</div>
+                        ))}
+                      </div>
+                      <div className="pt-2 flex justify-between font-bold border-t border-border/40">
+                         <span>VALOR TOTAL EQUIPE</span>
+                         <span className="text-foreground">{fmtBRL(calc.valorEquipe)}</span>
+                      </div>
+                    </div>
+
+                    {/* GELO section */}
+                    <div className="space-y-2">
+                      <div className="font-bold text-primary flex items-center gap-2 uppercase tracking-tighter">
+                        <div className="h-1 w-1 bg-primary rounded-full" /> GELO & LOGÍSTICA:
+                      </div>
+                      <div className="pl-3 space-y-1 text-muted-foreground font-medium uppercase tracking-tight">
+                        <div>- {calc.pacotesGelo} PACOTES DE GELO ({fmtBRL(calc.valorGelo)})</div>
+                        {draft.viagem.incluir && <div>- TAXA DE DESLOCAMENTO ({fmtBRL(calc.valorGasolina)})</div>}
+                      </div>
+                    </div>
+
+                    {/* GASTOS section */}
+                    <div className="space-y-2">
+                      <div className="font-bold text-primary flex items-center gap-2 uppercase tracking-tighter">
+                        <div className="h-1 w-1 bg-primary rounded-full" /> GASTOS DIVERSOS:
+                      </div>
+                      <div className="pl-3 space-y-1 text-muted-foreground font-medium uppercase tracking-tight">
+                        {draft.gastosDiversos.length === 0 && <div className="italic">Nenhum gasto extra</div>}
+                        {draft.gastosDiversos.map(g => (
+                          <div key={g.id} className="flex justify-between">
+                            <span>- {g.descricao.toUpperCase() || "ITEM EXTRA"}</span>
+                            <span>{fmtBRL(g.valor)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* TOTAIS section */}
+                    <div className="pt-4 border-t-2 border-primary/20 space-y-3">
+                       <div className="flex justify-between text-muted-foreground font-medium">
+                          <span>SUBTOTAL (CUSTOS + MARKUP)</span>
+                          <span>{fmtBRL(calc.custoTotalOrcamento)}</span>
                        </div>
-                       <div className="label-eyebrow text-white/70 mb-1">VALOR TOTAL PROPOSTA</div>
-                       <div className="font-display text-4xl font-bold">{fmtBRL(calc.valorTotalOrcamento)}</div>
-                       <div className="mt-4 pt-4 border-t border-white/20 flex justify-between items-center text-xs font-medium">
-                          <span>{draft.convidados} CONVIDADOS</span>
-                          <span className="bg-white/20 px-2 py-1 rounded">{fmtBRL(calc.mediaPorPessoa)} / PESSOA</span>
+                       <div className="flex justify-between text-primary font-bold">
+                          <span>LUCRO LÍQUIDO ADICIONADO</span>
+                          <span>{fmtBRL(draft.lucroDesejado)}</span>
+                       </div>
+                       {calc.valorDesconto > 0 && (
+                         <div className="flex justify-between text-destructive font-bold">
+                            <span>DESCONTO APLICADO ({draft.descontoMotivo || "GERAL"})</span>
+                            <span>- {fmtBRL(calc.valorDesconto)}</span>
+                         </div>
+                       )}
+                       
+                       <div className="bg-primary p-5 rounded-xl text-primary-foreground shadow-lg shadow-primary/20">
+                          <div className="text-[9px] font-bold uppercase tracking-[0.2em] opacity-80 mb-1">Valor Final da Proposta</div>
+                          <div className="text-3xl font-display font-bold">{fmtBRL(calc.valorTotalOrcamento)}</div>
+                          <div className="mt-3 pt-3 border-t border-white/20 flex justify-between text-[10px] font-bold opacity-90">
+                             <span>{draft.convidados} CONVIDADOS</span>
+                             <span className="bg-white/20 px-2 py-0.5 rounded">{fmtBRL(calc.mediaPorPessoa)} / PAX</span>
+                          </div>
                        </div>
                     </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-3 mt-6">
-                    <GhostButton onClick={() => handleSave(true)} className="text-[10px] font-bold" disabled={saving}>VERSÃO NOVA</GhostButton>
-                    <PrimaryButton className="h-12 text-xs font-bold" onClick={() => handleSave(false)} disabled={saving}>
-                       {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                       {saving ? "SALVANDO..." : "ATUALIZAR"}
-                    </PrimaryButton>
+
+                    <div className="grid grid-cols-2 gap-3 mt-6">
+                      <GhostButton onClick={() => handleSave(true)} className="h-10 text-[10px] font-bold" disabled={saving}>GERAR NOVA VERSÃO</GhostButton>
+                      <PrimaryButton className="h-10 text-[10px] font-bold" onClick={() => handleSave(false)} disabled={saving}>
+                         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                         {saving ? "SALVANDO..." : "ATUALIZAR ATUAL"}
+                      </PrimaryButton>
+                    </div>
                   </div>
                 </SectionCard>
 
@@ -1072,25 +1189,6 @@ function EventoInterna() {
            </div>
         )}
 
-      </div>
-
-      {/* PAINEL DE DEBUG (Remover após validação) */}
-      <div className="mt-20 p-8 border-t border-border bg-background/50">
-        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Debug de Dados (Supabase)</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-           <div className="p-4 bg-black/20 rounded-lg border border-border overflow-auto max-h-[300px]">
-              <div className="text-[10px] font-bold text-primary mb-2 uppercase">Evento Raw</div>
-              <pre className="text-[10px] text-muted-foreground">{JSON.stringify(evento, null, 2)}</pre>
-           </div>
-           <div className="p-4 bg-black/20 rounded-lg border border-border overflow-auto max-h-[300px]">
-              <div className="text-[10px] font-bold text-primary mb-2 uppercase">Budget Atual</div>
-              <pre className="text-[10px] text-muted-foreground">{JSON.stringify(currentBudget, null, 2)}</pre>
-           </div>
-        </div>
-        <div className="mt-4 p-4 bg-black/20 rounded-lg border border-border">
-           <div className="text-[10px] font-bold text-primary mb-2 uppercase">Draft State (Frontend)</div>
-           <pre className="text-[10px] text-muted-foreground">{JSON.stringify(draft, null, 2)}</pre>
-        </div>
       </div>
     </AppShell>
   );

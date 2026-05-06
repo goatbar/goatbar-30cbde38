@@ -14,6 +14,8 @@ export interface Event {
   drinks?: string[];
   notes?: string;
   status: string;
+  lead_source?: string;
+  referral_name?: string;
   created_at: string;
   updated_at: string;
 }
@@ -136,6 +138,11 @@ export const eventBudgetService = {
       .single();
     if (error) throw error;
     return data as Event;
+  },
+
+  async deleteEvent(id: string) {
+    const { error } = await supabase.from("events").delete().eq("id", id);
+    if (error) throw error;
   },
 
   async checkEventsSameDate(date: string) {

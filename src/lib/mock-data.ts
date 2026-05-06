@@ -243,11 +243,11 @@ export const drinks: Drink[] = [
     nome: "Caipirinha",
     categoria: "Cachaça",
     descricao: "Cachaça premium, limão e açúcar.",
-    custoUnitario: 2.20,
+    custoUnitario: 13.25,
     modalityConfig: {
-      evento: { active: true, cost: 2.20 },
+      evento: { active: true, cost: 13.25, price: 25 },
       steakhouse: { active: true, cost: 13.25, price: 25 },
-      goatbotequim: { active: true, cost: 2.37 }
+      goatbotequim: { active: true, cost: 13.25, price: 25 }
     },
     imagem: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=400&auto=format&fit=crop"
   },
@@ -256,11 +256,11 @@ export const drinks: Drink[] = [
     nome: "Caipirinha Limão Cravo e Mel",
     categoria: "Cachaça",
     descricao: "Cachaça, limão cravo e mel silvestre.",
-    custoUnitario: 2.70,
+    custoUnitario: 15.00,
     modalityConfig: {
-      evento: { active: true, cost: 2.70 },
+      evento: { active: true, cost: 15.00, price: 30 },
       steakhouse: { active: true, cost: 15.00, price: 30 },
-      goatbotequim: { active: true, cost: 4.37 }
+      goatbotequim: { active: true, cost: 15.00, price: 30 }
     },
     imagem: "https://images.unsplash.com/photo-1541546106583-b4f853b4306a?w=400&auto=format&fit=crop"
   },
@@ -269,11 +269,11 @@ export const drinks: Drink[] = [
     nome: "Caipivodka Morango",
     categoria: "Vodka",
     descricao: "Vodka e morangos frescos.",
-    custoUnitario: 3.60,
+    custoUnitario: 15.40,
     modalityConfig: {
-      evento: { active: true, cost: 3.60 },
+      evento: { active: true, cost: 15.40, price: 30 },
       steakhouse: { active: true, cost: 15.40, price: 30 },
-      goatbotequim: { active: true, cost: 5.37 }
+      goatbotequim: { active: true, cost: 15.40, price: 30 }
     },
     imagem: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&auto=format&fit=crop"
   },
@@ -308,11 +308,11 @@ export const drinks: Drink[] = [
     nome: "Mojito",
     categoria: "Rum",
     descricao: "Rum, limão, hortelã e água com gás.",
-    custoUnitario: 3.00,
+    custoUnitario: 16.76,
     modalityConfig: {
-      evento: { active: true, cost: 3.00 },
+      evento: { active: true, cost: 16.76, price: 32 },
       steakhouse: { active: true, cost: 16.76, price: 32 },
-      goatbotequim: { active: true, cost: 4.67 }
+      goatbotequim: { active: true, cost: 16.76, price: 32 }
     },
     imagem: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=400&auto=format&fit=crop"
   },
@@ -793,10 +793,9 @@ export function calcularOrcamentoEvento(evento: Evento) {
   }, 0);
   
   const totalDoses = evento.convidados * evento.drinksPorPessoa;
-  const dosesPorDrink = totalDoses / (evento.drinks.length || 1);
-  const mediaCustoDrinks = custoBaseDrinks / (evento.drinks.length || 1);
+  const mediaCustoDrinks = evento.drinks.length > 0 ? (custoBaseDrinks / evento.drinks.length) : 0;
   
-  const valorDrinksEvento = dosesPorDrink * mediaCustoDrinks * (1 + (evento.markupAdicionalDrinks || 0) / 100);
+  const valorDrinksEvento = totalDoses * mediaCustoDrinks * (1 + (evento.markupAdicionalDrinks || 0) / 100);
 
   // --- EQUIPE ---
   const valorEquipe = Object.values(evento.equipe).reduce((acc, p) => acc + (p.qtd * p.valorUnitario), 0);

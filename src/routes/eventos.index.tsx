@@ -23,7 +23,9 @@ function EventosPage() {
     local: "", 
     cidade: "São Paulo", 
     convidados: 100, 
-    observacoes: "" 
+    observacoes: "",
+    lead_source: "",
+    referral_name: ""
   });
 
   useEffect(() => {
@@ -73,6 +75,8 @@ function EventosPage() {
         city: form.cidade,
         guests: form.convidados,
         notes: form.observacoes,
+        lead_source: form.lead_source,
+        referral_name: form.referral_name,
         status: "novo_orcamento"
       });
       
@@ -232,8 +236,8 @@ function EventosPage() {
                   <label className="label-eyebrow block mb-2">Qtd Convidados</label>
                   <input
                     type="number"
-                    value={form.convidados}
-                    onChange={(e) => setForm((p) => ({ ...p, convidados: Number(e.target.value) }))}
+                    value={form.convidados || ""}
+                    onChange={(e) => setForm((p) => ({ ...p, convidados: e.target.value === "" ? 0 : Number(e.target.value) }))}
                     className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
                   />
                 </div>
@@ -247,6 +251,36 @@ function EventosPage() {
                     {["Casamento", "Corporativo", "Aniversário", "Confraternização"].map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label-eyebrow block mb-2">Canal de Origem</label>
+                  <select
+                    value={form.lead_source || ""}
+                    onChange={(e) => setForm((p) => ({ ...p, lead_source: e.target.value }))}
+                    className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
+                  >
+                    <option value="">A definir</option>
+                    <option value="Instagram">Instagram</option>
+                    <option value="Google">Google</option>
+                    <option value="WhatsApp">WhatsApp</option>
+                    <option value="Indicação">Indicação</option>
+                    <option value="Site">Site</option>
+                  </select>
+                </div>
+                {form.lead_source === "Indicação" && (
+                  <div>
+                    <label className="label-eyebrow block mb-2">Quem indicou?</label>
+                    <input
+                      type="text"
+                      placeholder="Nome da referência"
+                      value={form.referral_name || ""}
+                      onChange={(e) => setForm((p) => ({ ...p, referral_name: e.target.value }))}
+                      className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
+                    />
+                  </div>
+                )}
               </div>
               <div>
                 <label className="label-eyebrow block mb-2">Observações gerais</label>
@@ -281,7 +315,7 @@ function CalendarView({ eventosAtivos }: { eventosAtivos: RealEvent[] }) {
     const dayNum = i - firstDay + 1;
     if (dayNum > 0 && dayNum <= daysInMonth) {
       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-      const dayEvents = eventosAtivos.filter(e => e.date === dateStr);
+      const dayEvents = eventosAtivos.filter(e => e.date === dateStr && e.status === "confirmado");
       return { dayNum, dateStr, events: dayEvents };
     }
     return null;
