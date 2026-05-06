@@ -334,28 +334,24 @@ function EventoInterna() {
 
   if (loading) {
     return (
-      <AppShell>
-        <div className="flex flex-col items-center justify-center min-h-[60vh]">
-          <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
-          <p className="text-muted-foreground animate-pulse">Carregando detalhes do evento...</p>
-        </div>
-      </AppShell>
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 text-primary animate-spin mb-4" />
+        <p className="text-sm text-muted-foreground">Carregando dados do evento...</p>
+      </div>
     );
   }
 
   if (!draft || !calc) {
     return (
-      <AppShell>
-        <div className="p-12 text-center">
-          <h2 className="font-display text-2xl">Evento não encontrado</h2>
-          <Link to="/eventos" className="text-primary text-sm mt-3 inline-block">Voltar para lista</Link>
-        </div>
-      </AppShell>
+      <div className="p-8 text-center">
+        <h2 className="font-display text-2xl">Evento não encontrado</h2>
+        <Link to="/eventos" className="text-primary text-sm mt-3 inline-block">Voltar para lista</Link>
+      </div>
     );
   }
 
   return (
-    <AppShell>
+    <>
 
       <PageHeader
         breadcrumb={
@@ -1206,7 +1202,7 @@ function EventoInterna() {
         )}
 
       </div>
-    </AppShell>
+    </>
   );
 }
 

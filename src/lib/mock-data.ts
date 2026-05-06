@@ -239,28 +239,28 @@ export interface TipoEvento {
 
 export const drinks: Drink[] = [
   {
-    id: "caipirinha",
-    nome: "Caipirinha",
-    categoria: "Cachaça",
-    descricao: "Cachaça premium, limão e açúcar.",
-    custoUnitario: 13.25,
+    id: "caipivodka-limao",
+    nome: "Caipivodka Limão",
+    categoria: "Vodka",
+    descricao: "Vodka, limão e açúcar.",
+    custoUnitario: 2.20,
     modalityConfig: {
-      evento: { active: true, cost: 13.25, price: 25 },
-      steakhouse: { active: true, cost: 13.25, price: 25 },
-      goatbotequim: { active: true, cost: 13.25, price: 25 }
+      evento: { active: true, cost: 2.20, price: 25 },
+      steakhouse: { active: true, cost: 2.20, price: 25 },
+      goatbotequim: { active: true, cost: 2.20, price: 25 }
     },
     imagem: "https://images.unsplash.com/photo-1541546106583-b4f853b4306a?w=400&auto=format&fit=crop"
   },
   {
     id: "caipi-limao-cravo-mel",
-    nome: "Caipirinha Limão Cravo e Mel",
-    categoria: "Cachaça",
-    descricao: "Cachaça, limão cravo e mel silvestre.",
-    custoUnitario: 15.00,
+    nome: "Caipivodka limão cravo e mel",
+    categoria: "Vodka",
+    descricao: "Vodka, limão cravo e mel silvestre.",
+    custoUnitario: 2.70,
     modalityConfig: {
-      evento: { active: true, cost: 15.00, price: 30 },
-      steakhouse: { active: true, cost: 15.00, price: 30 },
-      goatbotequim: { active: true, cost: 15.00, price: 30 }
+      evento: { active: true, cost: 2.70, price: 30 },
+      steakhouse: { active: true, cost: 2.70, price: 30 },
+      goatbotequim: { active: true, cost: 2.70, price: 30 }
     },
     imagem: "https://images.unsplash.com/photo-1541546106583-b4f853b4306a?w=400&auto=format&fit=crop"
   },
@@ -269,11 +269,11 @@ export const drinks: Drink[] = [
     nome: "Caipivodka Morango",
     categoria: "Vodka",
     descricao: "Vodka e morangos frescos.",
-    custoUnitario: 15.40,
+    custoUnitario: 3.60,
     modalityConfig: {
-      evento: { active: true, cost: 15.40, price: 30 },
-      steakhouse: { active: true, cost: 15.40, price: 30 },
-      goatbotequim: { active: true, cost: 15.40, price: 30 }
+      evento: { active: true, cost: 3.60, price: 30 },
+      steakhouse: { active: true, cost: 3.60, price: 30 },
+      goatbotequim: { active: true, cost: 3.60, price: 30 }
     },
     imagem: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&auto=format&fit=crop"
   },
@@ -282,24 +282,24 @@ export const drinks: Drink[] = [
     nome: "Caipivodka Abacaxi",
     categoria: "Vodka",
     descricao: "Vodka, abacaxi e raspas de limão.",
-    custoUnitario: 15.40,
+    custoUnitario: 2.80,
     modalityConfig: {
-      evento: { active: true, cost: 15.40, price: 30 },
-      steakhouse: { active: true, cost: 15.40, price: 30 },
-      goatbotequim: { active: true, cost: 15.40, price: 30 }
+      evento: { active: true, cost: 2.80, price: 30 },
+      steakhouse: { active: true, cost: 2.80, price: 30 },
+      goatbotequim: { active: true, cost: 2.80, price: 30 }
     },
     imagem: "https://images.unsplash.com/photo-1587223962905-276f75608b4f?w=400&auto=format&fit=crop"
   },
   {
     id: "caipivodka-maracuja",
-    nome: "Caipivodka Maracujá",
+    nome: "Caip Maracujá com baunilha",
     categoria: "Vodka",
     descricao: "Vodka, maracujá e açúcar de baunilha.",
-    custoUnitario: 15.40,
+    custoUnitario: 3.20,
     modalityConfig: {
-      evento: { active: true, cost: 15.40, price: 30 },
-      steakhouse: { active: true, cost: 15.40, price: 30 },
-      goatbotequim: { active: true, cost: 15.40, price: 30 }
+      evento: { active: true, cost: 3.20, price: 30 },
+      steakhouse: { active: true, cost: 3.20, price: 30 },
+      goatbotequim: { active: true, cost: 3.20, price: 30 }
     },
     imagem: "https://images.unsplash.com/photo-1595981267035-7b04ca84a82d?w=400&auto=format&fit=crop"
   },
@@ -308,11 +308,11 @@ export const drinks: Drink[] = [
     nome: "Mojito",
     categoria: "Rum",
     descricao: "Rum, limão, hortelã e água com gás.",
-    custoUnitario: 16.76,
+    custoUnitario: 3.00,
     modalityConfig: {
-      evento: { active: true, cost: 16.76, price: 32 },
-      steakhouse: { active: true, cost: 16.76, price: 32 },
-      goatbotequim: { active: true, cost: 16.76, price: 32 }
+      evento: { active: true, cost: 3.00, price: 32 },
+      steakhouse: { active: true, cost: 3.00, price: 32 },
+      goatbotequim: { active: true, cost: 3.00, price: 32 }
     },
     imagem: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=400&auto=format&fit=crop"
   },
@@ -334,11 +334,11 @@ export const drinks: Drink[] = [
     nome: "Aquário",
     categoria: "Vodka",
     descricao: "Vodka, limão, curaçao, alecrim e água com gás.",
-    custoUnitario: 17.26,
+    custoUnitario: 4.25,
     modalityConfig: {
-      evento: { active: true, cost: 17.26, price: 32 },
-      steakhouse: { active: true, cost: 17.26, price: 32 },
-      goatbotequim: { active: true, cost: 17.26, price: 32 }
+      evento: { active: true, cost: 4.25, price: 32 },
+      steakhouse: { active: true, cost: 4.25, price: 32 },
+      goatbotequim: { active: true, cost: 4.25, price: 32 }
     },
     imagem: "https://images.unsplash.com/photo-1597290282695-edc43d0e7129?w=400&auto=format&fit=crop"
   },
@@ -347,11 +347,11 @@ export const drinks: Drink[] = [
     nome: "Moscow Mule",
     categoria: "Vodka",
     descricao: "Vodka, limão e sifão de gengibre.",
-    custoUnitario: 17.55,
+    custoUnitario: 3.10,
     modalityConfig: {
-      evento: { active: true, cost: 17.55, price: 35 },
-      steakhouse: { active: true, cost: 17.55, price: 35 },
-      goatbotequim: { active: true, cost: 17.55, price: 35 }
+      evento: { active: true, cost: 3.10, price: 35 },
+      steakhouse: { active: true, cost: 3.10, price: 35 },
+      goatbotequim: { active: true, cost: 3.10, price: 35 }
     },
     imagem: "https://images.unsplash.com/photo-1513415277900-a62401e19be4?w=400&auto=format&fit=crop"
   },
@@ -373,24 +373,24 @@ export const drinks: Drink[] = [
     nome: "Gin Tônica",
     categoria: "Gin",
     descricao: "Gin, tônica, limão siciliano e especiarias.",
-    custoUnitario: 18.55,
+    custoUnitario: 6.71,
     modalityConfig: {
-      evento: { active: true, cost: 18.55, price: 35 },
-      steakhouse: { active: true, cost: 18.55, price: 35 },
-      goatbotequim: { active: true, cost: 18.55, price: 35 }
+      evento: { active: true, cost: 6.71, price: 35 },
+      steakhouse: { active: true, cost: 6.71, price: 35 },
+      goatbotequim: { active: true, cost: 6.71, price: 35 }
     },
     imagem: "https://images.unsplash.com/photo-1551538827-9c037cb4f32a?w=400&auto=format&fit=crop"
   },
   {
-    id: "fitz-gerald",
-    nome: "Fitz Gerald",
+    id: "fitzgerald",
+    nome: "Fitzgerald",
     categoria: "Gin",
     descricao: "Gin, limão, angostura e twist.",
-    custoUnitario: 19.55,
+    custoUnitario: 7.23,
     modalityConfig: {
-      evento: { active: true, cost: 19.55, price: 35 },
-      steakhouse: { active: true, cost: 19.55, price: 35 },
-      goatbotequim: { active: true, cost: 19.55, price: 35 }
+      evento: { active: true, cost: 7.23, price: 35 },
+      steakhouse: { active: true, cost: 7.23, price: 35 },
+      goatbotequim: { active: true, cost: 7.23, price: 35 }
     },
     imagem: "https://images.unsplash.com/photo-1544145945-f904253d0c7b?w=400&auto=format&fit=crop"
   },
@@ -516,11 +516,11 @@ export const drinks: Drink[] = [
     nome: "Negroni",
     categoria: "Gin",
     descricao: "Gin, vermute e campari.",
-    custoUnitario: 25.35,
+    custoUnitario: 9.70,
     modalityConfig: {
-      evento: { active: true, cost: 9.70 },
-      steakhouse: { active: true, cost: 25.35, price: 45 },
-      goatbotequim: { active: false, cost: 0 }
+      evento: { active: true, cost: 9.70, price: 45 },
+      steakhouse: { active: true, cost: 9.70, price: 45 },
+      goatbotequim: { active: true, cost: 9.70, price: 45 }
     },
     imagem: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&auto=format&fit=crop"
   },
@@ -544,9 +544,9 @@ export const drinks: Drink[] = [
     descricao: "Campari, tônica e twist de laranja.",
     custoUnitario: 9.70,
     modalityConfig: {
-      evento: { active: true, cost: 9.70 },
-      steakhouse: { active: false, cost: 0 },
-      goatbotequim: { active: false, cost: 0 }
+      evento: { active: true, cost: 9.70, price: 35 },
+      steakhouse: { active: true, cost: 9.70, price: 35 },
+      goatbotequim: { active: true, cost: 9.70, price: 35 }
     },
     imagem: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&auto=format&fit=crop"
   },
@@ -557,9 +557,9 @@ export const drinks: Drink[] = [
     descricao: "Tequila, xarope grapefruit, limão e grapefruit.",
     custoUnitario: 13.98,
     modalityConfig: {
-      evento: { active: true, cost: 13.98 },
-      steakhouse: { active: false, cost: 0 },
-      goatbotequim: { active: false, cost: 0 }
+      evento: { active: true, cost: 13.98, price: 45 },
+      steakhouse: { active: true, cost: 13.98, price: 45 },
+      goatbotequim: { active: true, cost: 13.98, price: 45 }
     },
     imagem: "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=400&auto=format&fit=crop"
   },
@@ -570,9 +570,9 @@ export const drinks: Drink[] = [
     descricao: "Vodka, uva e água de coco.",
     custoUnitario: 4.00,
     modalityConfig: {
-      evento: { active: true, cost: 4.00 },
-      steakhouse: { active: false, cost: 0 },
-      goatbotequim: { active: false, cost: 0 }
+      evento: { active: true, cost: 4.00, price: 30 },
+      steakhouse: { active: true, cost: 4.00, price: 30 },
+      goatbotequim: { active: true, cost: 4.00, price: 30 }
     },
     imagem: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&auto=format&fit=crop"
   },
@@ -583,9 +583,9 @@ export const drinks: Drink[] = [
     descricao: "Gin, limão e xarope de amora.",
     custoUnitario: 7.06,
     modalityConfig: {
-      evento: { active: true, cost: 7.06 },
-      steakhouse: { active: false, cost: 0 },
-      goatbotequim: { active: false, cost: 0 }
+      evento: { active: true, cost: 7.06, price: 35 },
+      steakhouse: { active: true, cost: 7.06, price: 35 },
+      goatbotequim: { active: true, cost: 7.06, price: 35 }
     },
     imagem: "https://images.unsplash.com/photo-1551538827-9c037cb4f32a?w=400&auto=format&fit=crop"
   },

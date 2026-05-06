@@ -213,6 +213,14 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
                 {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
+            <div className="sm:col-span-2">
+              <label className="label-eyebrow block mb-2">URL da Imagem (Unsplash ou outro)</label>
+              <input type="text" value={imagem} onChange={e => setImagem(e.target.value)} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm" placeholder="https://images.unsplash.com/..." />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label-eyebrow block mb-2">Descrição Curta</label>
+              <input type="text" value={descricao} onChange={e => setDescricao(e.target.value)} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm" />
+            </div>
           </div>
 
           {/* Configuração por Modalidade */}
@@ -281,7 +289,7 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
 
         <div className="flex items-center justify-end gap-3 px-6 py-4 bg-background/50 border-t border-border sticky bottom-0 z-10">
           <GhostButton onClick={onClose}>Cancelar</GhostButton>
-          <PrimaryButton onClick={() => onSave(drink.id, { nome, categoria, descricao, modalityConfig: config, custoUnitario: config.evento.cost })}>Salvar Item</PrimaryButton>
+          <PrimaryButton onClick={() => onSave(drink.id, { nome, categoria, imagem, descricao, modalityConfig: config, custoUnitario: config.evento.cost })}>Salvar Item</PrimaryButton>
         </div>
       </div>
     </div>
