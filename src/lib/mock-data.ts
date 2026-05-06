@@ -978,7 +978,7 @@ export const tiposEvento: TipoEvento[] = [
 ];
 
 // ─── Cálculos derivados ───────────────────────────────────────────────────
-export function calcularEvento(evento: Evento) {
+export function calcularEvento(evento: Evento, drinksList: Drink[] = drinks) {
   const tipo = tiposEvento.find((t) => t.nome === evento.tipo) || tiposEvento[0];
   const param = (k: string) => parametros.find((p) => p.chave === k)?.valor ?? 0;
 
@@ -988,7 +988,7 @@ export function calcularEvento(evento: Evento) {
   const equipeNec = Math.ceil((evento.convidados / 50) * tipo.equipePor50);
 
   const custoDrinks = evento.drinks.reduce((acc, dId) => {
-    const d = drinks.find((x) => x.id === dId);
+    const d = drinksList.find((x) => x.id === dId);
     if (!d) return acc;
     return acc + d.custoUnitario * (dosesEstimadas / Math.max(evento.drinks.length, 1));
   }, 0);
@@ -1016,14 +1016,14 @@ export function calcularEvento(evento: Evento) {
   };
 }
 
-export function calcularOrcamentoEvento(evento: Evento) {
+export function calcularOrcamentoEvento(evento: Evento, drinksList: Drink[] = drinks) {
   if (!evento) return null;
 
   // --- DRINKS ---
-  const validDrinks = (evento.drinks || []).filter(id => drinks.some(d => d.id === id));
+  const validDrinks = (evento.drinks || []).filter(id => drinksList.some(d => d.id === id));
   
   const custoBaseDrinks = validDrinks.reduce((acc, drinkId) => {
-    const drink = drinks.find(d => d.id === drinkId);
+    const drink = drinksList.find(d => d.id === drinkId);
     return acc + (drink?.custoUnitario || 0);
   }, 0);
   

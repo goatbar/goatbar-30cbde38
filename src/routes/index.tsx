@@ -4,7 +4,7 @@ import { StatCard, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
 import { TrendingUp, ShoppingBag, CalendarRange, Wine, ChevronRight, Calculator } from "lucide-react";
 import { useAppStore } from "@/lib/app-store";
-import { drinks as allDrinks, calcularOrcamentoEvento } from "@/lib/mock-data";
+import { calcularOrcamentoEvento } from "@/lib/mock-data";
 import { useState, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -13,7 +13,7 @@ export const Route = createFileRoute("/")({ component: () => <AppShell><Dashboar
 
 function Dashboard() {
   const store = useAppStore();
-  const { financialSessions, eventos: todosEventos, eventContracts, drinks } = store;
+  const { financialSessions, eventos: todosEventos, eventContracts, drinks: allDrinks } = store;
   const [periodoDias, setPeriodoDias] = useState<number>(30);
 
   // Gastos da controladoria
@@ -68,7 +68,7 @@ function Dashboard() {
       const contrato = eventContracts.find(ec => ec.eventId === e.id);
       return ["confirmado", "realizado", "proposta_aceita"].includes(e.status) && contrato?.status === "assinado";
     });
-    const results = validos.map(e => calcularOrcamentoEvento(e));
+    const results = validos.map(e => calcularOrcamentoEvento(e, allDrinks));
     const receita = results.reduce((acc, r) => acc + r.valorTotalOrcamento, 0);
     const custos = results.reduce((acc, r) => acc + r.custoTotalOrcamento, 0);
     const lucro = results.reduce((acc, r) => acc + r.lucro, 0);

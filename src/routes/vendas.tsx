@@ -5,12 +5,12 @@ import { fmtBRL } from "@/lib/format";
 import { Plus, ShoppingBag, TrendingUp, X, Users, Utensils, Calendar, Calculator, Trash2, Pencil } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/app-store";
-import { drinks as allDrinks, calcularOrcamentoEvento, type SalesSessionItem, type FinancialSession } from "@/lib/mock-data";
+import { calcularOrcamentoEvento, type SalesSessionItem, type FinancialSession } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/vendas")({ component: () => <AppShell><VendasPage /></AppShell> });
 
 function VendasPage() {
-  const { financialSessions, addFinancialSession, updateFinancialSession, deleteFinancialSession, eventos, eventContracts } = useAppStore();
+  const { financialSessions, addFinancialSession, updateFinancialSession, deleteFinancialSession, eventos, eventContracts, drinks: allDrinks } = useAppStore();
   const [activeTab, setActiveTab] = useState<"Goat Botequim" | "7Steakhouse" | "Eventos" | "Consolidação">("Goat Botequim");
   const [showModal, setShowModal] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);

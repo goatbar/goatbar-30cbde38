@@ -237,7 +237,15 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
               <label className="label-eyebrow block mb-2">Imagem (Upload)</label>
               <input type="file" accept="image/*" onChange={e => {
                 const file = e.target.files?.[0];
-                if (file) setImagem(URL.createObjectURL(file));
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onloadend = () => {
+                    if (typeof reader.result === 'string') {
+                      setImagem(reader.result);
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                }
               }} className="w-full h-10 px-4 pt-1.5 rounded-lg bg-input border border-border text-sm file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20" />
             </div>
             <div className="sm:col-span-2">

@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
-import { drinks as allDrinks, calcularOrcamentoEvento, type Evento, type EventoStatus } from "@/lib/mock-data";
+import { calcularOrcamentoEvento, type Evento, type EventoStatus } from "@/lib/mock-data";
 import { fmtBRL } from "@/lib/format";
 import { Calendar, MapPin, Users, ArrowLeft, Save, Plus, Trash2, MessageCircle, FileSignature, CheckCircle2, Download, AlertCircle, Link as LinkIcon, Loader2, Copy, Megaphone, UserPlus, History, Clock } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -28,7 +28,8 @@ export const Route = createFileRoute("/eventos/$eventoId")({
 function EventoInterna() {
   const { eventoId } = Route.useParams();
   const { 
-    glasswares 
+    glasswares,
+    drinks: allDrinks
   } = useAppStore();
   
   // --- Estados Reais (Supabase) ---
@@ -199,7 +200,7 @@ function EventoInterna() {
 
   const [draft, setDraft] = useState<Evento | null>(null);
 
-  const calc = draft ? calcularOrcamentoEvento(draft) : null;
+  const calc = draft ? calcularOrcamentoEvento(draft, allDrinks) : null;
 
   const handleSave = async (saveAsNew: boolean = false) => {
     if (!draft || !calc) return;
