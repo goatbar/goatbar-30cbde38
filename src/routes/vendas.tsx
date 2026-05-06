@@ -19,7 +19,7 @@ function VendasPage() {
   const [modalItems, setModalItems] = useState<SalesSessionItem[]>([]);
   const [maoDeObraValor, setMaoDeObraValor] = useState(0);
   const [maoDeObraQtd, setMaoDeObraQtd] = useState(0);
-  const [reposicao, setReposicao] = useState(0);
+  const [custosDetalhes, setCustosDetalhes] = useState<{descricao: string, valor: number}[]>([]);
 
   // --- Helpers for Modal ---
   const activeModalityKey = useMemo(() => {
@@ -75,13 +75,16 @@ function VendasPage() {
   const handleSave = () => {
     if (activeTab === "Eventos" || activeTab === "Consolidação") return;
     
+    const reposicaoTotal = custosDetalhes.reduce((a, c) => a + c.valor, 0);
+
     addFinancialSession({
       data: modalDate,
       modalidade: activeTab,
       items: modalItems,
       maoDeObraValor,
       maoDeObraQtd,
-      reposicaoRestaurante: activeTab === "7Steakhouse" ? reposicao : undefined
+      reposicaoRestaurante: activeTab === "7Steakhouse" ? reposicaoTotal : undefined,
+      custosRestauranteDetalhes: activeTab === "7Steakhouse" ? custosDetalhes : undefined,
     });
     
     setShowModal(false);
@@ -89,7 +92,7 @@ function VendasPage() {
     setModalItems([]);
     setMaoDeObraValor(0);
     setMaoDeObraQtd(0);
-    setReposicao(0);
+    setCustosDetalhes([]);
   };
 
   // --- Calculations ---
@@ -125,11 +128,13 @@ function VendasPage() {
     const receitaBruta = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0), 0);
     const custoDrinks = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.custoUnitario * item.quantidade), 0), 0);
     const resultadoLiquido = receitaBruta - custoDrinks;
+    const repasseRestaurante = resultadoLiquido * 0.5;
+    const saldoAposRepasse = resultadoLiquido * 0.5;
     const maoDeObra = list.reduce((acc, s) => acc + (s.maoDeObraValor * s.maoDeObraQtd), 0);
     const reposicaoTotal = list.reduce((acc, s) => acc + (s.reposicaoRestaurante || 0), 0);
-    const lucroFinal = resultadoLiquido - maoDeObra - reposicaoTotal;
+    const lucroFinal = saldoAposRepasse - maoDeObra - reposicaoTotal;
 
-    return { receitaBruta, custoDrinks, resultadoLiquido, maoDeObra, reposicaoTotal, lucroFinal };
+    return { receitaBruta, custoDrinks, resultadoLiquido, repasseRestaurante, saldoAposRepasse, maoDeObra, reposicaoTotal, lucroFinal };
   }, [financialSessions]);
 
   const statsEventos = useMemo(() => {
@@ -201,13 +206,13 @@ function VendasPage() {
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
               <StatCard label="Receita Bruta" value={fmtBRL(statsSteakhouse.receitaBruta)} />
               <StatCard label="Custo Drinks" value={fmtBRL(statsSteakhouse.custoDrinks)} />
-              <StatCard label="Res. Líquido" value={fmtBRL(statsSteakhouse.resultadoLiquido)} />
-              <StatCard label="Mão de Obra" value={fmtBRL(statsSteakhouse.maoDeObra)} />
-              <StatCard label="Reposição" value={fmtBRL(statsSteakhouse.reposicaoTotal)} />
+              <StatCard label="Lucro Bruto" value={fmtBRL(statsSteakhouse.resultadoLiquido)} />
+              <StatCard label="Repasse 50%" value={fmtBRL(statsSteakhouse.repasseRestaurante)} />
+              <StatCard label="Custos Oper." value={fmtBRL(statsSteakhouse.maoDeObra + statsSteakhouse.reposicaoTotal)} />
               <StatCard label="Lucro Final" value={fmtBRL(statsSteakhouse.lucroFinal)} highlight />
             </div>
 
-            <SectionCard title="Sessões Lançadas" subtitle="Vendas diárias integradas ao restaurante">
+            <SectionCard title="Sessões Semanais Lançadas" subtitle="Vendas diárias agregadas por semana (Quinta a Domingo)">
               <div className="space-y-4">
                 {sessions.map(s => (
                   <SessionRow key={s.id} session={s} onDelete={() => deleteFinancialSession(s.id)} />
@@ -295,7 +300,7 @@ function VendasPage() {
               {/* Data */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label-eyebrow block mb-2">Data da Operação</label>
+                  <label className="label-eyebrow block mb-2">{activeTab === "7Steakhouse" ? "Data Inicial da Semana (Ex: Quinta-feira)" : "Data da Operação"}</label>
                   <input
                     type="date"
                     value={modalDate}
@@ -369,13 +374,47 @@ function VendasPage() {
               {/* Steakhouse Specific */}
               {activeTab === "7Steakhouse" && (
                 <div>
-                  <label className="label-eyebrow block mb-2">Reposição ao Restaurante (R$)</label>
-                  <input
-                    type="number"
-                    value={reposicao}
-                    onChange={e => setReposicao(Number(e.target.value))}
-                    className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                  />
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="label-eyebrow block">Custos Repassados (Restaurante)</label>
+                    <GhostButton onClick={() => setCustosDetalhes([...custosDetalhes, { descricao: "", valor: 0 }])} className="h-8 text-xs px-2"><Plus className="h-3 w-3 mr-1" /> Adicionar Custo</GhostButton>
+                  </div>
+                  <div className="space-y-2">
+                    {custosDetalhes.map((c, i) => (
+                      <div key={i} className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Ex: Frutas, Copos quebrados..."
+                          value={c.descricao}
+                          onChange={e => {
+                            const arr = [...custosDetalhes];
+                            arr[i].descricao = e.target.value;
+                            setCustosDetalhes(arr);
+                          }}
+                          className="flex-1 h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                        />
+                        <input
+                          type="number"
+                          placeholder="R$"
+                          value={c.valor || ""}
+                          onChange={e => {
+                            const arr = [...custosDetalhes];
+                            arr[i].valor = Number(e.target.value);
+                            setCustosDetalhes(arr);
+                          }}
+                          className="w-28 h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                        />
+                        <button onClick={() => setCustosDetalhes(custosDetalhes.filter((_, idx) => idx !== i))} className="h-9 w-9 flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-md">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {custosDetalhes.length === 0 && <div className="text-[11px] text-muted-foreground italic mb-2">Nenhum custo listado. Adicione se houver.</div>}
+                    {custosDetalhes.length > 0 && (
+                      <div className="text-right text-sm font-bold pt-2">
+                        Total Custos Restaurante: <span className="text-destructive">{fmtBRL(custosDetalhes.reduce((a, c) => a + c.valor, 0))}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -400,7 +439,20 @@ function SessionRow({ session, onDelete }: { session: FinancialSession; onDelete
   if (session.modalidade === "Goat Botequim") {
     lucro = (resLiq * 0.6) - (session.maoDeObraValor * session.maoDeObraQtd);
   } else {
-    lucro = resLiq - (session.maoDeObraValor * session.maoDeObraQtd) - (session.reposicaoRestaurante || 0);
+    lucro = (resLiq * 0.5) - (session.maoDeObraValor * session.maoDeObraQtd) - (session.reposicaoRestaurante || 0);
+  }
+
+  // Format date correctly based on modality
+  let dateFormatted = "";
+  if (session.modalidade === "7Steakhouse") {
+    const startDate = new Date(session.data);
+    startDate.setUTCHours(12); // avoid timezone bugs
+    const endDate = new Date(startDate.getTime() + 3 * 24 * 60 * 60 * 1000);
+    dateFormatted = `Semana de ${startDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} a ${endDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
+  } else {
+    const d = new Date(session.data);
+    d.setUTCHours(12);
+    dateFormatted = d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
   }
 
   return (
@@ -410,8 +462,13 @@ function SessionRow({ session, onDelete }: { session: FinancialSession; onDelete
           <Calculator className="h-5 w-5" />
         </div>
         <div>
-          <div className="font-medium text-sm">{new Date(session.data).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}</div>
-          <div className="text-xs text-muted-foreground mt-0.5">{session.items.length} drinks lançados • Mão de obra: {session.maoDeObraQtd}x {fmtBRL(session.maoDeObraValor)}</div>
+          <div className="font-medium text-sm capitalize">{dateFormatted}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            {session.items.length} drinks • Eqp: {session.maoDeObraQtd}x {fmtBRL(session.maoDeObraValor)}
+            {session.modalidade === "7Steakhouse" && session.custosRestauranteDetalhes && session.custosRestauranteDetalhes.length > 0 && (
+              <span className="ml-1 text-destructive/80">• Custos: {fmtBRL(session.reposicaoRestaurante || 0)}</span>
+            )}
+          </div>
         </div>
       </div>
       

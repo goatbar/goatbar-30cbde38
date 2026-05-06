@@ -138,6 +138,24 @@ function DrinkCard({ drink: d, onEdit }: { drink: Drink, onEdit: () => void }) {
           </div>
         </div>
         <p className="text-xs text-muted-foreground mt-2 line-clamp-2 min-h-8">{d.descricao}</p>
+        
+        {d.insumos && d.insumos.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-border/60 bg-surface/30 rounded-lg p-2 -mx-2">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1.5 flex justify-between items-center">
+              <span>Ficha Técnica (Insumos)</span>
+              <span className="text-muted-foreground opacity-60">Total: {fmtBRL(d.custoUnitario)}</span>
+            </div>
+            <ul className="space-y-1">
+              {d.insumos.map((i, idx) => (
+                <li key={idx} className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>{i.nome}</span>
+                  <span className="font-medium">{fmtBRL(i.custo)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div className="mt-3 pt-3 border-t border-border/60 grid grid-cols-3 gap-y-3 gap-x-2 text-xs">
           <div>
             <div className="text-muted-foreground">Evento (Custo)</div>

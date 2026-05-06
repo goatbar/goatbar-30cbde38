@@ -56,7 +56,8 @@ export interface FinancialSession {
   items: SalesSessionItem[];
   maoDeObraValor: number;
   maoDeObraQtd: number;
-  reposicaoRestaurante?: number; // Steakhouse only
+  reposicaoRestaurante?: number; // Steakhouse only (soma total)
+  custosRestauranteDetalhes?: { descricao: string; valor: number }[];
   observacoes?: string;
 }
 
