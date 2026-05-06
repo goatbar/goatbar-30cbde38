@@ -13,7 +13,6 @@ function DrinksPage() {
   const { drinks: allDrinks, updateDrink, addDrink } = useAppStore();
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState("Todas");
-  const [statusFilter, setStatusFilter] = useState<"todos" | "ativo" | "inativo">("ativo");
   const [editingDrink, setEditingDrink] = useState<Drink | null>(null);
 
   const blankDrink: Drink = {
@@ -34,8 +33,7 @@ function DrinksPage() {
   const filtrados = allDrinks.filter((d) => {
     const matchBusca = d.nome.toLowerCase().includes(busca.toLowerCase());
     const matchCategoria = categoria === "Todas" || d.categoria === categoria;
-    const matchStatus = statusFilter === "todos" || d.status === statusFilter;
-    return matchBusca && matchCategoria && matchStatus;
+    return matchBusca && matchCategoria;
   });
 
   const ativos = allDrinks.filter((d) => d.modalityConfig?.evento?.active);
@@ -85,17 +83,6 @@ function DrinksPage() {
           >
             {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
-          <div className="flex rounded-lg border border-border overflow-hidden">
-            {(["todos", "ativo", "inativo"] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setStatusFilter(s)}
-                className={`px-4 h-10 text-sm capitalize transition-colors ${statusFilter === s ? "bg-primary text-primary-foreground" : "bg-surface text-muted-foreground hover:text-foreground"}`}
-              >
-                {s === "todos" ? "Todos" : s === "ativo" ? "Ativos" : "Inativos"}
-              </button>
-            ))}
-          </div>
         </div>
 
         <SectionCard title="Catálogo" subtitle={`${filtrados.length} drinks`}>
@@ -149,9 +136,6 @@ function DrinkCard({ drink: d, onEdit }: { drink: Drink, onEdit: () => void }) {
             <div className="font-display font-semibold text-sm pr-6">{d.nome}</div>
             <div className="text-xs text-muted-foreground mt-0.5">{d.categoria}</div>
           </div>
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider shrink-0 ${d.status === "ativo" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
-            {d.status}
-          </span>
         </div>
         <p className="text-xs text-muted-foreground mt-2 line-clamp-2 min-h-8">{d.descricao}</p>
         <div className="mt-3 pt-3 border-t border-border/60 grid grid-cols-3 gap-y-3 gap-x-2 text-xs">

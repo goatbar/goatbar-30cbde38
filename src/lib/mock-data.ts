@@ -93,7 +93,7 @@ export interface Evento {
   status: EventoStatus;
   contratoId?: string;
 
-  // Novos campos de orçamento
+  // Novos campos de orçamento (Versão Atual)
   drinksPorPessoa: number;
   markupAdicionalDrinks: number;
   equipe: {
@@ -114,10 +114,11 @@ export interface Evento {
   historicoAlteracoes: EventoHistoricoAlteracao[];
   historicoNegociacao: EventoHistoricoNegociacao[];
   
-  // Legacy (can be synced with calculation)
+  // Legacy/Computed
   valorNegociado: number;
   custoPrevisto: number;
 }
+
 
 export interface Contrato {
   id: string;
@@ -221,7 +222,7 @@ export interface ParametroCalculo {
   label: string;
   valor: number;
   unidade: string;
-  grupo: "Repasse" | "Custos" | "Consumo" | "Operacional";
+  groupo: "Repasse" | "Custos" | "Consumo" | "Operacional";
   descricao?: string;
 }
 
@@ -237,311 +238,385 @@ export interface TipoEvento {
 // ─── Drinks ───────────────────────────────────────────────────────────────
 
 export const drinks: Drink[] = [
-  // --- STEAKHOUSE & EVENTOS & BOTEQUIM ---
   {
     id: "caipirinha",
     nome: "Caipirinha",
     categoria: "Cachaça",
-    descricao: "Cachaça, limão e açúcar.",
-    custoUnitario: 6.00,
+    descricao: "Cachaça premium, limão e açúcar.",
+    custoUnitario: 2.20,
     modalityConfig: {
-      evento: { active: true, cost: 6.00 },
+      evento: { active: true, cost: 2.20 },
       steakhouse: { active: true, cost: 13.25, price: 25 },
       goatbotequim: { active: true, cost: 2.37 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=400&auto=format&fit=crop"
   },
   {
-    id: "caipirinha-limao-cravo",
+    id: "caipi-limao-cravo-mel",
     nome: "Caipirinha Limão Cravo e Mel",
     categoria: "Cachaça",
-    descricao: "Limão cravo e mel.",
-    custoUnitario: 7.50,
+    descricao: "Cachaça, limão cravo e mel silvestre.",
+    custoUnitario: 2.70,
     modalityConfig: {
-      evento: { active: true, cost: 7.50 },
+      evento: { active: true, cost: 2.70 },
       steakhouse: { active: true, cost: 15.00, price: 30 },
       goatbotequim: { active: true, cost: 4.37 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1541546106583-b4f853b4306a?w=400&auto=format&fit=crop"
   },
   {
     id: "caipivodka-morango",
     nome: "Caipivodka Morango",
     categoria: "Vodka",
-    descricao: "Vodka e morango.",
-    custoUnitario: 7.50,
+    descricao: "Vodka e morangos frescos.",
+    custoUnitario: 3.60,
     modalityConfig: {
-      evento: { active: true, cost: 7.50 },
+      evento: { active: true, cost: 3.60 },
       steakhouse: { active: true, cost: 15.40, price: 30 },
-      goatbotequim: { active: false, cost: 0 }
-    }
+      goatbotequim: { active: true, cost: 5.37 }
+    },
+    imagem: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&auto=format&fit=crop"
   },
   {
     id: "caipivodka-abacaxi",
     nome: "Caipivodka Abacaxi",
     categoria: "Vodka",
-    descricao: "Vodka e abacaxi.",
-    custoUnitario: 7.00,
+    descricao: "Vodka, abacaxi e raspas de limão.",
+    custoUnitario: 2.80,
     modalityConfig: {
-      evento: { active: true, cost: 7.00 },
+      evento: { active: true, cost: 2.80 },
       steakhouse: { active: true, cost: 15.40, price: 30 },
       goatbotequim: { active: false, cost: 0 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1587223962905-276f75608b4f?w=400&auto=format&fit=crop"
   },
   {
     id: "caipivodka-maracuja",
     nome: "Caipivodka Maracujá",
     categoria: "Vodka",
-    descricao: "Vodka e maracujá.",
-    custoUnitario: 7.20,
+    descricao: "Vodka, maracujá e açúcar de baunilha.",
+    custoUnitario: 3.20,
     modalityConfig: {
-      evento: { active: true, cost: 7.20 },
+      evento: { active: true, cost: 3.20 },
       steakhouse: { active: true, cost: 15.40, price: 30 },
-      goatbotequim: { active: false, cost: 4.47 }
-    }
+      goatbotequim: { active: true, cost: 4.47 }
+    },
+    imagem: "https://images.unsplash.com/photo-1595981267035-7b04ca84a82d?w=400&auto=format&fit=crop"
   },
   {
     id: "mojito",
     nome: "Mojito",
     categoria: "Rum",
-    descricao: "Rum, limão e hortelã.",
-    custoUnitario: 7.80,
+    descricao: "Rum, limão, hortelã e água com gás.",
+    custoUnitario: 3.00,
     modalityConfig: {
-      evento: { active: true, cost: 7.80 },
+      evento: { active: true, cost: 3.00 },
       steakhouse: { active: true, cost: 16.76, price: 32 },
       goatbotequim: { active: true, cost: 4.67 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=400&auto=format&fit=crop"
   },
   {
     id: "sex-on-the-beach",
     nome: "Sex on the Beach",
     categoria: "Vodka",
-    descricao: "Vodka, pêssego e laranja.",
-    custoUnitario: 8.20,
+    descricao: "Vodka, suco de laranja, xarope de pêssego e grenadine.",
+    custoUnitario: 6.62,
     modalityConfig: {
-      evento: { active: true, cost: 8.20 },
+      evento: { active: true, cost: 6.62 },
       steakhouse: { active: true, cost: 17.76, price: 32 },
       goatbotequim: { active: false, cost: 0 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1536935338788-846bb9981813?w=400&auto=format&fit=crop"
   },
   {
     id: "aquario",
     nome: "Aquário",
     categoria: "Vodka",
-    descricao: "Drink azul refrescante.",
-    custoUnitario: 8.00,
+    descricao: "Vodka, limão, curaçao, alecrim e água com gás.",
+    custoUnitario: 4.25,
     modalityConfig: {
-      evento: { active: true, cost: 8.00 },
+      evento: { active: true, cost: 4.25 },
       steakhouse: { active: true, cost: 17.26, price: 32 },
       goatbotequim: { active: false, cost: 0 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1597290282695-edc43d0e7129?w=400&auto=format&fit=crop"
   },
   {
     id: "moscow-mule",
     nome: "Moscow Mule",
     categoria: "Vodka",
-    descricao: "Vodka, limão e espuma de gengibre.",
-    custoUnitario: 8.80,
+    descricao: "Vodka, limão e sifão de gengibre.",
+    custoUnitario: 3.10,
     modalityConfig: {
-      evento: { active: true, cost: 8.80 },
+      evento: { active: true, cost: 3.10 },
       steakhouse: { active: true, cost: 17.55, price: 35 },
       goatbotequim: { active: false, cost: 0 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1513415277900-a62401e19be4?w=400&auto=format&fit=crop"
   },
   {
     id: "london-mule",
     nome: "London Mule",
     categoria: "Gin",
-    descricao: "Gin, limão e espuma de gengibre.",
-    custoUnitario: 9.00,
+    descricao: "Gin, limão e sifão de gengibre.",
+    custoUnitario: 5.76,
     modalityConfig: {
-      evento: { active: true, cost: 9.00 },
+      evento: { active: true, cost: 5.76 },
       steakhouse: { active: true, cost: 18.55, price: 35 },
       goatbotequim: { active: false, cost: 0 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1513415277900-a62401e19be4?w=400&auto=format&fit=crop"
   },
   {
     id: "gin-tonica",
     nome: "Gin Tônica",
     categoria: "Gin",
-    descricao: "Gin, tônica e limão.",
-    custoUnitario: 8.50,
+    descricao: "Gin, tônica, limão siciliano e especiarias.",
+    custoUnitario: 6.71,
     modalityConfig: {
-      evento: { active: true, cost: 8.50 },
+      evento: { active: true, cost: 6.71 },
       steakhouse: { active: true, cost: 18.55, price: 35 },
       goatbotequim: { active: true, cost: 8.17 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1551538827-9c037cb4f32a?w=400&auto=format&fit=crop"
   },
   {
     id: "fitz-gerald",
     nome: "Fitz Gerald",
     categoria: "Gin",
-    descricao: "Gin, limão e angostura.",
-    custoUnitario: 9.50,
+    descricao: "Gin, limão, angostura e twist.",
+    custoUnitario: 7.23,
     modalityConfig: {
-      evento: { active: true, cost: 9.50 },
+      evento: { active: true, cost: 7.23 },
       steakhouse: { active: true, cost: 19.55, price: 35 },
       goatbotequim: { active: false, cost: 0 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1544145945-f904253d0c7b?w=400&auto=format&fit=crop"
   },
   {
     id: "tom-collins",
     nome: "Tom Collins",
     categoria: "Gin",
-    descricao: "Gin, limão e soda.",
-    custoUnitario: 9.20,
+    descricao: "Gin, limão, água com gás e cereja.",
+    custoUnitario: 5.91,
     modalityConfig: {
-      evento: { active: true, cost: 9.20 },
+      evento: { active: true, cost: 5.91 },
       steakhouse: { active: true, cost: 19.05, price: 35 },
       goatbotequim: { active: false, cost: 0 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1536935338788-846bb9981813?w=400&auto=format&fit=crop"
   },
   {
     id: "aperol-spritz",
     nome: "Aperol Spritz",
     categoria: "Aperitivos",
-    descricao: "Aperol, espumante e soda.",
-    custoUnitario: 11.50,
+    descricao: "Aperol, espumante, laranja e água com gás.",
+    custoUnitario: 10.50,
     modalityConfig: {
-      evento: { active: true, cost: 11.50 },
+      evento: { active: true, cost: 10.50 },
       steakhouse: { active: true, cost: 20.50, price: 35 },
       goatbotequim: { active: false, cost: 0 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1560512823-829485b8bf24?w=400&auto=format&fit=crop"
   },
   {
     id: "cest-la-vie",
     nome: "C’est lá vie",
     categoria: "Gin",
-    descricao: "Gin e frutas.",
-    custoUnitario: 12.50,
+    descricao: "Xarope, limão, espumante, água com gás e gelo.",
+    custoUnitario: 9.51,
     modalityConfig: {
-      evento: { active: true, cost: 12.50 },
+      evento: { active: true, cost: 9.51 },
       steakhouse: { active: true, cost: 22.70, price: 40 },
       goatbotequim: { active: false, cost: 0 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=400&auto=format&fit=crop"
   },
   {
     id: "expresso-martini",
     nome: "Expresso Martini",
     categoria: "Vodka",
-    descricao: "Vodka e café.",
-    custoUnitario: 10.50,
+    descricao: "Vodka, açúcar baunilha, bailays e café.",
+    custoUnitario: 4.86,
     modalityConfig: {
-      evento: { active: true, cost: 10.50 },
+      evento: { active: true, cost: 4.86 },
       steakhouse: { active: true, cost: 20.70, price: 40 },
       goatbotequim: { active: false, cost: 0 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1544145945-f904253d0c7b?w=400&auto=format&fit=crop"
   },
   {
     id: "apple-martini",
     nome: "Apple Martini",
     categoria: "Vodka",
-    descricao: "Vodka e maçã verde.",
-    custoUnitario: 10.00,
+    descricao: "Xarope e vodka.",
+    custoUnitario: 3.70,
     modalityConfig: {
-      evento: { active: true, cost: 10.00 },
+      evento: { active: true, cost: 3.70 },
       steakhouse: { active: true, cost: 20.70, price: 40 },
       goatbotequim: { active: false, cost: 0 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1587223962905-276f75608b4f?w=400&auto=format&fit=crop"
   },
   {
     id: "stamping",
     nome: "Stamping",
     categoria: "Vodka",
-    descricao: "Vodka e especiarias.",
-    custoUnitario: 10.80,
+    descricao: "Vodka, maracujá, limão, açúcar baunilha e tabasco.",
+    custoUnitario: 3.90,
     modalityConfig: {
-      evento: { active: true, cost: 10.80 },
+      evento: { active: true, cost: 3.90 },
       steakhouse: { active: true, cost: 20.70, price: 40 },
       goatbotequim: { active: false, cost: 0 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1595981267035-7b04ca84a82d?w=400&auto=format&fit=crop"
   },
   {
     id: "mint-jullep",
     nome: "Mint Jullep",
     categoria: "Whisky",
-    descricao: "Whisky, hortelã e açúcar.",
-    custoUnitario: 10.20,
+    descricao: "Whisky, limão e hortelã.",
+    custoUnitario: 5.50,
     modalityConfig: {
-      evento: { active: true, cost: 10.20 },
+      evento: { active: true, cost: 5.50 },
       steakhouse: { active: true, cost: 21.20, price: 40 },
       goatbotequim: { active: false, cost: 0 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=400&auto=format&fit=crop"
   },
   {
     id: "whisky-sour",
     nome: "Whisky Sour",
     categoria: "Whisky",
-    descricao: "Whisky e limão.",
-    custoUnitario: 11.00,
+    descricao: "Whisky, limão, proteína e guarnição.",
+    custoUnitario: 5.80,
     modalityConfig: {
-      evento: { active: true, cost: 11.00 },
+      evento: { active: true, cost: 5.80 },
       steakhouse: { active: true, cost: 21.70, price: 40 },
       goatbotequim: { active: false, cost: 0 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=400&auto=format&fit=crop"
   },
   {
     id: "old-fashioned",
     nome: "Old Fashioned",
     categoria: "Whisky",
-    descricao: "Whisky, angostura e açúcar.",
-    custoUnitario: 13.00,
+    descricao: "Whisky premium, angostura e açúcar.",
+    custoUnitario: 24.35,
     modalityConfig: {
       evento: { active: true, cost: 13.00 },
       steakhouse: { active: true, cost: 24.35, price: 45 },
       goatbotequim: { active: false, cost: 0 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=400&auto=format&fit=crop"
   },
   {
     id: "negroni",
     nome: "Negroni",
     categoria: "Gin",
     descricao: "Gin, vermute e campari.",
-    custoUnitario: 12.00,
+    custoUnitario: 25.35,
     modalityConfig: {
-      evento: { active: true, cost: 12.00 },
+      evento: { active: true, cost: 9.70 },
       steakhouse: { active: true, cost: 25.35, price: 45 },
       goatbotequim: { active: false, cost: 0 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&auto=format&fit=crop"
   },
   {
     id: "soda-italiana",
     nome: "Soda Italiana",
     categoria: "Sem Álcool",
-    descricao: "Soda e xarope de frutas.",
-    custoUnitario: 5.00,
+    descricao: "Xarope e água com gás.",
+    custoUnitario: 3.34,
     modalityConfig: {
-      evento: { active: true, cost: 5.00 },
+      evento: { active: true, cost: 3.34 },
       steakhouse: { active: true, cost: 10.00, price: 25 },
       goatbotequim: { active: false, cost: 0 }
-    }
-  },
-
-  // --- EXCLUSIVOS BOTEQUIM ---
-  {
-    id: "caipi-limao",
-    nome: "Caipi Limão",
-    categoria: "Cachaça",
-    descricao: "Tradicional de limão.",
-    custoUnitario: 4.50,
-    modalityConfig: {
-      evento: { active: false, cost: 0 },
-      steakhouse: { active: false, cost: 0 },
-      goatbotequim: { active: true, cost: 3.87 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&auto=format&fit=crop"
   },
   {
-    id: "caipi-morango",
-    nome: "Caipi Morango",
-    categoria: "Cachaça",
-    descricao: "Tradicional de morango.",
-    custoUnitario: 6.00,
+    id: "campari-tonica",
+    nome: "Campari Tônica",
+    categoria: "Aperitivos",
+    descricao: "Campari, tônica e twist de laranja.",
+    custoUnitario: 9.70,
     modalityConfig: {
-      evento: { active: false, cost: 0 },
+      evento: { active: true, cost: 9.70 },
       steakhouse: { active: false, cost: 0 },
-      goatbotequim: { active: true, cost: 5.37 }
-    }
+      goatbotequim: { active: false, cost: 0 }
+    },
+    imagem: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&auto=format&fit=crop"
+  },
+  {
+    id: "paloma",
+    nome: "Paloma",
+    categoria: "Tequila",
+    descricao: "Tequila, xarope grapefruit, limão e grapefruit.",
+    custoUnitario: 13.98,
+    modalityConfig: {
+      evento: { active: true, cost: 13.98 },
+      steakhouse: { active: false, cost: 0 },
+      goatbotequim: { active: false, cost: 0 }
+    },
+    imagem: "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=400&auto=format&fit=crop"
+  },
+  {
+    id: "bossa-nova",
+    nome: "Bossa Nova",
+    categoria: "Vodka",
+    descricao: "Vodka, uva e água de coco.",
+    custoUnitario: 4.00,
+    modalityConfig: {
+      evento: { active: true, cost: 4.00 },
+      steakhouse: { active: false, cost: 0 },
+      goatbotequim: { active: false, cost: 0 }
+    },
+    imagem: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&auto=format&fit=crop"
+  },
+  {
+    id: "bramble",
+    nome: "Bramble",
+    categoria: "Gin",
+    descricao: "Gin, limão e xarope de amora.",
+    custoUnitario: 7.06,
+    modalityConfig: {
+      evento: { active: true, cost: 7.06 },
+      steakhouse: { active: false, cost: 0 },
+      goatbotequim: { active: false, cost: 0 }
+    },
+    imagem: "https://images.unsplash.com/photo-1551538827-9c037cb4f32a?w=400&auto=format&fit=crop"
+  },
+  {
+    id: "olho-grego",
+    nome: "Olho Grego",
+    categoria: "Vodka",
+    descricao: "Vodka, limão e xaropes especiais.",
+    custoUnitario: 7.00,
+    modalityConfig: {
+      evento: { active: true, cost: 7.00 },
+      steakhouse: { active: false, cost: 0 },
+      goatbotequim: { active: false, cost: 0 }
+    },
+    imagem: "https://images.unsplash.com/photo-1597290282695-edc43d0e7129?w=400&auto=format&fit=crop"
+  },
+  {
+    id: "cosmopolitan",
+    nome: "Cosmopolitan",
+    categoria: "Vodka",
+    descricao: "Vodka, cramberry, limão e cointreau.",
+    custoUnitario: 8.97,
+    modalityConfig: {
+      evento: { active: true, cost: 8.97 },
+      steakhouse: { active: false, cost: 0 },
+      goatbotequim: { active: false, cost: 0 }
+    },
+    imagem: "https://images.unsplash.com/photo-1536935338788-846bb9981813?w=400&auto=format&fit=crop"
   },
 
-  // --- DOSES ---
+  // --- DOSES BOTEQUIM ---
   {
     id: "dose-cachaca",
     nome: "Cachaça (Dose)",
@@ -552,43 +627,47 @@ export const drinks: Drink[] = [
       evento: { active: false, cost: 0 },
       steakhouse: { active: false, cost: 0 },
       goatbotequim: { active: true, cost: 1.50, price: 7.00 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1595981267035-7b04ca84a82d?w=400&auto=format&fit=crop"
   },
   {
     id: "dose-vodka",
     nome: "Vodka (Dose)",
     categoria: "Doses",
-    descricao: "Dose de vodka.",
+    descricao: "Dose de vodka standard.",
     custoUnitario: 3.00,
     modalityConfig: {
       evento: { active: false, cost: 0 },
       steakhouse: { active: false, cost: 0 },
       goatbotequim: { active: true, cost: 3.00, price: 14.00 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=400&auto=format&fit=crop"
   },
   {
     id: "dose-gin",
     nome: "Gin (Dose)",
     categoria: "Doses",
-    descricao: "Dose de gin.",
+    descricao: "Dose de gin nacional.",
     custoUnitario: 6.00,
     modalityConfig: {
       evento: { active: false, cost: 0 },
       steakhouse: { active: false, cost: 0 },
       goatbotequim: { active: true, cost: 6.00, price: 17.00 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1551538827-9c037cb4f32a?w=400&auto=format&fit=crop"
   },
   {
     id: "dose-whisky",
     nome: "Whisky (Dose)",
     categoria: "Doses",
-    descricao: "Dose de whisky.",
+    descricao: "Dose de whisky 8 anos.",
     custoUnitario: 10.00,
     modalityConfig: {
       evento: { active: false, cost: 0 },
       steakhouse: { active: false, cost: 0 },
       goatbotequim: { active: true, cost: 10.00, price: 25.00 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=400&auto=format&fit=crop"
   },
   {
     id: "dose-campari",
@@ -600,7 +679,8 @@ export const drinks: Drink[] = [
       evento: { active: false, cost: 0 },
       steakhouse: { active: false, cost: 0 },
       goatbotequim: { active: true, cost: 7.00, price: 25.00 }
-    }
+    },
+    imagem: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&auto=format&fit=crop"
   }
 ];
 
@@ -645,18 +725,18 @@ export const contractSignatureHistories: ContractSignatureHistory[] = [];
 
 // ─── Parâmetros de cálculo ────────────────────────────────────────────────
 export const parametros: ParametroCalculo[] = [
-  { id: "p1", chave: "repasse_percentual", label: "Percentual de repasse", valor: 15, unidade: "%", grupo: "Repasse", descricao: "Aplicado sobre receita líquida" },
-  { id: "p2", chave: "custo_equipe_hora", label: "Custo de equipe por hora", valor: 65, unidade: "R$", grupo: "Custos" },
-  { id: "p3", chave: "custo_operacional_evento", label: "Custo operacional fixo por evento", valor: 850, unidade: "R$", grupo: "Custos" },
-  { id: "p4", chave: "margem_minima", label: "Margem mínima aceitável", valor: 35, unidade: "%", grupo: "Operacional" },
-  { id: "p5", chave: "perda_estimada", label: "Perdas estimadas", valor: 4, unidade: "%", grupo: "Operacional" },
-  { id: "p6", chave: "quebra_copos", label: "Quebra de copos por 100 convidados", valor: 6, unidade: "un", grupo: "Operacional" },
-  { id: "p7", chave: "consumo_medio_pessoa", label: "Consumo médio por convidado", valor: 4.5, unidade: "doses", grupo: "Consumo" },
-  { id: "p8", chave: "gelo_kg_pessoa", label: "Gelo por convidado", valor: 1.2, unidade: "kg", grupo: "Consumo" },
-  { id: "p9", chave: "insumos_pessoa", label: "Insumos por convidado", valor: 4.5, unidade: "R$", grupo: "Consumo" },
-  { id: "p10", chave: "markup_eventos", label: "Markup Eventos", valor: 3.5, unidade: "x", grupo: "Precificação" },
-  { id: "p11", chave: "markup_7steakhouse", label: "Markup 7Steakhouse", valor: 3.0, unidade: "x", grupo: "Precificação" },
-  { id: "p12", chave: "markup_goatbotequim", label: "Markup Goat Botequim", valor: 2.8, unidade: "x", grupo: "Precificação" },
+  { id: "p1", chave: "repasse_percentual", label: "Percentual de repasse", valor: 15, unidade: "%", groupo: "Repasse", descricao: "Aplicado sobre receita líquida" },
+  { id: "p2", chave: "custo_equipe_hora", label: "Custo de equipe por hora", valor: 65, unidade: "R$", groupo: "Custos" },
+  { id: "p3", chave: "custo_operacional_evento", label: "Custo operacional fixo por evento", valor: 850, unidade: "R$", groupo: "Custos" },
+  { id: "p4", chave: "margem_minima", label: "Margem mínima aceitável", valor: 35, unidade: "%", groupo: "Operacional" },
+  { id: "p5", chave: "perda_estimada", label: "Perdas estimadas", valor: 4, unidade: "%", groupo: "Operacional" },
+  { id: "p6", chave: "quebra_copos", label: "Quebra de copos por 100 convidados", valor: 6, unidade: "un", groupo: "Operacional" },
+  { id: "p7", chave: "consumo_medio_pessoa", label: "Consumo médio por convidado", valor: 4.5, unidade: "doses", groupo: "Consumo" },
+  { id: "p8", chave: "gelo_kg_pessoa", label: "Gelo por convidado", valor: 1.2, unidade: "kg", groupo: "Consumo" },
+  { id: "p9", chave: "insumos_pessoa", label: "Insumos por convidado", valor: 4.5, unidade: "R$", groupo: "Consumo" },
+  { id: "p10", chave: "markup_eventos", label: "Markup Eventos", valor: 3.5, unidade: "x", groupo: "Precificação" },
+  { id: "p11", chave: "markup_7steakhouse", label: "Markup 7Steakhouse", valor: 3.0, unidade: "x", groupo: "Precificação" },
+  { id: "p12", chave: "markup_goatbotequim", label: "Markup Goat Botequim", valor: 2.8, unidade: "x", groupo: "Precificação" },
 ];
 
 export const tiposEvento: TipoEvento[] = [
@@ -706,50 +786,41 @@ export function calcularEvento(evento: Evento) {
 }
 
 export function calcularOrcamentoEvento(evento: Evento) {
-  // 1 & 2 & 3. Média de custo dos drinks selecionados
-  let mediaCustoDrinks = 0;
-  if (evento.drinks.length > 0) {
-    const drinksData = evento.drinks.map((id) => drinks.find((d) => d.id === id)).filter(Boolean) as typeof drinks;
-    const somaCustoDrinks = drinksData.reduce((acc, d) => acc + d.custoUnitario, 0);
-    mediaCustoDrinks = somaCustoDrinks / drinksData.length;
-  }
+  // --- DRINKS ---
+  const custoBaseDrinks = evento.drinks.reduce((acc, drinkId) => {
+    const drink = drinks.find(d => d.id === drinkId);
+    return acc + (drink?.custoUnitario || 0);
+  }, 0);
+  
+  const totalDoses = evento.convidados * evento.drinksPorPessoa;
+  const dosesPorDrink = totalDoses / (evento.drinks.length || 1);
+  const mediaCustoDrinks = custoBaseDrinks / (evento.drinks.length || 1);
+  
+  const valorDrinksEvento = dosesPorDrink * mediaCustoDrinks * (1 + (evento.markupAdicionalDrinks || 0) / 100);
 
-  // 4 & 5. Custo base dos drinks
-  const drinksPorPessoa = evento.drinksPorPessoa || 0;
-  const custoBaseDrinks = mediaCustoDrinks * drinksPorPessoa * evento.convidados;
+  // --- EQUIPE ---
+  const valorEquipe = Object.values(evento.equipe).reduce((acc, p) => acc + (p.qtd * p.valorUnitario), 0);
 
-  // 6 & 7. Valor final dos drinks
-  const percentualAdicional = evento.markupAdicionalDrinks || 0;
-  const valorDrinksEvento = custoBaseDrinks * (1 + percentualAdicional / 100);
+  // --- GELO ---
+  const pacotesGelo = evento.gelo?.pacotesOverride || Math.ceil((evento.convidados / 100) * 35);
+  const valorGelo = pacotesGelo * (evento.gelo?.valorUnitario || 6);
 
-  // Equipe
-  const valorEquipe = 
-    ((evento.equipe?.bartender?.qtd || 0) * (evento.equipe?.bartender?.valorUnitario || 200)) +
-    ((evento.equipe?.keeper?.qtd || 0) * (evento.equipe?.keeper?.valorUnitario || 200)) +
-    ((evento.equipe?.copeira?.qtd || 0) * (evento.equipe?.copeira?.valorUnitario || 200));
+  // --- LOGÍSTICA ---
+  const valorGasolina = evento.viagem?.incluir ? evento.viagem.valor : 0;
 
-  // Gelo
-  const pacotesCalculados = Math.ceil((evento.convidados / 100) * 35);
-  const pacotesFinais = evento.gelo?.pacotesOverride !== undefined ? evento.gelo.pacotesOverride : pacotesCalculados;
-  const valorGelo = pacotesFinais * (evento.gelo?.valorUnitario || 6);
+  // --- GASTOS DIVERSOS ---
+  const valorGastosDiversos = (evento.gastosDiversos || []).reduce((acc, g) => acc + g.valor, 0);
 
-  // Gasolina
-  const valorGasolina = evento.viagem?.incluir ? (evento.viagem?.valor || 0) : 0;
-
-  // Gastos diversos
-  const valorGastosDiversos = (evento.gastosDiversos || []).reduce((acc, item) => acc + (item.valor || 0), 0);
-
-  // Lucro
-  const lucro = evento.lucroDesejado || 0;
-
-  // Resumo final
-  const valorTotalOrcamento = valorDrinksEvento + valorEquipe + valorGelo + valorGasolina + valorGastosDiversos + lucro;
+  // --- TOTAIS ---
+  const custoTotalOrcamento = valorDrinksEvento + valorEquipe + valorGelo + valorGasolina + valorGastosDiversos;
+  const valorTotalSemDesconto = custoTotalOrcamento + (evento.lucroDesejado || 0);
+  const valorDesconto = evento.desconto || 0;
+  const valorTotalOrcamento = valorTotalSemDesconto - valorDesconto;
+  
+  const lucro = valorTotalOrcamento - custoTotalOrcamento;
   const mediaPorPessoa = evento.convidados > 0 ? valorTotalOrcamento / evento.convidados : 0;
-  const custoTotalOrcamento = custoBaseDrinks + valorEquipe + valorGelo + valorGasolina + valorGastosDiversos;
-
-  // Pagamento
-  const percPago = evento.pagamento?.percentualPago || 0;
-  const valorPago = valorTotalOrcamento * (percPago / 100);
+  
+  const valorPago = (valorTotalOrcamento * (evento.pagamento?.percentualPago || 0)) / 100;
   const valorPendente = valorTotalOrcamento - valorPago;
   const percPendente = 100 - percPago;
   
@@ -777,6 +848,7 @@ export function calcularOrcamentoEvento(evento: Evento) {
   };
 }
 
+
 export function vendasResumo(filtroUnidade?: Unidade) {
   const lista = filtroUnidade ? vendas.filter((v) => v.unidade === filtroUnidade) : vendas;
   const receita = lista.reduce((a, v) => a + v.precoUnitario * v.quantidade, 0);
@@ -801,29 +873,5 @@ export function rankingDrinks() {
     cur.lucro += (v.precoUnitario - v.custoUnitario) * v.quantidade;
     map.set(v.drinkId, cur);
   });
-  return Array.from(map.entries())
-    .map(([id, v]) => ({ id, ...v }))
-    .sort((a, b) => b.receita - a.receita);
+  return Array.from(map.values()).sort((a, b) => b.qtd - a.qtd);
 }
-
-export function vendasPorDia(dias = 14) {
-  const out: { data: string; receita: number; lucro: number }[] = [];
-  const hoje = new Date();
-  for (let i = dias - 1; i >= 0; i--) {
-    const d = new Date(hoje);
-    d.setDate(hoje.getDate() - i);
-    const dia = d.toISOString().slice(0, 10);
-    const lista = vendas.filter((v) => v.data.slice(0, 10) === dia);
-    const receita = lista.reduce((a, v) => a + v.precoUnitario * v.quantidade, 0);
-    const lucro = lista.reduce((a, v) => a + (v.precoUnitario - v.custoUnitario) * v.quantidade, 0);
-    out.push({ data: dia, receita, lucro });
-  }
-  return out;
-}
-
-export const fmtBRL = (n: number) =>
-  n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 });
-export const fmtBRL2 = fmtBRL;
-export const fmtPct = (n: number) => `${n.toFixed(1)}%`;
-export const fmtData = (iso: string) =>
-  new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });

@@ -2,52 +2,85 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { StatCard, SectionCard, PrimaryButton, StatusBadge, GhostButton } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
-import { Plus, Calendar, MapPin, Users, ChevronRight, X, AlertTriangle, LayoutGrid, List } from "lucide-react";
-import { useState } from "react";
-import { useAppStore } from "@/lib/app-store";
-import { calcularOrcamentoEvento, type Evento } from "@/lib/mock-data";
+import { Plus, Calendar, MapPin, Users, ChevronRight, X, AlertTriangle, LayoutGrid, List, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { eventBudgetService, type Event as RealEvent } from "@/services/event-budget-service";
 
 export const Route = createFileRoute("/eventos")({ component: () => <AppShell><EventosPage /></AppShell> });
 
 function EventosPage() {
-  const { eventos, addEvento } = useAppStore();
   const navigate = useNavigate();
+  const [eventos, setEventos] = useState<RealEvent[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [viewMode, setViewMode] = useState<"lista" | "calendario">("lista");
-  const [form, setForm] = useState({ nome: "", telefone: "", email: "", tipo: "Casamento", data: "", local: "", cidade: "São Paulo", convidados: 100, observacoes: "" });
+  const [form, setForm] = useState({ 
+    nome: "", 
+    telefone: "", 
+    email: "", 
+    tipo: "Casamento", 
+    data: "", 
+    local: "", 
+    cidade: "São Paulo", 
+    convidados: 100, 
+    observacoes: "" 
+  });
 
+  useEffect(() => {
+    loadEvents();
+  }, []);
+
+  const loadEvents = async () => {
+    setLoading(true);
+    try {
+      const data = await eventBudgetService.listEvents();
+      setEventos(data);
+    } catch (e) {
+      console.error("Erro ao carregar eventos:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Estatísticas calculadas
   const eventosAtivos = eventos.filter(e => !["cancelado", "proposta_recusada"].includes(e.status));
-  const receitaEnviados = eventosAtivos.filter(e => ["orcamento_enviado", "aguardando_retorno", "em_assinatura"].includes(e.status)).reduce((a, e) => a + calcularOrcamentoEvento(e).valorTotalOrcamento, 0);
-  const receitaConfirmados = eventosAtivos.filter(e => ["confirmado", "realizado", "proposta_aceita"].includes(e.status)).reduce((a, e) => a + calcularOrcamentoEvento(e).valorTotalOrcamento, 0);
-
-  const mesmoDiaEventos = form.data ? eventos.filter(e => e.data === form.data && !["cancelado", "proposta_recusada"].includes(e.status)) : [];
-
-  const handleCreate = () => {
-    if (!form.nome || !form.data) return;
-    const newId = `e${Date.now()}`;
-    addEvento({
-      ...form,
-      id: newId,
-      status: "novo_orcamento",
-      drinks: [],
-      drinksPorPessoa: 4,
-      markupAdicionalDrinks: 0,
-      equipe: { bartender: { qtd: 0, valorUnitario: 200 }, keeper: { qtd: 0, valorUnitario: 200 }, copeira: { qtd: 0, valorUnitario: 200 } },
-      gelo: { valorUnitario: 6 },
-      viagem: { incluir: false, valor: 0 },
-      gastosDiversos: [],
-      lucroDesejado: 0,
-      pagamento: { formaPagamento: "", percentualPago: 0 },
-      historicoAlteracoes: [],
-      historicoNegociacao: [{ data: new Date().toISOString(), status: "novo_orcamento", observacao: "Orçamento criado." }],
-      valorNegociado: 0,
-      custoPrevisto: 0,
-      horario: "19:00",
-      cliente: form.nome,
-    } as Evento);
+  
+  // Para receita, precisamos dos valores dos orçamentos atuais
+  // Como o listEvents não traz o orçamento por padrão para performance, 
+  // idealmente teríamos uma view ou query específica para stats.
+  // Por enquanto, usaremos os dados que temos ou faremos o cálculo base.
+  
+  const receitaEnviados = eventosAtivos
+    .filter(e => ["orcamento_enviado", "aguardando_retorno", "em_assinatura"].includes(e.status))
+    .reduce((a, e) => a + (e.current_budget_value || 0), 0);
     
-    setShowModal(false);
-    navigate({ to: "/eventos/$eventoId", params: { eventoId: newId } });
+  const receitaConfirmados = eventosAtivos
+    .filter(e => ["confirmado", "realizado", "proposta_aceita"].includes(e.status))
+    .reduce((a, e) => a + (e.current_budget_value || 0), 0);
+
+  const mesmoDiaEventos = form.data ? eventos.filter(e => e.date === form.data && !["cancelado", "proposta_recusada"].includes(e.status)) : [];
+
+  const handleCreate = async () => {
+    if (!form.nome || !form.data) return;
+    try {
+      const newEvent = await eventBudgetService.createEvent({
+        client_name: form.nome,
+        phone: form.telefone,
+        email: form.email,
+        event_type: form.tipo,
+        date: form.data,
+        event_location: form.local,
+        city: form.cidade,
+        guests: form.convidados,
+        notes: form.observacoes,
+        status: "novo_orcamento"
+      });
+      
+      setShowModal(false);
+      navigate({ to: "/eventos/$eventoId", params: { eventoId: newEvent.id } });
+    } catch (e) {
+      alert("Erro ao criar evento.");
+    }
   };
 
   return (
@@ -72,7 +105,7 @@ function EventosPage() {
 
         <SectionCard 
           title="Pipeline de negociações" 
-          subtitle={`${eventos.length} registros`}
+          subtitle={loading ? "Carregando..." : `${eventos.length} registros`}
           action={
             <div className="flex bg-background border border-border rounded-lg p-0.5">
               <button onClick={() => setViewMode("lista")} className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${viewMode === "lista" ? "bg-surface shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
@@ -84,14 +117,17 @@ function EventosPage() {
             </div>
           }
         >
-          {viewMode === "lista" ? (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20">
+               <Loader2 className="h-8 w-8 text-primary animate-spin mb-4" />
+               <p className="text-sm text-muted-foreground">Buscando eventos no Supabase...</p>
+            </div>
+          ) : viewMode === "lista" ? (
             <div className="space-y-2">
               {eventos.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-8">Nenhum evento cadastrado. Crie o primeiro!</p>
               )}
-              {eventos.map((e) => {
-                const calc = calcularOrcamentoEvento(e);
-                return (
+              {eventos.map((e) => (
                   <Link
                     key={e.id}
                     to="/eventos/$eventoId"
@@ -102,24 +138,24 @@ function EventosPage() {
                       <Calendar className="h-5 w-5 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">{e.nome}</div>
+                      <div className="font-medium text-sm truncate">{e.client_name}</div>
                       <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {e.convidados} pessoas</span>
-                        <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {e.local || "A definir"}</span>
-                        <span>{e.data ? new Date(e.data).toLocaleDateString("pt-BR", {timeZone: "UTC"}) : "Data a definir"}</span>
+                        <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {e.guests} pessoas</span>
+                        <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {e.event_location || "A definir"}</span>
+                        <span>{e.date ? new Date(e.date).toLocaleDateString("pt-BR", {timeZone: "UTC"}) : "Data a definir"}</span>
                       </div>
                     </div>
                     <div className="hidden sm:flex items-center gap-3 shrink-0">
                       <div className="text-right">
-                        <div className="text-sm font-medium">{calc.valorTotalOrcamento > 0 ? fmtBRL(calc.valorTotalOrcamento) : "--"}</div>
-                        <div className="text-[11px] text-muted-foreground">{calc.valorTotalOrcamento > 0 ? `${fmtBRL(calc.mediaPorPessoa)}/pessoa` : "Orçamento em aberto"}</div>
+                        <div className="text-sm font-medium">{e.current_budget_value ? fmtBRL(e.current_budget_value) : "--"}</div>
+                        <div className="text-[11px] text-muted-foreground">{e.current_budget_value ? `${fmtBRL(e.current_budget_value / e.guests)}/pessoa` : "Orçamento em aberto"}</div>
                       </div>
-                      <StatusBadge status={e.status} />
+                      <StatusBadge status={e.status as any} />
                       <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                     </div>
                   </Link>
-                );
-              })}
+                )
+              )}
             </div>
           ) : (
             <CalendarView eventosAtivos={eventosAtivos} />
@@ -142,7 +178,7 @@ function EventosPage() {
                     <div className="font-semibold">Atenção: já existe outro evento orçado ou confirmado para esta mesma data.</div>
                     <ul className="mt-2 list-disc list-inside space-y-1 opacity-80">
                       {mesmoDiaEventos.map(ev => (
-                        <li key={ev.id}>{ev.nome} ({ev.local}) - {ev.status.replace("_", " ")}</li>
+                        <li key={ev.id}>{ev.client_name} ({ev.event_location}) - {ev.status.replace("_", " ")}</li>
                       ))}
                     </ul>
                   </div>
@@ -211,7 +247,7 @@ function EventosPage() {
   );
 }
 
-function CalendarView({ eventosAtivos }: { eventosAtivos: Evento[] }) {
+function CalendarView({ eventosAtivos }: { eventosAtivos: RealEvent[] }) {
   const today = new Date();
   const year = today.getFullYear();
   const month = today.getMonth();
@@ -222,7 +258,7 @@ function CalendarView({ eventosAtivos }: { eventosAtivos: Evento[] }) {
     const dayNum = i - firstDay + 1;
     if (dayNum > 0 && dayNum <= daysInMonth) {
       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-      const dayEvents = eventosAtivos.filter(e => e.data === dateStr);
+      const dayEvents = eventosAtivos.filter(e => e.date === dateStr);
       return { dayNum, dateStr, events: dayEvents };
     }
     return null;
@@ -241,24 +277,22 @@ function CalendarView({ eventosAtivos }: { eventosAtivos: Evento[] }) {
               <>
                 <div className={`text-xs font-medium mb-1 ${d.dayNum === today.getDate() ? 'text-primary' : 'text-muted-foreground'}`}>{d.dayNum}</div>
                 <div className="space-y-1.5">
-                  {d.events.map(e => {
-                    const calc = calcularOrcamentoEvento(e);
-                    return (
+                  {d.events.map(e => (
                       <Link key={e.id} to="/eventos/$eventoId" params={{eventoId: e.id}} className="block p-1.5 rounded border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer">
-                        <div className="font-medium text-primary text-[11px] truncate leading-tight">{e.nome}</div>
+                        <div className="font-medium text-primary text-[11px] truncate leading-tight">{e.client_name}</div>
                         <div className="text-[9px] text-muted-foreground mt-0.5 truncate flex justify-between">
                           <span>{e.status.replace(/_/g, " ")}</span>
                         </div>
                       </Link>
-                    );
-                  })}
+                    )
+                  )}
                 </div>
               </>
             )}
           </div>
         ))}
-      </div>
     </div>
   );
 }
+
 
