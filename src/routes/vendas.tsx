@@ -33,8 +33,10 @@ function VendasPage() {
 
   const filteredDrinks = useMemo(() => {
     const key = activeModalityKey as "steakhouse" | "goatbotequim" | "evento";
-    return allDrinks.filter(d => d.modalityConfig?.[key]?.active);
-  }, [activeModalityKey]);
+    return allDrinks
+      .filter(d => d.modalityConfig?.[key]?.active)
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [activeModalityKey, allDrinks]);
 
   const addItem = () => {
     const firstDrink = filteredDrinks[0] || allDrinks[0];
@@ -530,6 +532,7 @@ function VendasPage() {
 }
 
 function SessionRow({ session, onEdit, onDelete }: { session: FinancialSession; onEdit: () => void; onDelete: () => void }) {
+  const { drinks: allDrinks } = useAppStore();
   const [isExpanded, setIsExpanded] = useState(false);
   
   let lucro = 0;

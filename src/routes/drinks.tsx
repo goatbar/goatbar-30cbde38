@@ -34,7 +34,7 @@ function DrinksPage() {
     const matchBusca = d.nome.toLowerCase().includes(busca.toLowerCase());
     const matchCategoria = categoria === "Todas" || d.categoria === categoria;
     return matchBusca && matchCategoria;
-  });
+  }).sort((a, b) => a.nome.localeCompare(b.nome));
 
   const ativos = allDrinks.filter((d) => d.modalityConfig?.evento?.active);
   const custoMedio = ativos.length ? ativos.reduce((a, d) => a + d.custoUnitario, 0) / ativos.length : 0;

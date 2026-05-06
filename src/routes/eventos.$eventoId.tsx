@@ -521,6 +521,7 @@ function EventoInterna() {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-[450px] overflow-y-auto p-2 scrollbar-thin">
                       {allDrinks
                         .filter(d => d.nome.toLowerCase().includes(buscaDrink.toLowerCase()))
+                        .sort((a, b) => a.nome.localeCompare(b.nome))
                         .map(d => (
                         <div key={d.id} onClick={() => toggleDrink(d.id)} className={`relative overflow-hidden rounded-xl border-2 transition-all cursor-pointer group flex flex-col ${draft.drinks.includes(d.id) ? "border-primary bg-primary/5 shadow-md scale-[0.98]" : "border-border bg-surface hover:border-primary/40 hover:scale-[1.02]"}`}>
                           <div className="h-24 overflow-hidden relative">
@@ -746,7 +747,13 @@ function EventoInterna() {
                       </div>
                       <div className="pl-3 space-y-1 text-muted-foreground font-medium uppercase tracking-tight text-xs">
                         {draft.drinks.length === 0 && <div className="italic">Nenhum drink selecionado</div>}
-                        {draft.drinks.filter(dId => allDrinks.some(d => d.id === dId)).map(dId => {
+                        {draft.drinks.filter(dId => allDrinks.some(d => d.id === dId))
+                          .sort((a, b) => {
+                            const drinkA = allDrinks.find(d => d.id === a);
+                            const drinkB = allDrinks.find(d => d.id === b);
+                            return (drinkA?.nome || "").localeCompare(drinkB?.nome || "");
+                          })
+                          .map(dId => {
                           const drink = allDrinks.find(d => d.id === dId);
                           return <div key={dId} className="flex justify-between"><span>- {drink?.nome}</span></div>;
                         })}
