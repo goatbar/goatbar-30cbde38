@@ -291,6 +291,7 @@ function CalendarView({ eventosAtivos }: { eventosAtivos: RealEvent[] }) {
             )}
           </div>
         ))}
+      </div>
     </div>
   );
 }
