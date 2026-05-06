@@ -822,6 +822,7 @@ export function calcularOrcamentoEvento(evento: Evento) {
   
   const valorPago = (valorTotalOrcamento * (evento.pagamento?.percentualPago || 0)) / 100;
   const valorPendente = valorTotalOrcamento - valorPago;
+  const percPago = evento.pagamento?.percentualPago || 0;
   const percPendente = 100 - percPago;
   
   let statusPagamento = "Não pago";

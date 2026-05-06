@@ -17,6 +17,7 @@ import {
 
 import { eventBudgetService, type Event as RealEvent, type BudgetVersion, type BudgetHistory, type NegotiationHistory } from "@/services/event-budget-service";
 import { Loader2, History, Copy, Clock } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
   component: EventoInterna,
@@ -82,7 +83,7 @@ function EventoInterna() {
       setRealContract(contract);
       // Busca específica para dados do cliente (Opcional)
       try {
-        const { data: cData } = await (eventContractsService as any).supabase
+        const { data: cData } = await supabase
           .from("event_contract_client_data")
           .select("*")
           .eq("event_id", eventoId)
