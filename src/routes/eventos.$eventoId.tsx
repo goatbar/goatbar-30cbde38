@@ -3,7 +3,7 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { drinks as allDrinks, calcularOrcamentoEvento, type Evento, type EventoStatus } from "@/lib/mock-data";
 import { fmtBRL } from "@/lib/format";
-import { Calendar, MapPin, Users, ArrowLeft, Save, Plus, Trash2, MessageCircle, FileSignature, CheckCircle2, Download, AlertCircle, Link as LinkIcon, Loader2, Copy, Megaphone, UserPlus } from "lucide-react";
+import { Calendar, MapPin, Users, ArrowLeft, Save, Plus, Trash2, MessageCircle, FileSignature, CheckCircle2, Download, AlertCircle, Link as LinkIcon, Loader2, Copy, Megaphone, UserPlus, History, Clock } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAppStore } from "@/lib/app-store";
 import { 
@@ -570,11 +570,22 @@ function EventoInterna() {
                     </div>
                   )}
                   
-                  <div className="p-5 rounded-xl bg-primary/5 border border-primary/10 flex justify-between items-center mt-4 shadow-inner">
+                  <div className="p-5 rounded-xl bg-primary/5 border border-primary/10 flex flex-col sm:flex-row justify-between items-start sm:items-center mt-4 shadow-inner gap-4">
                     <div className="space-y-1">
-                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Análise de Custo</div>
-                      <div className="text-sm">Média Unitária: <span className="font-bold">{fmtBRL(calc.mediaCustoDrinks)}</span></div>
-                      <div className="text-sm">Custo Base Total: <span className="font-bold">{fmtBRL(calc.custoBaseDrinks)}</span></div>
+                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Análise de Insumos / Custo</div>
+                      <div className="text-sm">Média Unitária Insumos: <span className="font-bold">{fmtBRL(calc.mediaCustoDrinks)}</span></div>
+                      <div className="text-sm">Soma Insumos (1 de cada): <span className="font-bold">{fmtBRL(calc.custoBaseDrinks)}</span></div>
+                      {draft.drinks.length > 0 && (
+                        <div className="mt-2 text-xs text-muted-foreground">
+                           <div className="font-bold mb-1">Insumos (Custo Base por Drink):</div>
+                           <ul className="list-disc pl-4 space-y-0.5">
+                             {draft.drinks.map(dId => {
+                               const drink = allDrinks.find(d => d.id === dId);
+                               return <li key={dId}>{drink?.nome}: <span className="font-medium text-foreground">{fmtBRL(drink?.custoUnitario || 0)}</span></li>
+                             })}
+                           </ul>
+                        </div>
+                      )}
                     </div>
                     <div className="text-right">
                       <div className="label-eyebrow text-primary">Valor Sugerido Drinks</div>
@@ -712,7 +723,7 @@ function EventoInterna() {
                       <div className="font-bold text-primary flex items-center gap-2 uppercase tracking-tighter">
                         <div className="h-1 w-1 bg-primary rounded-full" /> DRINKS SELECIONADOS:
                       </div>
-                      <div className="pl-3 space-y-1 text-muted-foreground font-medium uppercase tracking-tight">
+                      <div className="pl-3 space-y-1 text-muted-foreground font-medium uppercase tracking-tight text-xs">
                         {draft.drinks.length === 0 && <div className="italic">Nenhum drink selecionado</div>}
                         {draft.drinks.map(dId => {
                           const drink = allDrinks.find(d => d.id === dId);
@@ -730,9 +741,9 @@ function EventoInterna() {
                       <div className="font-bold text-primary flex items-center gap-2 uppercase tracking-tighter">
                         <div className="h-1 w-1 bg-primary rounded-full" /> EQUIPE OPERACIONAL:
                       </div>
-                      <div className="pl-3 space-y-1 text-muted-foreground font-medium uppercase tracking-tight">
+                      <div className="pl-3 space-y-1 text-muted-foreground font-medium uppercase tracking-tight text-xs">
                         {Object.entries(draft.equipe).filter(([_, p]) => p.qtd > 0).map(([key, p]) => (
-                          <div key={key}>- {p.qtd} {key.toUpperCase()}{p.qtd > 1 ? 'S' : ''}</div>
+                          <div key={key}>- {p.qtd} {key.toUpperCase()}{p.qtd > 1 && !key.endsWith('s') ? 'S' : ''}</div>
                         ))}
                       </div>
                       <div className="pt-2 flex justify-between font-bold border-t border-border/40">
@@ -757,11 +768,11 @@ function EventoInterna() {
                       <div className="font-bold text-primary flex items-center gap-2 uppercase tracking-tighter">
                         <div className="h-1 w-1 bg-primary rounded-full" /> GASTOS DIVERSOS:
                       </div>
-                      <div className="pl-3 space-y-1 text-muted-foreground font-medium uppercase tracking-tight">
+                      <div className="pl-3 space-y-1 text-muted-foreground font-medium uppercase tracking-tight text-xs">
                         {draft.gastosDiversos.length === 0 && <div className="italic">Nenhum gasto extra</div>}
                         {draft.gastosDiversos.map(g => (
                           <div key={g.id} className="flex justify-between">
-                            <span>- {g.descricao.toUpperCase() || "ITEM EXTRA"}</span>
+                            <span>- INSUMOS: ({g.descricao.toUpperCase() || "ITEM EXTRA"})</span>
                             <span>{fmtBRL(g.valor)}</span>
                           </div>
                         ))}

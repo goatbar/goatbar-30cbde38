@@ -684,6 +684,28 @@ export const drinks: Drink[] = [
   }
 ];
 
+const applyPrices = () => {
+  const steakhousePrices: Record<string, number> = { "caipivodka-limao": 25, "caipi-limao-cravo-mel": 30, "caipivodka-morango": 30, "caipivodka-abacaxi": 30, "caipivodka-maracuja": 30, "mojito": 32, "sex-on-beach": 32, "aquario": 32, "moscow-mule": 35, "london-mule": 35, "gin-tonica": 35, "fitz-gerald": 35, "tom-collins": 35, "aperol-spritz": 35, "cest-la-vie": 40, "expresso-martini": 40, "apple-martini": 40, "stamping": 40, "mint-jullep": 40, "whisky-sour": 40, "old-fashioned": 45, "negroni": 45, "soda-italiana": 25 };
+  const steakhouseCosts: Record<string, number> = { "caipivodka-limao": 13.25, "caipi-limao-cravo-mel": 13.25, "caipivodka-morango": 15.40, "caipivodka-abacaxi": 15.40, "caipivodka-maracuja": 15.40, "mojito": 16.76, "sex-on-beach": 17.76, "aquario": 17.26, "moscow-mule": 17.55, "london-mule": 18.55, "gin-tonica": 18.55, "fitz-gerald": 19.55, "tom-collins": 19.05, "aperol-spritz": 20.50, "cest-la-vie": 22.70, "expresso-martini": 20.70, "apple-martini": 20.70, "stamping": 20.70, "mint-jullep": 21.20, "whisky-sour": 21.70, "old-fashioned": 24.35, "negroni": 25.35 };
+  
+  const goatbotequimPrices: Record<string, number> = { "caipivodka-limao": 20, "caipi-limao-cravo-mel": 22, "caipivodka-morango": 22, "caipivodka-abacaxi": 22, "caipivodka-maracuja": 22, "mojito": 25, "gin-tonica": 28, "dose-cachaca": 7, "dose-vodka": 14, "dose-gin": 17, "dose-whisky": 25, "dose-campari": 25 };
+  const goatbotequimCosts: Record<string, number> = { "caipivodka-limao": 2.37, "caipi-limao-cravo-mel": 4.37, "caipivodka-morango": 5.37, "caipivodka-maracuja": 4.47, "mojito": 4.67, "gin-tonica": 8.17, "dose-cachaca": 1.5, "dose-vodka": 3, "dose-gin": 6, "dose-whisky": 10, "dose-campari": 7 };
+
+  drinks.forEach(d => {
+    if (steakhousePrices[d.id] || steakhouseCosts[d.id]) {
+      d.modalityConfig.steakhouse.active = true;
+      if (steakhousePrices[d.id]) d.modalityConfig.steakhouse.price = steakhousePrices[d.id];
+      if (steakhouseCosts[d.id]) d.modalityConfig.steakhouse.cost = steakhouseCosts[d.id];
+    }
+    if (goatbotequimPrices[d.id] || goatbotequimCosts[d.id]) {
+      d.modalityConfig.goatbotequim.active = true;
+      if (goatbotequimPrices[d.id]) d.modalityConfig.goatbotequim.price = goatbotequimPrices[d.id];
+      if (goatbotequimCosts[d.id]) d.modalityConfig.goatbotequim.cost = goatbotequimCosts[d.id];
+    }
+  });
+};
+applyPrices();
+
 export const fichaTecnica = {}; 
 
 
