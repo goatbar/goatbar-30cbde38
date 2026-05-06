@@ -25,7 +25,7 @@ export interface BudgetVersion {
   is_current: boolean;
   status: string;
   
-  -- Budget Details
+  // Budget Details
   selected_drinks: any;
   drinks_per_person: number;
   drinks_markup_percentage: number;
@@ -34,7 +34,7 @@ export interface BudgetVersion {
   drinks_base_cost: number;
   drinks_final_value: number;
   
-  -- Staff
+  // Staff
   bartender_quantity: number;
   bartender_unit_value: number;
   keeper_quantity: number;
@@ -43,27 +43,27 @@ export interface BudgetVersion {
   copeira_unit_value: number;
   team_total_value: number;
   
-  -- Ice
+  // Ice
   ice_packages_quantity: number;
   ice_package_unit_value: number;
   ice_total_value: number;
   
-  -- Travel
+  // Travel
   has_travel: boolean;
   fuel_value: number;
   
-  -- Misc
+  // Misc
   miscellaneous_items: any;
   miscellaneous_total_value: number;
   
-  -- Profit & Final
+  // Profit & Final
   discount_value: number;
   discount_description?: string;
   profit_value: number;
   final_budget_value: number;
   average_value_per_person: number;
   
-  -- Payment
+  // Payment
   payment_method?: string;
   paid_percentage: number;
   paid_value: number;
