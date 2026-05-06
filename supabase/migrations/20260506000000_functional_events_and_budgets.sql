@@ -1,8 +1,14 @@
 -- Migration: Functional Events and Budgets
 -- Adds support for full budget management, versioning and history.
 
--- 1. Create or Enhance events table
-CREATE TABLE IF NOT EXISTS public.events (
+-- 1. Reset and Create events table
+-- Se você quiser manter os dados, remova o DROP TABLE e use apenas os ALTER TABLE abaixo
+DROP TABLE IF EXISTS public.event_negotiation_history CASCADE;
+DROP TABLE IF EXISTS public.event_budget_history CASCADE;
+DROP TABLE IF EXISTS public.event_budget_versions CASCADE;
+DROP TABLE IF EXISTS public.events CASCADE;
+
+CREATE TABLE public.events (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     client_name text NOT NULL,
     date date NOT NULL,
@@ -61,6 +67,8 @@ CREATE TABLE IF NOT EXISTS public.event_budget_versions (
     miscellaneous_total_value numeric DEFAULT 0,
     
     -- Profit & Final
+    discount_value numeric DEFAULT 0,
+    discount_description text,
     profit_value numeric DEFAULT 0,
     final_budget_value numeric DEFAULT 0,
     average_value_per_person numeric DEFAULT 0,
@@ -89,6 +97,7 @@ CREATE TABLE IF NOT EXISTS public.event_budget_history (
     new_data jsonb,
     previous_final_value numeric,
     new_final_value numeric,
+    discount_applied numeric DEFAULT 0,
     created_by uuid REFERENCES auth.users(id),
     created_at timestamptz DEFAULT now()
 );
