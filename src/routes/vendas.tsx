@@ -505,6 +505,8 @@ function SessionRow({ session, onEdit, onDelete }: { session: FinancialSession; 
   let receitaGoatbarRow = 0;
   let custoInsumosRow = 0;
   let lucroRestauranteRow = 0;
+  
+  const totalDrinks = session.items.reduce((acc, item) => acc + item.quantidade, 0);
 
   let maoDeObraCalculada = 0;
   if (session.modalidade === "7Steakhouse" && session.maoDeObraDetalhes && session.maoDeObraDetalhes.length > 0) {
@@ -555,7 +557,7 @@ function SessionRow({ session, onEdit, onDelete }: { session: FinancialSession; 
           <div>
             <div className="font-medium text-sm capitalize">{dateFormatted}</div>
             <div className="text-xs text-muted-foreground mt-0.5">
-            {session.items.length} drinks • {session.modalidade === "7Steakhouse" && session.maoDeObraDetalhes && session.maoDeObraDetalhes.length > 0 ? `Equipe: ${session.maoDeObraDetalhes.length} dias (${fmtBRL(maoDeObraCalculada)})` : (session.modalidade === "7Steakhouse" ? `Equipe: ${session.maoDeObraQtd} dias x ${fmtBRL(session.maoDeObraValor)}` : `Eqp: ${session.maoDeObraQtd}x ${fmtBRL(session.maoDeObraValor)}`)}
+            {totalDrinks} drinks • {session.modalidade === "7Steakhouse" && session.maoDeObraDetalhes && session.maoDeObraDetalhes.length > 0 ? `Equipe: ${session.maoDeObraDetalhes.length} dias (${fmtBRL(maoDeObraCalculada)})` : (session.modalidade === "7Steakhouse" ? `Equipe: ${session.maoDeObraQtd} dias x ${fmtBRL(session.maoDeObraValor)}` : `Eqp: ${session.maoDeObraQtd}x ${fmtBRL(session.maoDeObraValor)}`)}
           </div>
           </div>
         </div>
