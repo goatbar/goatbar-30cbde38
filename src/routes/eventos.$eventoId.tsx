@@ -426,7 +426,11 @@ function EventoInterna() {
                   <PrimaryButton className="w-full mt-6" onClick={handleSave}>Salvar Orçamento</PrimaryButton>
                 </SectionCard>
               </div>
-            </div>        {/* TAB CONTRATO */}
+            </div>
+          </div>
+        )}
+
+        {/* TAB CONTRATO */}
         {activeTab === "Contrato" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-7">
             <div className="lg:col-span-8 space-y-6">
