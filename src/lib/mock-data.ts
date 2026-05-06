@@ -249,7 +249,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 13.25, price: 25 },
       goatbotequim: { active: true, cost: 13.25, price: 25 }
     },
-    imagem: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=400&auto=format&fit=crop"
+    imagem: "https://images.unsplash.com/photo-1541546106583-b4f853b4306a?w=400&auto=format&fit=crop"
   },
   {
     id: "caipi-limao-cravo-mel",
@@ -282,11 +282,11 @@ export const drinks: Drink[] = [
     nome: "Caipivodka Abacaxi",
     categoria: "Vodka",
     descricao: "Vodka, abacaxi e raspas de limão.",
-    custoUnitario: 2.80,
+    custoUnitario: 15.40,
     modalityConfig: {
-      evento: { active: true, cost: 2.80 },
+      evento: { active: true, cost: 15.40, price: 30 },
       steakhouse: { active: true, cost: 15.40, price: 30 },
-      goatbotequim: { active: false, cost: 0 }
+      goatbotequim: { active: true, cost: 15.40, price: 30 }
     },
     imagem: "https://images.unsplash.com/photo-1587223962905-276f75608b4f?w=400&auto=format&fit=crop"
   },
@@ -295,11 +295,11 @@ export const drinks: Drink[] = [
     nome: "Caipivodka Maracujá",
     categoria: "Vodka",
     descricao: "Vodka, maracujá e açúcar de baunilha.",
-    custoUnitario: 3.20,
+    custoUnitario: 15.40,
     modalityConfig: {
-      evento: { active: true, cost: 3.20 },
+      evento: { active: true, cost: 15.40, price: 30 },
       steakhouse: { active: true, cost: 15.40, price: 30 },
-      goatbotequim: { active: true, cost: 4.47 }
+      goatbotequim: { active: true, cost: 15.40, price: 30 }
     },
     imagem: "https://images.unsplash.com/photo-1595981267035-7b04ca84a82d?w=400&auto=format&fit=crop"
   },
@@ -334,11 +334,11 @@ export const drinks: Drink[] = [
     nome: "Aquário",
     categoria: "Vodka",
     descricao: "Vodka, limão, curaçao, alecrim e água com gás.",
-    custoUnitario: 4.25,
+    custoUnitario: 17.26,
     modalityConfig: {
-      evento: { active: true, cost: 4.25 },
+      evento: { active: true, cost: 17.26, price: 32 },
       steakhouse: { active: true, cost: 17.26, price: 32 },
-      goatbotequim: { active: false, cost: 0 }
+      goatbotequim: { active: true, cost: 17.26, price: 32 }
     },
     imagem: "https://images.unsplash.com/photo-1597290282695-edc43d0e7129?w=400&auto=format&fit=crop"
   },
@@ -347,11 +347,11 @@ export const drinks: Drink[] = [
     nome: "Moscow Mule",
     categoria: "Vodka",
     descricao: "Vodka, limão e sifão de gengibre.",
-    custoUnitario: 3.10,
+    custoUnitario: 17.55,
     modalityConfig: {
-      evento: { active: true, cost: 3.10 },
+      evento: { active: true, cost: 17.55, price: 35 },
       steakhouse: { active: true, cost: 17.55, price: 35 },
-      goatbotequim: { active: false, cost: 0 }
+      goatbotequim: { active: true, cost: 17.55, price: 35 }
     },
     imagem: "https://images.unsplash.com/photo-1513415277900-a62401e19be4?w=400&auto=format&fit=crop"
   },
@@ -373,11 +373,11 @@ export const drinks: Drink[] = [
     nome: "Gin Tônica",
     categoria: "Gin",
     descricao: "Gin, tônica, limão siciliano e especiarias.",
-    custoUnitario: 6.71,
+    custoUnitario: 18.55,
     modalityConfig: {
-      evento: { active: true, cost: 6.71 },
+      evento: { active: true, cost: 18.55, price: 35 },
       steakhouse: { active: true, cost: 18.55, price: 35 },
-      goatbotequim: { active: true, cost: 8.17 }
+      goatbotequim: { active: true, cost: 18.55, price: 35 }
     },
     imagem: "https://images.unsplash.com/photo-1551538827-9c037cb4f32a?w=400&auto=format&fit=crop"
   },
@@ -386,11 +386,11 @@ export const drinks: Drink[] = [
     nome: "Fitz Gerald",
     categoria: "Gin",
     descricao: "Gin, limão, angostura e twist.",
-    custoUnitario: 7.23,
+    custoUnitario: 19.55,
     modalityConfig: {
-      evento: { active: true, cost: 7.23 },
+      evento: { active: true, cost: 19.55, price: 35 },
       steakhouse: { active: true, cost: 19.55, price: 35 },
-      goatbotequim: { active: false, cost: 0 }
+      goatbotequim: { active: true, cost: 19.55, price: 35 }
     },
     imagem: "https://images.unsplash.com/photo-1544145945-f904253d0c7b?w=400&auto=format&fit=crop"
   },

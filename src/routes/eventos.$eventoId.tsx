@@ -16,8 +16,10 @@ import {
 } from "@/services/contract-service";
 
 import { eventBudgetService, type Event as RealEvent, type BudgetVersion, type BudgetHistory, type NegotiationHistory } from "@/services/event-budget-service";
-import { Loader2, History, Copy, Clock, Trash2, Megaphone, UserPlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Check, Search } from "lucide-react";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
   component: EventoInterna,
@@ -45,6 +47,7 @@ function EventoInterna() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("Orçamento");
+  const [buscaDrink, setBuscaDrink] = useState("");
 
   useEffect(() => {
     loadAllData();
@@ -389,7 +392,7 @@ function EventoInterna() {
             <div className="flex-1">
               <h4 className="font-bold text-destructive">Atenção: Conflito de Agenda</h4>
               <p className="text-sm text-destructive/80">
-                Já existem {sameDateEvents.length} evento(s) cadastrado(s) para o dia {new Date(draft.data).toLocaleDateString("pt-BR")}:
+                Já existem {sameDateEvents.length} evento(s) cadastrado(s) para o dia {format(parseISO(draft.data), "dd/MM/yyyy", { locale: ptBR })}:
                 <span className="font-semibold ml-1">
                   {sameDateEvents.map(e => e.client_name).join(", ")}
                 </span>
@@ -404,7 +407,7 @@ function EventoInterna() {
         {/* RESUMO FIXO TOP */}
         <div className="card-premium p-6 relative overflow-hidden bg-surface flex flex-wrap gap-8 justify-between items-center">
           <div className="flex gap-8">
-            <Info icon={<Calendar className="h-4 w-4 text-primary" />} label="Data" value={draft.data ? new Date(draft.data).toLocaleDateString("pt-BR") : "A definir"} />
+            <Info icon={<Calendar className="h-4 w-4 text-primary" />} label="Data" value={draft.data ? format(parseISO(draft.data), "dd/MM/yyyy", { locale: ptBR }) : "A definir"} />
             <Info icon={<Users className="h-4 w-4 text-primary" />} label="Convidados" value={draft.convidados.toString()} />
             <Info icon={<MapPin className="h-4 w-4 text-primary" />} label="Local" value={draft.local || "A definir"} />
             
@@ -506,9 +509,22 @@ function EventoInterna() {
                     </div>
                   </div>
                   
-                  <div>
+                  <div className="space-y-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <input 
+                        type="text" 
+                        placeholder="Buscar drink pelo nome..." 
+                        value={buscaDrink}
+                        onChange={e => setBuscaDrink(e.target.value)}
+                        className="w-full h-11 pl-10 pr-4 rounded-xl bg-input border border-border focus:ring-2 focus:ring-primary/20 transition-all outline-none text-sm"
+                      />
+                    </div>
+                    
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-[450px] overflow-y-auto p-2 scrollbar-thin">
-                      {allDrinks.map(d => (
+                      {allDrinks
+                        .filter(d => d.nome.toLowerCase().includes(buscaDrink.toLowerCase()))
+                        .map(d => (
                         <div key={d.id} onClick={() => toggleDrink(d.id)} className={`relative overflow-hidden rounded-xl border-2 transition-all cursor-pointer group flex flex-col ${draft.drinks.includes(d.id) ? "border-primary bg-primary/5 shadow-md scale-[0.98]" : "border-border bg-surface hover:border-primary/40 hover:scale-[1.02]"}`}>
                           <div className="h-24 overflow-hidden relative">
                              <img src={d.imagem} alt={d.nome} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
@@ -848,7 +864,7 @@ function EventoInterna() {
                   </div>
                 </SectionCard>
               ) : (
-                <SectionCard title="Dados do Contratante" subtitle={`Validado em ${new Date(realClientData.submitted_at || realClientData.created_at).toLocaleDateString()}`}>
+                <SectionCard title="Dados do Contratante" subtitle={`Validado em ${realClientData.submitted_at || realClientData.created_at ? format(parseISO(realClientData.submitted_at || realClientData.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : "---"}`}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-4 bg-primary/5 rounded-2xl border border-primary/10">
                     <DataField label="Razão Social / Nome" value={realClientData.client_name} />
                     <DataField label="Documento (CPF/CNPJ)" value={realClientData.cpf_cnpj} />
@@ -1117,7 +1133,7 @@ function EventoInterna() {
                                    {fmtBRL(v.final_budget_value)}
                                    {v.is_current && <span className="text-[10px] bg-primary text-white px-2 py-0.5 rounded-full uppercase">Atual</span>}
                                 </div>
-                                <div className="text-xs text-muted-foreground">Gerado em {new Date(v.created_at).toLocaleString("pt-BR")}</div>
+                                <div className="text-[10px] text-muted-foreground">Gerado em {format(parseISO(v.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}</div>
                              </div>
                           </div>
                           

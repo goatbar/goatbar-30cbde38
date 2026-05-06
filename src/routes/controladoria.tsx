@@ -386,7 +386,7 @@ function ControladoriaPage() {
 
                 <div>
                    <label className="label-eyebrow">Valor (R$)</label>
-                   <input type="number" value={form.amount || ""} onChange={e => setForm(p => ({...p, amount: Number(e.target.value)}))} className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none font-bold text-primary" placeholder="0,00" />
+                   <input type="number" value={form.amount || ""} onChange={e => setForm(p => ({...p, amount: e.target.value === "" ? 0 : Number(e.target.value)}))} className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none font-bold text-primary" placeholder="0,00" />
                 </div>
 
                 <div>

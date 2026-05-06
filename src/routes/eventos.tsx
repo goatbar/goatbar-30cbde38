@@ -2,11 +2,11 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { StatCard, SectionCard, PrimaryButton, StatusBadge, GhostButton } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
-import { Plus, Calendar, MapPin, Users, ChevronRight, X, AlertTriangle, LayoutGrid, List, Loader2 } from "lucide-react";
+import { Plus, Calendar, MapPin, Users, ChevronRight, X, AlertTriangle, LayoutGrid, List, Loader2, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { eventBudgetService, type Event as RealEvent } from "@/services/event-budget-service";
 
-export const Route = createFileRoute("/eventos/")({ component: () => <AppShell><EventosPage /></AppShell> });
+export const Route = createFileRoute("/eventos")({ component: () => <AppShell><EventosPage /></AppShell> });
 
 function EventosPage() {
   const navigate = useNavigate();
@@ -175,6 +175,20 @@ function EventosPage() {
                           <option value="cancelado">Cancelado</option>
                         </select>
                       </div>
+
+                      <button 
+                        className="h-8 w-8 rounded-full flex items-center justify-center bg-background border border-border text-destructive hover:bg-destructive/10 transition-all"
+                        onClick={async (ev) => {
+                          ev.preventDefault();
+                          ev.stopPropagation();
+                          if (confirm("Excluir este orçamento definitivamente?")) {
+                            await eventBudgetService.deleteEvent(e.id);
+                            loadEvents();
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
 
                       <div className="h-8 w-8 rounded-full flex items-center justify-center bg-background border border-border group-hover:border-primary/30 group-hover:text-primary transition-all">
                         <ChevronRight className="h-4 w-4" />

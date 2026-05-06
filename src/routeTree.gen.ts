@@ -12,11 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as VendasRouteImport } from './routes/vendas'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InventarioRouteImport } from './routes/inventario'
+import { Route as EventosRouteImport } from './routes/eventos'
 import { Route as DrinksRouteImport } from './routes/drinks'
+import { Route as ControladoriaRouteImport } from './routes/controladoria'
 import { Route as ContratosRouteImport } from './routes/contratos'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as EventosIndexRouteImport } from './routes/eventos.index'
 import { Route as PosEventoEventoIdRouteImport } from './routes/pos-evento.$eventoId'
 import { Route as EventosEventoIdRouteImport } from './routes/eventos.$eventoId'
 import { Route as ContratoFormEventoIdRouteImport } from './routes/contrato.form.$eventoId'
@@ -37,9 +38,19 @@ const InventarioRoute = InventarioRouteImport.update({
   path: '/inventario',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EventosRoute = EventosRouteImport.update({
+  id: '/eventos',
+  path: '/eventos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DrinksRoute = DrinksRouteImport.update({
   id: '/drinks',
   path: '/drinks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ControladoriaRoute = ControladoriaRouteImport.update({
+  id: '/controladoria',
+  path: '/controladoria',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContratosRoute = ContratosRouteImport.update({
@@ -55,11 +66,6 @@ const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EventosIndexRoute = EventosIndexRouteImport.update({
-  id: '/eventos/',
-  path: '/eventos/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PosEventoEventoIdRoute = PosEventoEventoIdRouteImport.update({
@@ -87,13 +93,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/contratos': typeof ContratosRoute
+  '/controladoria': typeof ControladoriaRoute
   '/drinks': typeof DrinksRoute
+  '/eventos': typeof EventosRouteWithChildren
   '/inventario': typeof InventarioRoute
   '/login': typeof LoginRoute
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
-  '/eventos/': typeof EventosIndexRoute
   '/contrato/dados/$token': typeof ContratoDadosTokenRoute
   '/contrato/form/$eventoId': typeof ContratoFormEventoIdRoute
 }
@@ -101,13 +108,14 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/contratos': typeof ContratosRoute
+  '/controladoria': typeof ControladoriaRoute
   '/drinks': typeof DrinksRoute
+  '/eventos': typeof EventosRouteWithChildren
   '/inventario': typeof InventarioRoute
   '/login': typeof LoginRoute
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
-  '/eventos': typeof EventosIndexRoute
   '/contrato/dados/$token': typeof ContratoDadosTokenRoute
   '/contrato/form/$eventoId': typeof ContratoFormEventoIdRoute
 }
@@ -116,13 +124,14 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/contratos': typeof ContratosRoute
+  '/controladoria': typeof ControladoriaRoute
   '/drinks': typeof DrinksRoute
+  '/eventos': typeof EventosRouteWithChildren
   '/inventario': typeof InventarioRoute
   '/login': typeof LoginRoute
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
-  '/eventos/': typeof EventosIndexRoute
   '/contrato/dados/$token': typeof ContratoDadosTokenRoute
   '/contrato/form/$eventoId': typeof ContratoFormEventoIdRoute
 }
@@ -132,13 +141,14 @@ export interface FileRouteTypes {
     | '/'
     | '/configuracoes'
     | '/contratos'
+    | '/controladoria'
     | '/drinks'
+    | '/eventos'
     | '/inventario'
     | '/login'
     | '/vendas'
     | '/eventos/$eventoId'
     | '/pos-evento/$eventoId'
-    | '/eventos/'
     | '/contrato/dados/$token'
     | '/contrato/form/$eventoId'
   fileRoutesByTo: FileRoutesByTo
@@ -146,13 +156,14 @@ export interface FileRouteTypes {
     | '/'
     | '/configuracoes'
     | '/contratos'
+    | '/controladoria'
     | '/drinks'
+    | '/eventos'
     | '/inventario'
     | '/login'
     | '/vendas'
     | '/eventos/$eventoId'
     | '/pos-evento/$eventoId'
-    | '/eventos'
     | '/contrato/dados/$token'
     | '/contrato/form/$eventoId'
   id:
@@ -160,13 +171,14 @@ export interface FileRouteTypes {
     | '/'
     | '/configuracoes'
     | '/contratos'
+    | '/controladoria'
     | '/drinks'
+    | '/eventos'
     | '/inventario'
     | '/login'
     | '/vendas'
     | '/eventos/$eventoId'
     | '/pos-evento/$eventoId'
-    | '/eventos/'
     | '/contrato/dados/$token'
     | '/contrato/form/$eventoId'
   fileRoutesById: FileRoutesById
@@ -175,12 +187,13 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ConfiguracoesRoute: typeof ConfiguracoesRoute
   ContratosRoute: typeof ContratosRoute
+  ControladoriaRoute: typeof ControladoriaRoute
   DrinksRoute: typeof DrinksRoute
+  EventosRoute: typeof EventosRouteWithChildren
   InventarioRoute: typeof InventarioRoute
   LoginRoute: typeof LoginRoute
   VendasRoute: typeof VendasRoute
   PosEventoEventoIdRoute: typeof PosEventoEventoIdRoute
-  EventosIndexRoute: typeof EventosIndexRoute
   ContratoDadosTokenRoute: typeof ContratoDadosTokenRoute
   ContratoFormEventoIdRoute: typeof ContratoFormEventoIdRoute
 }
@@ -208,11 +221,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InventarioRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/eventos': {
+      id: '/eventos'
+      path: '/eventos'
+      fullPath: '/eventos'
+      preLoaderRoute: typeof EventosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/drinks': {
       id: '/drinks'
       path: '/drinks'
       fullPath: '/drinks'
       preLoaderRoute: typeof DrinksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/controladoria': {
+      id: '/controladoria'
+      path: '/controladoria'
+      fullPath: '/controladoria'
+      preLoaderRoute: typeof ControladoriaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contratos': {
@@ -234,13 +261,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/eventos/': {
-      id: '/eventos/'
-      path: '/eventos'
-      fullPath: '/eventos/'
-      preLoaderRoute: typeof EventosIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pos-evento/$eventoId': {
@@ -274,16 +294,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface EventosRouteChildren {
+  EventosEventoIdRoute: typeof EventosEventoIdRoute
+}
+
+const EventosRouteChildren: EventosRouteChildren = {
+  EventosEventoIdRoute: EventosEventoIdRoute,
+}
+
+const EventosRouteWithChildren =
+  EventosRoute._addFileChildren(EventosRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,
   ContratosRoute: ContratosRoute,
+  ControladoriaRoute: ControladoriaRoute,
   DrinksRoute: DrinksRoute,
+  EventosRoute: EventosRouteWithChildren,
   InventarioRoute: InventarioRoute,
   LoginRoute: LoginRoute,
   VendasRoute: VendasRoute,
   PosEventoEventoIdRoute: PosEventoEventoIdRoute,
-  EventosIndexRoute: EventosIndexRoute,
   ContratoDadosTokenRoute: ContratoDadosTokenRoute,
   ContratoFormEventoIdRoute: ContratoFormEventoIdRoute,
 }

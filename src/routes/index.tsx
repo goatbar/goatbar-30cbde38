@@ -6,12 +6,18 @@ import { TrendingUp, ShoppingBag, CalendarRange, Wine, ChevronRight, Calculator 
 import { useAppStore } from "@/lib/app-store";
 import { drinks as allDrinks, calcularOrcamentoEvento } from "@/lib/mock-data";
 import { useState, useMemo } from "react";
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 export const Route = createFileRoute("/")({ component: () => <AppShell><Dashboard /></AppShell> });
 
 function Dashboard() {
-  const { financialSessions, eventos: todosEventos, eventContracts } = useAppStore();
+  const store = useAppStore();
+  const { financialSessions, eventos: todosEventos, eventContracts, drinks } = store;
   const [periodoDias, setPeriodoDias] = useState<number>(30);
+
+  // Gastos da controladoria
+  const totalGastos = (store as any).financial_expenses?.reduce((a: number, b: any) => a + Number(b.amount), 0) || 0;
 
   // Filtros Globais Baseados no Período Selecionado
   const limiteData = useMemo(() => {
@@ -127,7 +133,7 @@ function Dashboard() {
           <StatCard label="Receita Consolidada" value={fmtBRL(totalReceita)} icon={<TrendingUp className="h-4 w-4" />} />
           <StatCard label="Lucro Total Goat Bar" value={fmtBRL(totalLucro)} icon={<ShoppingBag className="h-4 w-4" />} highlight />
           <StatCard label="Eventos Confirmados" value={String(eventStats.qtd)} icon={<CalendarRange className="h-4 w-4" />} />
-          <StatCard label="Margem Média" value={totalReceita > 0 ? `${((totalLucro / totalReceita) * 100).toFixed(1)}%` : "0%"} />
+          <StatCard label="Custos Controladoria" value={fmtBRL(totalGastos)} icon={<Calculator className="h-4 w-4 text-amber-500" />} />
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
@@ -184,7 +190,7 @@ function Dashboard() {
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm truncate">{e.nome}</div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {new Date(e.data).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} · {e.convidados} convidados
+                      {e.data ? format(parseISO(e.data), "dd/MMM", { locale: ptBR }) : "--"} · {e.convidados} convidados
                     </div>
                   </div>
                   <StatusBadge status={e.status} />

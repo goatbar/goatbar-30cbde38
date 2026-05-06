@@ -28,7 +28,7 @@ import {
   type FinancialSession,
 } from "@/lib/mock-data";
 
-const STORAGE_KEY = "goatbar-functional-store-v7";
+const STORAGE_KEY = "goatbar-functional-store-v9";
 
 type AppStore = {
   vendas: Venda[];
