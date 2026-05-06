@@ -196,6 +196,8 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
   const [descricao, setDescricao] = useState(drink.descricao || "");
   const [imagem, setImagem] = useState(drink.imagem || "");
   const [config, setConfig] = useState(drink.modalityConfig);
+  const [insumos, setInsumos] = useState<{nome: string, custo: number}[]>(drink.insumos || []);
+  const insumosTotal = insumos.reduce((a, b) => a + b.custo, 0);
 
   const CATEGORIAS_SUGERIDAS = ["Whisky", "Rum", "Vodka", "Campari", "Cachaça", "Espumante", "Mocktail", "Gin", "Tequila", "Doses"];
   const allCategories = Array.from(new Set([...CATEGORIAS_SUGERIDAS]));
@@ -256,10 +258,49 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
                   <input type="checkbox" checked={config.evento.active} onChange={e => updateModality("evento", "active", e.target.checked)} className="h-4 w-4" />
                 </div>
                 {config.evento.active && (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-4">
                     <div>
-                      <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">Custo Insumos (R$)</label>
-                      <input type="number" value={config.evento.cost} onChange={e => updateModality("evento", "cost", Number(e.target.value))} className="w-full h-9 px-3 rounded-lg bg-input border border-border text-sm" />
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-[10px] uppercase font-bold text-muted-foreground block">Insumos (Ficha Técnica)</label>
+                        <GhostButton onClick={() => setInsumos([...insumos, { nome: "", custo: 0 }])} className="h-6 text-[10px] px-2"><Plus className="h-3 w-3 mr-1" /> Adicionar Insumo</GhostButton>
+                      </div>
+                      <div className="space-y-2">
+                        {insumos.map((i, idx) => (
+                          <div key={idx} className="flex gap-2">
+                            <input
+                              type="text"
+                              placeholder="Nome do insumo"
+                              value={i.nome}
+                              onChange={e => {
+                                const arr = [...insumos];
+                                arr[idx].nome = e.target.value;
+                                setInsumos(arr);
+                              }}
+                              className="flex-1 h-8 px-3 rounded-md bg-input border border-border text-xs focus:border-primary focus:outline-none"
+                            />
+                            <input
+                              type="number"
+                              placeholder="R$"
+                              value={i.custo || ""}
+                              onChange={e => {
+                                const arr = [...insumos];
+                                arr[idx].custo = Number(e.target.value);
+                                setInsumos(arr);
+                              }}
+                              className="w-24 h-8 px-3 rounded-md bg-input border border-border text-xs focus:border-primary focus:outline-none"
+                            />
+                            <button onClick={() => setInsumos(insumos.filter((_, iidx) => iidx !== idx))} className="h-8 w-8 flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-md">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                        {insumos.length === 0 && <div className="text-[11px] text-muted-foreground italic">Nenhum insumo detalhado.</div>}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center border-t border-border pt-2">
+                      <label className="text-[10px] uppercase font-bold text-muted-foreground block">Custo Total / Custo Evento (R$)</label>
+                      <div className="font-bold text-sm text-primary">{fmtBRL(insumosTotal)}</div>
                     </div>
                   </div>
                 )}
@@ -310,7 +351,7 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
 
         <div className="flex items-center justify-end gap-3 px-6 py-4 bg-background/50 border-t border-border sticky bottom-0 z-10">
           <GhostButton onClick={onClose}>Cancelar</GhostButton>
-          <PrimaryButton onClick={() => onSave(drink.id, { nome, categoria, imagem, descricao, modalityConfig: config, custoUnitario: config.evento.cost })}>Salvar Item</PrimaryButton>
+          <PrimaryButton onClick={() => onSave(drink.id, { nome, categoria, imagem, descricao, modalityConfig: config, custoUnitario: config.evento.active && insumos.length > 0 ? insumosTotal : config.evento.cost, insumos })}>Salvar Item</PrimaryButton>
         </div>
       </div>
     </div>
