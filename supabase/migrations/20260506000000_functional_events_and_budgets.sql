@@ -118,18 +118,18 @@ ALTER TABLE public.event_budget_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.event_budget_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.event_negotiation_history ENABLE ROW LEVEL SECURITY;
 
-DO $$ BEGIN
-    CREATE POLICY "authenticated full access events" ON public.events FOR ALL TO authenticated USING (true) WITH CHECK (true);
-EXCEPTION WHEN others THEN NULL; END $$;
+-- Reset policies to ensure no conflicts
+DROP POLICY IF EXISTS "authenticated full access events" ON public.events;
+DROP POLICY IF EXISTS "public full access events" ON public.events;
+DROP POLICY IF EXISTS "authenticated full access budget_versions" ON public.event_budget_versions;
+DROP POLICY IF EXISTS "public full access budget_versions" ON public.event_budget_versions;
+DROP POLICY IF EXISTS "authenticated full access budget_history" ON public.event_budget_history;
+DROP POLICY IF EXISTS "public full access budget_history" ON public.event_budget_history;
+DROP POLICY IF EXISTS "authenticated full access negotiation_history" ON public.event_negotiation_history;
+DROP POLICY IF EXISTS "public full access negotiation_history" ON public.event_negotiation_history;
 
-DO $$ BEGIN
-    CREATE POLICY "authenticated full access budget_versions" ON public.event_budget_versions FOR ALL TO authenticated USING (true) WITH CHECK (true);
-EXCEPTION WHEN others THEN NULL; END $$;
-
-DO $$ BEGIN
-    CREATE POLICY "authenticated full access budget_history" ON public.event_budget_history FOR ALL TO authenticated USING (true) WITH CHECK (true);
-EXCEPTION WHEN others THEN NULL; END $$;
-
-DO $$ BEGIN
-    CREATE POLICY "authenticated full access negotiation_history" ON public.event_negotiation_history FOR ALL TO authenticated USING (true) WITH CHECK (true);
-EXCEPTION WHEN others THEN NULL; END $$;
+-- Create ultra-permissive policies for initial phase
+CREATE POLICY "public full access events" ON public.events FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "public full access budget_versions" ON public.event_budget_versions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "public full access budget_history" ON public.event_budget_history FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "public full access negotiation_history" ON public.event_negotiation_history FOR ALL USING (true) WITH CHECK (true);
