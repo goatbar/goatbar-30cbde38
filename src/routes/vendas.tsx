@@ -1,154 +1,448 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import { StatCard, SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
+import { StatCard, SectionCard, PrimaryButton, GhostButton, StatusBadge } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
-import { Plus, ShoppingBag, TrendingUp, X } from "lucide-react";
-import { useState } from "react";
+import { Plus, ShoppingBag, TrendingUp, X, Users, Utensils, Calendar, Calculator, Trash2 } from "lucide-react";
+import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/app-store";
-import { drinks as allDrinks } from "@/lib/mock-data";
+import { drinks as allDrinks, calcularOrcamentoEvento, type SalesSessionItem, type FinancialSession } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/vendas")({ component: () => <AppShell><VendasPage /></AppShell> });
 
 function VendasPage() {
-  const { vendas, addVenda } = useAppStore();
+  const { financialSessions, addFinancialSession, deleteFinancialSession, eventos, eventContracts } = useAppStore();
+  const [activeTab, setActiveTab] = useState<"Goat Botequim" | "7Steakhouse" | "Eventos" | "Consolidação">("Goat Botequim");
   const [showModal, setShowModal] = useState(false);
-  const [selectedDrink, setSelectedDrink] = useState(allDrinks[0]?.id ?? "");
-  const [qty, setQty] = useState(1);
-  const [unidade, setUnidade] = useState<"7Steakhouse" | "Goat Botequim">("7Steakhouse");
+  
+  // Modal states
+  const [modalDate, setModalDate] = useState(new Date().toISOString().split("T")[0]);
+  const [modalItems, setModalItems] = useState<SalesSessionItem[]>([]);
+  const [maoDeObraValor, setMaoDeObraValor] = useState(0);
+  const [maoDeObraQtd, setMaoDeObraQtd] = useState(0);
+  const [reposicao, setReposicao] = useState(0);
 
-  const receita = vendas.reduce((a, v) => a + v.precoUnitario * v.quantidade, 0);
-  const custo = vendas.reduce((a, v) => a + v.custoUnitario * v.quantidade, 0);
-  const lucro = receita - custo;
-  const margem = receita > 0 ? ((lucro / receita) * 100).toFixed(1) : "0.0";
+  // --- Helpers for Modal ---
+  const activeModalityKey = useMemo(() => {
+    if (activeTab === "7Steakhouse") return "steakhouse";
+    if (activeTab === "Goat Botequim") return "goatbotequim";
+    return "evento";
+  }, [activeTab]);
 
-  const handleCreate = () => {
-    const drink = allDrinks.find((d) => d.id === selectedDrink);
-    if (!drink) return;
-    const preco = unidade === "7Steakhouse" ? drink.precoVenda7Steakhouse : drink.precoVendaGoatBotequim;
+  const filteredDrinks = useMemo(() => {
+    const key = activeModalityKey as "steakhouse" | "goatbotequim" | "evento";
+    return allDrinks.filter(d => d.modalityConfig?.[key]?.active);
+  }, [activeModalityKey]);
+
+  const addItem = () => {
+    const firstDrink = filteredDrinks[0] || allDrinks[0];
+    const key = activeModalityKey as "steakhouse" | "goatbotequim" | "evento";
+    const config = firstDrink.modalityConfig?.[key];
     
-    addVenda({
-      data: new Date().toISOString(),
-      unidade,
-      drinkId: drink.id,
-      drinkNome: drink.nome,
-      quantidade: qty,
-      precoUnitario: preco,
-      custoUnitario: drink.custoUnitario,
-    });
-    setShowModal(false);
+    setModalItems([...modalItems, { 
+      drinkId: firstDrink.id, 
+      nome: firstDrink.nome, 
+      quantidade: 1, 
+      precoUnitario: config?.price || 0, 
+      custoUnitario: config?.cost || 0 
+    }]);
   };
 
-  const recentes = [...vendas].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()).slice(0, 30);
+  const removeItem = (index: number) => {
+    setModalItems(modalItems.filter((_, i) => i !== index));
+  };
+
+  const updateItem = (index: number, field: keyof SalesSessionItem, value: any) => {
+    const newItems = [...modalItems];
+    if (field === "drinkId") {
+      const d = allDrinks.find(x => x.id === value);
+      if (d) {
+        const key = activeModalityKey as "steakhouse" | "goatbotequim" | "evento";
+        const config = d.modalityConfig?.[key];
+        newItems[index] = {
+          ...newItems[index],
+          drinkId: d.id,
+          nome: d.nome,
+          precoUnitario: config?.price || 0,
+          custoUnitario: config?.cost || 0
+        };
+      }
+    } else {
+      (newItems[index] as any)[field] = value;
+    }
+    setModalItems(newItems);
+  };
+
+  const handleSave = () => {
+    if (activeTab === "Eventos" || activeTab === "Consolidação") return;
+    
+    addFinancialSession({
+      data: modalDate,
+      modalidade: activeTab,
+      items: modalItems,
+      maoDeObraValor,
+      maoDeObraQtd,
+      reposicaoRestaurante: activeTab === "7Steakhouse" ? reposicao : undefined
+    });
+    
+    setShowModal(false);
+    // Reset
+    setModalItems([]);
+    setMaoDeObraValor(0);
+    setMaoDeObraQtd(0);
+    setReposicao(0);
+  };
+
+  // --- Calculations ---
+  
+  // Filtered sessions
+  const sessions = financialSessions.filter(s => s.modalidade === activeTab);
+
+  // Event calculations
+  const eventosValidos = useMemo(() => {
+    return eventos.filter(e => {
+      const contrato = eventContracts.find(ec => ec.eventId === e.id);
+      const isFechado = ["confirmado", "realizado", "proposta_aceita"].includes(e.status);
+      const isAssinado = contrato?.status === "assinado";
+      return isFechado && isAssinado;
+    });
+  }, [eventos, eventContracts]);
+
+  const statsBotequim = useMemo(() => {
+    const list = financialSessions.filter(s => s.modalidade === "Goat Botequim");
+    const receitaBruta = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0), 0);
+    const custoDrinks = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.custoUnitario * item.quantidade), 0), 0);
+    const resultadoLiquido = receitaBruta - custoDrinks;
+    const repasse = resultadoLiquido * 0.4;
+    const saldoAposRepasse = resultadoLiquido * 0.6;
+    const maoDeObra = list.reduce((acc, s) => acc + (s.maoDeObraValor * s.maoDeObraQtd), 0);
+    const lucroFinal = saldoAposRepasse - maoDeObra;
+
+    return { receitaBruta, custoDrinks, resultadoLiquido, repasse, maoDeObra, lucroFinal };
+  }, [financialSessions]);
+
+  const statsSteakhouse = useMemo(() => {
+    const list = financialSessions.filter(s => s.modalidade === "7Steakhouse");
+    const receitaBruta = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0), 0);
+    const custoDrinks = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.custoUnitario * item.quantidade), 0), 0);
+    const resultadoLiquido = receitaBruta - custoDrinks;
+    const maoDeObra = list.reduce((acc, s) => acc + (s.maoDeObraValor * s.maoDeObraQtd), 0);
+    const reposicaoTotal = list.reduce((acc, s) => acc + (s.reposicaoRestaurante || 0), 0);
+    const lucroFinal = resultadoLiquido - maoDeObra - reposicaoTotal;
+
+    return { receitaBruta, custoDrinks, resultadoLiquido, maoDeObra, reposicaoTotal, lucroFinal };
+  }, [financialSessions]);
+
+  const statsEventos = useMemo(() => {
+    const results = eventosValidos.map(e => calcularOrcamentoEvento(e));
+    const receita = results.reduce((acc, r) => acc + r.valorTotalOrcamento, 0);
+    const custos = results.reduce((acc, r) => acc + r.custoTotalOrcamento, 0);
+    const lucro = results.reduce((acc, r) => acc + r.lucro, 0);
+
+    return { receita, custos, lucro };
+  }, [eventosValidos]);
 
   return (
     <>
       <PageHeader
-        title="Vendas"
-        subtitle="Histórico de vendas por unidade — 7Steakhouse e Goat Botequim."
+        title="Operações Financeiras"
+        subtitle="Controle de vendas, custos e resultados por modalidade."
         action={
-          <PrimaryButton onClick={() => setShowModal(true)}>
-            <Plus className="h-4 w-4" /> Registrar venda
-          </PrimaryButton>
+          (activeTab === "Goat Botequim" || activeTab === "7Steakhouse") && (
+            <PrimaryButton onClick={() => {
+              setModalItems([]);
+              setShowModal(true);
+            }}>
+              <Plus className="h-4 w-4" /> Lançar Sessão
+            </PrimaryButton>
+          )
         }
       />
 
       <div className="px-8 py-7 space-y-7">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
-          <StatCard label="Total de vendas" value={String(vendas.length)} icon={<ShoppingBag className="h-4 w-4" />} />
-          <StatCard label="Receita total" value={fmtBRL(receita)} icon={<TrendingUp className="h-4 w-4" />} />
-          <StatCard label="Lucro total" value={fmtBRL(lucro)} />
-          <StatCard label="Margem média" value={`${margem}%`} />
+        {/* Tabs */}
+        <div className="flex gap-2 p-1 bg-surface border border-border rounded-xl w-fit">
+          {(["Goat Botequim", "7Steakhouse", "Eventos", "Consolidação"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setActiveTab(t)}
+              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === t ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {t}
+            </button>
+          ))}
         </div>
 
-        <SectionCard title="Vendas recentes" subtitle={`Últimas ${recentes.length} transações`}>
-          <div className="overflow-x-auto -mx-6">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left">
-                  {["Data", "Drink", "Unidade", "Qtd", "Receita", "Custo", "Lucro"].map((h) => (
-                    <th key={h} className="label-eyebrow px-6 py-3 border-y border-border">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {recentes.map((v) => (
-                  <tr key={v.id} className="border-b border-border/60 hover:bg-surface/50 transition-colors">
-                    <td className="px-6 py-3">{new Date(v.data).toLocaleDateString("pt-BR")}</td>
-                    <td className="px-6 py-3 font-medium">{v.drinkNome}</td>
-                    <td className="px-6 py-3 text-muted-foreground">{v.unidade}</td>
-                    <td className="px-6 py-3">{v.quantidade}</td>
-                    <td className="px-6 py-3">{fmtBRL(v.precoUnitario * v.quantidade)}</td>
-                    <td className="px-6 py-3 text-muted-foreground">{fmtBRL(v.custoUnitario * v.quantidade)}</td>
-                    <td className="px-6 py-3 text-success font-medium">{fmtBRL((v.precoUnitario - v.custoUnitario) * v.quantidade)}</td>
-                  </tr>
+        {/* --- GOAT BOTEQUIM --- */}
+        {activeTab === "Goat Botequim" && (
+          <div className="space-y-7">
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+              <StatCard label="Receita Bruta" value={fmtBRL(statsBotequim.receitaBruta)} />
+              <StatCard label="Custo Drinks" value={fmtBRL(statsBotequim.custoDrinks)} />
+              <StatCard label="Res. Líquido" value={fmtBRL(statsBotequim.resultadoLiquido)} />
+              <StatCard label="Repasse (40%)" value={fmtBRL(statsBotequim.repasse)} />
+              <StatCard label="Mão de Obra" value={fmtBRL(statsBotequim.maoDeObra)} />
+              <StatCard label="Lucro Final" value={fmtBRL(statsBotequim.lucroFinal)} highlight />
+            </div>
+
+            <SectionCard title="Sessões Lançadas" subtitle="Histórico de vendas consolidadas por dia">
+              <div className="space-y-4">
+                {sessions.map(s => (
+                  <SessionRow key={s.id} session={s} onDelete={() => deleteFinancialSession(s.id)} />
                 ))}
-              </tbody>
-            </table>
+                {sessions.length === 0 && <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">Nenhuma sessão lançada.</div>}
+              </div>
+            </SectionCard>
           </div>
-        </SectionCard>
+        )}
+
+        {/* --- STEAKHOUSE --- */}
+        {activeTab === "7Steakhouse" && (
+          <div className="space-y-7">
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+              <StatCard label="Receita Bruta" value={fmtBRL(statsSteakhouse.receitaBruta)} />
+              <StatCard label="Custo Drinks" value={fmtBRL(statsSteakhouse.custoDrinks)} />
+              <StatCard label="Res. Líquido" value={fmtBRL(statsSteakhouse.resultadoLiquido)} />
+              <StatCard label="Mão de Obra" value={fmtBRL(statsSteakhouse.maoDeObra)} />
+              <StatCard label="Reposição" value={fmtBRL(statsSteakhouse.reposicaoTotal)} />
+              <StatCard label="Lucro Final" value={fmtBRL(statsSteakhouse.lucroFinal)} highlight />
+            </div>
+
+            <SectionCard title="Sessões Lançadas" subtitle="Vendas diárias integradas ao restaurante">
+              <div className="space-y-4">
+                {sessions.map(s => (
+                  <SessionRow key={s.id} session={s} onDelete={() => deleteFinancialSession(s.id)} />
+                ))}
+                {sessions.length === 0 && <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">Nenhuma sessão lançada.</div>}
+              </div>
+            </SectionCard>
+          </div>
+        )}
+
+        {/* --- EVENTOS --- */}
+        {activeTab === "Eventos" && (
+          <div className="space-y-7">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+              <StatCard label="Receita Total" value={fmtBRL(statsEventos.receita)} />
+              <StatCard label="Custos Totais" value={fmtBRL(statsEventos.custos)} />
+              <StatCard label="Lucro Acumulado" value={fmtBRL(statsEventos.lucro)} highlight />
+            </div>
+
+            <SectionCard title="Eventos Integrados" subtitle="Apenas eventos fechados e com contrato assinado">
+              <div className="overflow-x-auto -mx-6">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left border-y border-border">
+                      <th className="px-6 py-3 label-eyebrow">Evento</th>
+                      <th className="px-6 py-3 label-eyebrow">Data</th>
+                      <th className="px-6 py-3 label-eyebrow">Receita</th>
+                      <th className="px-6 py-3 label-eyebrow">Custos</th>
+                      <th className="px-6 py-3 label-eyebrow text-success">Lucro</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {eventosValidos.map(e => {
+                      const res = calcularOrcamentoEvento(e);
+                      return (
+                        <tr key={e.id} className="border-b border-border/60 hover:bg-surface/50 transition-colors">
+                          <td className="px-6 py-4 font-medium">{e.nome}</td>
+                          <td className="px-6 py-4 text-muted-foreground">{new Date(e.data).toLocaleDateString("pt-BR")}</td>
+                          <td className="px-6 py-4">{fmtBRL(res.valorTotalOrcamento)}</td>
+                          <td className="px-6 py-4 text-muted-foreground">{fmtBRL(res.custoTotalOrcamento)}</td>
+                          <td className="px-6 py-4 text-success font-semibold">{fmtBRL(res.lucro)}</td>
+                        </tr>
+                      );
+                    })}
+                    {eventosValidos.length === 0 && (
+                      <tr><td colSpan={5} className="px-6 py-10 text-center text-muted-foreground">Nenhum evento qualificado para o financeiro.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </SectionCard>
+          </div>
+        )}
+
+        {/* --- CONSOLIDAÇÃO --- */}
+        {activeTab === "Consolidação" && (
+          <div className="space-y-7">
+             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+              <StatCard label="Receita Consolidada" value={fmtBRL(statsBotequim.receitaBruta + statsSteakhouse.receitaBruta + statsEventos.receita)} />
+              <StatCard label="Custos Consolidados" value={fmtBRL(statsBotequim.custoDrinks + statsSteakhouse.custoDrinks + statsEventos.custos)} />
+              <StatCard label="Lucro Total Goat Bar" value={fmtBRL(statsBotequim.lucroFinal + statsSteakhouse.lucroFinal + statsEventos.lucro)} highlight />
+            </div>
+
+            <SectionCard title="Distribuição por Modalidade" subtitle="Participação de cada unidade no lucro total">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <SummaryCard label="Goat Botequim" value={statsBotequim.lucroFinal} color="bg-primary" icon={<ShoppingBag className="h-4 w-4" />} />
+                <SummaryCard label="7Steakhouse" value={statsSteakhouse.lucroFinal} color="bg-success" icon={<Utensils className="h-4 w-4" />} />
+                <SummaryCard label="Eventos" value={statsEventos.lucro} color="bg-amber-500" icon={<Calendar className="h-4 w-4" />} />
+              </div>
+            </SectionCard>
+          </div>
+        )}
       </div>
 
+      {/* --- MODAL DE LANÇAMENTO --- */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm bg-surface border border-border rounded-2xl shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="w-full max-w-2xl bg-surface border border-border rounded-2xl shadow-2xl my-auto">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
-              <h2 className="font-display text-lg font-semibold">Registrar venda</h2>
+              <h2 className="font-display text-lg font-semibold">Lançar Sessão — {activeTab}</h2>
               <button onClick={() => setShowModal(false)} className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"><X className="h-4 w-4" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            
+            <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+              {/* Data */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="label-eyebrow block mb-2">Data da Operação</label>
+                  <input
+                    type="date"
+                    value={modalDate}
+                    onChange={e => setModalDate(e.target.value)}
+                    className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <hr className="border-border" />
+
+              {/* Lista de Drinks */}
               <div>
-                <label className="label-eyebrow block mb-2">Drink</label>
-                <select
-                  value={selectedDrink}
-                  onChange={(e) => setSelectedDrink(e.target.value)}
-                  className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm"
-                >
-                  {allDrinks.filter((d) => d.status === "ativo").map((d) => (
-                    <option key={d.id} value={d.id}>{d.nome}</option>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="label-eyebrow">Drinks Vendidos</label>
+                  <GhostButton onClick={addItem} className="h-8 text-xs px-2"><Plus className="h-3 w-3 mr-1" /> Adicionar Drink</GhostButton>
+                </div>
+                <div className="space-y-2">
+                  {modalItems.map((item, idx) => (
+                    <div key={idx} className="flex gap-2 items-center">
+                      <select
+                        value={item.drinkId}
+                        onChange={e => updateItem(idx, "drinkId", e.target.value)}
+                        className="flex-1 h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                      >
+                        {filteredDrinks.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}
+                      </select>
+                      <input
+                        type="number"
+                        min={1}
+                        value={item.quantidade}
+                        onChange={e => updateItem(idx, "quantidade", Number(e.target.value))}
+                        className="w-20 h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                      />
+                      <div className="w-24 text-right text-sm font-medium pr-2">
+                        {fmtBRL(item.precoUnitario * item.quantidade)}
+                      </div>
+                      <button onClick={() => removeItem(idx)} className="h-9 w-9 flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-md">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   ))}
-                </select>
+                  {modalItems.length === 0 && <div className="text-center py-6 text-xs text-muted-foreground border border-dashed border-border rounded-lg">Nenhum drink lançado.</div>}
+                </div>
               </div>
-              <div>
-                <label className="label-eyebrow block mb-2">Unidade</label>
-                <select
-                  value={unidade}
-                  onChange={(e) => setUnidade(e.target.value as any)}
-                  className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm"
-                >
-                  <option value="7Steakhouse">7Steakhouse</option>
-                  <option value="Goat Botequim">Goat Botequim</option>
-                </select>
+
+              <hr className="border-border" />
+
+              {/* Mão de Obra */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label-eyebrow block mb-2">Valor da Diária (R$)</label>
+                  <input
+                    type="number"
+                    value={maoDeObraValor}
+                    onChange={e => setMaoDeObraValor(Number(e.target.value))}
+                    className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="label-eyebrow block mb-2">Qtd de Pessoas</label>
+                  <input
+                    type="number"
+                    value={maoDeObraQtd}
+                    onChange={e => setMaoDeObraQtd(Number(e.target.value))}
+                    className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="label-eyebrow block mb-2">Quantidade</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={qty}
-                  onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
-                  className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm"
-                />
-              </div>
-              {selectedDrink && (() => {
-                const d = allDrinks.find((x) => x.id === selectedDrink);
-                if (!d) return null;
-                const preco = unidade === "7Steakhouse" ? d.precoVenda7Steakhouse : d.precoVendaGoatBotequim;
-                return (
-                  <div className="rounded-lg bg-background/60 border border-border p-4 text-sm space-y-1.5">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Receita</span><span className="font-medium">{fmtBRL(preco * qty)}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Custo</span><span>{fmtBRL(d.custoUnitario * qty)}</span></div>
-                    <div className="flex justify-between text-success"><span>Lucro</span><span className="font-semibold">{fmtBRL((preco - d.custoUnitario) * qty)}</span></div>
-                  </div>
-                );
-              })()}
+
+              {/* Steakhouse Specific */}
+              {activeTab === "7Steakhouse" && (
+                <div>
+                  <label className="label-eyebrow block mb-2">Reposição ao Restaurante (R$)</label>
+                  <input
+                    type="number"
+                    value={reposicao}
+                    onChange={e => setReposicao(Number(e.target.value))}
+                    className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                  />
+                </div>
+              )}
             </div>
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+
+            <div className="flex items-center justify-end gap-3 px-6 py-4 bg-background/50 border-t border-border sticky bottom-0">
               <GhostButton onClick={() => setShowModal(false)}>Cancelar</GhostButton>
-              <PrimaryButton onClick={handleCreate}>Registrar</PrimaryButton>
+              <PrimaryButton onClick={handleSave}>Salvar Sessão</PrimaryButton>
             </div>
           </div>
         </div>
       )}
     </>
+  );
+}
+
+function SessionRow({ session, onDelete }: { session: FinancialSession; onDelete: () => void }) {
+  const receita = session.items.reduce((a, b) => a + (b.precoUnitario * b.quantidade), 0);
+  const custo = session.items.reduce((a, b) => a + (b.custoUnitario * b.quantidade), 0);
+  const resLiq = receita - custo;
+  
+  let lucro = 0;
+  if (session.modalidade === "Goat Botequim") {
+    lucro = (resLiq * 0.6) - (session.maoDeObraValor * session.maoDeObraQtd);
+  } else {
+    lucro = resLiq - (session.maoDeObraValor * session.maoDeObraQtd) - (session.reposicaoRestaurante || 0);
+  }
+
+  return (
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl border border-border bg-background/40 hover:border-border-strong transition-all group">
+      <div className="flex items-center gap-4">
+        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+          <Calculator className="h-5 w-5" />
+        </div>
+        <div>
+          <div className="font-medium text-sm">{new Date(session.data).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">{session.items.length} drinks lançados • Mão de obra: {session.maoDeObraQtd}x {fmtBRL(session.maoDeObraValor)}</div>
+        </div>
+      </div>
+      
+      <div className="flex items-center gap-6 w-full sm:w-auto">
+        <div className="text-right">
+          <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Receita</div>
+          <div className="text-sm font-medium">{fmtBRL(receita)}</div>
+        </div>
+        <div className="text-right">
+          <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Lucro Final</div>
+          <div className="text-sm font-bold text-success">{fmtBRL(lucro)}</div>
+        </div>
+        <button onClick={onDelete} className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) {
+  return (
+    <div className="p-5 rounded-2xl border border-border bg-surface/50">
+      <div className="flex items-center gap-3 mb-4">
+        <div className={`h-8 w-8 rounded-lg ${color} text-white flex items-center justify-center`}>
+          {icon}
+        </div>
+        <div className="font-medium text-sm">{label}</div>
+      </div>
+      <div className="text-2xl font-bold font-display">{fmtBRL(value)}</div>
+      <div className="mt-2 text-xs text-muted-foreground">Lucro líquido acumulado</div>
+    </div>
   );
 }

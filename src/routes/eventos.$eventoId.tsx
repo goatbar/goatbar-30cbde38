@@ -5,6 +5,14 @@ import { drinks as allDrinks, calcularOrcamentoEvento, fmtBRL, type Evento, type
 import { Calendar, MapPin, Users, ArrowLeft, Save, Plus, Trash2, MessageCircle, FileSignature, CheckCircle2, Download, AlertCircle, Link as LinkIcon } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAppStore } from "@/lib/app-store";
+import { 
+  contractTemplatesService, 
+  contractSignersService, 
+  eventContractsService,
+  clientContractFormService,
+  type ContractTemplate,
+  type ContractSigner
+} from "@/services/contract-service";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
   component: () => (
@@ -20,10 +28,48 @@ export const Route = createFileRoute("/eventos/$eventoId")({
 function EventoInterna() {
   const { eventoId } = Route.useLoaderData();
   const { 
-    eventos, updateEvento, glasswares, eventContractClientDatas, 
-    eventContracts, contractTemplates, contractSigners, 
-    addEventContract, updateEventContract 
+    eventos, updateEvento, glasswares
   } = useAppStore();
+  
+  // --- Novos Estados Reais (Supabase) ---
+  const [realTemplates, setRealTemplates] = useState<ContractTemplate[]>([]);
+  const [realSigners, setRealSigners] = useState<ContractSigner[]>([]);
+  const [realClientData, setRealClientData] = useState<any>(null);
+  const [realContract, setRealContract] = useState<any>(null);
+  const [loadingContract, setLoadingContract] = useState(false);
+
+  useEffect(() => {
+    loadContractModule();
+  }, [eventoId]);
+
+  const loadContractModule = async () => {
+    setLoadingContract(true);
+    try {
+      const [tps, sigs, client, contract] = await Promise.all([
+        contractTemplatesService.listTemplates(),
+        contractSignersService.listSigners(),
+        eventContractsService.getContractByEventId(eventoId), // Sim, este é o contrato vinculado
+        // Precisamos buscar os dados do cliente separadamente
+      ]);
+      
+      // Busca específica para dados do cliente via event_id
+      const { data: cData } = await (eventContractsService as any).supabase
+        .from("event_contract_client_data")
+        .select("*")
+        .eq("event_id", eventoId)
+        .maybeSingle();
+
+      setRealTemplates(tps);
+      setRealSigners(sigs);
+      setRealClientData(cData);
+      setRealContract(tps); // Fallback ou lógica de encontrar o contrato real
+      setRealContract(contract);
+    } catch (e) {
+      console.error("Erro ao carregar módulo de contratos:", e);
+    } finally {
+      setLoadingContract(false);
+    }
+  };
   
   const eventoOriginal = eventos.find((x) => x.id === eventoId);
 
@@ -99,20 +145,31 @@ function EventoInterna() {
     });
   };
 
-  const handleGenerateContract = () => {
-    if (!clientData) { alert("Os dados do cliente são necessários."); return; }
+  const handleGenerateContract = async () => {
+    if (!realClientData) { alert("Os dados do cliente são necessários."); return; }
     if (!selectedTemplate || !selectedSigner) { alert("Selecione um template e um assinante."); return; }
     
-    addEventContract({
-      eventId: draft.id,
-      templateId: selectedTemplate,
-      signerId: selectedSigner,
-      status: "gerado",
-      version: 1,
-      generatedAt: new Date().toISOString(),
-    });
-    handleStatusChange("em_assinatura", "Contrato gerado e pronto para envio.");
-    alert("Contrato gerado com sucesso!");
+    try {
+      await eventContractsService.createContractForEvent(draft.id, selectedTemplate, selectedSigner);
+      handleStatusChange("em_assinatura", "Contrato gerado no sistema.");
+      alert("Contrato gerado com sucesso!");
+      loadContractModule();
+    } catch (e) {
+      alert("Erro ao gerar contrato.");
+    }
+  };
+
+  const handleRequestClientData = async () => {
+    try {
+      const data = await clientContractFormService.createPublicFormToken(draft.id);
+      const link = `${window.location.origin}/contrato/dados/${data.public_token}`;
+      navigator.clipboard.writeText(link);
+      handleStatusChange("dados_solicitados", "Link de coleta de dados gerado.");
+      alert("Link seguro copiado para a área de transferência!");
+      loadContractModule();
+    } catch (e) {
+      alert("Erro ao gerar link de solicitação.");
+    }
   };
 
   return (
@@ -369,17 +426,17 @@ function EventoInterna() {
                   <PrimaryButton className="w-full mt-6" onClick={handleSave}>Salvar Orçamento</PrimaryButton>
                 </SectionCard>
               </div>
-            </div>
-
-          </div>
-        )}
-
-        {/* TAB CONTRATO */}
+            </div>        {/* TAB CONTRATO */}
         {activeTab === "Contrato" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-7">
             <div className="lg:col-span-8 space-y-6">
               
-              {!clientData ? (
+              {loadingContract ? (
+                 <div className="flex flex-col items-center justify-center py-20 bg-surface border border-border rounded-xl">
+                  <Loader2 className="h-8 w-8 text-primary animate-spin mb-4" />
+                  <p className="text-sm text-muted-foreground">Carregando dados do contrato...</p>
+                </div>
+              ) : !realClientData ? (
                 <SectionCard title="Dados do Cliente Ausentes" subtitle="É necessário que o cliente preencha o formulário para gerar o contrato">
                   <div className="flex flex-col items-center justify-center p-8 bg-surface border border-border rounded-xl text-center space-y-4">
                     <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center text-primary">
@@ -390,49 +447,45 @@ function EventoInterna() {
                       <p className="text-sm text-muted-foreground mt-1 max-w-sm">Envie o link seguro para que o cliente preencha as informações legais (CNPJ/CPF, endereço, etc).</p>
                     </div>
                     <PrimaryButton 
-                      onClick={() => {
-                        handleStatusChange("dados_solicitados", "Formulário de contrato enviado ao cliente.");
-                        navigator.clipboard.writeText(`${window.location.origin}/contrato/form/${draft.id}`);
-                        alert("Link copiado para a área de transferência!");
-                      }}
+                      onClick={handleRequestClientData}
                       className="mt-2"
                     >
-                      <LinkIcon className="h-4 w-4" /> Copiar Link do Formulário
+                      <LinkIcon className="h-4 w-4" /> Gerar Link de Coleta
                     </PrimaryButton>
                   </div>
                 </SectionCard>
               ) : (
-                <SectionCard title="Dados do Cliente para Contrato" subtitle={`Recebido em ${new Date(clientData.submittedAt).toLocaleString()}`}>
+                <SectionCard title="Dados do Cliente para Contrato" subtitle={`Recebido em ${new Date(realClientData.submitted_at || realClientData.created_at).toLocaleString()}`}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
                     <div>
                       <label className="text-xs text-muted-foreground block mb-1">Contratante</label>
-                      <div className="font-medium">{clientData.clientName}</div>
+                      <div className="font-medium">{realClientData.client_name}</div>
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground block mb-1">CPF/CNPJ</label>
-                      <div className="font-medium">{clientData.cpfCnpj}</div>
+                      <div className="font-medium">{realClientData.cpf_cnpj}</div>
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground block mb-1">E-mail</label>
-                      <div className="font-medium">{clientData.email}</div>
+                      <div className="font-medium">{realClientData.email}</div>
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground block mb-1">Telefone</label>
-                      <div className="font-medium">{clientData.phone}</div>
+                      <div className="font-medium">{realClientData.phone}</div>
                     </div>
                     <div className="md:col-span-2">
                       <label className="text-xs text-muted-foreground block mb-1">Endereço Completo</label>
-                      <div className="font-medium">{clientData.address}</div>
+                      <div className="font-medium">{realClientData.address}</div>
                     </div>
-                    {clientData.legalRepresentativeName && (
+                    {realClientData.legal_representative_name && (
                       <>
                         <div>
                           <label className="text-xs text-muted-foreground block mb-1">Rep. Legal (Nome)</label>
-                          <div className="font-medium">{clientData.legalRepresentativeName}</div>
+                          <div className="font-medium">{realClientData.legal_representative_name}</div>
                         </div>
                         <div>
                           <label className="text-xs text-muted-foreground block mb-1">Rep. Legal (CPF)</label>
-                          <div className="font-medium">{clientData.legalRepresentativeCpf}</div>
+                          <div className="font-medium">{realClientData.legal_representative_cpf}</div>
                         </div>
                       </>
                     )}
@@ -440,7 +493,7 @@ function EventoInterna() {
                 </SectionCard>
               )}
 
-              {clientData && !activeContract && (
+              {!loadingContract && realClientData && !realContract && (
                 <SectionCard title="Geração de Contrato">
                   <div className="space-y-5">
                     <div>
@@ -451,7 +504,7 @@ function EventoInterna() {
                         className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm"
                       >
                         <option value="">-- Selecione o modelo --</option>
-                        {contractTemplates.map(t => (
+                        {realTemplates.map(t => (
                           <option key={t.id} value={t.id}>{t.name}</option>
                         ))}
                       </select>
@@ -464,7 +517,7 @@ function EventoInterna() {
                         className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm"
                       >
                         <option value="">-- Selecione o sócio --</option>
-                        {contractSigners.filter(s => s.isActive).map(s => (
+                        {realSigners.filter(s => s.is_active).map(s => (
                           <option key={s.id} value={s.id}>{s.name} ({s.role})</option>
                         ))}
                       </select>
@@ -485,16 +538,16 @@ function EventoInterna() {
                 </SectionCard>
               )}
 
-              {activeContract && (
-                <SectionCard title="Documento Gerado" subtitle={`Versão ${activeContract.version}`}>
+              {!loadingContract && realContract && (
+                <SectionCard title="Documento Gerado" subtitle={`Versão ${realContract.version}`}>
                   <div className="flex items-center justify-between p-4 bg-surface border border-border rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
                         <FileSignature className="h-5 w-5" />
                       </div>
                       <div>
-                        <div className="font-medium text-sm">Contrato_Prestacao_Servicos_v{activeContract.version}.pdf</div>
-                        <div className="text-xs text-muted-foreground">Gerado em {new Date(activeContract.generatedAt!).toLocaleString()}</div>
+                        <div className="font-medium text-sm">Contrato_Prestacao_Servicos_v{realContract.version}.pdf</div>
+                        <div className="text-xs text-muted-foreground">Gerado em {new Date(realContract.generated_at || realContract.created_at).toLocaleString()}</div>
                       </div>
                     </div>
                     <div className="flex gap-2">
@@ -506,39 +559,41 @@ function EventoInterna() {
                   <div className="mt-6 pt-6 border-t border-border">
                     <h4 className="font-medium mb-4">Assinatura Eletrônica</h4>
                     
-                    {activeContract.status === "gerado" && (
+                    {realContract.status === "draft" && (
                       <div className="flex items-center justify-between bg-background/50 border border-border p-4 rounded-lg">
                         <div className="text-sm text-muted-foreground">O contrato está pronto para ser enviado para as partes assinarem.</div>
-                        <PrimaryButton onClick={() => {
-                          updateEventContract(activeContract.id, { status: "enviado_assinatura", sentForSignatureAt: new Date().toISOString() });
+                        <PrimaryButton onClick={async () => {
+                          await eventContractsService.updateContractStatus(realContract.id, "sent");
                           handleStatusChange("em_assinatura", "Contrato enviado para assinatura via plataforma de assinaturas.");
                           alert("Contrato enviado!");
+                          loadContractModule();
                         }}>Enviar para assinatura</PrimaryButton>
                       </div>
                     )}
 
-                    {(activeContract.status === "enviado_assinatura" || activeContract.status === "assinado_parcialmente") && (
+                    {(realContract.status === "sent" || realContract.status === "partially_signed") && (
                       <div className="space-y-4">
                         <div className="bg-warning/10 border border-warning/20 p-3 rounded-lg text-sm text-warning font-medium flex items-center gap-2">
                           <span className="h-2 w-2 rounded-full bg-warning animate-pulse" />
                           Aguardando assinaturas...
                         </div>
                         <div className="flex justify-end gap-2">
-                          <GhostButton onClick={() => {
-                            updateEventContract(activeContract.id, { status: "assinado", fullySignedAt: new Date().toISOString() });
+                          <GhostButton onClick={async () => {
+                            await eventContractsService.updateContractStatus(realContract.id, "signed");
                             handleStatusChange("confirmado", "Contrato assinado por todas as partes.");
+                            loadContractModule();
                           }}>Simular Assinatura Completa (Teste)</GhostButton>
                         </div>
                       </div>
                     )}
 
-                    {activeContract.status === "assinado" && (
+                    {realContract.status === "signed" && (
                       <div className="bg-success/10 border border-success/20 p-4 rounded-lg flex justify-between items-center">
                         <div className="flex items-center gap-3 text-success">
                           <CheckCircle2 className="h-6 w-6" />
                           <div>
                             <div className="font-medium">Contrato Totalmente Assinado</div>
-                            <div className="text-xs opacity-80">Finalizado em {new Date(activeContract.fullySignedAt!).toLocaleString()}</div>
+                            <div className="text-xs opacity-80">Finalizado em {new Date(realContract.fully_signed_at || realContract.updated_at).toLocaleString()}</div>
                           </div>
                         </div>
                         <GhostButton className="text-success hover:bg-success/20"><Download className="h-4 w-4" /> Certificado</GhostButton>
@@ -553,12 +608,15 @@ function EventoInterna() {
             <div className="lg:col-span-4">
               <SectionCard title="Status do Contrato">
                 <div className="space-y-4">
-                  <StatusStep done={!!clientData} title="Formulário preenchido" />
-                  <StatusStep done={!!activeContract} title="Contrato gerado" />
-                  <StatusStep done={activeContract?.status === "enviado_assinatura" || activeContract?.status === "assinado_parcialmente" || activeContract?.status === "assinado"} title="Enviado para assinatura" />
-                  <StatusStep done={activeContract?.status === "assinado"} title="Assinatura concluída" />
+                  <StatusStep done={!!realClientData} title="Formulário preenchido" />
+                  <StatusStep done={!!realContract} title="Contrato gerado" />
+                  <StatusStep done={realContract?.status === "sent" || realContract?.status === "partially_signed" || realContract?.status === "signed"} title="Enviado para assinatura" />
+                  <StatusStep done={realContract?.status === "signed"} title="Assinatura concluída" />
                 </div>
               </SectionCard>
+            </div>
+          </div>
+        )}SectionCard>
             </div>
           </div>
         )}

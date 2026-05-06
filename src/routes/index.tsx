@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { StatCard, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
-import { TrendingUp, ShoppingBag, CalendarRange, Wine, ChevronRight } from "lucide-react";
+import { TrendingUp, ShoppingBag, CalendarRange, Wine, ChevronRight, Calculator } from "lucide-react";
 import { useAppStore } from "@/lib/app-store";
 import { drinks as allDrinks, calcularOrcamentoEvento } from "@/lib/mock-data";
 import { useState, useMemo } from "react";
@@ -10,7 +10,7 @@ import { useState, useMemo } from "react";
 export const Route = createFileRoute("/")({ component: () => <AppShell><Dashboard /></AppShell> });
 
 function Dashboard() {
-  const { vendas: todasVendas, eventos: todosEventos } = useAppStore();
+  const { financialSessions, eventos: todosEventos, eventContracts } = useAppStore();
   const [periodoDias, setPeriodoDias] = useState<number>(30);
 
   // Filtros Globais Baseados no Período Selecionado
@@ -22,52 +22,82 @@ function Dashboard() {
     return d;
   }, [periodoDias]);
 
-  const vendas = useMemo(() => {
-    return todasVendas.filter(v => new Date(v.data).getTime() >= limiteData.getTime());
-  }, [todasVendas, limiteData]);
+  // --- Filtered Data ---
+  const filteredSessions = useMemo(() => {
+    return financialSessions.filter(s => new Date(s.data).getTime() >= limiteData.getTime());
+  }, [financialSessions, limiteData]);
 
-  const eventos = useMemo(() => {
+  const filteredEventos = useMemo(() => {
     return todosEventos.filter(e => new Date(e.data || 0).getTime() >= limiteData.getTime());
   }, [todosEventos, limiteData]);
 
-  const receita = vendas.reduce((a, v) => a + v.precoUnitario * v.quantidade, 0);
-  const custo = vendas.reduce((a, v) => a + v.custoUnitario * v.quantidade, 0);
-  const lucro = receita - custo;
-  const margem = receita > 0 ? ((lucro / receita) * 100).toFixed(1) : "0.0";
+  // --- Modality Calculations ---
+
+  // Goat Botequim
+  const botStats = useMemo(() => {
+    const list = filteredSessions.filter(s => s.modalidade === "Goat Botequim");
+    const receitaBruta = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0), 0);
+    const custoDrinks = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.custoUnitario * item.quantidade), 0), 0);
+    const resLiq = receitaBruta - custoDrinks;
+    const maoDeObra = list.reduce((acc, s) => acc + (s.maoDeObraValor * s.maoDeObraQtd), 0);
+    const lucroFinal = (resLiq * 0.6) - maoDeObra;
+    return { receitaBruta, custoDrinks, lucroFinal };
+  }, [filteredSessions]);
+
+  // 7Steakhouse
+  const steakStats = useMemo(() => {
+    const list = filteredSessions.filter(s => s.modalidade === "7Steakhouse");
+    const receitaBruta = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0), 0);
+    const custoDrinks = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.custoUnitario * item.quantidade), 0), 0);
+    const resLiq = receitaBruta - custoDrinks;
+    const maoDeObra = list.reduce((acc, s) => acc + (s.maoDeObraValor * s.maoDeObraQtd), 0);
+    const reposicao = list.reduce((acc, s) => acc + (s.reposicaoRestaurante || 0), 0);
+    const lucroFinal = resLiq - maoDeObra - reposicao;
+    return { receitaBruta, custoDrinks, lucroFinal };
+  }, [filteredSessions]);
+
+  // Eventos
+  const eventStats = useMemo(() => {
+    const validos = filteredEventos.filter(e => {
+      const contrato = eventContracts.find(ec => ec.eventId === e.id);
+      return ["confirmado", "realizado", "proposta_aceita"].includes(e.status) && contrato?.status === "assinado";
+    });
+    const results = validos.map(e => calcularOrcamentoEvento(e));
+    const receita = results.reduce((acc, r) => acc + r.valorTotalOrcamento, 0);
+    const custos = results.reduce((acc, r) => acc + r.custoTotalOrcamento, 0);
+    const lucro = results.reduce((acc, r) => acc + r.lucro, 0);
+    return { receita, custos, lucro, qtd: validos.length };
+  }, [filteredEventos, eventContracts]);
+
+  // Consolidated
+  const totalReceita = botStats.receitaBruta + steakStats.receitaBruta + eventStats.receita;
+  const totalLucro = botStats.lucroFinal + steakStats.lucroFinal + eventStats.lucro;
+
+  // --- UI Elements ---
   
   const rankingDrinks = useMemo(() => {
     const map = new Map<string, { nome: string; qtd: number; receita: number; lucro: number }>();
-    vendas.forEach((v) => {
-      const cur = map.get(v.drinkId) || { nome: v.drinkNome, qtd: 0, receita: 0, lucro: 0 };
-      cur.qtd += v.quantidade;
-      cur.receita += v.precoUnitario * v.quantidade;
-      cur.lucro += (v.precoUnitario - v.custoUnitario) * v.quantidade;
-      map.set(v.drinkId, cur);
+    filteredSessions.forEach((s) => {
+      s.items.forEach(item => {
+        const cur = map.get(item.drinkId) || { nome: item.nome, qtd: 0, receita: 0, lucro: 0 };
+        cur.qtd += item.quantidade;
+        cur.receita += item.precoUnitario * item.quantidade;
+        cur.lucro += (item.precoUnitario - item.custoUnitario) * item.quantidade;
+        map.set(item.drinkId, cur);
+      });
     });
     return Array.from(map.entries())
       .map(([id, v]) => ({ id, ...v }))
       .sort((a, b) => b.receita - a.receita);
-  }, [vendas]);
+  }, [filteredSessions]);
 
   const topDrinks = rankingDrinks.slice(0, 5);
 
-  const eventosAtivos = eventos.filter((e) => !["cancelado", "proposta_recusada"].includes(e.status));
-  const proximosEventos = [...eventosAtivos].sort((a, b) => new Date(a.data || 0).getTime() - new Date(b.data || 0).getTime()).filter(e => new Date(e.data || 0).getTime() >= new Date().setHours(0,0,0,0)).slice(0, 5);
-
-  const mesAtual = new Date().getMonth();
-  const eventosMes = eventos.filter(e => new Date(e.data || 0).getMonth() === mesAtual);
-  
-  const orcadosMes = eventosMes.length;
-  const confirmadosMes = eventosMes.filter(e => ["confirmado", "realizado", "proposta_aceita"].includes(e.status)).length;
-  
-  const valorEnviados = eventosAtivos.filter(e => ["orcamento_enviado", "aguardando_retorno", "em_assinatura"].includes(e.status)).reduce((a, e) => a + calcularOrcamentoEvento(e).valorTotalOrcamento, 0);
-  const valorConfirmados = eventosAtivos.filter(e => ["confirmado", "realizado", "proposta_aceita"].includes(e.status)).reduce((a, e) => a + calcularOrcamentoEvento(e).valorTotalOrcamento, 0);
-  
-  const ticketMedio = eventosAtivos.length ? eventosAtivos.reduce((a, e) => a + calcularOrcamentoEvento(e).valorTotalOrcamento, 0) / eventosAtivos.length : 0;
-  const mediaPorPessoa = eventosAtivos.length ? eventosAtivos.reduce((a, e) => a + calcularOrcamentoEvento(e).mediaPorPessoa, 0) / eventosAtivos.length : 0;
-  
-  const aguardandoRetorno = eventosAtivos.filter(e => e.status === "aguardando_retorno").length;
-  const pagamentoPendente = eventosAtivos.filter(e => ["confirmado", "proposta_aceita"].includes(e.status) && calcularOrcamentoEvento(e).percPendente > 0).length;
+  const proximosEventos = [...filteredEventos]
+    .filter(e => !["cancelado", "proposta_recusada"].includes(e.status))
+    .sort((a, b) => new Date(a.data || 0).getTime() - new Date(b.data || 0).getTime())
+    .filter(e => new Date(e.data || 0).getTime() >= new Date().setHours(0,0,0,0))
+    .slice(0, 5);
 
   return (
     <>
@@ -92,24 +122,17 @@ function Dashboard() {
       />
 
       <div className="px-8 py-7 space-y-7">
-        {/* Stats */}
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
-          <StatCard label="Orçados no Mês" value={String(orcadosMes)} icon={<CalendarRange className="h-4 w-4" />} />
-          <StatCard label="Confirmados no Mês" value={String(confirmadosMes)} icon={<CalendarRange className="h-4 w-4" />} />
-          <StatCard label="Valor Enviado" value={fmtBRL(valorEnviados)} icon={<TrendingUp className="h-4 w-4" />} />
-          <StatCard label="Valor Confirmado" value={fmtBRL(valorConfirmados)} icon={<TrendingUp className="h-4 w-4" />} />
-        </div>
-
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
-          <StatCard label="Ticket Médio" value={fmtBRL(ticketMedio)} />
-          <StatCard label="Média / Pessoa" value={fmtBRL(mediaPorPessoa)} />
-          <StatCard label="Aguardando Retorno" value={String(aguardandoRetorno)} />
-          <StatCard label="Pagamento Pendente" value={String(pagamentoPendente)} />
+        {/* Main Financial Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+          <StatCard label="Receita Consolidada" value={fmtBRL(totalReceita)} icon={<TrendingUp className="h-4 w-4" />} />
+          <StatCard label="Lucro Total Goat Bar" value={fmtBRL(totalLucro)} icon={<ShoppingBag className="h-4 w-4" />} highlight />
+          <StatCard label="Eventos Confirmados" value={String(eventStats.qtd)} icon={<CalendarRange className="h-4 w-4" />} />
+          <StatCard label="Margem Média" value={totalReceita > 0 ? `${((totalLucro / totalReceita) * 100).toFixed(1)}%` : "0%"} />
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
           {/* Top Drinks */}
-          <SectionCard title="Drinks mais rentáveis" subtitle="Por lucro total nos últimos 90 dias">
+          <SectionCard title="Drinks mais rentáveis" subtitle="Participação no lucro por sessões diretas">
             <div className="space-y-3">
               {topDrinks.map((d, i) => {
                 const drink = allDrinks.find((x) => x.id === d.id);
@@ -128,7 +151,7 @@ function Dashboard() {
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm truncate">{d.nome}</div>
-                      <div className="text-xs text-muted-foreground">{d.qtd} unidades vendidas</div>
+                      <div className="text-xs text-muted-foreground">{d.qtd} doses vendidas</div>
                     </div>
                     <div className="text-right shrink-0">
                       <div className="text-sm font-medium text-success">{fmtBRL(d.lucro)}</div>
@@ -137,11 +160,12 @@ function Dashboard() {
                   </div>
                 );
               })}
+              {topDrinks.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Nenhuma venda direta no período</p>}
             </div>
           </SectionCard>
 
           {/* Próximos Eventos */}
-          <SectionCard title="Próximos eventos" subtitle="Ordenados por data" action={
+          <SectionCard title="Próximos eventos" subtitle="Agenda operacional" action={
             <Link to="/eventos" className="text-xs text-primary hover:text-primary/80 transition-colors font-medium">
               Ver todos
             </Link>
@@ -171,32 +195,37 @@ function Dashboard() {
           </SectionCard>
         </div>
 
-        {/* Resumo Financeiro */}
-        <SectionCard title="Resumo financeiro" subtitle="Consolidado das operações">
+        {/* Resumo por Modalidade */}
+        <SectionCard title="Resumo por Modalidade" subtitle="Consolidado de resultados líquidos">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <div className="label-eyebrow">Vendas diretas</div>
-              <div className="mt-3 space-y-2 text-sm">
-                <Row k="Receita" v={fmtBRL(receita)} />
-                <Row k="Custo" v={fmtBRL(custo)} />
-                <Row k="Lucro" v={fmtBRL(lucro)} highlight />
-                <Row k="Margem" v={`${margem}%`} />
+            <div className="p-4 rounded-xl border border-border bg-background/40">
+              <div className="flex items-center gap-2 mb-3">
+                <ShoppingBag className="h-4 w-4 text-primary" />
+                <div className="label-eyebrow">Goat Botequim</div>
+              </div>
+              <div className="space-y-2 text-sm">
+                <Row k="Receita Bruta" v={fmtBRL(botStats.receitaBruta)} />
+                <Row k="Lucro Final (60% - MO)" v={fmtBRL(botStats.lucroFinal)} highlight />
               </div>
             </div>
-            <div>
-              <div className="label-eyebrow">Eventos (Confirmados)</div>
-              <div className="mt-3 space-y-2 text-sm">
-                <Row k="Receita confirmada" v={fmtBRL(valorConfirmados)} highlight />
-                <Row k="Ticket médio" v={fmtBRL(ticketMedio)} />
-                <Row k="Média por pessoa" v={fmtBRL(mediaPorPessoa)} />
-                <Row k="Total em pipeline" v={String(eventosAtivos.length)} />
+            <div className="p-4 rounded-xl border border-border bg-background/40">
+              <div className="flex items-center gap-2 mb-3">
+                <Calculator className="h-4 w-4 text-success" />
+                <div className="label-eyebrow">7Steakhouse</div>
+              </div>
+              <div className="space-y-2 text-sm">
+                <Row k="Receita Bruta" v={fmtBRL(steakStats.receitaBruta)} />
+                <Row k="Lucro Final (-MO, -Rep)" v={fmtBRL(steakStats.lucroFinal)} highlight />
               </div>
             </div>
-            <div>
-              <div className="label-eyebrow">Ações Necessárias</div>
-              <div className="mt-3 space-y-2 text-sm">
-                <Row k="Aguardando retorno" v={String(aguardandoRetorno)} />
-                <Row k="Pagamentos pendentes" v={String(pagamentoPendente)} />
+            <div className="p-4 rounded-xl border border-border bg-background/40">
+              <div className="flex items-center gap-2 mb-3">
+                <CalendarRange className="h-4 w-4 text-amber-500" />
+                <div className="label-eyebrow">Eventos Fechados</div>
+              </div>
+              <div className="space-y-2 text-sm">
+                <Row k="Receita Total" v={fmtBRL(eventStats.receita)} />
+                <Row k="Lucro Orçamentário" v={fmtBRL(eventStats.lucro)} highlight />
               </div>
             </div>
           </div>

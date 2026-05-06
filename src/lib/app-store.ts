@@ -12,6 +12,7 @@ import {
   eventContractClientDatas as seedEventContractClientDatas,
   contractHistories as seedContractHistories,
   contractSignatureHistories as seedContractSignatureHistories,
+  financialSessions as seedFinancialSessions,
   type Drink,
   type Contrato,
   type Evento,
@@ -24,9 +25,10 @@ import {
   type EventContractClientData,
   type ContractHistory,
   type ContractSignatureHistory,
+  type FinancialSession,
 } from "@/lib/mock-data";
 
-const STORAGE_KEY = "goatbar-functional-store-v6";
+const STORAGE_KEY = "goatbar-functional-store-v7";
 
 type AppStore = {
   vendas: Venda[];
@@ -41,6 +43,7 @@ type AppStore = {
   eventContractClientDatas: EventContractClientData[];
   contractHistories: ContractHistory[];
   contractSignatureHistories: ContractSignatureHistory[];
+  financialSessions: FinancialSession[];
 };
 
 function seedStore(): AppStore {
@@ -57,6 +60,7 @@ function seedStore(): AppStore {
     eventContractClientDatas: structuredClone(seedEventContractClientDatas),
     contractHistories: structuredClone(seedContractHistories),
     contractSignatureHistories: structuredClone(seedContractSignatureHistories),
+    financialSessions: structuredClone(seedFinancialSessions),
   };
 }
 
@@ -79,6 +83,7 @@ function readStore(): AppStore {
       eventContractClientDatas: parsed.eventContractClientDatas ?? seedEventContractClientDatas,
       contractHistories: parsed.contractHistories ?? seedContractHistories,
       contractSignatureHistories: parsed.contractSignatureHistories ?? seedContractSignatureHistories,
+      financialSessions: parsed.financialSessions ?? seedFinancialSessions,
     };
   } catch {
     return seedStore();
@@ -182,6 +187,24 @@ export function useAppStore() {
         setStore((prev) => ({
           ...prev,
           contractSignatureHistories: [{ ...input, id: `csh${Date.now()}` }, ...prev.contractSignatureHistories],
+        }));
+      },
+      addFinancialSession(input: Omit<FinancialSession, "id">) {
+        setStore((prev) => ({
+          ...prev,
+          financialSessions: [{ ...input, id: `fs${Date.now()}` }, ...prev.financialSessions],
+        }));
+      },
+      updateFinancialSession(id: string, payload: Partial<FinancialSession>) {
+        setStore((prev) => ({
+          ...prev,
+          financialSessions: prev.financialSessions.map((fs) => (fs.id === id ? { ...fs, ...payload } : fs)),
+        }));
+      },
+      deleteFinancialSession(id: string) {
+        setStore((prev) => ({
+          ...prev,
+          financialSessions: prev.financialSessions.filter((fs) => fs.id !== id),
         }));
       },
     }),

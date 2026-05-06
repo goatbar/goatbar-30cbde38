@@ -3,17 +3,23 @@
 
 export type Unidade = "Eventos" | "7Steakhouse" | "Goat Botequim";
 
+export interface ModalityConfig {
+  active: boolean;
+  cost: number;
+  price?: number;
+}
+
 export interface Drink {
   id: string;
   nome: string;
   categoria: string;
   descricao: string;
-  ingredientes: { nome: string; custo: number }[];
-  custoUnitario: number;
-  precoVenda7Steakhouse: number;
-  precoVendaGoatBotequim: number;
-  status: "ativo" | "inativo";
-  disponibilidade: Unidade[];
+  custoUnitario: number; // Exclusivo para Eventos
+  modalityConfig: {
+    evento: ModalityConfig;
+    steakhouse: ModalityConfig;
+    goatbotequim: ModalityConfig;
+  };
   imagem?: string;
 }
 
@@ -26,6 +32,25 @@ export interface Venda {
   quantidade: number;
   precoUnitario: number;
   custoUnitario: number;
+  observacoes?: string;
+}
+
+export interface SalesSessionItem {
+  drinkId: string;
+  nome: string;
+  quantidade: number;
+  precoUnitario: number;
+  custoUnitario: number;
+}
+
+export interface FinancialSession {
+  id: string;
+  data: string; // ISO
+  modalidade: "Goat Botequim" | "7Steakhouse";
+  items: SalesSessionItem[];
+  maoDeObraValor: number;
+  maoDeObraQtd: number;
+  reposicaoRestaurante?: number; // Steakhouse only
   observacoes?: string;
 }
 
@@ -210,81 +235,385 @@ export interface TipoEvento {
 }
 
 // ─── Drinks ───────────────────────────────────────────────────────────────
-// Precificação oficial Goat Bar — custo de insumos por dose.
-// Preço de venda calculado com markup ~3.5x e arredondado para múltiplos de R$ 2.
-const todasUnidades: Unidade[] = ["Eventos", "7Steakhouse", "Goat Botequim"];
-const precoSugerido = (custo: number) => Math.max(18, Math.round((custo * 3.5) / 2) * 2);
 
-interface DrinkSeed {
-  id: string;
-  nome: string;
-  categoria: string;
-  descricao: string;
-  ingredientes: { nome: string; custo: number }[];
-  status?: "ativo" | "inativo";
-  disponibilidade?: Unidade[];
-  precoVenda7Steakhouse?: number;
-  precoVendaGoatBotequim?: number;
-  imagem?: string;
-}
+export const drinks: Drink[] = [
+  // --- STEAKHOUSE & EVENTOS & BOTEQUIM ---
+  {
+    id: "caipirinha",
+    nome: "Caipirinha",
+    categoria: "Cachaça",
+    descricao: "Cachaça, limão e açúcar.",
+    custoUnitario: 6.00,
+    modalityConfig: {
+      evento: { active: true, cost: 6.00 },
+      steakhouse: { active: true, cost: 13.25, price: 25 },
+      goatbotequim: { active: true, cost: 2.37 }
+    }
+  },
+  {
+    id: "caipirinha-limao-cravo",
+    nome: "Caipirinha Limão Cravo e Mel",
+    categoria: "Cachaça",
+    descricao: "Limão cravo e mel.",
+    custoUnitario: 7.50,
+    modalityConfig: {
+      evento: { active: true, cost: 7.50 },
+      steakhouse: { active: true, cost: 15.00, price: 30 },
+      goatbotequim: { active: true, cost: 4.37 }
+    }
+  },
+  {
+    id: "caipivodka-morango",
+    nome: "Caipivodka Morango",
+    categoria: "Vodka",
+    descricao: "Vodka e morango.",
+    custoUnitario: 7.50,
+    modalityConfig: {
+      evento: { active: true, cost: 7.50 },
+      steakhouse: { active: true, cost: 15.40, price: 30 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "caipivodka-abacaxi",
+    nome: "Caipivodka Abacaxi",
+    categoria: "Vodka",
+    descricao: "Vodka e abacaxi.",
+    custoUnitario: 7.00,
+    modalityConfig: {
+      evento: { active: true, cost: 7.00 },
+      steakhouse: { active: true, cost: 15.40, price: 30 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "caipivodka-maracuja",
+    nome: "Caipivodka Maracujá",
+    categoria: "Vodka",
+    descricao: "Vodka e maracujá.",
+    custoUnitario: 7.20,
+    modalityConfig: {
+      evento: { active: true, cost: 7.20 },
+      steakhouse: { active: true, cost: 15.40, price: 30 },
+      goatbotequim: { active: false, cost: 4.47 }
+    }
+  },
+  {
+    id: "mojito",
+    nome: "Mojito",
+    categoria: "Rum",
+    descricao: "Rum, limão e hortelã.",
+    custoUnitario: 7.80,
+    modalityConfig: {
+      evento: { active: true, cost: 7.80 },
+      steakhouse: { active: true, cost: 16.76, price: 32 },
+      goatbotequim: { active: true, cost: 4.67 }
+    }
+  },
+  {
+    id: "sex-on-the-beach",
+    nome: "Sex on the Beach",
+    categoria: "Vodka",
+    descricao: "Vodka, pêssego e laranja.",
+    custoUnitario: 8.20,
+    modalityConfig: {
+      evento: { active: true, cost: 8.20 },
+      steakhouse: { active: true, cost: 17.76, price: 32 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "aquario",
+    nome: "Aquário",
+    categoria: "Vodka",
+    descricao: "Drink azul refrescante.",
+    custoUnitario: 8.00,
+    modalityConfig: {
+      evento: { active: true, cost: 8.00 },
+      steakhouse: { active: true, cost: 17.26, price: 32 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "moscow-mule",
+    nome: "Moscow Mule",
+    categoria: "Vodka",
+    descricao: "Vodka, limão e espuma de gengibre.",
+    custoUnitario: 8.80,
+    modalityConfig: {
+      evento: { active: true, cost: 8.80 },
+      steakhouse: { active: true, cost: 17.55, price: 35 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "london-mule",
+    nome: "London Mule",
+    categoria: "Gin",
+    descricao: "Gin, limão e espuma de gengibre.",
+    custoUnitario: 9.00,
+    modalityConfig: {
+      evento: { active: true, cost: 9.00 },
+      steakhouse: { active: true, cost: 18.55, price: 35 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "gin-tonica",
+    nome: "Gin Tônica",
+    categoria: "Gin",
+    descricao: "Gin, tônica e limão.",
+    custoUnitario: 8.50,
+    modalityConfig: {
+      evento: { active: true, cost: 8.50 },
+      steakhouse: { active: true, cost: 18.55, price: 35 },
+      goatbotequim: { active: true, cost: 8.17 }
+    }
+  },
+  {
+    id: "fitz-gerald",
+    nome: "Fitz Gerald",
+    categoria: "Gin",
+    descricao: "Gin, limão e angostura.",
+    custoUnitario: 9.50,
+    modalityConfig: {
+      evento: { active: true, cost: 9.50 },
+      steakhouse: { active: true, cost: 19.55, price: 35 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "tom-collins",
+    nome: "Tom Collins",
+    categoria: "Gin",
+    descricao: "Gin, limão e soda.",
+    custoUnitario: 9.20,
+    modalityConfig: {
+      evento: { active: true, cost: 9.20 },
+      steakhouse: { active: true, cost: 19.05, price: 35 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "aperol-spritz",
+    nome: "Aperol Spritz",
+    categoria: "Aperitivos",
+    descricao: "Aperol, espumante e soda.",
+    custoUnitario: 11.50,
+    modalityConfig: {
+      evento: { active: true, cost: 11.50 },
+      steakhouse: { active: true, cost: 20.50, price: 35 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "cest-la-vie",
+    nome: "C’est lá vie",
+    categoria: "Gin",
+    descricao: "Gin e frutas.",
+    custoUnitario: 12.50,
+    modalityConfig: {
+      evento: { active: true, cost: 12.50 },
+      steakhouse: { active: true, cost: 22.70, price: 40 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "expresso-martini",
+    nome: "Expresso Martini",
+    categoria: "Vodka",
+    descricao: "Vodka e café.",
+    custoUnitario: 10.50,
+    modalityConfig: {
+      evento: { active: true, cost: 10.50 },
+      steakhouse: { active: true, cost: 20.70, price: 40 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "apple-martini",
+    nome: "Apple Martini",
+    categoria: "Vodka",
+    descricao: "Vodka e maçã verde.",
+    custoUnitario: 10.00,
+    modalityConfig: {
+      evento: { active: true, cost: 10.00 },
+      steakhouse: { active: true, cost: 20.70, price: 40 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "stamping",
+    nome: "Stamping",
+    categoria: "Vodka",
+    descricao: "Vodka e especiarias.",
+    custoUnitario: 10.80,
+    modalityConfig: {
+      evento: { active: true, cost: 10.80 },
+      steakhouse: { active: true, cost: 20.70, price: 40 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "mint-jullep",
+    nome: "Mint Jullep",
+    categoria: "Whisky",
+    descricao: "Whisky, hortelã e açúcar.",
+    custoUnitario: 10.20,
+    modalityConfig: {
+      evento: { active: true, cost: 10.20 },
+      steakhouse: { active: true, cost: 21.20, price: 40 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "whisky-sour",
+    nome: "Whisky Sour",
+    categoria: "Whisky",
+    descricao: "Whisky e limão.",
+    custoUnitario: 11.00,
+    modalityConfig: {
+      evento: { active: true, cost: 11.00 },
+      steakhouse: { active: true, cost: 21.70, price: 40 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "old-fashioned",
+    nome: "Old Fashioned",
+    categoria: "Whisky",
+    descricao: "Whisky, angostura e açúcar.",
+    custoUnitario: 13.00,
+    modalityConfig: {
+      evento: { active: true, cost: 13.00 },
+      steakhouse: { active: true, cost: 24.35, price: 45 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "negroni",
+    nome: "Negroni",
+    categoria: "Gin",
+    descricao: "Gin, vermute e campari.",
+    custoUnitario: 12.00,
+    modalityConfig: {
+      evento: { active: true, cost: 12.00 },
+      steakhouse: { active: true, cost: 25.35, price: 45 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
+  {
+    id: "soda-italiana",
+    nome: "Soda Italiana",
+    categoria: "Sem Álcool",
+    descricao: "Soda e xarope de frutas.",
+    custoUnitario: 5.00,
+    modalityConfig: {
+      evento: { active: true, cost: 5.00 },
+      steakhouse: { active: true, cost: 10.00, price: 25 },
+      goatbotequim: { active: false, cost: 0 }
+    }
+  },
 
-const drinkSeeds: DrinkSeed[] = [
-  { id: "d1", nome: "Caipivodka Limão", categoria: "Caipirinhas", descricao: "Vodka e limão.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Limão", custo: 0.20 }], imagem: "/drinks/d1.jpg" },
-  { id: "d2", nome: "Caipivodka Limão Cravo e Mel", categoria: "Caipirinhas", descricao: "Vodka, limão cravo e mel.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Limão", custo: 0.20 }, { nome: "Cravo", custo: 0.10 }, { nome: "Mel", custo: 0.40 }], imagem: "/drinks/d2.jpg" },
-  { id: "d3", nome: "Caipivodka Morango", categoria: "Caipirinhas", descricao: "Vodka e morango.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Morango", custo: 1.60 }], imagem: "/drinks/d3.jpg" },
-  { id: "d4", nome: "Caipivodka Abacaxi", categoria: "Caipirinhas", descricao: "Vodka, abacaxi e raspas.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Abacaxi", custo: 0.50 }, { nome: "Raspas", custo: 0.30 }], imagem: "/drinks/d4.jpg" },
-  { id: "d5", nome: "Caip Maracujá com Baunilha", categoria: "Caipirinhas", descricao: "Vodka, maracujá e açúcar de baunilha.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Maracujá", custo: 0.90 }, { nome: "Açúcar Baunilha", custo: 0.30 }], imagem: "/drinks/d5.jpg" },
-  { id: "d6", nome: "Moscow Mule", categoria: "Mules", descricao: "Vodka, limão e sifão.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Limão", custo: 0.20 }, { nome: "Sifão", custo: 0.90 }], imagem: "/drinks/d6.jpg" },
-  { id: "d7", nome: "London Mule", categoria: "Mules", descricao: "Gin, limão e sifão.", ingredientes: [{ nome: "Gin", custo: 4.66 }, { nome: "Limão", custo: 0.20 }, { nome: "Sifão", custo: 0.90 }], imagem: "/drinks/d7.jpg" },
-  { id: "d8", nome: "Mojito", categoria: "Refrescantes", descricao: "Vodka, limão, hortelã e água com gás.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Limão", custo: 0.20 }, { nome: "Hortelã", custo: 0.50 }, { nome: "Água com gás", custo: 0.30 }], imagem: "/drinks/d8.jpg" },
-  { id: "d9", nome: "Aquário", categoria: "Autoral", descricao: "Vodka, limão, curaçao, alecrim, açúcar e água com gás.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Limão", custo: 0.20 }, { nome: "Curaçao", custo: 1.00 }, { nome: "Alecrim", custo: 0.25 }, { nome: "Açúcar", custo: 0.50 }, { nome: "Água com gás", custo: 0.30 }], imagem: "/drinks/d9.jpg" },
-  { id: "d10", nome: "Sex on The Beach", categoria: "Tropicais", descricao: "Vodka, suco de laranja, xarope pêssego, grenadine e jujuba.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Suco laranja", custo: 0.80 }, { nome: "Xarope pêssego", custo: 2.64 }, { nome: "Grenadine", custo: 0.88 }, { nome: "Jujuba", custo: 0.30 }], imagem: "/drinks/d10.jpg" },
-  { id: "d11", nome: "Bossa Nova", categoria: "Tropicais", descricao: "Vodka, uva e água de coco.", ingredientes: [{ nome: "Vodka", custo: 2.0 }, { nome: "Uva", custo: 1.00 }, { nome: "Água de coco", custo: 1.00 }], imagem: "/drinks/d11.jpg" },
-  { id: "d12", nome: "Gin Tônica", categoria: "Gin", descricao: "Gin, tônica, limão siciliano e especiaria.", ingredientes: [{ nome: "Gin", custo: 4.66 }, { nome: "Tônica", custo: 1.50 }, { nome: "Limão siciliano", custo: 0.30 }, { nome: "Especiaria", custo: 0.25 }], imagem: "/drinks/d12.jpg" },
-  { id: "d13", nome: "Tom Collins", categoria: "Clássico", descricao: "Gin, limão, água com gás e cereja.", ingredientes: [{ nome: "Gin", custo: 4.66 }, { nome: "Limão", custo: 0.20 }, { nome: "Água com gás", custo: 0.30 }, { nome: "Cereja", custo: 0.75 }], imagem: "/drinks/d13.jpg" },
-  { id: "d14", nome: "Fitzgerald", categoria: "Clássico", descricao: "Gin, limão, angostura e twist.", ingredientes: [{ nome: "Gin", custo: 4.00 }, { nome: "Limão", custo: 0.20 }, { nome: "Angostura", custo: 2.83 }, { nome: "Twist", custo: 0.20 }], imagem: "/drinks/d14.jpg" },
-  { id: "d15", nome: "Bramble", categoria: "Gin", descricao: "Gin, limão, xarope amora e guarnição.", ingredientes: [{ nome: "Gin", custo: 4.66 }, { nome: "Limão", custo: 0.20 }, { nome: "Xarope amora", custo: 1.40 }, { nome: "Guarnição", custo: 0.80 }], imagem: "/drinks/bramble.jpg" },
-  { id: "d16", nome: "Aperol Spritz", categoria: "Aperitivo", descricao: "Aperol, champanhe, laranja e água com gás.", ingredientes: [{ nome: "Aperol", custo: 4.00 }, { nome: "Champanhe", custo: 6.00 }, { nome: "Laranja", custo: 0.20 }, { nome: "Água com gás", custo: 0.30 }], imagem: "/drinks/d16.jpg" },
-  { id: "d17", nome: "Cest Lá Vie", categoria: "Autoral", descricao: "Xarope, limão, champanhe, água com gás e gelo.", ingredientes: [{ nome: "Xarope", custo: 2.64 }, { nome: "Limão", custo: 0.20 }, { nome: "Champanhe", custo: 6.00 }, { nome: "Água com gás", custo: 0.30 }, { nome: "Gelo", custo: 0.37 }], imagem: "/drinks/d17.jpg" },
-  { id: "d18", nome: "Mint Julep", categoria: "Whisky", descricao: "Whisky, limão e hortelã.", ingredientes: [{ nome: "Whisky", custo: 5.00 }, { nome: "Limão", custo: 0.20 }, { nome: "Hortelã", custo: 0.30 }], imagem: "/drinks/d18.jpg" },
-  { id: "d19", nome: "Whisky Sour", categoria: "Sour", descricao: "Whisky, limão, proteína e guarnição.", ingredientes: [{ nome: "Whisky", custo: 5.00 }, { nome: "Limão", custo: 0.20 }, { nome: "Proteína", custo: 0.30 }, { nome: "Guarnição", custo: 0.30 }], imagem: "/drinks/d19.jpg" },
-  { id: "d20", nome: "Negroni", categoria: "Clássico", descricao: "Vermute, gin e campari.", ingredientes: [{ nome: "Vermute", custo: 2.20 }, { nome: "Gin", custo: 4.00 }, { nome: "Campari", custo: 3.50 }], imagem: "/drinks/d20.jpg" },
-  { id: "d21", nome: "Campari Tônica", categoria: "Aperitivo", descricao: "Tônica, campari e twist laranja.", ingredientes: [{ nome: "Tônica", custo: 1.50 }, { nome: "Campari", custo: 8.00 }, { nome: "Twist laranja", custo: 0.20 }] },
-  { id: "d22", nome: "Raspberry", categoria: "Autoral", descricao: "Vodka, coulis e espuma.", ingredientes: [{ nome: "Vodka", custo: 4.00 }, { nome: "Coulis", custo: 0.00 }, { nome: "Espuma", custo: 0.00 }], status: "inativo" },
-  { id: "d23", nome: "Stamping", categoria: "Autoral", descricao: "Vodka, maracujá, limão, açúcar baunilha e tabasco.", ingredientes: [{ nome: "Vodka", custo: 2.00 }, { nome: "Maracujá", custo: 0.90 }, { nome: "Limão", custo: 0.20 }, { nome: "Açúcar baunilha", custo: 0.30 }, { nome: "Tabasco", custo: 0.40 }], imagem: "/drinks/d23.jpg" },
-  { id: "d24", nome: "Olho Grego", categoria: "Autoral", descricao: "Vodka, limão, xarope amêndoas e xarope curaçao.", ingredientes: [{ nome: "Vodka", custo: 4.00 }, { nome: "Limão", custo: 0.20 }, { nome: "Xarope amêndoas", custo: 1.40 }, { nome: "Xarope curaçao", custo: 1.40 }], imagem: "/drinks/olho-grego.jpg" },
-  { id: "d25", nome: "Cosmopolitan", categoria: "Clássico", descricao: "Vodka, xarope cranberry, limão e cointreau.", ingredientes: [{ nome: "Vodka", custo: 4.00 }, { nome: "Xarope Cranberry", custo: 2.10 }, { nome: "Limão", custo: 0.20 }, { nome: "Cointreau", custo: 2.57 }], imagem: "/drinks/cosmopolitan.jpg" },
-  { id: "d26", nome: "Apple Martini", categoria: "Martini", descricao: "Xarope e vodka.", ingredientes: [{ nome: "Xarope", custo: 1.70 }, { nome: "Vodka", custo: 2.00 }], imagem: "/drinks/d26.jpg" },
-  { id: "d27", nome: "Expresso Martini", categoria: "Martini", descricao: "Vodka, açúcar baunilha, baileys e café.", ingredientes: [{ nome: "Vodka", custo: 2.00 }, { nome: "Açúcar baunilha", custo: 0.50 }, { nome: "Baileys", custo: 1.86 }, { nome: "Café", custo: 0.50 }], imagem: "/drinks/d27.jpg" },
-  { id: "d28", nome: "Paloma", categoria: "Tequila", descricao: "Tequila, xarope grapefruit, limão e grapefruit.", ingredientes: [{ nome: "Tequila", custo: 10.73 }, { nome: "Xarope grapefruit", custo: 2.80 }, { nome: "Limão", custo: 0.20 }, { nome: "Grapefruit", custo: 0.25 }], imagem: "/drinks/paloma.jpg" },
-  { id: "d29", nome: "Soda Italiana", categoria: "Sem álcool", descricao: "Xarope e água com gás.", ingredientes: [{ nome: "Xarope", custo: 2.64 }, { nome: "Água com gás", custo: 0.70 }] },
+  // --- EXCLUSIVOS BOTEQUIM ---
+  {
+    id: "caipi-limao",
+    nome: "Caipi Limão",
+    categoria: "Cachaça",
+    descricao: "Tradicional de limão.",
+    custoUnitario: 4.50,
+    modalityConfig: {
+      evento: { active: false, cost: 0 },
+      steakhouse: { active: false, cost: 0 },
+      goatbotequim: { active: true, cost: 3.87 }
+    }
+  },
+  {
+    id: "caipi-morango",
+    nome: "Caipi Morango",
+    categoria: "Cachaça",
+    descricao: "Tradicional de morango.",
+    custoUnitario: 6.00,
+    modalityConfig: {
+      evento: { active: false, cost: 0 },
+      steakhouse: { active: false, cost: 0 },
+      goatbotequim: { active: true, cost: 5.37 }
+    }
+  },
+
+  // --- DOSES ---
+  {
+    id: "dose-cachaca",
+    nome: "Cachaça (Dose)",
+    categoria: "Doses",
+    descricao: "Dose de cachaça premium.",
+    custoUnitario: 1.50,
+    modalityConfig: {
+      evento: { active: false, cost: 0 },
+      steakhouse: { active: false, cost: 0 },
+      goatbotequim: { active: true, cost: 1.50, price: 7.00 }
+    }
+  },
+  {
+    id: "dose-vodka",
+    nome: "Vodka (Dose)",
+    categoria: "Doses",
+    descricao: "Dose de vodka.",
+    custoUnitario: 3.00,
+    modalityConfig: {
+      evento: { active: false, cost: 0 },
+      steakhouse: { active: false, cost: 0 },
+      goatbotequim: { active: true, cost: 3.00, price: 14.00 }
+    }
+  },
+  {
+    id: "dose-gin",
+    nome: "Gin (Dose)",
+    categoria: "Doses",
+    descricao: "Dose de gin.",
+    custoUnitario: 6.00,
+    modalityConfig: {
+      evento: { active: false, cost: 0 },
+      steakhouse: { active: false, cost: 0 },
+      goatbotequim: { active: true, cost: 6.00, price: 17.00 }
+    }
+  },
+  {
+    id: "dose-whisky",
+    nome: "Whisky (Dose)",
+    categoria: "Doses",
+    descricao: "Dose de whisky.",
+    custoUnitario: 10.00,
+    modalityConfig: {
+      evento: { active: false, cost: 0 },
+      steakhouse: { active: false, cost: 0 },
+      goatbotequim: { active: true, cost: 10.00, price: 25.00 }
+    }
+  },
+  {
+    id: "dose-campari",
+    nome: "Campari (Dose)",
+    categoria: "Doses",
+    descricao: "Dose de campari.",
+    custoUnitario: 7.00,
+    modalityConfig: {
+      evento: { active: false, cost: 0 },
+      steakhouse: { active: false, cost: 0 },
+      goatbotequim: { active: true, cost: 7.00, price: 25.00 }
+    }
+  }
 ];
 
-export const drinks: Drink[] = drinkSeeds.map((s) => {
-  const custo = +s.ingredientes.reduce((a, i) => a + i.custo, 0).toFixed(2);
-  return {
-    id: s.id,
-    nome: s.nome,
-    categoria: s.categoria,
-    descricao: s.descricao,
-    ingredientes: s.ingredientes,
-    custoUnitario: custo,
-    precoVenda7Steakhouse: s.precoVenda7Steakhouse ?? Math.max(18, Math.round((custo * 3.0) / 2) * 2),
-    precoVendaGoatBotequim: s.precoVendaGoatBotequim ?? Math.max(15, Math.round((custo * 2.8) / 2) * 2),
-    status: s.status ?? "ativo",
-    disponibilidade: s.disponibilidade ?? todasUnidades,
-    imagem: s.imagem,
-  };
-});
+export const fichaTecnica = {}; 
 
-export const fichaTecnica = Object.fromEntries(
-  drinkSeeds.map((s) => [s.id, s.ingredientes]),
-);
 
 export const margem = (precoVenda: number, custo: number) => ((precoVenda - custo) / precoVenda) * 100;
 
 // ─── Vendas (90 dias) ─────────────────────────────────────────────────────
 export const vendas: Venda[] = [];
+
+// ─── Sessões Financeiras (Botequim/Steakhouse) ─────────────────────────────
+export const financialSessions: FinancialSession[] = [];
 
 // ─── Eventos ──────────────────────────────────────────────────────────────
 export const eventos: Evento[] = [];
@@ -493,9 +822,8 @@ export function vendasPorDia(dias = 14) {
 }
 
 export const fmtBRL = (n: number) =>
-  n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-export const fmtBRL2 = (n: number) =>
-  n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export const fmtBRL2 = fmtBRL;
 export const fmtPct = (n: number) => `${n.toFixed(1)}%`;
 export const fmtData = (iso: string) =>
   new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
