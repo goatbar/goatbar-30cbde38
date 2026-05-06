@@ -11,7 +11,9 @@ import {
   Search,
   ChevronDown,
   LogOut,
-  Inbox
+  Inbox,
+  BarChart3,
+  Wallet
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -23,6 +25,7 @@ const nav: { to: string; label: string; icon: typeof LayoutDashboard; exact?: bo
   { to: "/drinks", label: "Drinks", icon: Wine },
   { to: "/inventario", label: "Inventário", icon: Package },
   { to: "/eventos", label: "Eventos", icon: CalendarRange },
+  { to: "/controladoria", label: "Controladoria", icon: BarChart3 },
   { to: "/contratos", label: "Contratos", icon: FileText },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ];
