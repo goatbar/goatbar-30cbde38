@@ -5,12 +5,21 @@ import type { Database } from './types';
 function createSupabaseClient() {
   // Use import.meta.env for client-side (Vite build-time replacement)
   // Fall back to process.env for SSR (server-side rendering)
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  // Safely check for process.env so Vite doesn't throw ReferenceError
+  const getEnv = (key: string) => {
+    try {
+      return typeof process !== "undefined" ? process.env[key] : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || getEnv('SUPABASE_URL');
   const SUPABASE_PUBLISHABLE_KEY =
     import.meta.env.VITE_SUPABASE_ANON_KEY ||
     import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_KEY;
+    getEnv('SUPABASE_ANON_KEY') ||
+    getEnv('SUPABASE_PUBLISHABLE_KEY');
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     throw new Error(

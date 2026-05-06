@@ -725,7 +725,7 @@ function EventoInterna() {
                       </div>
                       <div className="pl-3 space-y-1 text-muted-foreground font-medium uppercase tracking-tight text-xs">
                         {draft.drinks.length === 0 && <div className="italic">Nenhum drink selecionado</div>}
-                        {draft.drinks.map(dId => {
+                        {draft.drinks.filter(dId => allDrinks.some(d => d.id === dId)).map(dId => {
                           const drink = allDrinks.find(d => d.id === dId);
                           return <div key={dId} className="flex justify-between"><span>- {drink?.nome}</span></div>;
                         })}
@@ -782,7 +782,7 @@ function EventoInterna() {
                     {/* TOTAIS section */}
                     <div className="pt-4 border-t-2 border-primary/20 space-y-3">
                        <div className="flex justify-between text-muted-foreground font-medium">
-                          <span>SUBTOTAL (CUSTOS + MARKUP)</span>
+                          <span>SUBTOTAL GERAL</span>
                           <span>{fmtBRL(calc.custoTotalOrcamento)}</span>
                        </div>
                        <div className="flex justify-between text-primary font-bold">

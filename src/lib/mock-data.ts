@@ -811,15 +811,17 @@ export function calcularOrcamentoEvento(evento: Evento) {
   if (!evento) return null;
 
   // --- DRINKS ---
-  const custoBaseDrinks = (evento.drinks || []).reduce((acc, drinkId) => {
-    const drink = (drinks || []).find(d => d.id === drinkId);
+  const validDrinks = (evento.drinks || []).filter(id => drinks.some(d => d.id === id));
+  
+  const custoBaseDrinks = validDrinks.reduce((acc, drinkId) => {
+    const drink = drinks.find(d => d.id === drinkId);
     return acc + (drink?.custoUnitario || 0);
   }, 0);
   
   const convidados = Number(evento.convidados) || 0;
   const drinksPorPessoa = Number(evento.drinksPorPessoa) || 0;
   const totalDoses = convidados * drinksPorPessoa;
-  const qtdDrinksSelecionados = (evento.drinks || []).length;
+  const qtdDrinksSelecionados = validDrinks.length;
   const mediaCustoDrinks = qtdDrinksSelecionados > 0 ? (custoBaseDrinks / qtdDrinksSelecionados) : 0;
   
   const markupAdicional = Number(evento.markupAdicionalDrinks) || 0;
