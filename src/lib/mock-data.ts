@@ -786,47 +786,54 @@ export function calcularEvento(evento: Evento) {
 }
 
 export function calcularOrcamentoEvento(evento: Evento) {
+  if (!evento) return null;
+
   // --- DRINKS ---
-  const custoBaseDrinks = evento.drinks.reduce((acc, drinkId) => {
-    const drink = drinks.find(d => d.id === drinkId);
+  const custoBaseDrinks = (evento.drinks || []).reduce((acc, drinkId) => {
+    const drink = (drinks || []).find(d => d.id === drinkId);
     return acc + (drink?.custoUnitario || 0);
   }, 0);
   
-  const totalDoses = evento.convidados * evento.drinksPorPessoa;
-  const mediaCustoDrinks = evento.drinks.length > 0 ? (custoBaseDrinks / evento.drinks.length) : 0;
+  const convidados = Number(evento.convidados) || 0;
+  const drinksPorPessoa = Number(evento.drinksPorPessoa) || 0;
+  const totalDoses = convidados * drinksPorPessoa;
+  const qtdDrinksSelecionados = (evento.drinks || []).length;
+  const mediaCustoDrinks = qtdDrinksSelecionados > 0 ? (custoBaseDrinks / qtdDrinksSelecionados) : 0;
   
-  const valorDrinksEvento = totalDoses * mediaCustoDrinks * (1 + (evento.markupAdicionalDrinks || 0) / 100);
+  const markupAdicional = Number(evento.markupAdicionalDrinks) || 0;
+  const valorDrinksEvento = totalDoses * mediaCustoDrinks * (1 + markupAdicional / 100);
 
   // --- EQUIPE ---
-  const valorEquipe = Object.values(evento.equipe).reduce((acc, p) => acc + (p.qtd * p.valorUnitario), 0);
+  const valorEquipe = Object.values(evento.equipe || {}).reduce((acc, p) => acc + ((Number(p.qtd) || 0) * (Number(p.valorUnitario) || 0)), 0);
 
   // --- GELO ---
-  const pacotesGelo = evento.gelo?.pacotesOverride || Math.ceil((evento.convidados / 100) * 35);
-  const valorGelo = pacotesGelo * (evento.gelo?.valorUnitario || 6);
+  const pacotesGelo = Number(evento.gelo?.pacotesOverride) || Math.ceil((convidados / 100) * 35);
+  const valorGelo = pacotesGelo * (Number(evento.gelo?.valorUnitario) || 6);
 
   // --- LOGÍSTICA ---
-  const valorGasolina = evento.viagem?.incluir ? evento.viagem.valor : 0;
+  const valorGasolina = evento.viagem?.incluir ? (Number(evento.viagem.valor) || 0) : 0;
 
   // --- GASTOS DIVERSOS ---
-  const valorGastosDiversos = (evento.gastosDiversos || []).reduce((acc, g) => acc + g.valor, 0);
+  const valorGastosDiversos = (evento.gastosDiversos || []).reduce((acc, g) => acc + (Number(g.valor) || 0), 0);
 
   // --- TOTAIS ---
   const custoTotalOrcamento = valorDrinksEvento + valorEquipe + valorGelo + valorGasolina + valorGastosDiversos;
-  const valorTotalSemDesconto = custoTotalOrcamento + (evento.lucroDesejado || 0);
-  const valorDesconto = evento.desconto || 0;
+  const lucroDesejado = Number(evento.lucroDesejado) || 0;
+  const valorTotalSemDesconto = custoTotalOrcamento + lucroDesejado;
+  const valorDesconto = Number(evento.desconto) || 0;
   const valorTotalOrcamento = valorTotalSemDesconto - valorDesconto;
   
   const lucro = valorTotalOrcamento - custoTotalOrcamento;
-  const mediaPorPessoa = evento.convidados > 0 ? valorTotalOrcamento / evento.convidados : 0;
+  const mediaPorPessoa = convidados > 0 ? valorTotalOrcamento / convidados : 0;
   
-  const valorPago = (valorTotalOrcamento * (evento.pagamento?.percentualPago || 0)) / 100;
+  const percentualPago = Number(evento.pagamento?.percentualPago) || 0;
+  const valorPago = (valorTotalOrcamento * percentualPago) / 100;
   const valorPendente = valorTotalOrcamento - valorPago;
-  const percPago = evento.pagamento?.percentualPago || 0;
-  const percPendente = 100 - percPago;
+  const percPendente = 100 - percentualPago;
   
   let statusPagamento = "Não pago";
-  if (percPago === 100) statusPagamento = "Pago integralmente";
-  else if (percPago > 0) statusPagamento = "Parcialmente pago";
+  if (percentualPago >= 100) statusPagamento = "Pago integralmente";
+  else if (percentualPago > 0) statusPagamento = "Parcialmente pago";
 
   return {
     mediaCustoDrinks,

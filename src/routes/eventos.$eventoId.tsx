@@ -3,7 +3,7 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { drinks as allDrinks, calcularOrcamentoEvento, type Evento, type EventoStatus } from "@/lib/mock-data";
 import { fmtBRL } from "@/lib/format";
-import { Calendar, MapPin, Users, ArrowLeft, Save, Plus, Trash2, MessageCircle, FileSignature, CheckCircle2, Download, AlertCircle, Link as LinkIcon } from "lucide-react";
+import { Calendar, MapPin, Users, ArrowLeft, Save, Plus, Trash2, MessageCircle, FileSignature, CheckCircle2, Download, AlertCircle, Link as LinkIcon, Loader2, Copy, Megaphone, UserPlus } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAppStore } from "@/lib/app-store";
 import { 
@@ -394,7 +394,7 @@ function EventoInterna() {
                 </span>
               </p>
             </div>
-            <Link to="/calendario" className="text-xs font-bold uppercase tracking-wider bg-destructive text-white px-4 py-2 rounded-lg hover:opacity-90 transition-opacity">
+            <Link to="/eventos" className="text-xs font-bold uppercase tracking-wider bg-destructive text-white px-4 py-2 rounded-lg hover:opacity-90 transition-opacity">
               Ver Calendário
             </Link>
           </div>
