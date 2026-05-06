@@ -87,19 +87,26 @@ function EventoInterna() {
       setRealTemplates(tps);
       setRealSigners(sigs);
       setRealContract(contract);
-
-      // Busca específica para dados do cliente
-      const { data: cData } = await (eventContractsService as any).supabase
-        .from("event_contract_client_data")
-        .select("*")
-        .eq("event_id", eventoId)
-        .maybeSingle();
-      setRealClientData(cData);
+      // Busca específica para dados do cliente (Opcional)
+      try {
+        const { data: cData } = await (eventContractsService as any).supabase
+          .from("event_contract_client_data")
+          .select("*")
+          .eq("event_id", eventoId)
+          .maybeSingle();
+        setRealClientData(cData);
+      } catch (err) {
+        console.warn("Tabela de dados de contrato não encontrada ou inacessível:", err);
+      }
 
       // Verificação de mesma data
       if (ev?.date) {
-        const conflicts = await eventBudgetService.checkEventsSameDate(ev.date);
-        setSameDateEvents(conflicts.filter(c => c.id !== eventoId));
+        try {
+          const conflicts = await eventBudgetService.checkEventsSameDate(ev.date);
+          setSameDateEvents(conflicts.filter(c => c.id !== eventoId));
+        } catch (err) {
+           console.warn("Erro ao buscar conflitos de data:", err);
+        }
       }
 
       // Sync draft state with loaded budget
@@ -109,8 +116,9 @@ function EventoInterna() {
         setDraft(mapEventToDraft(ev));
       }
 
-    } catch (e) {
+    } catch (e: any) {
       console.error("Erro ao carregar dados do evento:", e);
+      alert(`Erro crítico ao carregar evento: ${e.message || "Verifique sua conexão"}`);
     } finally {
       setLoading(false);
     }

@@ -128,32 +128,33 @@ function EventosPage() {
                 <p className="text-sm text-muted-foreground text-center py-8">Nenhum evento cadastrado. Crie o primeiro!</p>
               )}
               {eventos.map((e) => (
-                  <Link
+                  <div
                     key={e.id}
-                    to="/eventos/$eventoId"
-                    params={{ eventoId: e.id }}
-                    className="flex items-center gap-4 p-4 rounded-xl border border-border hover:border-border-strong hover:bg-surface transition-all group"
+                    onClick={() => navigate({ to: "/eventos/$eventoId", params: { eventoId: e.id } })}
+                    className="flex items-center gap-4 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-surface transition-all group cursor-pointer"
                   >
-                    <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                    <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
                       <Calendar className="h-5 w-5 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">{e.client_name}</div>
-                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {e.guests} pessoas</span>
+                      <div className="font-bold text-sm truncate group-hover:text-primary transition-colors">{e.client_name}</div>
+                      <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground uppercase tracking-wider font-bold">
+                        <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {e.guests} pax</span>
                         <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {e.event_location || "A definir"}</span>
                         <span>{e.date ? new Date(e.date).toLocaleDateString("pt-BR", {timeZone: "UTC"}) : "Data a definir"}</span>
                       </div>
                     </div>
-                    <div className="hidden sm:flex items-center gap-3 shrink-0">
+                    <div className="hidden sm:flex items-center gap-4 shrink-0">
                       <div className="text-right">
-                        <div className="text-sm font-medium">{e.current_budget_value ? fmtBRL(e.current_budget_value) : "--"}</div>
-                        <div className="text-[11px] text-muted-foreground">{e.current_budget_value ? `${fmtBRL(e.current_budget_value / e.guests)}/pessoa` : "Orçamento em aberto"}</div>
+                        <div className="text-sm font-bold text-foreground">{e.current_budget_value ? fmtBRL(e.current_budget_value) : "--"}</div>
+                        <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">{e.current_budget_value ? `${fmtBRL(e.current_budget_value / e.guests)}/pessoa` : "Orçamento em aberto"}</div>
                       </div>
                       <StatusBadge status={e.status as any} />
-                      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                      <div className="h-8 w-8 rounded-full flex items-center justify-center bg-background border border-border group-hover:border-primary/30 group-hover:text-primary transition-all">
+                        <ChevronRight className="h-4 w-4" />
+                      </div>
                     </div>
-                  </Link>
+                  </div>
                 )
               )}
             </div>
