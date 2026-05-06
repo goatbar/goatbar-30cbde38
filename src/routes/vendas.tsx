@@ -20,7 +20,8 @@ function VendasPage() {
   const [modalItems, setModalItems] = useState<SalesSessionItem[]>([]);
   const [maoDeObraValor, setMaoDeObraValor] = useState(0);
   const [maoDeObraQtd, setMaoDeObraQtd] = useState(0);
-  const [maoDeObraDetalhes, setMaoDeObraDetalhes] = useState<{data: string, valor: number, qtdPessoas: number}[]>([]);
+  const [maoDeObraNomes, setMaoDeObraNomes] = useState("");
+  const [maoDeObraDetalhes, setMaoDeObraDetalhes] = useState<{data: string, valor: number, qtdPessoas: number, nomes?: string}[]>([]);
   const [custosDetalhes, setCustosDetalhes] = useState<{descricao: string, valor: number}[]>([]);
 
   // --- Helpers for Modal ---
@@ -83,7 +84,8 @@ function VendasPage() {
       days.push({
         data: d.toISOString().split("T")[0],
         valor: 0,
-        qtdPessoas: 1
+        qtdPessoas: 1,
+        nomes: ""
       });
     }
     return days;
@@ -95,6 +97,7 @@ function VendasPage() {
     setModalItems(JSON.parse(JSON.stringify(session.items)));
     setMaoDeObraValor(session.maoDeObraValor);
     setMaoDeObraQtd(session.maoDeObraQtd);
+    setMaoDeObraNomes(session.maoDeObraNomes || "");
     setMaoDeObraDetalhes(session.maoDeObraDetalhes ? JSON.parse(JSON.stringify(session.maoDeObraDetalhes)) : []);
     setShowModal(true);
   };
@@ -108,6 +111,7 @@ function VendasPage() {
       items: modalItems,
       maoDeObraValor,
       maoDeObraQtd,
+      maoDeObraNomes,
       maoDeObraDetalhes: activeTab === "7Steakhouse" ? maoDeObraDetalhes : undefined,
     };
 
@@ -123,6 +127,7 @@ function VendasPage() {
     setModalItems([]);
     setMaoDeObraValor(0);
     setMaoDeObraQtd(0);
+    setMaoDeObraNomes("");
     setMaoDeObraDetalhes([]);
   };
 
@@ -203,6 +208,7 @@ function VendasPage() {
               setModalItems([]);
               setMaoDeObraValor(0);
               setMaoDeObraQtd(0);
+              setMaoDeObraNomes("");
               setMaoDeObraDetalhes(activeTab === "7Steakhouse" ? generateSteakhouseDays(today) : []);
               setShowModal(true);
             }}>
@@ -212,14 +218,14 @@ function VendasPage() {
         }
       />
 
-      <div className="px-8 py-7 space-y-7">
+      <div className="px-4 lg:px-8 py-5 lg:py-7 space-y-5 lg:space-y-7">
         {/* Tabs */}
-        <div className="flex gap-2 p-1 bg-surface border border-border rounded-xl w-fit">
+        <div className="flex overflow-x-auto gap-1 lg:gap-2 p-1 bg-surface border border-border rounded-xl w-full lg:w-fit scrollbar-hide">
           {(["Goat Botequim", "7Steakhouse", "Eventos", "Consolidação"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === t ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              className={`whitespace-nowrap px-4 lg:px-5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === t ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
             >
               {t}
             </button>
@@ -338,14 +344,14 @@ function VendasPage() {
 
       {/* --- MODAL DE LANÇAMENTO --- */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-2 lg:p-4 overflow-y-auto">
           <div className="w-full max-w-2xl bg-surface border border-border rounded-2xl shadow-2xl my-auto">
-            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
-              <h2 className="font-display text-lg font-semibold">{editingSessionId ? "Editar Sessão" : "Lançar Sessão"} — {activeTab}</h2>
-              <button onClick={() => setShowModal(false)} className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"><X className="h-4 w-4" /></button>
+            <div className="flex items-center justify-between px-4 lg:px-6 pt-5 lg:pt-6 pb-4 border-b border-border">
+              <h2 className="font-display text-base lg:text-lg font-semibold truncate pr-2">{editingSessionId ? "Editar Sessão" : "Lançar Sessão"} — {activeTab}</h2>
+              <button onClick={() => setShowModal(false)} className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors shrink-0"><X className="h-4 w-4" /></button>
             </div>
             
-            <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+            <div className="p-4 lg:p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               {/* Data */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -413,44 +419,57 @@ function VendasPage() {
                   </div>
                   <div className="space-y-2">
                     {maoDeObraDetalhes.map((m, i) => (
-                      <div key={i} className="flex gap-2">
+                      <div key={i} className="flex flex-col gap-2 p-3 bg-surface/50 border border-border/50 rounded-lg">
+                        <div className="flex gap-2">
+                          <input
+                            type="date"
+                            value={m.data}
+                            onChange={e => {
+                              const arr = [...maoDeObraDetalhes];
+                              arr[i].data = e.target.value;
+                              setMaoDeObraDetalhes(arr);
+                            }}
+                            className="w-32 h-9 px-3 rounded-md bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                          />
+                          <div className="flex-1 flex gap-2">
+                             <input
+                               type="number"
+                               placeholder="R$ Total"
+                               value={m.valor || ""}
+                               onChange={e => {
+                                 const arr = [...maoDeObraDetalhes];
+                                 arr[i].valor = Number(e.target.value);
+                                 setMaoDeObraDetalhes(arr);
+                               }}
+                               className="flex-1 h-9 px-3 rounded-md bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                             />
+                             <input
+                               type="number"
+                               placeholder="Pessoas"
+                               value={m.qtdPessoas || ""}
+                               onChange={e => {
+                                 const arr = [...maoDeObraDetalhes];
+                                 arr[i].qtdPessoas = Number(e.target.value);
+                                 setMaoDeObraDetalhes(arr);
+                               }}
+                               className="w-20 h-9 px-3 rounded-md bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                             />
+                          </div>
+                          <button onClick={() => setMaoDeObraDetalhes(maoDeObraDetalhes.filter((_, idx) => idx !== i))} className="h-9 w-9 flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-md">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                         <input
-                          type="date"
-                          value={m.data}
+                          type="text"
+                          placeholder="Nomes (Opcional. Ex: João, Maria)"
+                          value={m.nomes || ""}
                           onChange={e => {
                             const arr = [...maoDeObraDetalhes];
-                            arr[i].data = e.target.value;
+                            arr[i].nomes = e.target.value;
                             setMaoDeObraDetalhes(arr);
                           }}
-                          className="w-32 h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                          className="w-full h-9 px-3 rounded-md bg-input border border-border text-sm focus:border-primary focus:outline-none"
                         />
-                        <div className="flex-1 flex gap-2">
-                           <input
-                             type="number"
-                             placeholder="R$ Total"
-                             value={m.valor || ""}
-                             onChange={e => {
-                               const arr = [...maoDeObraDetalhes];
-                               arr[i].valor = Number(e.target.value);
-                               setMaoDeObraDetalhes(arr);
-                             }}
-                             className="flex-1 h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                           />
-                           <input
-                             type="number"
-                             placeholder="Pessoas"
-                             value={m.qtdPessoas || ""}
-                             onChange={e => {
-                               const arr = [...maoDeObraDetalhes];
-                               arr[i].qtdPessoas = Number(e.target.value);
-                               setMaoDeObraDetalhes(arr);
-                             }}
-                             className="w-20 h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                           />
-                        </div>
-                        <button onClick={() => setMaoDeObraDetalhes(maoDeObraDetalhes.filter((_, idx) => idx !== i))} className="h-9 w-9 flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-md">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
                       </div>
                     ))}
                     {maoDeObraDetalhes.length === 0 && <div className="text-[11px] text-muted-foreground italic mb-2">Nenhum dia de trabalho lançado.</div>}
@@ -462,22 +481,34 @@ function VendasPage() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="label-eyebrow block mb-2">Valor da Diária p/ Pessoa (R$)</label>
-                    <input
-                      type="number"
-                      value={maoDeObraValor}
-                      onChange={e => setMaoDeObraValor(Number(e.target.value))}
-                      className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                    />
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="label-eyebrow block mb-2">Valor da Diária p/ Pessoa (R$)</label>
+                      <input
+                        type="number"
+                        value={maoDeObraValor}
+                        onChange={e => setMaoDeObraValor(Number(e.target.value))}
+                        className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="label-eyebrow block mb-2">Qtd de Pessoas</label>
+                      <input
+                        type="number"
+                        value={maoDeObraQtd}
+                        onChange={e => setMaoDeObraQtd(Number(e.target.value))}
+                        className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                      />
+                    </div>
                   </div>
                   <div>
-                    <label className="label-eyebrow block mb-2">Qtd de Pessoas</label>
+                    <label className="label-eyebrow block mb-2">Nomes da Equipe (Opcional)</label>
                     <input
-                      type="number"
-                      value={maoDeObraQtd}
-                      onChange={e => setMaoDeObraQtd(Number(e.target.value))}
+                      type="text"
+                      placeholder="Ex: Pedro, Lucas"
+                      value={maoDeObraNomes}
+                      onChange={e => setMaoDeObraNomes(e.target.value)}
                       className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
                     />
                   </div>
@@ -562,8 +593,8 @@ function SessionRow({ session, onEdit, onDelete }: { session: FinancialSession; 
           </div>
         </div>
         
-        <div className="flex items-center gap-6 w-full sm:w-auto">
-          <div className="text-right">
+        <div className="flex items-center justify-between gap-4 w-full sm:w-auto">
+          <div className="text-left sm:text-right">
             <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">{session.modalidade === "7Steakhouse" ? "Receita Goat" : "Receita"}</div>
             <div className="text-sm font-medium">{fmtBRL(receitaGoatbarRow)}</div>
           </div>
@@ -583,7 +614,7 @@ function SessionRow({ session, onEdit, onDelete }: { session: FinancialSession; 
       </div>
 
       {isExpanded && (
-        <div className="p-4 border-t border-border/50 bg-surface/30 text-sm space-y-6">
+        <div className="p-4 border-t border-border/50 bg-surface/30 text-sm space-y-6 overflow-x-hidden">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             {/* Drinks Box */}
@@ -660,22 +691,30 @@ function SessionRow({ session, onEdit, onDelete }: { session: FinancialSession; 
                     <div className="pt-2">
                       <span className="text-xs text-destructive block mb-1">(-) Mão de Obra da Semana:</span>
                       {session.maoDeObraDetalhes && session.maoDeObraDetalhes.length > 0 ? (
-                        <ul className="pl-2 space-y-1 border-l-2 border-destructive/20 ml-1">
+                        <ul className="pl-2 space-y-1.5 border-l-2 border-destructive/20 ml-1">
                           {session.maoDeObraDetalhes.map((m, i) => {
                              const d = new Date(m.data);
                              d.setUTCHours(12);
                              return (
-                               <li key={i} className="flex justify-between text-[10px] text-muted-foreground">
-                                 <span>{d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} • {m.qtdPessoas} pessoas</span>
-                                 <span>{fmtBRL(m.valor)}</span>
+                               <li key={i} className="flex flex-col text-[10px] text-muted-foreground pb-1.5 mb-1.5 border-b border-border/30 last:border-0 last:pb-0 last:mb-0">
+                                 <div className="flex justify-between">
+                                   <span>{d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} • {m.qtdPessoas} pessoas</span>
+                                   <span>{fmtBRL(m.valor)}</span>
+                                 </div>
+                                 {m.nomes && <span className="text-[9px] text-muted-foreground/70 italic mt-0.5 pr-2 truncate">{m.nomes}</span>}
                                </li>
                              );
                           })}
                         </ul>
                       ) : (
-                        <div className="flex justify-between text-xs text-destructive">
-                          <span>({session.maoDeObraQtd} dias x {fmtBRL(session.maoDeObraValor)}/dia equipe)</span>
-                          <span>{fmtBRL(maoDeObraCalculada)}</span>
+                        <div className="flex flex-col text-xs text-destructive">
+                          <div className="flex justify-between">
+                            <span>({session.maoDeObraQtd} dias x {fmtBRL(session.maoDeObraValor)}/dia equipe)</span>
+                            <span>{fmtBRL(maoDeObraCalculada)}</span>
+                          </div>
+                          {session.maoDeObraNomes && (
+                            <span className="text-[10px] text-muted-foreground/70 italic mt-0.5">Equipe: {session.maoDeObraNomes}</span>
+                          )}
                         </div>
                       )}
                       {session.maoDeObraDetalhes && session.maoDeObraDetalhes.length > 0 && (

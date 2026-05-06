@@ -13,6 +13,7 @@ import {
   contractHistories as seedContractHistories,
   contractSignatureHistories as seedContractSignatureHistories,
   financialSessions as seedFinancialSessions,
+  inventoryItems as seedInventoryItems,
   type Drink,
   type Contrato,
   type Evento,
@@ -26,6 +27,7 @@ import {
   type ContractHistory,
   type ContractSignatureHistory,
   type FinancialSession,
+  type InventoryItem,
 } from "@/lib/mock-data";
 
 const STORAGE_KEY = "goatbar-functional-store-v11";
@@ -44,6 +46,7 @@ type AppStore = {
   contractHistories: ContractHistory[];
   contractSignatureHistories: ContractSignatureHistory[];
   financialSessions: FinancialSession[];
+  inventoryItems: InventoryItem[];
 };
 
 function seedStore(): AppStore {
@@ -61,6 +64,7 @@ function seedStore(): AppStore {
     contractHistories: structuredClone(seedContractHistories),
     contractSignatureHistories: structuredClone(seedContractSignatureHistories),
     financialSessions: structuredClone(seedFinancialSessions),
+    inventoryItems: structuredClone(seedInventoryItems),
   };
 }
 
@@ -84,6 +88,7 @@ function readStore(): AppStore {
       contractHistories: parsed.contractHistories ?? seedContractHistories,
       contractSignatureHistories: parsed.contractSignatureHistories ?? seedContractSignatureHistories,
       financialSessions: parsed.financialSessions ?? seedFinancialSessions,
+      inventoryItems: parsed.inventoryItems ?? seedInventoryItems,
     };
   } catch {
     return seedStore();
@@ -205,6 +210,24 @@ export function useAppStore() {
         setStore((prev) => ({
           ...prev,
           financialSessions: prev.financialSessions.filter((fs) => fs.id !== id),
+        }));
+      },
+      addInventoryItem(input: Omit<InventoryItem, "id">) {
+        setStore((prev) => ({
+          ...prev,
+          inventoryItems: [{ ...input, id: `inv${Date.now()}` }, ...prev.inventoryItems],
+        }));
+      },
+      updateInventoryItem(id: string, payload: Partial<InventoryItem>) {
+        setStore((prev) => ({
+          ...prev,
+          inventoryItems: prev.inventoryItems.map((inv) => (inv.id === id ? { ...inv, ...payload } : inv)),
+        }));
+      },
+      deleteInventoryItem(id: string) {
+        setStore((prev) => ({
+          ...prev,
+          inventoryItems: prev.inventoryItems.filter((inv) => inv.id !== id),
         }));
       },
     }),

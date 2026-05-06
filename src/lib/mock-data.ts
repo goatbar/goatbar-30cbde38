@@ -56,10 +56,18 @@ export interface FinancialSession {
   items: SalesSessionItem[];
   maoDeObraValor: number;
   maoDeObraQtd: number;
-  maoDeObraDetalhes?: { data: string; valor: number; qtdPessoas: number }[];
+  maoDeObraNomes?: string;
+  maoDeObraDetalhes?: { data: string; valor: number; qtdPessoas: number; nomes?: string }[];
   reposicaoRestaurante?: number; // Steakhouse only (soma total)
   custosRestauranteDetalhes?: { descricao: string; valor: number }[];
   observacoes?: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  nome: string;
+  quantidadeTotal: number;
+  observacoes: string;
 }
 
 export interface GastoDiverso {
@@ -907,6 +915,22 @@ export const eventos: Evento[] = [];
 
 // ─── Contratos Legado (to be deprecated) ────────────────────────────────────────────────────────────
 export const contratos: Contrato[] = [];
+
+// ─── Inventário ────────────────────────────────────────────────────────────
+export const inventoryItems: InventoryItem[] = [
+  {
+    id: "inv-1",
+    nome: "Vodka",
+    quantidadeTotal: 20,
+    observacoes: "- Estoque casa: 8 unidades\n- 7 Steakhouse: 5 unidades\n- Goat Botequim: 4 unidades\n- Evento reservado: 3 unidades"
+  },
+  {
+    id: "inv-2",
+    nome: "Gin",
+    quantidadeTotal: 12,
+    observacoes: "- Estoque casa: 12 unidades"
+  }
+];
 
 // ─── Novos Módulos de Contrato ────────────────────────────────────────────────
 export const contractTemplates: ContractTemplate[] = [

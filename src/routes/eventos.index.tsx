@@ -145,13 +145,13 @@ function EventosIndex() {
                         <span>{e.date ? new Date(e.date).toLocaleDateString("pt-BR", {timeZone: "UTC"}) : "Data a definir"}</span>
                       </div>
                     </div>
-                    <div className="hidden sm:flex items-center gap-4 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <div className="hidden sm:flex items-center gap-4 shrink-0">
                       <div className="text-right">
                         <div className="text-sm font-bold text-foreground">{e.current_budget_value ? fmtBRL(e.current_budget_value) : "--"}</div>
                         <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">{e.current_budget_value ? `${fmtBRL(e.current_budget_value / e.guests)}/pessoa` : "Orçamento em aberto"}</div>
                       </div>
                       
-                      <div className="relative group/status">
+                      <div className="relative group/status" onClick={(ev) => ev.preventDefault()}>
                         <StatusBadge status={e.status as any} />
                         <select 
                           className="absolute inset-0 opacity-0 cursor-pointer"

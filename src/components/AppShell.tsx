@@ -13,7 +13,8 @@ import {
   LogOut,
   Inbox,
   BarChart3,
-  Wallet
+  Wallet,
+  Menu
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -33,6 +34,7 @@ const nav: { to: string; label: string; icon: typeof LayoutDashboard; exact?: bo
 export function AppShell({ children }: { children?: ReactNode }) {
   const location = useLocation();
   const { session, loading, user, signOut } = useAuth();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   if (loading) {
     return (
@@ -51,8 +53,78 @@ export function AppShell({ children }: { children?: ReactNode }) {
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
-      {/* SIDEBAR */}
-      <aside className="hidden lg:flex flex-col w-64 shrink-0 bg-sidebar border-r border-sidebar-border">
+      {/* MOBILE TOPBAR */}
+      <div className="lg:hidden flex items-center justify-between p-4 border-b border-border bg-surface sticky top-0 z-40">
+        <Link to="/" className="flex items-center gap-3">
+          <img src={logo} alt="GOAT BAR" className="h-8 w-auto" />
+          <div className="font-display text-[11px] font-semibold tracking-[0.18em] leading-none">GOAT BAR</div>
+        </Link>
+        <button onClick={() => setMobileMenuOpen(true)} className="p-2 text-muted-foreground hover:text-foreground">
+          <Menu className="h-6 w-6" />
+        </button>
+      </div>
+
+      {/* MOBILE MENU DRAWER */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 flex lg:hidden">
+          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
+          <div className="relative w-72 max-w-[80vw] h-full bg-sidebar border-r border-sidebar-border shadow-2xl flex flex-col animate-in slide-in-from-left">
+            <div className="flex items-center justify-between px-6 pt-7 pb-8">
+              <Link to="/" className="flex items-center gap-3" onClick={() => setMobileMenuOpen(false)}>
+                <img src={logo} alt="GOAT BAR" className="h-10 w-auto" />
+              </Link>
+              <button onClick={() => setMobileMenuOpen(false)} className="p-2 text-muted-foreground hover:text-foreground">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="px-3 mb-2 label-eyebrow">Operação</div>
+            <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
+              {nav.map((item) => {
+                const Icon = item.icon;
+                const active = item.exact
+                  ? location.pathname === item.to
+                  : location.pathname.startsWith(item.to);
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to as any}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`group flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-all ${
+                      active
+                        ? "bg-primary text-primary-foreground shadow-[0_4px_20px_-8px_var(--primary)]"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground"
+                    }`}
+                  >
+                    <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                    <span className="font-medium text-base">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+
+            <div className="m-3 p-3 rounded-xl bg-sidebar-accent border border-sidebar-border">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-primary-foreground font-display font-semibold text-xs">
+                  {initials}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate capitalize">{displayName}</div>
+                </div>
+                <button
+                  onClick={signOut}
+                  className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DESKTOP SIDEBAR */}
+      <aside className="hidden lg:flex flex-col w-64 shrink-0 bg-sidebar border-r border-sidebar-border sticky top-0 h-screen overflow-y-auto">
         <div className="px-6 pt-7 pb-8">
           <Link to="/" className="flex items-center gap-3">
             <img src={logo} alt="GOAT BAR" className="h-12 w-auto" />
@@ -128,17 +200,22 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, subtitle, breadcrumb, action, periodo }: PageHeaderProps) {
   return (
-    <header className="topbar-glass sticky top-0 z-30">
-      <div className="flex items-center gap-6 px-8 py-5">
-        <div className="flex-1 min-w-0">
-          {breadcrumb && <div className="label-eyebrow mb-2">{breadcrumb}</div>}
-          <h1 className="font-display text-2xl font-semibold leading-tight">{title}</h1>
-          {subtitle && (
-            <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
-          )}
+    <header className="bg-surface/50 lg:bg-transparent lg:topbar-glass lg:sticky lg:top-0 z-30 border-b border-border lg:border-none">
+      <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6 px-4 lg:px-8 py-4 lg:py-5">
+        <div className="flex-1 min-w-0 flex items-center justify-between w-full lg:w-auto">
+          <div>
+            {breadcrumb && <div className="label-eyebrow mb-1 lg:mb-2">{breadcrumb}</div>}
+            <h1 className="font-display text-xl lg:text-2xl font-semibold leading-tight">{title}</h1>
+            {subtitle && (
+              <p className="text-xs lg:text-sm text-muted-foreground mt-1">{subtitle}</p>
+            )}
+          </div>
+          <div className="lg:hidden">
+            {action}
+          </div>
         </div>
 
-        <div className="hidden md:flex items-center gap-3">
+        <div className="hidden lg:flex items-center gap-3">
           {periodo ?? (
             <button className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-surface text-sm hover:border-border-strong transition-colors">
               <span className="label-eyebrow !text-foreground">Últimos 30 dias</span>
@@ -151,7 +228,6 @@ export function PageHeader({ title, subtitle, breadcrumb, action, periodo }: Pag
           </button>
 
           <NotificationsDropdown />
-
           {action}
         </div>
       </div>

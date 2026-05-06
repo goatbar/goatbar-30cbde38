@@ -132,8 +132,8 @@ function EventoInterna() {
     local: ev.event_location || "",
     cidade: ev.city || "",
     tipo: ev.event_type,
-    convidados: ev.guests,
-    drinks: ev.drinks || [],
+    convidados: ev.guests || 0,
+    drinks: Array.isArray(ev.drinks) ? ev.drinks : [],
     observacoes: ev.notes || "",
     status: ev.status as any,
     drinksPorPessoa: 4,
@@ -168,8 +168,8 @@ function EventoInterna() {
     local: ev.event_location || "",
     cidade: ev.city || "",
     tipo: ev.event_type,
-    convidados: ev.guests,
-    drinks: ev.drinks || [],
+    convidados: ev.guests || 0,
+    drinks: Array.isArray(ev.drinks) ? ev.drinks : [],
     observacoes: ev.notes || "",
     status: ev.status as any,
     drinksPorPessoa: b.drinks_per_person,
@@ -181,14 +181,14 @@ function EventoInterna() {
     },
     gelo: { pacotesOverride: b.ice_packages_quantity, valorUnitario: b.ice_package_unit_value },
     viagem: { incluir: b.has_travel, valor: b.fuel_value },
-    gastosDiversos: (b.miscellaneous_items as any[]) || [],
+    gastosDiversos: Array.isArray(b.miscellaneous_items) ? b.miscellaneous_items : [],
     lucroDesejado: b.profit_value,
     pagamento: { 
         formaPagamento: b.payment_method || "", 
         percentualPago: b.paid_percentage,
         dataPagamento: b.pending_payment_date
     },
-    coposVinculados: (b.selected_drinks as any)?.copos || {},
+    coposVinculados: typeof (b.selected_drinks as any)?.copos === 'object' ? (b.selected_drinks as any).copos : {},
     historicoAlteracoes: [],
     historicoNegociacao: [],
     valorNegociado: b.final_budget_value,
@@ -388,7 +388,7 @@ function EventoInterna() {
             <div className="flex-1">
               <h4 className="font-bold text-destructive">Atenção: Conflito de Agenda</h4>
               <p className="text-sm text-destructive/80">
-                Já existem {sameDateEvents.length} evento(s) cadastrado(s) para o dia {format(parseISO(draft.data), "dd/MM/yyyy", { locale: ptBR })}:
+                Já existem {sameDateEvents.length} evento(s) cadastrado(s) para o dia {draft.data ? (() => { try { return format(parseISO(draft.data), "dd/MM/yyyy", { locale: ptBR }); } catch { return draft.data; } })() : "esta data"}:
                 <span className="font-semibold ml-1">
                   {sameDateEvents.map(e => e.client_name).join(", ")}
                 </span>
