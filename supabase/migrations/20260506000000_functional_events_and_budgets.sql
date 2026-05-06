@@ -104,9 +104,14 @@ CREATE TABLE IF NOT EXISTS public.event_negotiation_history (
 );
 
 -- 5. Enable RLS and Policies
+ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.event_budget_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.event_budget_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.event_negotiation_history ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+    CREATE POLICY "authenticated full access events" ON public.events FOR ALL TO authenticated USING (true) WITH CHECK (true);
+EXCEPTION WHEN others THEN NULL; END $$;
 
 DO $$ BEGIN
     CREATE POLICY "authenticated full access budget_versions" ON public.event_budget_versions FOR ALL TO authenticated USING (true) WITH CHECK (true);
