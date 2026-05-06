@@ -154,6 +154,7 @@ function DrinkCard({ drink: d, onEdit }: { drink: Drink, onEdit: () => void }) {
           </span>
         </div>
         <p className="text-xs text-muted-foreground mt-2 line-clamp-2 min-h-8">{d.descricao}</p>
+        <div className="mt-3 pt-3 border-t border-border/60 grid grid-cols-3 gap-y-3 gap-x-2 text-xs">
           <div>
             <div className="text-muted-foreground">Evento (Custo)</div>
             <div className="font-medium mt-0.5">{fmtBRL(d.custoUnitario)}</div>

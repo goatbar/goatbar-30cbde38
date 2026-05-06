@@ -616,9 +616,6 @@ function EventoInterna() {
               </SectionCard>
             </div>
           </div>
-        )}SectionCard>
-            </div>
-          </div>
         )}
 
         {/* TAB NEGOCIAÇÃO E HISTÓRICO... remain the same */}

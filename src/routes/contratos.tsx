@@ -157,7 +157,8 @@ function ContratosPage() {
                           {ec.status === "assinado" && <GhostButton className="h-8 text-xs text-success hover:bg-success/10"><CheckCircle2 className="h-3 w-3" /> Certificado</GhostButton>}
                         </div>
                       </div>
-                    ))}
+                    );
+                  })}
                 </div>
               )}
             </SectionCard>
