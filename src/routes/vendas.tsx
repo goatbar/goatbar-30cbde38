@@ -20,6 +20,7 @@ function VendasPage() {
   const [modalItems, setModalItems] = useState<SalesSessionItem[]>([]);
   const [maoDeObraValor, setMaoDeObraValor] = useState(0);
   const [maoDeObraQtd, setMaoDeObraQtd] = useState(0);
+  const [maoDeObraDetalhes, setMaoDeObraDetalhes] = useState<{data: string, valor: number, qtdPessoas: number}[]>([]);
   const [custosDetalhes, setCustosDetalhes] = useState<{descricao: string, valor: number}[]>([]);
 
   // --- Helpers for Modal ---
@@ -73,12 +74,28 @@ function VendasPage() {
     setModalItems(newItems);
   };
 
+  const generateSteakhouseDays = (startDateStr: string) => {
+    const days = [];
+    const baseDate = new Date(startDateStr);
+    baseDate.setUTCHours(12);
+    for (let i = 0; i < 4; i++) {
+      const d = new Date(baseDate.getTime() + i * 24 * 60 * 60 * 1000);
+      days.push({
+        data: d.toISOString().split("T")[0],
+        valor: 0,
+        qtdPessoas: 1
+      });
+    }
+    return days;
+  };
+
   const handleEditSession = (session: FinancialSession) => {
     setEditingSessionId(session.id);
     setModalDate(session.data);
     setModalItems(JSON.parse(JSON.stringify(session.items)));
     setMaoDeObraValor(session.maoDeObraValor);
     setMaoDeObraQtd(session.maoDeObraQtd);
+    setMaoDeObraDetalhes(session.maoDeObraDetalhes ? JSON.parse(JSON.stringify(session.maoDeObraDetalhes)) : []);
     setShowModal(true);
   };
 
@@ -91,6 +108,7 @@ function VendasPage() {
       items: modalItems,
       maoDeObraValor,
       maoDeObraQtd,
+      maoDeObraDetalhes: activeTab === "7Steakhouse" ? maoDeObraDetalhes : undefined,
     };
 
     if (editingSessionId) {
@@ -105,6 +123,7 @@ function VendasPage() {
     setModalItems([]);
     setMaoDeObraValor(0);
     setMaoDeObraQtd(0);
+    setMaoDeObraDetalhes([]);
   };
 
   // --- Calculations ---
@@ -146,7 +165,12 @@ function VendasPage() {
        }, 0);
     }, 0);
     const lucroBrutoGoatbar = receitaGoatbar - custoInsumos;
-    const maoDeObra = list.reduce((acc, s) => acc + (s.maoDeObraValor * s.maoDeObraQtd), 0);
+    const maoDeObra = list.reduce((acc, s) => {
+      if (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0) {
+        return acc + s.maoDeObraDetalhes.reduce((a, b) => a + b.valor, 0);
+      }
+      return acc + (s.maoDeObraValor * s.maoDeObraQtd);
+    }, 0);
     const lucroFinal = lucroBrutoGoatbar - maoDeObra;
 
     const lucroRestaurante = list.reduce((acc, s) => {
@@ -173,11 +197,13 @@ function VendasPage() {
         action={
           (activeTab === "Goat Botequim" || activeTab === "7Steakhouse") && (
             <PrimaryButton onClick={() => {
+              const today = new Date().toISOString().split("T")[0];
               setEditingSessionId(null);
-              setModalDate(new Date().toISOString().split("T")[0]);
+              setModalDate(today);
               setModalItems([]);
               setMaoDeObraValor(0);
               setMaoDeObraQtd(0);
+              setMaoDeObraDetalhes(activeTab === "7Steakhouse" ? generateSteakhouseDays(today) : []);
               setShowModal(true);
             }}>
               <Plus className="h-4 w-4" /> Lançar Sessão
@@ -327,7 +353,13 @@ function VendasPage() {
                   <input
                     type="date"
                     value={modalDate}
-                    onChange={e => setModalDate(e.target.value)}
+                    onChange={e => {
+                      const newDate = e.target.value;
+                      setModalDate(newDate);
+                      if (activeTab === "7Steakhouse" && !editingSessionId) {
+                        setMaoDeObraDetalhes(generateSteakhouseDays(newDate));
+                      }
+                    }}
                     className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
                   />
                 </div>
@@ -373,26 +405,84 @@ function VendasPage() {
               <hr className="border-border" />
 
               {/* Mão de Obra */}
-              <div className="grid grid-cols-2 gap-4">
+              {activeTab === "7Steakhouse" ? (
                 <div>
-                  <label className="label-eyebrow block mb-2">{activeTab === "7Steakhouse" ? "Mão de Obra p/ Dia (Equipe R$)" : "Valor da Diária p/ Pessoa (R$)"}</label>
-                  <input
-                    type="number"
-                    value={maoDeObraValor}
-                    onChange={e => setMaoDeObraValor(Number(e.target.value))}
-                    className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                  />
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="label-eyebrow block">Mão de Obra (Diárias da Equipe)</label>
+                    <GhostButton onClick={() => setMaoDeObraDetalhes([...maoDeObraDetalhes, { data: new Date().toISOString().split("T")[0], valor: 0, qtdPessoas: 1 }])} className="h-8 text-xs px-2"><Plus className="h-3 w-3 mr-1" /> Adicionar Dia</GhostButton>
+                  </div>
+                  <div className="space-y-2">
+                    {maoDeObraDetalhes.map((m, i) => (
+                      <div key={i} className="flex gap-2">
+                        <input
+                          type="date"
+                          value={m.data}
+                          onChange={e => {
+                            const arr = [...maoDeObraDetalhes];
+                            arr[i].data = e.target.value;
+                            setMaoDeObraDetalhes(arr);
+                          }}
+                          className="w-32 h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                        />
+                        <div className="flex-1 flex gap-2">
+                           <input
+                             type="number"
+                             placeholder="R$ Total"
+                             value={m.valor || ""}
+                             onChange={e => {
+                               const arr = [...maoDeObraDetalhes];
+                               arr[i].valor = Number(e.target.value);
+                               setMaoDeObraDetalhes(arr);
+                             }}
+                             className="flex-1 h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                           />
+                           <input
+                             type="number"
+                             placeholder="Pessoas"
+                             value={m.qtdPessoas || ""}
+                             onChange={e => {
+                               const arr = [...maoDeObraDetalhes];
+                               arr[i].qtdPessoas = Number(e.target.value);
+                               setMaoDeObraDetalhes(arr);
+                             }}
+                             className="w-20 h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                           />
+                        </div>
+                        <button onClick={() => setMaoDeObraDetalhes(maoDeObraDetalhes.filter((_, idx) => idx !== i))} className="h-9 w-9 flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-md">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {maoDeObraDetalhes.length === 0 && <div className="text-[11px] text-muted-foreground italic mb-2">Nenhum dia de trabalho lançado.</div>}
+                    {maoDeObraDetalhes.length > 0 && (
+                      <div className="text-right text-sm font-bold pt-2">
+                        Total Mão de Obra: <span className="text-destructive">{fmtBRL(maoDeObraDetalhes.reduce((a, b) => a + b.valor, 0))}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <label className="label-eyebrow block mb-2">{activeTab === "7Steakhouse" ? "Quantidade de Dias" : "Qtd de Pessoas"}</label>
-                  <input
-                    type="number"
-                    value={maoDeObraQtd}
-                    onChange={e => setMaoDeObraQtd(Number(e.target.value))}
-                    className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                  />
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label-eyebrow block mb-2">Valor da Diária p/ Pessoa (R$)</label>
+                    <input
+                      type="number"
+                      value={maoDeObraValor}
+                      onChange={e => setMaoDeObraValor(Number(e.target.value))}
+                      className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="label-eyebrow block mb-2">Qtd de Pessoas</label>
+                    <input
+                      type="number"
+                      value={maoDeObraQtd}
+                      onChange={e => setMaoDeObraQtd(Number(e.target.value))}
+                      className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
 
             </div>
@@ -416,6 +506,13 @@ function SessionRow({ session, onEdit, onDelete }: { session: FinancialSession; 
   let custoInsumosRow = 0;
   let lucroRestauranteRow = 0;
 
+  let maoDeObraCalculada = 0;
+  if (session.modalidade === "7Steakhouse" && session.maoDeObraDetalhes && session.maoDeObraDetalhes.length > 0) {
+    maoDeObraCalculada = session.maoDeObraDetalhes.reduce((a, b) => a + b.valor, 0);
+  } else {
+    maoDeObraCalculada = session.maoDeObraValor * session.maoDeObraQtd;
+  }
+
   if (session.modalidade === "7Steakhouse") {
     receitaGoatbarRow = session.items.reduce((a, b) => a + (b.custoUnitario * b.quantidade), 0);
     custoInsumosRow = session.items.reduce((a, b) => {
@@ -423,13 +520,13 @@ function SessionRow({ session, onEdit, onDelete }: { session: FinancialSession; 
       return a + ((d ? d.custoUnitario : 0) * b.quantidade);
     }, 0);
     const resLiq = receitaGoatbarRow - custoInsumosRow;
-    lucro = resLiq - (session.maoDeObraValor * session.maoDeObraQtd);
+    lucro = resLiq - maoDeObraCalculada;
     lucroRestauranteRow = session.items.reduce((a, b) => a + ((b.precoUnitario - b.custoUnitario) * b.quantidade), 0);
   } else {
     receitaGoatbarRow = session.items.reduce((a, b) => a + (b.precoUnitario * b.quantidade), 0);
     custoInsumosRow = session.items.reduce((a, b) => a + (b.custoUnitario * b.quantidade), 0);
     const resLiq = receitaGoatbarRow - custoInsumosRow;
-    lucro = (resLiq * 0.6) - (session.maoDeObraValor * session.maoDeObraQtd);
+    lucro = (resLiq * 0.6) - maoDeObraCalculada;
   }
 
   // Format date correctly based on modality
@@ -458,7 +555,7 @@ function SessionRow({ session, onEdit, onDelete }: { session: FinancialSession; 
           <div>
             <div className="font-medium text-sm capitalize">{dateFormatted}</div>
             <div className="text-xs text-muted-foreground mt-0.5">
-            {session.items.length} drinks • {session.modalidade === "7Steakhouse" ? `Equipe: ${session.maoDeObraQtd} dias x ${fmtBRL(session.maoDeObraValor)}` : `Eqp: ${session.maoDeObraQtd}x ${fmtBRL(session.maoDeObraValor)}`}
+            {session.items.length} drinks • {session.modalidade === "7Steakhouse" && session.maoDeObraDetalhes && session.maoDeObraDetalhes.length > 0 ? `Equipe: ${session.maoDeObraDetalhes.length} dias (${fmtBRL(maoDeObraCalculada)})` : (session.modalidade === "7Steakhouse" ? `Equipe: ${session.maoDeObraQtd} dias x ${fmtBRL(session.maoDeObraValor)}` : `Eqp: ${session.maoDeObraQtd}x ${fmtBRL(session.maoDeObraValor)}`)}
           </div>
           </div>
         </div>
@@ -558,9 +655,33 @@ function SessionRow({ session, onEdit, onDelete }: { session: FinancialSession; 
                       <span>{fmtBRL(receitaGoatbarRow - custoInsumosRow)}</span>
                     </div>
 
-                    <div className="flex justify-between text-xs text-destructive pt-2">
-                      <span>(-) Mão de Obra ({session.maoDeObraQtd} dias x {fmtBRL(session.maoDeObraValor)}/dia equipe)</span>
-                      <span>{fmtBRL(session.maoDeObraValor * session.maoDeObraQtd)}</span>
+                    <div className="pt-2">
+                      <span className="text-xs text-destructive block mb-1">(-) Mão de Obra da Semana:</span>
+                      {session.maoDeObraDetalhes && session.maoDeObraDetalhes.length > 0 ? (
+                        <ul className="pl-2 space-y-1 border-l-2 border-destructive/20 ml-1">
+                          {session.maoDeObraDetalhes.map((m, i) => {
+                             const d = new Date(m.data);
+                             d.setUTCHours(12);
+                             return (
+                               <li key={i} className="flex justify-between text-[10px] text-muted-foreground">
+                                 <span>{d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} • {m.qtdPessoas} pessoas</span>
+                                 <span>{fmtBRL(m.valor)}</span>
+                               </li>
+                             );
+                          })}
+                        </ul>
+                      ) : (
+                        <div className="flex justify-between text-xs text-destructive">
+                          <span>({session.maoDeObraQtd} dias x {fmtBRL(session.maoDeObraValor)}/dia equipe)</span>
+                          <span>{fmtBRL(maoDeObraCalculada)}</span>
+                        </div>
+                      )}
+                      {session.maoDeObraDetalhes && session.maoDeObraDetalhes.length > 0 && (
+                        <div className="flex justify-between text-[10px] font-bold text-destructive mt-1 pl-3 border-t border-destructive/10 pt-1">
+                          <span>Total Mão de Obra</span>
+                          <span>{fmtBRL(maoDeObraCalculada)}</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex justify-between text-sm font-bold text-success border-y border-border/80 py-3 mt-3">
