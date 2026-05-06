@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { StatCard, SectionCard, PrimaryButton, GhostButton, StatusBadge } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
-import { Plus, ShoppingBag, TrendingUp, X, Users, Utensils, Calendar, Calculator, Trash2 } from "lucide-react";
+import { Plus, ShoppingBag, TrendingUp, X, Users, Utensils, Calendar, Calculator, Trash2, Pencil } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/app-store";
 import { drinks as allDrinks, calcularOrcamentoEvento, type SalesSessionItem, type FinancialSession } from "@/lib/mock-data";
@@ -10,9 +10,10 @@ import { drinks as allDrinks, calcularOrcamentoEvento, type SalesSessionItem, ty
 export const Route = createFileRoute("/vendas")({ component: () => <AppShell><VendasPage /></AppShell> });
 
 function VendasPage() {
-  const { financialSessions, addFinancialSession, deleteFinancialSession, eventos, eventContracts } = useAppStore();
+  const { financialSessions, addFinancialSession, updateFinancialSession, deleteFinancialSession, eventos, eventContracts } = useAppStore();
   const [activeTab, setActiveTab] = useState<"Goat Botequim" | "7Steakhouse" | "Eventos" | "Consolidação">("Goat Botequim");
   const [showModal, setShowModal] = useState(false);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   
   // Modal states
   const [modalDate, setModalDate] = useState(new Date().toISOString().split("T")[0]);
@@ -72,23 +73,38 @@ function VendasPage() {
     setModalItems(newItems);
   };
 
+  const handleEditSession = (session: FinancialSession) => {
+    setEditingSessionId(session.id);
+    setModalDate(session.data);
+    setModalItems(JSON.parse(JSON.stringify(session.items)));
+    setMaoDeObraValor(session.maoDeObraValor);
+    setMaoDeObraQtd(session.maoDeObraQtd);
+    setShowModal(true);
+  };
+
   const handleSave = () => {
     if (activeTab === "Eventos" || activeTab === "Consolidação") return;
     
-    addFinancialSession({
+    const payload = {
       data: modalDate,
       modalidade: activeTab,
       items: modalItems,
       maoDeObraValor,
       maoDeObraQtd,
-    });
+    };
+
+    if (editingSessionId) {
+      updateFinancialSession(editingSessionId, payload);
+    } else {
+      addFinancialSession(payload);
+    }
     
     setShowModal(false);
     // Reset
+    setEditingSessionId(null);
     setModalItems([]);
     setMaoDeObraValor(0);
     setMaoDeObraQtd(0);
-    setCustosDetalhes([]);
   };
 
   // --- Calculations ---
@@ -157,7 +173,11 @@ function VendasPage() {
         action={
           (activeTab === "Goat Botequim" || activeTab === "7Steakhouse") && (
             <PrimaryButton onClick={() => {
+              setEditingSessionId(null);
+              setModalDate(new Date().toISOString().split("T")[0]);
               setModalItems([]);
+              setMaoDeObraValor(0);
+              setMaoDeObraQtd(0);
               setShowModal(true);
             }}>
               <Plus className="h-4 w-4" /> Lançar Sessão
@@ -195,7 +215,7 @@ function VendasPage() {
             <SectionCard title="Sessões Lançadas" subtitle="Histórico de vendas consolidadas por dia">
               <div className="space-y-4">
                 {sessions.map(s => (
-                  <SessionRow key={s.id} session={s} onDelete={() => deleteFinancialSession(s.id)} />
+                  <SessionRow key={s.id} session={s} onEdit={() => handleEditSession(s)} onDelete={() => deleteFinancialSession(s.id)} />
                 ))}
                 {sessions.length === 0 && <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">Nenhuma sessão lançada.</div>}
               </div>
@@ -218,7 +238,7 @@ function VendasPage() {
             <SectionCard title="Sessões Semanais Lançadas" subtitle="Vendas diárias agregadas por semana (Quinta a Domingo)">
               <div className="space-y-4">
                 {sessions.map(s => (
-                  <SessionRow key={s.id} session={s} onDelete={() => deleteFinancialSession(s.id)} />
+                  <SessionRow key={s.id} session={s} onEdit={() => handleEditSession(s)} onDelete={() => deleteFinancialSession(s.id)} />
                 ))}
                 {sessions.length === 0 && <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">Nenhuma sessão lançada.</div>}
               </div>
@@ -295,7 +315,7 @@ function VendasPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="w-full max-w-2xl bg-surface border border-border rounded-2xl shadow-2xl my-auto">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
-              <h2 className="font-display text-lg font-semibold">Lançar Sessão — {activeTab}</h2>
+              <h2 className="font-display text-lg font-semibold">{editingSessionId ? "Editar Sessão" : "Lançar Sessão"} — {activeTab}</h2>
               <button onClick={() => setShowModal(false)} className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"><X className="h-4 w-4" /></button>
             </div>
             
@@ -379,7 +399,7 @@ function VendasPage() {
 
             <div className="flex items-center justify-end gap-3 px-6 py-4 bg-background/50 border-t border-border sticky bottom-0">
               <GhostButton onClick={() => setShowModal(false)}>Cancelar</GhostButton>
-              <PrimaryButton onClick={handleSave}>Salvar Sessão</PrimaryButton>
+              <PrimaryButton onClick={handleSave}>{editingSessionId ? "Salvar Alterações" : "Salvar Sessão"}</PrimaryButton>
             </div>
           </div>
         </div>
@@ -388,7 +408,7 @@ function VendasPage() {
   );
 }
 
-function SessionRow({ session, onDelete }: { session: FinancialSession; onDelete: () => void }) {
+function SessionRow({ session, onEdit, onDelete }: { session: FinancialSession; onEdit: () => void; onDelete: () => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   
   let lucro = 0;
@@ -452,9 +472,14 @@ function SessionRow({ session, onDelete }: { session: FinancialSession; onDelete
             <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Lucro Final</div>
             <div className="text-sm font-bold text-success">{fmtBRL(lucro)}</div>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all shrink-0">
-            <Trash2 className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+              <Pencil className="h-4 w-4" />
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
 
