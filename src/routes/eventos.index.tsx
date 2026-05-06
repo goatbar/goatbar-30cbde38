@@ -6,7 +6,7 @@ import { Plus, Calendar, MapPin, Users, ChevronRight, X, AlertTriangle, LayoutGr
 import { useState, useEffect } from "react";
 import { eventBudgetService, type Event as RealEvent } from "@/services/event-budget-service";
 
-export const Route = createFileRoute("/eventos")({ component: () => <AppShell><EventosPage /></AppShell> });
+export const Route = createFileRoute("/eventos/")({ component: () => <AppShell><EventosPage /></AppShell> });
 
 function EventosPage() {
   const navigate = useNavigate();

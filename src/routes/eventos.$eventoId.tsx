@@ -1072,6 +1072,25 @@ function EventoInterna() {
         )}
 
       </div>
+
+      {/* PAINEL DE DEBUG (Remover após validação) */}
+      <div className="mt-20 p-8 border-t border-border bg-background/50">
+        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Debug de Dados (Supabase)</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+           <div className="p-4 bg-black/20 rounded-lg border border-border overflow-auto max-h-[300px]">
+              <div className="text-[10px] font-bold text-primary mb-2 uppercase">Evento Raw</div>
+              <pre className="text-[10px] text-muted-foreground">{JSON.stringify(evento, null, 2)}</pre>
+           </div>
+           <div className="p-4 bg-black/20 rounded-lg border border-border overflow-auto max-h-[300px]">
+              <div className="text-[10px] font-bold text-primary mb-2 uppercase">Budget Atual</div>
+              <pre className="text-[10px] text-muted-foreground">{JSON.stringify(currentBudget, null, 2)}</pre>
+           </div>
+        </div>
+        <div className="mt-4 p-4 bg-black/20 rounded-lg border border-border">
+           <div className="text-[10px] font-bold text-primary mb-2 uppercase">Draft State (Frontend)</div>
+           <pre className="text-[10px] text-muted-foreground">{JSON.stringify(draft, null, 2)}</pre>
+        </div>
+      </div>
     </AppShell>
   );
 }
