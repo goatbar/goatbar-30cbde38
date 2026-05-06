@@ -210,6 +210,17 @@ export const eventContractsService = {
     return data;
   },
 
+  async updateContractStatus(contractId: string, status: string) {
+    const { data, error } = await supabase
+      .from("event_contracts")
+      .update({ 
+        status, 
+        updated_at: new Date().toISOString(),
+        fully_signed_at: status === "signed" ? new Date().toISOString() : null
+      })
+      .eq("id", contractId)
+      .select()
+      .single();
     if (error) throw error;
     return data;
   },
