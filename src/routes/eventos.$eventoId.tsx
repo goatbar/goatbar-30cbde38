@@ -259,9 +259,8 @@ function EventoInterna() {
 
       alert(saveAsNew ? "Nova versão do orçamento salva!" : "Orçamento atualizado com sucesso!");
       loadAllData();
-    } catch (e) {
-      console.error("Erro ao salvar:", e);
-      alert("Erro ao salvar orçamento.");
+    } catch (e: any) {
+      alert(`Erro ao salvar orçamento: ${e.message}`);
     } finally {
       setSaving(false);
     }
@@ -272,8 +271,8 @@ function EventoInterna() {
       await eventBudgetService.updateNegotiationStatus(eventoId, newStatus, note);
       setDraft(p => p ? ({ ...p, status: newStatus }) : null);
       loadAllData();
-    } catch (e) {
-      alert("Erro ao atualizar status.");
+    } catch (e: any) {
+      alert(`Erro ao atualizar status: ${e.message || "Erro desconhecido"}`);
     }
   };
 
@@ -298,8 +297,8 @@ function EventoInterna() {
       handleStatusChange("em_assinatura", "Contrato gerado no sistema.");
       alert("Contrato gerado com sucesso!");
       loadContractModule();
-    } catch (e) {
-      alert("Erro ao gerar contrato.");
+    } catch (e: any) {
+      alert(`Erro ao gerar contrato: ${e.message || "Erro desconhecido"}`);
     }
   };
 

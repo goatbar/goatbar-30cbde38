@@ -78,8 +78,8 @@ function EventosPage() {
       
       setShowModal(false);
       navigate({ to: "/eventos/$eventoId", params: { eventoId: newEvent.id } });
-    } catch (e) {
-      alert("Erro ao criar evento.");
+    } catch (e: any) {
+      alert(`Erro ao criar evento: ${e.message || "Erro desconhecido"}`);
     }
   };
 
