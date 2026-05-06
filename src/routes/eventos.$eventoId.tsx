@@ -576,14 +576,34 @@ function EventoInterna() {
                       <div className="text-sm">Média Unitária Insumos: <span className="font-bold">{fmtBRL(calc.mediaCustoDrinks)}</span></div>
                       <div className="text-sm">Soma Insumos (1 de cada): <span className="font-bold">{fmtBRL(calc.custoBaseDrinks)}</span></div>
                       {draft.drinks.length > 0 && (
-                        <div className="mt-2 text-xs text-muted-foreground">
-                           <div className="font-bold mb-1">Insumos (Custo Base por Drink):</div>
-                           <ul className="list-disc pl-4 space-y-0.5">
+                        <div className="mt-4 text-xs text-muted-foreground w-full">
+                           <div className="font-bold mb-3 uppercase tracking-widest text-primary text-[10px]">Detalhamento por Insumo:</div>
+                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                              {draft.drinks.map(dId => {
                                const drink = allDrinks.find(d => d.id === dId);
-                               return <li key={dId}>{drink?.nome}: <span className="font-medium text-foreground">{fmtBRL(drink?.custoUnitario || 0)}</span></li>
+                               if (!drink) return null;
+                               return (
+                                 <div key={dId} className="bg-surface border border-border p-3 rounded-lg shadow-sm">
+                                   <div className="font-bold text-foreground mb-1.5">{drink.nome}</div>
+                                   <ul className="space-y-0.5 mb-2">
+                                     {drink.insumos?.map((i, idx) => (
+                                       <li key={idx} className="flex justify-between text-muted-foreground">
+                                         <span>{i.nome}</span>
+                                         <span>{fmtBRL(i.custo)}</span>
+                                       </li>
+                                     ))}
+                                     {(!drink.insumos || drink.insumos.length === 0) && (
+                                       <li className="italic text-muted-foreground/50">Insumos não detalhados</li>
+                                     )}
+                                   </ul>
+                                   <div className="flex justify-between font-bold text-foreground border-t border-border/50 pt-1.5">
+                                     <span>Total</span>
+                                     <span>{fmtBRL(drink.custoUnitario)}</span>
+                                   </div>
+                                 </div>
+                               );
                              })}
-                           </ul>
+                           </div>
                         </div>
                       )}
                     </div>
