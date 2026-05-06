@@ -125,16 +125,24 @@ function VendasPage() {
 
   const statsSteakhouse = useMemo(() => {
     const list = financialSessions.filter(s => s.modalidade === "7Steakhouse");
-    const receitaBruta = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0), 0);
-    const custoDrinks = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.custoUnitario * item.quantidade), 0), 0);
-    const resultadoLiquido = receitaBruta - custoDrinks;
-    const repasseRestaurante = resultadoLiquido * 0.5;
-    const saldoAposRepasse = resultadoLiquido * 0.5;
+    const receitaGoatbar = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.custoUnitario * item.quantidade), 0), 0);
+    const custoInsumos = list.reduce((acc, s) => {
+       return acc + s.items.reduce((sum, item) => {
+         const d = allDrinks.find(x => x.id === item.drinkId);
+         const custoReal = d ? d.custoUnitario : 0;
+         return sum + (custoReal * item.quantidade);
+       }, 0);
+    }, 0);
+    const lucroBrutoGoatbar = receitaGoatbar - custoInsumos;
     const maoDeObra = list.reduce((acc, s) => acc + (s.maoDeObraValor * s.maoDeObraQtd), 0);
     const reposicaoTotal = list.reduce((acc, s) => acc + (s.reposicaoRestaurante || 0), 0);
-    const lucroFinal = saldoAposRepasse - maoDeObra - reposicaoTotal;
+    const lucroFinal = lucroBrutoGoatbar - maoDeObra - reposicaoTotal;
 
-    return { receitaBruta, custoDrinks, resultadoLiquido, repasseRestaurante, saldoAposRepasse, maoDeObra, reposicaoTotal, lucroFinal };
+    const lucroRestaurante = list.reduce((acc, s) => {
+       return acc + s.items.reduce((sum, item) => sum + ((item.precoUnitario - item.custoUnitario) * item.quantidade), 0);
+    }, 0);
+
+    return { receitaGoatbar, custoInsumos, lucroBrutoGoatbar, maoDeObra, reposicaoTotal, lucroFinal, lucroRestaurante };
   }, [financialSessions]);
 
   const statsEventos = useMemo(() => {
@@ -203,13 +211,14 @@ function VendasPage() {
         {/* --- STEAKHOUSE --- */}
         {activeTab === "7Steakhouse" && (
           <div className="space-y-7">
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-              <StatCard label="Receita Bruta" value={fmtBRL(statsSteakhouse.receitaBruta)} />
-              <StatCard label="Custo Drinks" value={fmtBRL(statsSteakhouse.custoDrinks)} />
-              <StatCard label="Lucro Bruto" value={fmtBRL(statsSteakhouse.resultadoLiquido)} />
-              <StatCard label="Repasse 50%" value={fmtBRL(statsSteakhouse.repasseRestaurante)} />
-              <StatCard label="Custos Oper." value={fmtBRL(statsSteakhouse.maoDeObra + statsSteakhouse.reposicaoTotal)} />
-              <StatCard label="Lucro Final" value={fmtBRL(statsSteakhouse.lucroFinal)} highlight />
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <StatCard label="Receita Goatbar" value={fmtBRL(statsSteakhouse.receitaGoatbar)} />
+              <StatCard label="Custo Insumos" value={fmtBRL(statsSteakhouse.custoInsumos)} />
+              <StatCard label="Lucro Bruto" value={fmtBRL(statsSteakhouse.lucroBrutoGoatbar)} />
+              <StatCard label="Lucro Retido Rest." value={fmtBRL(statsSteakhouse.lucroRestaurante)} />
+              <StatCard label="Mão de Obra" value={fmtBRL(statsSteakhouse.maoDeObra)} />
+              <StatCard label="Custos Oper. Rest." value={fmtBRL(statsSteakhouse.reposicaoTotal)} />
+              <StatCard label="Lucro F. Goatbar" value={fmtBRL(statsSteakhouse.lucroFinal)} highlight />
             </div>
 
             <SectionCard title="Sessões Semanais Lançadas" subtitle="Vendas diárias agregadas por semana (Quinta a Domingo)">
@@ -271,8 +280,8 @@ function VendasPage() {
         {activeTab === "Consolidação" && (
           <div className="space-y-7">
              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              <StatCard label="Receita Consolidada" value={fmtBRL(statsBotequim.receitaBruta + statsSteakhouse.receitaBruta + statsEventos.receita)} />
-              <StatCard label="Custos Consolidados" value={fmtBRL(statsBotequim.custoDrinks + statsSteakhouse.custoDrinks + statsEventos.custos)} />
+              <StatCard label="Receita Consolidada" value={fmtBRL(statsBotequim.receitaBruta + statsSteakhouse.receitaGoatbar + statsEventos.receita)} />
+              <StatCard label="Custos Consolidados" value={fmtBRL(statsBotequim.custoDrinks + statsSteakhouse.custoInsumos + statsEventos.custos)} />
               <StatCard label="Lucro Total Goat Bar" value={fmtBRL(statsBotequim.lucroFinal + statsSteakhouse.lucroFinal + statsEventos.lucro)} highlight />
             </div>
 
@@ -432,15 +441,26 @@ function VendasPage() {
 
 function SessionRow({ session, onDelete }: { session: FinancialSession; onDelete: () => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const receita = session.items.reduce((a, b) => a + (b.precoUnitario * b.quantidade), 0);
-  const custo = session.items.reduce((a, b) => a + (b.custoUnitario * b.quantidade), 0);
-  const resLiq = receita - custo;
   
   let lucro = 0;
-  if (session.modalidade === "Goat Botequim") {
-    lucro = (resLiq * 0.6) - (session.maoDeObraValor * session.maoDeObraQtd);
+  let receitaGoatbarRow = 0;
+  let custoInsumosRow = 0;
+  let lucroRestauranteRow = 0;
+
+  if (session.modalidade === "7Steakhouse") {
+    receitaGoatbarRow = session.items.reduce((a, b) => a + (b.custoUnitario * b.quantidade), 0);
+    custoInsumosRow = session.items.reduce((a, b) => {
+      const d = allDrinks.find(x => x.id === b.drinkId);
+      return a + ((d ? d.custoUnitario : 0) * b.quantidade);
+    }, 0);
+    const resLiq = receitaGoatbarRow - custoInsumosRow;
+    lucro = resLiq - (session.maoDeObraValor * session.maoDeObraQtd) - (session.reposicaoRestaurante || 0);
+    lucroRestauranteRow = session.items.reduce((a, b) => a + ((b.precoUnitario - b.custoUnitario) * b.quantidade), 0);
   } else {
-    lucro = (resLiq * 0.5) - (session.maoDeObraValor * session.maoDeObraQtd) - (session.reposicaoRestaurante || 0);
+    receitaGoatbarRow = session.items.reduce((a, b) => a + (b.precoUnitario * b.quantidade), 0);
+    custoInsumosRow = session.items.reduce((a, b) => a + (b.custoUnitario * b.quantidade), 0);
+    const resLiq = receitaGoatbarRow - custoInsumosRow;
+    lucro = (resLiq * 0.6) - (session.maoDeObraValor * session.maoDeObraQtd);
   }
 
   // Format date correctly based on modality
@@ -479,8 +499,8 @@ function SessionRow({ session, onDelete }: { session: FinancialSession; onDelete
         
         <div className="flex items-center gap-6 w-full sm:w-auto">
           <div className="text-right">
-            <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Receita</div>
-            <div className="text-sm font-medium">{fmtBRL(receita)}</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">{session.modalidade === "7Steakhouse" ? "Receita Goat" : "Receita"}</div>
+            <div className="text-sm font-medium">{fmtBRL(receitaGoatbarRow)}</div>
           </div>
           <div className="text-right">
             <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Lucro Final</div>
@@ -508,8 +528,8 @@ function SessionRow({ session, onDelete }: { session: FinancialSession; onDelete
                 ))}
               </ul>
               <div className="flex justify-between mt-3 pt-2 text-xs font-bold border-t border-border/80">
-                <span>Total Receita Drinks</span>
-                <span>{fmtBRL(receita)}</span>
+                <span>Total Receita</span>
+                <span>{fmtBRL(session.modalidade === "7Steakhouse" ? (receitaGoatbarRow + lucroRestauranteRow) : receitaGoatbarRow)}</span>
               </div>
             </div>
 
@@ -517,76 +537,94 @@ function SessionRow({ session, onDelete }: { session: FinancialSession; onDelete
             <div>
               <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider mb-3">Cálculo de Lucro</h4>
               <div className="space-y-2 bg-background/50 p-4 rounded-xl border border-border/50">
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Receita Bruta</span>
-                  <span>{fmtBRL(receita)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>(-) Custo dos Drinks</span>
-                  <span>{fmtBRL(custo)}</span>
-                </div>
-                <div className="flex justify-between text-xs font-bold border-b border-border/40 pb-2 mb-2">
-                  <span>(=) Lucro Bruto</span>
-                  <span>{fmtBRL(resLiq)}</span>
-                </div>
-
+                
                 {session.modalidade === "7Steakhouse" ? (
                   <>
-                    <div className="flex justify-between text-xs text-warning">
-                      <span>(-) Repasse 50% Restaurante</span>
-                      <span>{fmtBRL(resLiq * 0.5)}</span>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Receita Goatbar (Venda ao Rest.)</span>
+                      <span>{fmtBRL(receitaGoatbarRow)}</span>
                     </div>
                     <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>(=) Saldo Operacional (GoatBar)</span>
-                      <span>{fmtBRL(resLiq * 0.5)}</span>
+                      <span>(-) Custo Insumos (Ficha Téc.)</span>
+                      <span>{fmtBRL(custoInsumosRow)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs font-bold border-b border-border/40 pb-2 mb-2">
+                      <span>(=) Lucro Bruto Goatbar</span>
+                      <span>{fmtBRL(receitaGoatbarRow - custoInsumosRow)}</span>
+                    </div>
+
+                    <div className="flex justify-between text-xs text-destructive pt-2">
+                      <span>(-) Mão de Obra da Semana ({session.maoDeObraQtd}x)</span>
+                      <span>{fmtBRL(session.maoDeObraValor * session.maoDeObraQtd)}</span>
+                    </div>
+
+                    <div className="pt-2">
+                      <span className="text-xs text-destructive block mb-1">(-) Custos Detalhados (Restaurante):</span>
+                      {session.custosRestauranteDetalhes && session.custosRestauranteDetalhes.length > 0 ? (
+                        <ul className="pl-2 space-y-1 border-l-2 border-destructive/20 ml-1">
+                          {session.custosRestauranteDetalhes.map((c, i) => (
+                            <li key={i} className="flex justify-between text-[10px] text-muted-foreground">
+                              <span>{c.descricao}</span>
+                              <span>{fmtBRL(c.valor)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="text-[10px] text-muted-foreground italic pl-3">Nenhum custo registrado.</div>
+                      )}
+                      {session.reposicaoRestaurante && session.reposicaoRestaurante > 0 && (
+                        <div className="flex justify-between text-[10px] font-bold text-destructive mt-1 pl-3">
+                          <span>Total Custos Restaurante</span>
+                          <span>{fmtBRL(session.reposicaoRestaurante)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-between text-sm font-bold text-success border-y border-border/80 py-3 mt-3">
+                      <span>Lucro Final Goatbar</span>
+                      <span>{fmtBRL(lucro)}</span>
+                    </div>
+
+                    <div className="flex justify-between text-xs font-medium text-amber-500 mt-2">
+                      <span>Lucro Retido no Restaurante</span>
+                      <span>{fmtBRL(lucroRestauranteRow)}</span>
                     </div>
                   </>
                 ) : (
                   <>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Receita Bruta</span>
+                      <span>{fmtBRL(receitaGoatbarRow)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>(-) Custo dos Drinks</span>
+                      <span>{fmtBRL(custoInsumosRow)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs font-bold border-b border-border/40 pb-2 mb-2">
+                      <span>(=) Lucro Bruto</span>
+                      <span>{fmtBRL(receitaGoatbarRow - custoInsumosRow)}</span>
+                    </div>
+
                     <div className="flex justify-between text-xs text-warning">
                       <span>(-) Repasse 40% Restaurante</span>
-                      <span>{fmtBRL(resLiq * 0.4)}</span>
+                      <span>{fmtBRL((receitaGoatbarRow - custoInsumosRow) * 0.4)}</span>
                     </div>
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>(=) Saldo Operacional (GoatBar)</span>
-                      <span>{fmtBRL(resLiq * 0.6)}</span>
+                      <span>{fmtBRL((receitaGoatbarRow - custoInsumosRow) * 0.6)}</span>
+                    </div>
+
+                    <div className="flex justify-between text-xs text-destructive pt-2">
+                      <span>(-) Mão de Obra da Semana ({session.maoDeObraQtd}x)</span>
+                      <span>{fmtBRL(session.maoDeObraValor * session.maoDeObraQtd)}</span>
+                    </div>
+
+                    <div className="flex justify-between text-sm font-bold text-success border-t border-border/80 pt-3 mt-3">
+                      <span>Lucro Final</span>
+                      <span>{fmtBRL(lucro)}</span>
                     </div>
                   </>
                 )}
-
-                <div className="flex justify-between text-xs text-destructive pt-2">
-                  <span>(-) Mão de Obra da Semana ({session.maoDeObraQtd}x)</span>
-                  <span>{fmtBRL(session.maoDeObraValor * session.maoDeObraQtd)}</span>
-                </div>
-
-                {session.modalidade === "7Steakhouse" && (
-                  <div className="pt-2">
-                    <span className="text-xs text-destructive block mb-1">(-) Custos Detalhados (Restaurante):</span>
-                    {session.custosRestauranteDetalhes && session.custosRestauranteDetalhes.length > 0 ? (
-                      <ul className="pl-2 space-y-1 border-l-2 border-destructive/20 ml-1">
-                        {session.custosRestauranteDetalhes.map((c, i) => (
-                          <li key={i} className="flex justify-between text-[10px] text-muted-foreground">
-                            <span>{c.descricao}</span>
-                            <span>{fmtBRL(c.valor)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="text-[10px] text-muted-foreground italic pl-3">Nenhum custo registrado.</div>
-                    )}
-                    {session.reposicaoRestaurante && session.reposicaoRestaurante > 0 && (
-                      <div className="flex justify-between text-[10px] font-bold text-destructive mt-1 pl-3">
-                        <span>Total Custos Restaurante</span>
-                        <span>{fmtBRL(session.reposicaoRestaurante)}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex justify-between text-sm font-bold text-success border-t border-border/80 pt-3 mt-3">
-                  <span>Lucro Final</span>
-                  <span>{fmtBRL(lucro)}</span>
-                </div>
               </div>
             </div>
           </div>
