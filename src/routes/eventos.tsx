@@ -128,10 +128,11 @@ function EventosPage() {
                 <p className="text-sm text-muted-foreground text-center py-8">Nenhum evento cadastrado. Crie o primeiro!</p>
               )}
               {eventos.map((e) => (
-                  <div
+                  <Link
                     key={e.id}
-                    onClick={() => navigate({ to: "/eventos/$eventoId", params: { eventoId: e.id } })}
-                    className="flex items-center gap-4 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-surface transition-all group cursor-pointer"
+                    to="/eventos/$eventoId"
+                    params={{ eventoId: e.id }}
+                    className="flex items-center gap-4 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-surface transition-all group"
                   >
                     <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
                       <Calendar className="h-5 w-5 text-primary" />
@@ -144,17 +145,38 @@ function EventosPage() {
                         <span>{e.date ? new Date(e.date).toLocaleDateString("pt-BR", {timeZone: "UTC"}) : "Data a definir"}</span>
                       </div>
                     </div>
-                    <div className="hidden sm:flex items-center gap-4 shrink-0">
+                    <div className="hidden sm:flex items-center gap-4 shrink-0" onClick={(e) => e.stopPropagation()}>
                       <div className="text-right">
                         <div className="text-sm font-bold text-foreground">{e.current_budget_value ? fmtBRL(e.current_budget_value) : "--"}</div>
                         <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">{e.current_budget_value ? `${fmtBRL(e.current_budget_value / e.guests)}/pessoa` : "Orçamento em aberto"}</div>
                       </div>
-                      <StatusBadge status={e.status as any} />
+                      
+                      <div className="relative group/status">
+                        <StatusBadge status={e.status as any} />
+                        <select 
+                          className="absolute inset-0 opacity-0 cursor-pointer"
+                          value={e.status}
+                          onChange={(ev) => {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            eventBudgetService.updateNegotiationStatus(e.id, ev.target.value).then(() => loadEvents());
+                          }}
+                        >
+                          <option value="novo_orcamento">Novo orçamento</option>
+                          <option value="orcamento_enviado">Orçamento enviado</option>
+                          <option value="aguardando_retorno">Aguardando retorno</option>
+                          <option value="dados_solicitados">Dados solicitados</option>
+                          <option value="em_assinatura">Em assinatura</option>
+                          <option value="confirmado">Confirmado</option>
+                          <option value="cancelado">Cancelado</option>
+                        </select>
+                      </div>
+
                       <div className="h-8 w-8 rounded-full flex items-center justify-center bg-background border border-border group-hover:border-primary/30 group-hover:text-primary transition-all">
                         <ChevronRight className="h-4 w-4" />
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 )
               )}
             </div>

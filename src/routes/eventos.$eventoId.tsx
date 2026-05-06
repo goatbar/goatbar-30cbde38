@@ -19,18 +19,11 @@ import { eventBudgetService, type Event as RealEvent, type BudgetVersion, type B
 import { Loader2, History, Copy, Clock } from "lucide-react";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
-  component: () => (
-    <AppShell>
-      <EventoInterna />
-    </AppShell>
-  ),
-  loader: ({ params }) => {
-    return { eventoId: params.eventoId };
-  },
+  component: EventoInterna,
 });
 
 function EventoInterna() {
-  const { eventoId } = Route.useLoaderData();
+  const { eventoId } = Route.useParams();
   const { 
     glasswares 
   } = useAppStore();
@@ -325,24 +318,28 @@ function EventoInterna() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
-        <p className="text-muted-foreground animate-pulse">Carregando detalhes do evento...</p>
-      </div>
+      <AppShell>
+        <div className="flex flex-col items-center justify-center min-h-[60vh]">
+          <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
+          <p className="text-muted-foreground animate-pulse">Carregando detalhes do evento...</p>
+        </div>
+      </AppShell>
     );
   }
 
   if (!draft || !calc) {
     return (
-      <div className="p-12 text-center">
-        <h2 className="font-display text-2xl">Evento não encontrado</h2>
-        <Link to="/eventos" className="text-primary text-sm mt-3 inline-block">Voltar para lista</Link>
-      </div>
+      <AppShell>
+        <div className="p-12 text-center">
+          <h2 className="font-display text-2xl">Evento não encontrado</h2>
+          <Link to="/eventos" className="text-primary text-sm mt-3 inline-block">Voltar para lista</Link>
+        </div>
+      </AppShell>
     );
   }
 
   return (
-    <>
+    <AppShell>
 
       <PageHeader
         breadcrumb={
@@ -1075,7 +1072,7 @@ function EventoInterna() {
         )}
 
       </div>
-    </>
+    </AppShell>
   );
 }
 
