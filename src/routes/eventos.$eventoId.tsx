@@ -66,10 +66,23 @@ function EventoInterna() {
   const [activeTab, setActiveTab] = useState("Orçamento");
   const [isEditingHeader, setIsEditingHeader] = useState(false);
   const [buscaDrink, setBuscaDrink] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [selectedSigner, setSelectedSigner] = useState("");
 
   useEffect(() => {
     loadAllData();
   }, [eventoId]);
+
+  const loadContractModule = async () => {
+    const [tps, sigs, contract] = await Promise.all([
+      contractTemplatesService.listTemplates(),
+      contractSignersService.listSigners(),
+      eventContractsService.getContractByEventId(eventoId)
+    ]);
+    setRealTemplates(tps);
+    setRealSigners(sigs);
+    setRealContract(contract);
+  };
 
   const loadAllData = async () => {
     setLoading(true);
@@ -195,7 +208,7 @@ function EventoInterna() {
     cidade: ev.city || "",
     tipo: ev.event_type,
     convidados: ev.guests || 0,
-    drinks: Array.isArray(ev.drinks) ? ev.drinks : [],
+    drinks: Array.isArray(b.selected_drinks) ? (b.selected_drinks as any).ids : [],
     observacoes: ev.notes || "",
     status: ev.status as any,
     lead_source: ev.lead_source || "",
@@ -239,7 +252,7 @@ function EventoInterna() {
         drinks_markup_percentage: draft.markupAdicionalDrinks,
         drinks_cost_sum: calc.mediaCustoDrinks * draft.drinks.length,
         average_drink_cost: calc.mediaCustoDrinks,
-        drinks_base_cost: calc.custoBaseDrinks,
+        drinks_base_cost: calc.mediaCustoDrinks * (draft.convidados * draft.drinksPorPessoa),
         drinks_final_value: calc.valorDrinksEvento,
         bartender_quantity: draft.equipe.bartender.qtd,
         bartender_unit_value: draft.equipe.bartender.valorUnitario,
@@ -269,7 +282,7 @@ function EventoInterna() {
         discount_description: draft.descontoMotivo || ""
       };
 
-      // Atualiza evento base
+      // Atualiza evento base com totais financeiros para integração com dashboard/financeiro
       await eventBudgetService.updateEvent(eventoId, {
         client_name: draft.cliente,
         phone: draft.telefone,
@@ -284,7 +297,11 @@ function EventoInterna() {
         notes: draft.observacoes,
         status: draft.status,
         lead_source: draft.lead_source,
-        referral_name: draft.referral_name
+        referral_name: draft.referral_name,
+        current_budget_value: calc.valorTotalOrcamento,
+        current_profit_value: calc.lucro,
+        payment_due_date: draft.pagamento.dataPagamento,
+        payment_percent_received: draft.pagamento.percentualPago
       });
 
       // Salva orçamento
@@ -382,7 +399,18 @@ function EventoInterna() {
 
   const handleStatusChange = async (newStatus: EventoStatus, note?: string) => {
     try {
+      // Sincroniza também os valores financeiros atuais ao mudar status para garantir integração
+      const updatePayload: any = { status: newStatus };
+      if (calc) {
+        updatePayload.current_budget_value = calc.valorTotalOrcamento;
+        updatePayload.current_profit_value = calc.lucro;
+        updatePayload.payment_due_date = draft?.pagamento.dataPagamento;
+        updatePayload.payment_percent_received = draft?.pagamento.percentualPago;
+      }
+
       await eventBudgetService.updateNegotiationStatus(eventoId, newStatus, note);
+      await eventBudgetService.updateEvent(eventoId, updatePayload);
+      
       setDraft(p => p ? ({ ...p, status: newStatus }) : null);
       loadAllData();
     } catch (e: any) {

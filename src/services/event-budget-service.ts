@@ -233,22 +233,11 @@ export const eventBudgetService = {
   },
 
   async deleteBudgetVersion(budgetId: string) {
-    // Get version details first for the log
-    const { data: v } = await supabase
-      .from("event_budget_versions")
-      .select("*")
-      .eq("id", budgetId)
-      .maybeSingle();
-      
-    if (v) {
-      await this.addBudgetHistory({
-        event_id: v.event_id,
-        budget_version_id: budgetId,
-        action: `Versão V${v.version_number} Excluída`,
-        previous_final_value: v.final_budget_value,
-        new_final_value: 0
-      });
-    }
+    // Delete history first (if no cascade in DB)
+    await supabase
+      .from("event_budget_history")
+      .delete()
+      .eq("budget_version_id", budgetId);
 
     const { error } = await supabase
       .from("event_budget_versions")
