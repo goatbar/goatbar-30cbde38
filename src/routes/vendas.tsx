@@ -586,7 +586,7 @@ function SessionRow({ session, drinks, onEdit, onDelete }: { session: any; drink
     const ci = items.reduce((acc: number, i: any) => {
       const fallbackDrink = drinks.find(d => d.id === i.drinkId) || drinks.find(d => d.nome === i.nome || d.nome === i.drink_name);
       const fallbackCost = isSteak
-        ? Number(fallbackDrink?.custoUnitario || 0)
+        ? Number(fallbackDrink?.modalityConfig?.evento?.cost || fallbackDrink?.custoUnitario || 0)
         : Number(fallbackDrink?.modalityConfig?.goatbotequim?.cost || 0);
       const itemCost = Number(i.custoInsumo ?? fallbackCost);
       return acc + (itemCost * i.quantidade);
