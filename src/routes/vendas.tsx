@@ -122,7 +122,7 @@ function VendasPage() {
       quantidade: 1, 
       precoUnitario: config?.price || 0, 
       custoUnitario: config?.cost || 0,
-      custoInsumo: isSteak ? firstDrink.custoUnitario : config?.cost
+      custoInsumo: isSteak ? (firstDrink.modalityConfig?.evento?.cost ?? firstDrink.custoUnitario) : config?.cost
     }]);
   };
 
@@ -139,7 +139,7 @@ function VendasPage() {
           nome: d.nome,
           precoUnitario: config?.price || 0,
           custoUnitario: config?.cost || 0,
-          custoInsumo: isSteak ? d.custoUnitario : config?.cost
+          custoInsumo: isSteak ? (d.modalityConfig?.evento?.cost ?? d.custoUnitario) : config?.cost
         };
       }
     } else {
@@ -182,11 +182,11 @@ function VendasPage() {
     };
 
     try {
-       await financialService.createSession(payload);
-       // Also update local store if still using it partially
        if (editingSessionId) {
+         await financialService.updateSession(editingSessionId, payload);
          updateFinancialSession(editingSessionId, payload);
        } else {
+         await financialService.createSession(payload);
          addFinancialSession(payload);
        }
        setShowModal(false);
@@ -218,12 +218,21 @@ function VendasPage() {
       
       const sessionReceita = (s.items || []).reduce((acc: number, item: any) => acc + (item.precoUnitario * item.quantidade), 0);
       const sessionCusto = (s.items || []).reduce((acc: number, item: any) => {
-        // Usa o custoInsumo gravado no item, fallback para o custoUnitario base do drink
+        const d = allDrinks.find(x => x.id === item.drinkId);
+
+        if (s.modalidade === "Goat Botequim") {
+          // No Botequim, custo vem da modalidade Goat Botequim (não da ficha técnica)
+          const goatCost = Number(item.custoUnitario ?? d?.modalityConfig?.goatbotequim?.cost ?? 0);
+          return acc + (goatCost * item.quantidade);
+        }
+
+        // Steakhouse/Evento: usa ficha técnica (custoInsumo) com fallback de modalidade
         if (item.custoInsumo !== undefined && item.custoInsumo !== null) {
           return acc + (item.custoInsumo * item.quantidade);
         }
-        const d = allDrinks.find(x => x.id === item.drinkId);
-        return acc + ((d?.custoUnitario || 0) * item.quantidade);
+
+        const fallbackCost = Number(d?.modalityConfig?.evento?.cost || d?.custoUnitario || 0);
+        return acc + (fallbackCost * item.quantidade);
       }, 0);
       
       const maoDeObra = s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0 
@@ -266,6 +275,32 @@ function VendasPage() {
 
     return Object.values(meses).sort((a, b) => b.mes.localeCompare(a.mes));
   }, [filteredSessions, filteredEventos, allDrinks]);
+
+  const ganhosTerceiros = useMemo(() => {
+    const valorRepassadoGoatBotequim = filteredSessions
+      .filter(s => s.modalidade === "Goat Botequim")
+      .reduce((acc, s) => {
+        const lucroBrutoSessao = (s.items || []).reduce((sum: number, item: any) => {
+          const receitaItem = Number(item.precoUnitario || 0) * Number(item.quantidade || 0);
+          const drink = allDrinks.find(d => d.id === item.drinkId) || allDrinks.find(d => d.nome === item.nome || d.nome === item.drink_name);
+          const custoItem = Number(item.custoUnitario ?? drink?.modalityConfig?.goatbotequim?.cost ?? 0) * Number(item.quantidade || 0);
+          return sum + (receitaItem - custoItem);
+        }, 0);
+        return acc + (lucroBrutoSessao * 0.4);
+      }, 0);
+
+    const valorRetido7Steakhouse = filteredSessions
+      .filter(s => s.modalidade === "7Steakhouse")
+      .reduce((acc, s) => {
+        const retidoSessao = (s.items || []).reduce(
+          (sum: number, item: any) => sum + ((Number(item.precoUnitario || 0) - Number(item.custoUnitario || 0)) * Number(item.quantidade || 0)),
+          0
+        );
+        return acc + retidoSessao;
+      }, 0);
+
+    return { valorRepassadoGoatBotequim, valorRetido7Steakhouse };
+  }, [filteredSessions, allDrinks]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -331,7 +366,7 @@ function VendasPage() {
             <SectionCard title="Sessões Lançadas" subtitle="Histórico de vendas consolidadas por dia">
               <div className="space-y-4">
                 {filteredSessions.filter(s => s.modalidade === "Goat Botequim").map(s => (
-                  <SessionRow key={s.id} session={s} onEdit={() => handleEditSession(s)} onDelete={() => deleteFinancialSession(s.id)} />
+                  <SessionRow key={s.id} session={s} drinks={allDrinks} onEdit={() => handleEditSession(s)} onDelete={() => deleteFinancialSession(s.id)} />
                 ))}
                 {filteredSessions.filter(s => s.modalidade === "Goat Botequim").length === 0 && <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">Nenhuma sessão lançada.</div>}
               </div>
@@ -360,7 +395,7 @@ function VendasPage() {
             <SectionCard title="Sessões Semanais Lançadas" subtitle="Vendas diárias agregadas por semana">
               <div className="space-y-4">
                 {filteredSessions.filter(s => s.modalidade === "7Steakhouse").map(s => (
-                  <SessionRow key={s.id} session={s} onEdit={() => handleEditSession(s)} onDelete={() => deleteFinancialSession(s.id)} />
+                  <SessionRow key={s.id} session={s} drinks={allDrinks} onEdit={() => handleEditSession(s)} onDelete={() => deleteFinancialSession(s.id)} />
                 ))}
                 {filteredSessions.filter(s => s.modalidade === "7Steakhouse").length === 0 && <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">Nenhuma sessão lançada.</div>}
               </div>
@@ -435,6 +470,23 @@ function VendasPage() {
               <StatCard label="Custos Consolidados" value={fmtBRL(metrics.consolidated.receita - metrics.consolidated.lucro)} />
               <StatCard label="Lucro Total Goat Bar" value={fmtBRL(metrics.consolidated.lucro)} highlight />
             </div>
+
+            <SectionCard title="Ganhos de Terceiros" subtitle="Valores repassados e retidos nas operações do 7Steakhouse">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <SummaryCard
+                  label="Repassado para Goat Botequim"
+                  value={ganhosTerceiros.valorRepassadoGoatBotequim}
+                  color="bg-primary"
+                  icon={<ShoppingBag className="h-4 w-4" />}
+                />
+                <SummaryCard
+                  label="Retido pela 7Steakhouse"
+                  value={ganhosTerceiros.valorRetido7Steakhouse}
+                  color="bg-success"
+                  icon={<Utensils className="h-4 w-4" />}
+                />
+              </div>
+            </SectionCard>
 
             <SectionCard title="Evolução Mensal" subtitle="Resumo consolidado por mês de operação">
               <div className="overflow-x-auto -mx-6">
@@ -540,7 +592,18 @@ function VendasPage() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <div>
+                    <label className="label-eyebrow block mb-2">Quem trabalhou (nomes)</label>
+                    <input
+                      type="text"
+                      value={maoDeObraNomes}
+                      onChange={e => setMaoDeObraNomes(e.target.value)}
+                      placeholder="Ex.: João, Maria, Carlos"
+                      className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="label-eyebrow block mb-2">Custo Mão de Obra (Dia)</label>
                     <input type="number" value={maoDeObraValor} onChange={e => setMaoDeObraValor(Number(e.target.value))} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm" />
@@ -548,6 +611,7 @@ function VendasPage() {
                   <div>
                     <label className="label-eyebrow block mb-2">Qtd Dias/Equipe</label>
                     <input type="number" value={maoDeObraQtd} onChange={e => setMaoDeObraQtd(Number(e.target.value))} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm" />
+                  </div>
                   </div>
                 </div>
               )}
@@ -564,21 +628,13 @@ function VendasPage() {
   );
 }
 
-function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () => void; onDelete: () => void }) {
+function SessionRow({ session, drinks, onEdit, onDelete }: { session: any; drinks: any[]; onEdit: () => void; onDelete: () => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const isSteak = session.modalidade === "7Steakhouse";
   
   // Cálculos Básicos
   const items = session.items || [];
-  const receitaBruta = items.reduce((acc: number, item: any) => acc + (item.precoUnitario * item.quantidade), 0);
-  const receitaGoat = items.reduce((acc: number, item: any) => acc + (item.custoUnitario * item.quantidade), 0);
-  
-  // Custo Real (usando drinks da store para pegar custo base se necessário)
-  const custoInsumos = items.reduce((acc: number, item: any) => acc + (item.custoUnitario * item.quantidade), 0);
-  // Nota: No Botequim, o lucro bruto é Receita - Custo. 
-  // No Steakhouse, o lucro bruto do Goat é ReceitaGoat - CustoInsumos.
-  
-  const lucroBruto = isSteak ? (receitaGoat - items.reduce((acc: number, item: any) => acc + (item.custoUnitario * item.quantidade * 0.8), 0)) : (receitaBruta - items.reduce((acc: number, item: any) => acc + (item.custoUnitario * item.quantidade), 0));
+  const totalDrinks = items.reduce((acc: number, i: any) => acc + Number(i.quantidade || 0), 0);
 
   // No print do usuário para Botequim:
   // Receita Bruta: R$ 627
@@ -592,7 +648,14 @@ function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () =>
   const calc = useMemo(() => {
     const rb = items.reduce((acc: number, i: any) => acc + (Number(i.precoUnitario || 0) * i.quantidade), 0);
     const rg = items.reduce((acc: number, i: any) => acc + (Number(i.custoUnitario || 0) * i.quantidade), 0);
-    const ci = items.reduce((acc: number, i: any) => acc + (Number(i.custoInsumo || i.custoUnitario || 0) * i.quantidade), 0);
+    const ci = items.reduce((acc: number, i: any) => {
+      const fallbackDrink = drinks.find(d => d.id === i.drinkId) || drinks.find(d => d.nome === i.nome || d.nome === i.drink_name);
+      const fallbackCost = isSteak
+        ? Number(fallbackDrink?.modalityConfig?.evento?.cost || fallbackDrink?.custoUnitario || 0)
+        : Number(i.custoUnitario ?? fallbackDrink?.modalityConfig?.goatbotequim?.cost ?? 0);
+      const itemCost = isSteak ? Number(i.custoInsumo ?? fallbackCost) : Number(fallbackCost);
+      return acc + (itemCost * i.quantidade);
+    }, 0);
     
     const lb = rb - ci;
     const rep = lb * 0.4;
@@ -613,7 +676,7 @@ function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () =>
       maoDeObra: mo,
       lucroFinal: isSteak ? (rg - ci - mo) : (saldo - mo)
     };
-  }, [session, isSteak]);
+  }, [session, isSteak, drinks]);
 
   return (
     <div className={`rounded-2xl border-2 transition-all duration-300 overflow-hidden ${isExpanded ? "border-primary bg-surface shadow-2xl shadow-primary/5" : "border-border bg-surface/40 hover:border-primary/30"}`}>
@@ -632,7 +695,7 @@ function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () =>
                  <ChevronRight className={`h-4 w-4 text-primary transition-transform duration-300 ${isExpanded ? "rotate-90" : ""}`} />
               </div>
               <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mt-0.5">
-                 {items.length} drinks · Eqp: {session.maoDeObraQtd}x {fmtBRL(session.maoDeObraValor)}
+                 {totalDrinks} drinks · Eqp: {session.maoDeObraQtd}x {fmtBRL(session.maoDeObraValor)}
               </div>
            </div>
         </div>
@@ -679,7 +742,7 @@ function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () =>
                     ))}
                     <div className="pt-3 border-t border-border/40 flex justify-between items-center">
                        <span className="text-[10px] font-bold text-muted-foreground uppercase">Total Receita</span>
-                       <span className="font-black text-sm">{fmtBRL(calc.receitaBruta)}</span>
+                       <span className="font-black text-sm">{fmtBRL(isSteak ? calc.receitaGoat : calc.receitaBruta)}</span>
                     </div>
                  </div>
               </div>

@@ -25,6 +25,17 @@ export const Route = createFileRoute("/eventos/$eventoId")({
   component: EventoInterna,
 });
 
+const parseDiscountsFromDescription = (discountValue: number, discountDescription?: string | null) => {
+  if (!discountDescription) return discountValue > 0 ? [{ valor: discountValue, motivo: "" }] : [];
+  try {
+    const parsed = JSON.parse(discountDescription);
+    if (Array.isArray(parsed?.descontos)) {
+      return parsed.descontos.map((d: any) => ({ valor: Number(d.valor) || 0, motivo: String(d.motivo || "") }));
+    }
+  } catch {}
+  return discountValue > 0 ? [{ valor: discountValue, motivo: discountDescription }] : [];
+};
+
 const HeaderField = ({ label, value, isEditing, onChange, icon, type = "text" }: { label: string, value: string, isEditing: boolean, onChange: (v: string) => void, icon?: React.ReactNode, type?: string }) => (
   <div className="space-y-1">
     <div className="label-eyebrow flex items-center gap-1">{icon} {label}</div>
@@ -174,7 +185,7 @@ function EventoInterna() {
     status: ev.status as any,
     lead_source: ev.lead_source || "",
     referral_name: ev.referral_name || "",
-    is_paid_full: ev.is_paid_full || false,
+    is_paid_full: (ev.payment_percent_received || 0) >= 100,
     drinksPorPessoa: 4,
     markupAdicionalDrinks: 0,
     equipe: {
@@ -197,7 +208,8 @@ function EventoInterna() {
     valorNegociado: ev.current_budget_value || 0,
     custoPrevisto: 0,
     desconto: 0,
-    descontoMotivo: ""
+    descontoMotivo: "",
+    descontos: []
   });
 
   const mapBudgetToDraft = (ev: RealEvent, b: BudgetVersion): Evento => ({
@@ -217,7 +229,7 @@ function EventoInterna() {
     status: ev.status as any,
     lead_source: ev.lead_source || "",
     referral_name: ev.referral_name || "",
-    is_paid_full: ev.is_paid_full || false,
+    is_paid_full: (ev.payment_percent_received || 0) >= 100,
     drinksPorPessoa: b.drinks_per_person,
     markupAdicionalDrinks: b.drinks_markup_percentage,
     equipe: {
@@ -240,7 +252,8 @@ function EventoInterna() {
     valorNegociado: b.final_budget_value || ev.current_budget_value || 0,
     custoPrevisto: b.drinks_base_cost + b.team_total_value + b.ice_total_value + b.fuel_value + b.miscellaneous_total_value,
     desconto: b.discount_value,
-    descontoMotivo: b.discount_description || ""
+    descontoMotivo: b.discount_description || "",
+    descontos: parseDiscountsFromDescription(b.discount_value, b.discount_description)
   });
 
   const [draft, setDraft] = useState<Evento | null>(null);
@@ -251,6 +264,8 @@ function EventoInterna() {
     if (!draft || !calc) return;
     setSaving(true);
     try {
+      const descontosValidos = (draft.descontos || []).filter((d) => (Number(d.valor) || 0) > 0);
+      const totalDescontos = descontosValidos.reduce((acc, d) => acc + (Number(d.valor) || 0), 0);
       const budgetPayload = {
         drinks_per_person: draft.drinksPorPessoa,
         drinks_markup_percentage: draft.markupAdicionalDrinks,
@@ -282,8 +297,8 @@ function EventoInterna() {
         pending_value: calc.valorPendente,
         pending_payment_date: draft.pagamento.dataPagamento,
         selected_drinks: { ids: draft.drinks, copos: draft.coposVinculados },
-        discount_value: draft.desconto || 0,
-        discount_description: draft.descontoMotivo || ""
+        discount_value: totalDescontos,
+        discount_description: JSON.stringify({ descontos: descontosValidos })
       };
 
       // Atualiza evento base com totais financeiros para integração com dashboard/financeiro
@@ -305,8 +320,7 @@ function EventoInterna() {
         current_budget_value: calc.valorTotalOrcamento,
         current_profit_value: draft.lucroDesejado,
         payment_due_date: draft.pagamento.dataPagamento,
-        payment_percent_received: draft.pagamento.percentualPago,
-        is_paid_full: draft.is_paid_full
+        payment_percent_received: draft.pagamento.percentualPago
       });
 
       // Salva orçamento
@@ -925,15 +939,35 @@ function EventoInterna() {
 
                 <SectionCard title="5. Descontos & Gestão" subtitle="Ajustes finos no valor final">
                   <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-4 rounded-xl border border-border bg-surface">
-                           <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">Valor do Desconto (R$)</label>
-                           <input type="number" value={draft.desconto || ""} onChange={e => setDraft(p => p ? ({...p, desconto: e.target.value === "" ? 0 : Number(e.target.value)}) : null)} className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm font-bold text-destructive" placeholder="0,00" />
+                    <div className="space-y-3">
+                      {(draft.descontos || []).map((d, i) => (
+                        <div key={`desconto-${i}`} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
+                          <div className="p-4 rounded-xl border border-border bg-surface">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">Valor do Desconto (R$)</label>
+                            <input type="number" value={d.valor || ""} onChange={e => setDraft(p => {
+                              if (!p) return null;
+                              const descontos = [...(p.descontos || [])];
+                              descontos[i] = { ...descontos[i], valor: e.target.value === "" ? 0 : Number(e.target.value) };
+                              return { ...p, descontos };
+                            })} className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm font-bold text-destructive" placeholder="0,00" />
+                          </div>
+                          <div className="p-4 rounded-xl border border-border bg-surface">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">Motivo do Desconto</label>
+                            <input type="text" value={d.motivo || ""} onChange={e => setDraft(p => {
+                              if (!p) return null;
+                              const descontos = [...(p.descontos || [])];
+                              descontos[i] = { ...descontos[i], motivo: e.target.value };
+                              return { ...p, descontos };
+                            })} className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm" placeholder="Ex: Parceria / Cortesia" />
+                          </div>
+                          <button onClick={() => setDraft(p => p ? ({ ...p, descontos: (p.descontos || []).filter((_, idx) => idx !== i) }) : null)} className="h-10 w-10 self-center flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-lg transition-colors">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
-                        <div className="p-4 rounded-xl border border-border bg-surface">
-                           <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">Motivo do Desconto</label>
-                           <input type="text" value={draft.descontoMotivo || ""} onChange={e => setDraft(p => p ? ({...p, descontoMotivo: e.target.value}) : null)} className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm" placeholder="Ex: Parceria / Cortesia" />
-                        </div>
+                      ))}
+                      <GhostButton onClick={() => setDraft(p => p ? ({ ...p, descontos: [...(p.descontos || []), { valor: 0, motivo: "" }] }) : null)} className="w-full text-xs font-bold py-3 border-dashed border-2">
+                        <Plus className="h-3 w-3" /> ADICIONAR DESCONTO
+                      </GhostButton>
                     </div>
 
                     <div className="p-5 rounded-2xl bg-primary/10 border-2 border-primary/20 shadow-lg shadow-primary/5">
@@ -1033,9 +1067,19 @@ function EventoInterna() {
                           <span>{fmtBRL(draft.lucroDesejado)}</span>
                        </div>
                        {calc.valorDesconto > 0 && (
-                         <div className="flex justify-between text-destructive font-bold">
-                            <span>DESCONTO APLICADO ({draft.descontoMotivo || "GERAL"})</span>
-                            <span>- {fmtBRL(calc.valorDesconto)}</span>
+                         <div className="space-y-2">
+                           <div className="flex justify-between text-destructive font-bold">
+                              <span>DESCONTOS APLICADOS ({(draft.descontos || []).filter((d) => (Number(d.valor) || 0) > 0).length || 1})</span>
+                              <span>- {fmtBRL(calc.valorDesconto)}</span>
+                           </div>
+                           <div className="pl-3 space-y-1 text-[11px] text-destructive/90 font-medium">
+                             {(draft.descontos || []).filter((d) => (Number(d.valor) || 0) > 0).map((d, idx) => (
+                               <div key={`preview-desconto-${idx}`} className="flex justify-between gap-3">
+                                 <span>- {d.motivo?.trim() ? d.motivo : `Desconto ${idx + 1}`}</span>
+                                 <span>{fmtBRL(Number(d.valor) || 0)}</span>
+                               </div>
+                             ))}
+                           </div>
                          </div>
                        )}
                        
@@ -1284,7 +1328,7 @@ function EventoInterna() {
         {activeTab === "Contatos & Negociação" && (
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-7 animate-in fade-in duration-500">
             <div className="xl:col-span-5 space-y-6">
-               <SectionCard title="Controle Financeiro" subtitle="Regras de pagamento e prazos">
+               <SectionCard title="Controle Financeiro" subtitle="As informações de pagamento em negociação e pagamento só serão realizadas após a confirmação do evento.">
                  <div className="space-y-5">
                    <div className="space-y-2">
                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Condição de Pagamento</label>
@@ -1457,7 +1501,7 @@ function EventoInterna() {
                           </div>
                         </div>
                         
-                        <div className="mt-4 grid grid-cols-3 gap-2 border-t border-border pt-4">
+                        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2 border-t border-border pt-4">
                            <div className="text-center">
                               <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Convidados</div>
                               <div className="text-sm font-bold">{v.average_value_per_person > 0 ? Math.round(v.final_budget_value / v.average_value_per_person) : '--'}</div>
@@ -1465,6 +1509,10 @@ function EventoInterna() {
                            <div className="text-center">
                               <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Subtotal (Base)</div>
                               <div className="text-sm font-bold">{fmtBRL(v.drinks_final_value + v.team_total_value + v.ice_total_value + v.fuel_value + v.miscellaneous_total_value)}</div>
+                           </div>
+                           <div className="text-center">
+                              <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Desconto</div>
+                              <div className="text-sm font-bold text-destructive">{v.discount_value > 0 ? `- ${fmtBRL(v.discount_value)}` : "Sem desconto"}</div>
                            </div>
                            <div className="text-center">
                               <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Lucro</div>

@@ -126,20 +126,23 @@ function Dashboard() {
   const proximosPagamentos = [...eventosSupabase]
     .filter(e => {
       const s = e.status?.toUpperCase();
-      const isPaid = (e.payment_percent_received || 0) >= 100;
+      const percentualPago = Number(e.payment_percent_received ?? e.paid_percentage ?? 0);
+      const isPaid = percentualPago >= 100;
       return ["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(s) && !isPaid;
     })
     .map(e => {
-       const total = Number(e.current_budget_value || 0);
-       const percentPago = Number(e.payment_percent_received || 0);
+       const total = Number(e.current_budget_value || e.budget_value || 0);
+       const percentPago = Number(e.payment_percent_received ?? e.paid_percentage ?? 0);
+       const percentPendente = Math.max(0, 100 - percentPago);
        const pago = total * (percentPago / 100);
        const pendente = total - pago;
-       return { ...e, valorPendente: pendente };
+       const vencimento = e.payment_due_date || e.pending_payment_date || null;
+       return { ...e, percentualPago: percentPago, percentualPendente: percentPendente, valorPendente: pendente, dataVencimentoPagamento: vencimento };
     })
     .filter(e => e.valorPendente > 0)
     .sort((a, b) => {
-      const dateA = a.payment_due_date || a.date || "9999-12-31";
-      const dateB = b.payment_due_date || b.date || "9999-12-31";
+      const dateA = a.dataVencimentoPagamento || "9999-12-31";
+      const dateB = b.dataVencimentoPagamento || "9999-12-31";
       return new Date(dateA).getTime() - new Date(dateB).getTime();
     })
     .slice(0, 5);
@@ -168,8 +171,8 @@ function Dashboard() {
         }
       />
 
-      <div className="px-8 py-7 space-y-7">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+      <div className="page-container space-y-6 lg:space-y-7">
+        <div className="responsive-grid-kpi">
           <StatCard label="Receita Consolidada" value={fmtBRL(metrics.consolidated.receita)} icon={<TrendingUp className="h-4 w-4" />} />
           <StatCard label="Lucro Total Goat Bar" value={fmtBRL(metrics.consolidated.lucro)} icon={<ShoppingBag className="h-4 w-4" />} highlight />
           <StatCard label="Eventos Confirmados" value={String(metrics.events.count)} icon={<CalendarRange className="h-4 w-4" />} />
@@ -207,6 +210,9 @@ function Dashboard() {
                     <div className="text-xs text-muted-foreground mt-0.5">
                       {e.date ? format(parseISO(e.date), "dd/MMM", { locale: ptBR }) : "--"} · {e.guests || e.convidados} convidados
                     </div>
+                    <div className="text-[11px] text-muted-foreground/90 mt-0.5 truncate">
+                      {[e.event_type, e.city].filter(Boolean).join(" · ") || "Tipo/cidade não informados"}
+                    </div>
                   </div>
                   <StatusBadge status={e.status} />
                   <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
@@ -222,11 +228,11 @@ function Dashboard() {
                   <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0"><Calculator className="h-5 w-5" /></div>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-sm truncate">{e.nome || e.client_name}</div>
-                    <div className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mt-0.5">Vence em: {e.payment_due_date ? format(parseISO(e.payment_due_date), "dd/MM/yyyy") : (e.date ? format(parseISO(e.date), "dd/MM/yyyy") : "A definir")}</div>
+                    <div className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mt-0.5">Vence em: {e.dataVencimentoPagamento ? format(parseISO(e.dataVencimentoPagamento), "dd/MM/yyyy") : "A definir"}</div>
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-sm font-black text-foreground">{fmtBRL(e.valorPendente)}</div>
-                    <div className="text-[9px] font-bold text-muted-foreground uppercase">Saldo Pendente</div>
+                    <div className="text-[9px] font-bold text-muted-foreground uppercase">{e.percentualPendente.toFixed(0)}% pendente · {e.percentualPago.toFixed(0)}% pago</div>
                   </div>
                 </Link>
               ))}

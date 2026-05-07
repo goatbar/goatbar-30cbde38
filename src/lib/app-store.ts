@@ -187,10 +187,15 @@ export function useAppStore() {
           drinks: prev.drinks.map((d) => {
             if (d.id !== id) return d;
             const updated = { ...d, ...payload };
+<<<<<<< HEAD
             // Recalculate custoUnitario from insumos if provided
             const insumoSource = payload.insumos ?? payload.ingredientes;
             if (insumoSource && insumoSource.length > 0) {
               updated.custoUnitario = Number(insumoSource.reduce((a: number, i: { custo: number }) => a + i.custo, 0).toFixed(2));
+=======
+            if (payload.insumos) {
+              updated.custoUnitario = Number(payload.insumos.reduce((a, i) => a + i.custo, 0).toFixed(2));
+>>>>>>> 958723b0da4fc89e151321280bc6161317224b47
             }
             return updated;
           }),
@@ -198,12 +203,19 @@ export function useAppStore() {
       },
       addDrink(input: Omit<Drink, "id"> & { _presetId?: string }) {
         setStore((prev) => {
+<<<<<<< HEAD
           const { _presetId, ...rest } = input as any;
           const insumoSource = (rest.insumos ?? rest.ingredientes ?? []) as { custo: number }[];
           const newDrink: Drink = {
             ...rest,
             id: _presetId ?? `d${Date.now()}`,
             custoUnitario: Number(insumoSource.reduce((a: number, i: { custo: number }) => a + i.custo, 0).toFixed(2))
+=======
+          const newDrink = {
+            ...input,
+            id: `d${Date.now()}`,
+            custoUnitario: Number((input.insumos ?? []).reduce((a, i) => a + i.custo, 0).toFixed(2))
+>>>>>>> 958723b0da4fc89e151321280bc6161317224b47
           };
           return {
             ...prev,
