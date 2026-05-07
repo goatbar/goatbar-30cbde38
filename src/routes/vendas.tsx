@@ -278,13 +278,15 @@ function VendasPage() {
 
   const ganhosTerceiros = useMemo(() => {
     const valorRepassadoGoatBotequim = filteredSessions
-      .filter(s => s.modalidade === "7Steakhouse")
+      .filter(s => s.modalidade === "Goat Botequim")
       .reduce((acc, s) => {
-        const repassadoSessao = (s.items || []).reduce(
-          (sum: number, item: any) => sum + (Number(item.precoUnitario || 0) * Number(item.quantidade || 0)),
-          0
-        );
-        return acc + repassadoSessao;
+        const lucroBrutoSessao = (s.items || []).reduce((sum: number, item: any) => {
+          const receitaItem = Number(item.precoUnitario || 0) * Number(item.quantidade || 0);
+          const drink = allDrinks.find(d => d.id === item.drinkId) || allDrinks.find(d => d.nome === item.nome || d.nome === item.drink_name);
+          const custoItem = Number(item.custoUnitario ?? drink?.modalityConfig?.goatbotequim?.cost ?? 0) * Number(item.quantidade || 0);
+          return sum + (receitaItem - custoItem);
+        }, 0);
+        return acc + (lucroBrutoSessao * 0.4);
       }, 0);
 
     const valorRetido7Steakhouse = filteredSessions
@@ -298,7 +300,7 @@ function VendasPage() {
       }, 0);
 
     return { valorRepassadoGoatBotequim, valorRetido7Steakhouse };
-  }, [filteredSessions]);
+  }, [filteredSessions, allDrinks]);
 
   return (
     <div className="min-h-screen bg-background">

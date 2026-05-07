@@ -1067,9 +1067,19 @@ function EventoInterna() {
                           <span>{fmtBRL(draft.lucroDesejado)}</span>
                        </div>
                        {calc.valorDesconto > 0 && (
-                         <div className="flex justify-between text-destructive font-bold">
-                            <span>DESCONTOS APLICADOS ({(draft.descontos || []).filter((d) => (Number(d.valor) || 0) > 0).length || 1})</span>
-                            <span>- {fmtBRL(calc.valorDesconto)}</span>
+                         <div className="space-y-2">
+                           <div className="flex justify-between text-destructive font-bold">
+                              <span>DESCONTOS APLICADOS ({(draft.descontos || []).filter((d) => (Number(d.valor) || 0) > 0).length || 1})</span>
+                              <span>- {fmtBRL(calc.valorDesconto)}</span>
+                           </div>
+                           <div className="pl-3 space-y-1 text-[11px] text-destructive/90 font-medium">
+                             {(draft.descontos || []).filter((d) => (Number(d.valor) || 0) > 0).map((d, idx) => (
+                               <div key={`preview-desconto-${idx}`} className="flex justify-between gap-3">
+                                 <span>- {d.motivo?.trim() ? d.motivo : `Desconto ${idx + 1}`}</span>
+                                 <span>{fmtBRL(Number(d.valor) || 0)}</span>
+                               </div>
+                             ))}
+                           </div>
                          </div>
                        )}
                        
