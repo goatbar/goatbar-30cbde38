@@ -543,7 +543,18 @@ function VendasPage() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <div>
+                    <label className="label-eyebrow block mb-2">Quem trabalhou (nomes)</label>
+                    <input
+                      type="text"
+                      value={maoDeObraNomes}
+                      onChange={e => setMaoDeObraNomes(e.target.value)}
+                      placeholder="Ex.: João, Maria, Carlos"
+                      className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="label-eyebrow block mb-2">Custo Mão de Obra (Dia)</label>
                     <input type="number" value={maoDeObraValor} onChange={e => setMaoDeObraValor(Number(e.target.value))} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm" />
@@ -551,6 +562,7 @@ function VendasPage() {
                   <div>
                     <label className="label-eyebrow block mb-2">Qtd Dias/Equipe</label>
                     <input type="number" value={maoDeObraQtd} onChange={e => setMaoDeObraQtd(Number(e.target.value))} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm" />
+                  </div>
                   </div>
                 </div>
               )}

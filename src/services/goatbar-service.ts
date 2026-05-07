@@ -1,6 +1,17 @@
 import { drinks as seedDrinks } from "@/lib/mock-data";
 
-type Drink = { id: string; name: string; cost: number; price: number; image: string };
+type Drink = {
+  id: string;
+  nome: string;
+  custoUnitario: number;
+  precoVenda: number;
+  imagem: string;
+  modalityConfig: {
+    evento: { active: boolean; cost: number; price?: number };
+    steakhouse: { active: boolean; cost: number; price?: number };
+    goatbotequim: { active: boolean; cost: number; price?: number };
+  };
+};
 type Sale = { id: string; total_revenue: number; total_cost: number; date: string };
 type Event = {
   id: string;
@@ -21,10 +32,11 @@ const STORAGE_KEY = "goatbar_mock_db_v1";
 
 const initialDrinks: Drink[] = seedDrinks.map((d) => ({
   id: d.id,
-  name: d.nome,
-  cost: d.custoUnitario,
-  price: d.precoVenda,
-  image: d.imagem?.startsWith("/") ? d.imagem : `/${d.imagem ?? "drinks/old-fashioned.jpg"}`,
+  nome: d.nome,
+  custoUnitario: d.custoUnitario,
+  precoVenda: d.precoVenda,
+  imagem: d.imagem?.startsWith("/") ? d.imagem : `/${d.imagem ?? "drinks/old-fashioned.jpg"}`,
+  modalityConfig: d.modalityConfig,
 }));
 
 const seed = {
@@ -53,10 +65,20 @@ function readDb() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
     return structuredClone(seed);
   }
-  parsed.drinks = parsed.drinks.map((d: Drink) => ({
-    ...d,
-    image: d.image?.startsWith("/") ? d.image : `/${d.image}`,
-  }));
+  parsed.drinks = parsed.drinks.map((d: any) => {
+    const nome = d.nome ?? d.name;
+    const custoUnitario = Number(d.custoUnitario ?? d.cost ?? 0);
+    const precoVenda = Number(d.precoVenda ?? d.price ?? 0);
+    const imagemBruta = d.imagem ?? d.image ?? "/drinks/old-fashioned.jpg";
+    const imagem = imagemBruta?.startsWith("/") ? imagemBruta : `/${imagemBruta}`;
+    const modalityConfig = d.modalityConfig ?? {
+      evento: { active: true, cost: custoUnitario },
+      steakhouse: { active: true, cost: custoUnitario, price: precoVenda },
+      goatbotequim: { active: true, cost: custoUnitario, price: precoVenda }
+    };
+
+    return { id: d.id, nome, custoUnitario, precoVenda, imagem, modalityConfig };
+  });
   return parsed;
 }
 
@@ -70,10 +92,15 @@ export const goatbarService = {
     const db = readDb();
     db.drinks.unshift({
       id: crypto.randomUUID(),
-      name: payload.name,
-      cost: payload.cost,
-      price: payload.price,
-      image: payload.image ?? "/drinks/old-fashioned.jpg",
+      nome: payload.name,
+      custoUnitario: payload.cost,
+      precoVenda: payload.price,
+      imagem: payload.image ?? "/drinks/old-fashioned.jpg",
+      modalityConfig: {
+        evento: { active: true, cost: payload.cost },
+        steakhouse: { active: true, cost: payload.cost, price: payload.price },
+        goatbotequim: { active: true, cost: payload.cost, price: payload.price }
+      }
     });
     writeDb(db);
   },
