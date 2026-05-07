@@ -164,15 +164,7 @@ function VendasPage() {
   // Filtered sessions
   const sessions = financialSessions.filter(s => s.modalidade === activeTab);
 
-  // Event calculations
-  const eventosValidos = useMemo(() => {
-    return eventos.filter(e => {
-      const contrato = eventContracts.find(ec => ec.eventId === e.id);
-      const isFechado = ["confirmado", "realizado", "proposta_aceita"].includes(e.status);
-      const isAssinado = contrato?.status === "assinado";
-      return isFechado && isAssinado;
-    });
-  }, [eventos, eventContracts]);
+
 
   const statsBotequim = useMemo(() => {
     const list = financialSessions.filter(s => s.modalidade === "Goat Botequim");
