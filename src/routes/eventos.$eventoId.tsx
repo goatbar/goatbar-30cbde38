@@ -1361,12 +1361,13 @@ function EventoInterna() {
                               </div>
                               <p className="text-sm text-foreground/80 leading-relaxed">{n.note}</p>
                            </div>
-                     ))}
-                   </div>
-                 </div>
-               </SectionCard>
-            </div>
-          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </SectionCard>
+             </div>
+           </div>
         )}
 
 
