@@ -107,6 +107,11 @@ function EventoInterna() {
         }
       }
 
+      if (!ev) {
+        alert("Evento não encontrado no banco de dados.");
+        return;
+      }
+
       // Sync draft state with loaded budget
       if (budget) {
         setDraft(mapBudgetToDraft(ev, budget));
@@ -116,11 +121,7 @@ function EventoInterna() {
 
     } catch (e: any) {
       console.error("Erro ao carregar dados do evento:", e);
-      if (e.message?.includes("multiple (or no) rows returned")) {
-          alert("Aviso: Existem dados duplicados ou ausentes para este evento no banco. Por favor, contate o suporte ou verifique a integridade dos dados.");
-      } else {
-          alert(`Erro crítico ao carregar evento: ${e.message || "Verifique sua conexão"}`);
-      }
+      alert(`Erro crítico ao carregar evento: ${e.message || "Verifique sua conexão"}`);
     } finally {
       setLoading(false);
     }

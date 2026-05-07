@@ -114,9 +114,9 @@ export const eventBudgetService = {
       .from("events")
       .select("*")
       .eq("id", id)
-      .maybeSingle(); // Safer than .single()
+      .limit(1);
     if (error) throw error;
-    return data as Event;
+    return (data && data.length > 0) ? data[0] as Event : null;
   },
 
   async createEvent(payload: Partial<Event>) {
@@ -161,9 +161,9 @@ export const eventBudgetService = {
       .select("*")
       .eq("event_id", eventId)
       .eq("is_current", true)
-      .maybeSingle();
+      .limit(1);
     if (error) throw error;
-    return data as BudgetVersion;
+    return (data && data.length > 0) ? data[0] as BudgetVersion : null;
   },
 
   async listBudgetVersions(eventId: string) {

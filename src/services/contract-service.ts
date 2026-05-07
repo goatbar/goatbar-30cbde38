@@ -189,9 +189,9 @@ export const eventContractsService = {
         contract_signers (name)
       `)
       .eq("event_id", eventId)
-      .maybeSingle();
+      .limit(1);
     if (error) throw error;
-    return data;
+    return (data && data.length > 0) ? data[0] : null;
   },
 
   async createContractForEvent(eventId: string, templateId: string, signerId: string) {
