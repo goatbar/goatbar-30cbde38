@@ -14,7 +14,8 @@ import {
   Inbox,
   BarChart3,
   Wallet,
-  Menu
+  Menu,
+  X
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -183,9 +184,32 @@ export function AppShell({ children }: { children?: ReactNode }) {
       </aside>
 
       {/* MAIN */}
-      <main className="flex-1 min-w-0 flex flex-col">
+      <main className="flex-1 min-w-0 flex flex-col pb-20 lg:pb-0">
         {children ?? <Outlet />}
       </main>
+
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
+        <div className="grid grid-cols-5 px-2 py-2">
+          {nav.slice(0, 5).map((item) => {
+            const Icon = item.icon;
+            const active = item.exact
+              ? location.pathname === item.to
+              : location.pathname.startsWith(item.to);
+            return (
+              <Link
+                key={`bottom-${item.to}`}
+                to={item.to as any}
+                className={`flex flex-col items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[10px] ${
+                  active ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span className="truncate max-w-full">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }

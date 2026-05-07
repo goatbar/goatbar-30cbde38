@@ -171,8 +171,8 @@ function Dashboard() {
         }
       />
 
-      <div className="px-8 py-7 space-y-7">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+      <div className="page-container space-y-6 lg:space-y-7">
+        <div className="responsive-grid-kpi">
           <StatCard label="Receita Consolidada" value={fmtBRL(metrics.consolidated.receita)} icon={<TrendingUp className="h-4 w-4" />} />
           <StatCard label="Lucro Total Goat Bar" value={fmtBRL(metrics.consolidated.lucro)} icon={<ShoppingBag className="h-4 w-4" />} highlight />
           <StatCard label="Eventos Confirmados" value={String(metrics.events.count)} icon={<CalendarRange className="h-4 w-4" />} />

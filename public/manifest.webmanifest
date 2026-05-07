@@ -1,0 +1,16 @@
+{
+  "name": "Goat Bar Management",
+  "short_name": "Goat Bar",
+  "description": "Sistema de gestão e operação Goat Bar",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F1414",
+  "theme_color": "#701117",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48 32x32 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}
