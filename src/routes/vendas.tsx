@@ -3,15 +3,33 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { StatCard, SectionCard, PrimaryButton, GhostButton, StatusBadge } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
 import { Plus, ShoppingBag, TrendingUp, X, Users, Utensils, Calendar, Calculator, Trash2, Pencil } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAppStore } from "@/lib/app-store";
 import { calcularOrcamentoEvento, type SalesSessionItem, type FinancialSession } from "@/lib/mock-data";
+import { eventBudgetService } from "@/services/event-budget-service";
 
 export const Route = createFileRoute("/vendas")({ component: () => <AppShell><VendasPage /></AppShell> });
 
 function VendasPage() {
-  const { financialSessions, addFinancialSession, updateFinancialSession, deleteFinancialSession, eventos, eventContracts, drinks: allDrinks } = useAppStore();
+  const { financialSessions, addFinancialSession, updateFinancialSession, deleteFinancialSession, eventContracts, drinks: allDrinks } = useAppStore();
   const [activeTab, setActiveTab] = useState<"Goat Botequim" | "7Steakhouse" | "Eventos" | "Consolidação">("Goat Botequim");
+  const [eventosSupabase, setEventosSupabase] = useState<any[]>([]);
+  const [loadingEventos, setLoadingEventos] = useState(false);
+
+  useEffect(() => {
+    const loadEventos = async () => {
+      setLoadingEventos(true);
+      try {
+        const data = await eventBudgetService.getEvents();
+        setEventosSupabase(data || []);
+      } catch (err) {
+        console.error("Erro ao carregar eventos:", err);
+      } finally {
+        setLoadingEventos(false);
+      }
+    };
+    loadEventos();
+  }, []);
   const [showModal, setShowModal] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   
@@ -134,6 +152,14 @@ function VendasPage() {
   };
 
   // --- Calculations ---
+
+  // Event calculations
+  const eventosValidos = useMemo(() => {
+    return eventosSupabase.filter(e => {
+      // Relaxed filter: only confirmed status is needed to show in finance
+      return ["confirmado", "realizado", "proposta_aceita"].includes(e.status);
+    });
+  }, [eventosSupabase]);
   
   // Filtered sessions
   const sessions = financialSessions.filter(s => s.modalidade === activeTab);
@@ -188,10 +214,10 @@ function VendasPage() {
   }, [financialSessions]);
 
   const statsEventos = useMemo(() => {
-    const results = eventosValidos.map(e => calcularOrcamentoEvento(e));
-    const receita = results.reduce((acc, r) => acc + r.valorTotalOrcamento, 0);
-    const custos = results.reduce((acc, r) => acc + r.custoTotalOrcamento, 0);
-    const lucro = results.reduce((acc, r) => acc + r.lucro, 0);
+    // If the event has current_budget_value (cached in Supabase), use it.
+    const receita = eventosValidos.reduce((acc, e) => acc + (e.current_budget_value || 0), 0);
+    const lucro = eventosValidos.reduce((acc, e) => acc + (e.current_profit_value || 0), 0);
+    const custos = receita - lucro;
 
     return { receita, custos, lucro };
   }, [eventosValidos]);
@@ -303,19 +329,25 @@ function VendasPage() {
                   </thead>
                   <tbody>
                     {eventosValidos.map(e => {
-                      const res = calcularOrcamentoEvento(e);
+                      const receita = e.current_budget_value || 0;
+                      const lucro = e.current_profit_value || 0;
+                      const custo = receita - lucro;
                       return (
                         <tr key={e.id} className="border-b border-border/60 hover:bg-surface/50 transition-colors">
                           <td className="px-6 py-4 font-medium">{e.nome}</td>
-                          <td className="px-6 py-4 text-muted-foreground">{new Date(e.data).toLocaleDateString("pt-BR")}</td>
-                          <td className="px-6 py-4">{fmtBRL(res.valorTotalOrcamento)}</td>
-                          <td className="px-6 py-4 text-muted-foreground">{fmtBRL(res.custoTotalOrcamento)}</td>
-                          <td className="px-6 py-4 text-success font-semibold">{fmtBRL(res.lucro)}</td>
+                          <td className="px-6 py-4 text-muted-foreground">{e.date ? new Date(e.date).toLocaleDateString("pt-BR", {timeZone: "UTC"}) : "--"}</td>
+                          <td className="px-6 py-4">{fmtBRL(receita)}</td>
+                          <td className="px-6 py-4 text-muted-foreground">{fmtBRL(custo)}</td>
+                          <td className="px-6 py-4 text-success font-semibold">{fmtBRL(lucro)}</td>
                         </tr>
                       );
                     })}
                     {eventosValidos.length === 0 && (
-                      <tr><td colSpan={5} className="px-6 py-10 text-center text-muted-foreground">Nenhum evento qualificado para o financeiro.</td></tr>
+                      <tr>
+                        <td colSpan={5} className="px-6 py-10 text-center text-muted-foreground italic">
+                          {loadingEventos ? "Carregando eventos do Supabase..." : "Nenhum evento qualificado para o financeiro."}
+                        </td>
+                      </tr>
                     )}
                   </tbody>
                 </table>

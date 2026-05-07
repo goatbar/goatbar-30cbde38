@@ -5,16 +5,26 @@ import { fmtBRL } from "@/lib/format";
 import { TrendingUp, ShoppingBag, CalendarRange, Wine, ChevronRight, Calculator } from "lucide-react";
 import { useAppStore } from "@/lib/app-store";
 import { calcularOrcamentoEvento } from "@/lib/mock-data";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { eventBudgetService } from "@/services/event-budget-service";
 
 export const Route = createFileRoute("/")({ component: () => <AppShell><Dashboard /></AppShell> });
 
 function Dashboard() {
   const store = useAppStore();
-  const { financialSessions, eventos: todosEventos, eventContracts, drinks: allDrinks } = store;
+  const { financialSessions, eventContracts, drinks: allDrinks } = store;
   const [periodoDias, setPeriodoDias] = useState<number>(30);
+  const [eventosSupabase, setEventosSupabase] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      const data = await eventBudgetService.getEvents();
+      setEventosSupabase(data || []);
+    };
+    loadData();
+  }, []);
 
   // Gastos da controladoria
   const totalGastos = (store as any).financial_expenses?.reduce((a: number, b: any) => a + Number(b.amount), 0) || 0;
@@ -34,8 +44,11 @@ function Dashboard() {
   }, [financialSessions, limiteData]);
 
   const filteredEventos = useMemo(() => {
-    return todosEventos.filter(e => new Date(e.data || 0).getTime() >= limiteData.getTime());
-  }, [todosEventos, limiteData]);
+    return eventosSupabase.filter(e => {
+      const eventDate = e.date || e.data;
+      return new Date(eventDate || 0).getTime() >= limiteData.getTime();
+    });
+  }, [eventosSupabase, limiteData]);
 
   // --- Modality Calculations ---
 
@@ -53,27 +66,34 @@ function Dashboard() {
   // 7Steakhouse
   const steakStats = useMemo(() => {
     const list = filteredSessions.filter(s => s.modalidade === "7Steakhouse");
-    const receitaBruta = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0), 0);
-    const custoDrinks = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.custoUnitario * item.quantidade), 0), 0);
-    const resLiq = receitaBruta - custoDrinks;
-    const maoDeObra = list.reduce((acc, s) => acc + (s.maoDeObraValor * s.maoDeObraQtd), 0);
-    const reposicao = list.reduce((acc, s) => acc + (s.reposicaoRestaurante || 0), 0);
-    const lucroFinal = resLiq - maoDeObra - reposicao;
-    return { receitaBruta, custoDrinks, lucroFinal };
-  }, [filteredSessions]);
+    // Receita na Steakhouse para a Goatbar é o repasse (custoUnitario gravado no item)
+    const receitaGoatbar = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.custoUnitario * item.quantidade), 0), 0);
+    const custoDrinks = list.reduce((acc, s) => {
+      return acc + s.items.reduce((sum, item) => {
+        const d = allDrinks.find(x => x.id === item.drinkId);
+        return sum + ((d?.custoUnitario || 0) * item.quantidade);
+      }, 0);
+    }, 0);
+    const lucroBruto = receitaGoatbar - custoDrinks;
+    const maoDeObra = list.reduce((acc, s) => {
+      if (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0) {
+        return acc + s.maoDeObraDetalhes.reduce((a, b) => a + b.valor, 0);
+      }
+      return acc + (s.maoDeObraValor * s.maoDeObraQtd);
+    }, 0);
+    const lucroFinal = lucroBruto - maoDeObra;
+    return { receitaBruta: receitaGoatbar, custoDrinks, lucroFinal };
+  }, [filteredSessions, allDrinks]);
 
   // Eventos
   const eventStats = useMemo(() => {
     const validos = filteredEventos.filter(e => {
-      const contrato = eventContracts.find(ec => ec.eventId === e.id);
-      return ["confirmado", "realizado", "proposta_aceita"].includes(e.status) && contrato?.status === "assinado";
+      return ["confirmado", "realizado", "proposta_aceita"].includes(e.status);
     });
-    const results = validos.map(e => calcularOrcamentoEvento(e, allDrinks));
-    const receita = results.reduce((acc, r) => acc + r.valorTotalOrcamento, 0);
-    const custos = results.reduce((acc, r) => acc + r.custoTotalOrcamento, 0);
-    const lucro = results.reduce((acc, r) => acc + r.lucro, 0);
-    return { receita, custos, lucro, qtd: validos.length };
-  }, [filteredEventos, eventContracts]);
+    const receita = validos.reduce((acc, e) => acc + (e.current_budget_value || 0), 0);
+    const lucro = validos.reduce((acc, e) => acc + (e.current_profit_value || 0), 0);
+    return { receita, lucro, qtd: validos.length };
+  }, [filteredEventos]);
 
   // Consolidated
   const totalReceita = botStats.receitaBruta + steakStats.receitaBruta + eventStats.receita;
@@ -84,17 +104,27 @@ function Dashboard() {
   const rankingDrinks = useMemo(() => {
     const map = new Map<string, { nome: string; qtd: number; receita: number; lucro: number }>();
     filteredSessions.forEach((s) => {
+      const isSteakhouse = s.modalidade === "7Steakhouse";
       s.items.forEach(item => {
         const cur = map.get(item.drinkId) || { nome: item.nome, qtd: 0, receita: 0, lucro: 0 };
         cur.qtd += item.quantidade;
-        cur.receita += item.precoUnitario * item.quantidade;
-        cur.lucro += (item.precoUnitario - item.custoUnitario) * item.quantidade;
+        
+        if (isSteakhouse) {
+          // Lucro Goatbar na Steakhouse = Repasse - Custo Insumo
+          const d = allDrinks.find(x => x.id === item.drinkId);
+          cur.receita += item.custoUnitario * item.quantidade;
+          cur.lucro += (item.custoUnitario - (d?.custoUnitario || 0)) * item.quantidade;
+        } else {
+          // Lucro Goatbar no Botequim = (Venda - Custo) * 60%
+          cur.receita += item.precoUnitario * item.quantidade;
+          cur.lucro += (item.precoUnitario - item.custoUnitario) * item.quantidade * 0.6;
+        }
         map.set(item.drinkId, cur);
       });
     });
     return Array.from(map.entries())
       .map(([id, v]) => ({ id, ...v }))
-      .sort((a, b) => b.receita - a.receita);
+      .sort((a, b) => b.lucro - a.lucro); // Rank by profit
   }, [filteredSessions]);
 
   const topDrinks = rankingDrinks.slice(0, 5);
