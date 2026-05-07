@@ -570,15 +570,6 @@ function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () =>
   
   // Cálculos Básicos
   const items = session.items || [];
-  const receitaBruta = items.reduce((acc: number, item: any) => acc + (item.precoUnitario * item.quantidade), 0);
-  const receitaGoat = items.reduce((acc: number, item: any) => acc + (item.custoUnitario * item.quantidade), 0);
-  
-  // Custo Real (usando drinks da store para pegar custo base se necessário)
-  const custoInsumos = items.reduce((acc: number, item: any) => acc + (item.custoUnitario * item.quantidade), 0);
-  // Nota: No Botequim, o lucro bruto é Receita - Custo. 
-  // No Steakhouse, o lucro bruto do Goat é ReceitaGoat - CustoInsumos.
-  
-  const lucroBruto = isSteak ? (receitaGoat - items.reduce((acc: number, item: any) => acc + (item.custoUnitario * item.quantidade * 0.8), 0)) : (receitaBruta - items.reduce((acc: number, item: any) => acc + (item.custoUnitario * item.quantidade), 0));
 
   // No print do usuário para Botequim:
   // Receita Bruta: R$ 627
@@ -679,7 +670,7 @@ function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () =>
                     ))}
                     <div className="pt-3 border-t border-border/40 flex justify-between items-center">
                        <span className="text-[10px] font-bold text-muted-foreground uppercase">Total Receita</span>
-                       <span className="font-black text-sm">{fmtBRL(calc.receitaBruta)}</span>
+                       <span className="font-black text-sm">{fmtBRL(isSteak ? calc.receitaGoat : calc.receitaBruta)}</span>
                     </div>
                  </div>
               </div>
