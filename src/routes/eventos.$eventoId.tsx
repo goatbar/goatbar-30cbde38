@@ -1169,15 +1169,29 @@ function EventoInterna() {
                   </div>
                 </SectionCard>
               ) : (
-                <SectionCard title="Dados do Contratante" subtitle={`Validado em ${realClientData.submitted_at || realClientData.created_at ? format(parseISO(realClientData.submitted_at || realClientData.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : "---"}`}>
+                <SectionCard 
+                  title="Dados do Contratante" 
+                  subtitle={`Validado em ${realClientData.submitted_at || realClientData.created_at ? format(parseISO(realClientData.submitted_at || realClientData.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : "---"}`}
+                  action={
+                    <GhostButton onClick={handleRequestClientData} className="h-8 text-[10px] font-bold">
+                      <LinkIcon className="h-3 w-3" /> GERAR NOVO LINK
+                    </GhostButton>
+                  }
+                >
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-4 bg-primary/5 rounded-2xl border border-primary/10">
                     <DataField label="Razão Social / Nome" value={realClientData.client_name} />
                     <DataField label="Documento (CPF/CNPJ)" value={realClientData.cpf_cnpj} />
                     <DataField label="E-mail de Contato" value={realClientData.email} />
-                    <DataField label="Telefone / WhatsApp" value={realClientData.phone} />
-                    <div className="md:col-span-2">
-                      <DataField label="Endereço de Faturamento" value={realClientData.address} />
-                    </div>
+                    <DataField label="Local / Endereço do Evento" value={realClientData.address} />
+                    
+                    {realClientData.notes && (
+                      <div className="md:col-span-2 mt-2 pt-4 border-t border-primary/10">
+                        <div className="text-[10px] font-bold text-primary uppercase tracking-widest mb-3">Detalhes e Pagamento Informados pelo Cliente</div>
+                        <div className="whitespace-pre-wrap text-sm text-foreground/80 font-medium leading-relaxed bg-background p-4 rounded-xl border border-primary/10">
+                          {realClientData.notes}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </SectionCard>
               )}

@@ -15,40 +15,29 @@ export const Route = createFileRoute("/contrato/dados/$token")({
 /* ─── Opções de pagamento ─────────────────────────────────────── */
 const FORMAS = [
   {
-    id: "pix_cartao",
-    label: "Pix e Cartão de Crédito",
-    desc: "Combina Pix e cartão na mesma transação",
+    id: "cartao_pix",
+    label: "Cartão de Crédito + Pix",
+    desc: "Inserir valor pago em Pix e parcelar o restante",
     hasCard: true,
+    hasPixVal: true,
   },
   {
     id: "cartao",
     label: "Cartão de Crédito",
-    desc: "Pagamento integral no cartão",
+    desc: "Parcelar o valor integral",
     hasCard: true,
+    hasPixVal: false,
   },
   {
-    id: "pix",
-    label: "Pix",
-    desc: "Pagamento via Pix",
+    id: "entrada_30",
+    label: "30% na assinatura + Restante na semana do evento",
+    desc: "Pague 30% agora e o restante próximo ao evento",
     hasCard: false,
-  },
-] as const;
-
-const CONDICOES = [
-  {
-    id: "avista",
-    label: "À vista",
-    desc: "Valor integral em uma única parcela",
-  },
-  {
-    id: "entrada",
-    label: "30% na assinatura + restante na semana do evento",
-    desc: "Entrada de 30% e o saldo até a semana do evento",
+    hasPixVal: false,
   },
 ] as const;
 
 type FormaId = (typeof FORMAS)[number]["id"];
-type CondicaoId = (typeof CONDICOES)[number]["id"];
 
 /* ─── Pill radio reutilizável ─────────────────────────────────── */
 function PillOption({
@@ -110,11 +99,12 @@ function ContratoDadosPublicPage() {
 
   /* Pagamento */
   const [forma, setForma] = useState<FormaId | "">("");
-  const [condicao, setCondicao] = useState<CondicaoId | "">("");
   const [parcelas, setParcelas] = useState("1");
+  const [pixValue, setPixValue] = useState("");
 
   const formaInfo = FORMAS.find((f) => f.id === forma);
   const needsCard = formaInfo?.hasCard ?? false;
+  const needsPixVal = formaInfo?.hasPixVal ?? false;
 
   useEffect(() => {
     clientContractFormService
@@ -126,15 +116,15 @@ function ContratoDadosPublicPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!forma || !condicao) return;
+    if (!forma) return;
 
-    const paymentSummary = [
-      `Forma: ${formaInfo?.label}`,
-      `Condição: ${CONDICOES.find((c) => c.id === condicao)?.label}`,
-      needsCard ? `Parcelas: ${parcelas}x` : null,
-    ]
-      .filter(Boolean)
-      .join(" | ");
+    let paymentSummary = `Forma de Pagamento: ${formaInfo?.label}`;
+    if (needsPixVal) {
+      paymentSummary += ` | Valor em Pix: R$ ${pixValue}`;
+    }
+    if (needsCard) {
+      paymentSummary += ` | Parcelas no Cartão: ${parcelas}x`;
+    }
 
     setSubmitting(true);
     try {
@@ -326,8 +316,8 @@ function ContratoDadosPublicPage() {
                   selected={forma === f.id}
                   onClick={() => {
                     setForma(f.id);
-                    // Reset parcelas quando não usar cartão
                     if (!f.hasCard) setParcelas("1");
+                    if (!f.hasPixVal) setPixValue("");
                   }}
                   label={f.label}
                   desc={f.desc}
@@ -335,63 +325,70 @@ function ContratoDadosPublicPage() {
               ))}
             </div>
 
-            {/* Parcelas — visível apenas quando cartão está selecionado */}
-            {needsCard && (
-              <div className="mt-5 p-4 rounded-xl border border-primary/20 bg-primary/5">
-                <label className="label-eyebrow block mb-2 flex items-center gap-1.5">
-                  <Hash className="h-3.5 w-3.5" /> Número de Parcelas *
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    required
-                    type="number"
-                    min={1}
-                    max={12}
-                    value={parcelas}
-                    onChange={(e) => setParcelas(e.target.value)}
-                    className="w-24 h-11 px-4 rounded-lg bg-input border border-border text-sm text-center font-bold focus:border-primary focus:outline-none"
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    parcela{Number(parcelas) !== 1 ? "s" : ""} no cartão
-                    {Number(parcelas) === 1 ? " (à vista)" : ""}
-                  </span>
-                </div>
+            {/* Condições dinâmicas */}
+            {(needsCard || needsPixVal) && (
+              <div className="mt-5 p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-4">
+                {needsPixVal && (
+                  <div>
+                    <label className="label-eyebrow block mb-2 flex items-center gap-1.5">
+                      Valor a ser pago no Pix (R$) *
+                    </label>
+                    <input
+                      required
+                      type="text"
+                      placeholder="Ex: 5000,00"
+                      value={pixValue}
+                      onChange={(e) => setPixValue(e.target.value)}
+                      className="w-full h-11 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                    />
+                  </div>
+                )}
+                
+                {needsCard && (
+                  <div>
+                    <label className="label-eyebrow block mb-2 flex items-center gap-1.5">
+                      <Hash className="h-3.5 w-3.5" /> Número de Parcelas no Cartão *
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        required
+                        type="number"
+                        min={1}
+                        max={12}
+                        value={parcelas}
+                        onChange={(e) => setParcelas(e.target.value)}
+                        className="w-24 h-11 px-4 rounded-lg bg-input border border-border text-sm text-center font-bold focus:border-primary focus:outline-none"
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        parcela{Number(parcelas) !== 1 ? "s" : ""} no cartão
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </SectionCard>
 
-          {/* ── Condição de Pagamento ── */}
-          <SectionCard title="Condição de Pagamento" subtitle="Quando será realizado o pagamento">
-            <div className="flex items-center gap-2 mb-4 text-xs text-muted-foreground">
-              <CreditCard className="h-3.5 w-3.5 shrink-0" />
-              <span>Selecione a condição de pagamento</span>
-            </div>
-            <div className="flex flex-col gap-3">
-              {CONDICOES.map((c) => (
-                <PillOption
-                  key={c.id}
-                  selected={condicao === c.id}
-                  onClick={() => setCondicao(c.id)}
-                  label={c.label}
-                  desc={c.desc}
-                />
-              ))}
-            </div>
-          </SectionCard>
-
-          {/* ── Resumo do pagamento (quando ambos selecionados) ── */}
-          {forma && condicao && (
+          {/* ── Resumo do pagamento ── */}
+          {forma && (
             <div className="rounded-xl border border-success/30 bg-success/5 px-5 py-4 text-sm space-y-1">
               <div className="font-semibold text-success text-xs uppercase tracking-wider mb-2">Resumo selecionado</div>
               <div className="text-foreground">
-                <span className="text-muted-foreground">Forma: </span>
+                <span className="text-muted-foreground">Forma de Pagamento: </span>
                 {formaInfo?.label}
-                {needsCard && ` — ${parcelas}x`}
               </div>
-              <div className="text-foreground">
-                <span className="text-muted-foreground">Condição: </span>
-                {CONDICOES.find((c) => c.id === condicao)?.label}
-              </div>
+              {needsPixVal && pixValue && (
+                <div className="text-foreground">
+                  <span className="text-muted-foreground">Valor em Pix: </span>
+                  R$ {pixValue}
+                </div>
+              )}
+              {needsCard && (
+                <div className="text-foreground">
+                  <span className="text-muted-foreground">Parcelas: </span>
+                  {parcelas}x no cartão
+                </div>
+              )}
             </div>
           )}
 
@@ -402,7 +399,7 @@ function ContratoDadosPublicPage() {
             </div>
             <PrimaryButton
               type="submit"
-              disabled={submitting || !forma || !condicao}
+              disabled={submitting || !forma}
               className="w-full sm:w-auto h-12 px-8 text-base shadow-lg shadow-primary/20 disabled:opacity-50"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
