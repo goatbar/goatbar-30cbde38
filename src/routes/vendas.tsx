@@ -171,25 +171,10 @@ function VendasPage() {
   };
 
   const handleSave = async () => {
-    const modalityKey = activeTab === "7Steakhouse" ? "steakhouse" : "goatbotequim";
-    const normalizedItems = modalItems.map((item) => {
-      const drink = allDrinks.find((d) => d.id === item.drinkId);
-      const cfg = drink?.modalityConfig?.[modalityKey];
-      if (!drink || !cfg) return item;
-      const custoInsumo = activeTab === "7Steakhouse" ? Number(drink.custoUnitario || 0) : Number(cfg.cost || 0);
-      return {
-        ...item,
-        nome: drink.nome,
-        precoUnitario: Number(cfg.price || 0),
-        custoUnitario: Number(cfg.cost || 0),
-        custoInsumo,
-      };
-    });
-
     const payload = {
       data: modalDate,
       modalidade: activeTab,
-      items: normalizedItems,
+      items: modalItems,
       maoDeObraValor,
       maoDeObraQtd,
       maoDeObraNomes,
@@ -197,11 +182,11 @@ function VendasPage() {
     };
 
     try {
-       await financialService.createSession(payload);
-       // Also update local store if still using it partially
        if (editingSessionId) {
+         await financialService.updateSession(editingSessionId, payload);
          updateFinancialSession(editingSessionId, payload);
        } else {
+         await financialService.createSession(payload);
          addFinancialSession(payload);
        }
        setShowModal(false);
