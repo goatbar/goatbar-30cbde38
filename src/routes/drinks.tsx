@@ -343,7 +343,7 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
                 {config.goatbotequim.active && (
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">Custo Drinks (R$)</label>
+                      <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">Custo (R$)</label>
                       <input type="number" value={config.goatbotequim.cost} onChange={e => updateModality("goatbotequim", "cost", Number(e.target.value))} className="w-full h-9 px-3 rounded-lg bg-input border border-border text-sm" />
                     </div>
                     <div>
