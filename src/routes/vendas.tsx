@@ -331,7 +331,7 @@ function VendasPage() {
             <SectionCard title="Sessões Lançadas" subtitle="Histórico de vendas consolidadas por dia">
               <div className="space-y-4">
                 {filteredSessions.filter(s => s.modalidade === "Goat Botequim").map(s => (
-                  <SessionRow key={s.id} session={s} onEdit={() => handleEditSession(s)} onDelete={() => deleteFinancialSession(s.id)} />
+                  <SessionRow key={s.id} session={s} drinks={allDrinks} onEdit={() => handleEditSession(s)} onDelete={() => deleteFinancialSession(s.id)} />
                 ))}
                 {filteredSessions.filter(s => s.modalidade === "Goat Botequim").length === 0 && <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">Nenhuma sessão lançada.</div>}
               </div>
@@ -360,7 +360,7 @@ function VendasPage() {
             <SectionCard title="Sessões Semanais Lançadas" subtitle="Vendas diárias agregadas por semana">
               <div className="space-y-4">
                 {filteredSessions.filter(s => s.modalidade === "7Steakhouse").map(s => (
-                  <SessionRow key={s.id} session={s} onEdit={() => handleEditSession(s)} onDelete={() => deleteFinancialSession(s.id)} />
+                  <SessionRow key={s.id} session={s} drinks={allDrinks} onEdit={() => handleEditSession(s)} onDelete={() => deleteFinancialSession(s.id)} />
                 ))}
                 {filteredSessions.filter(s => s.modalidade === "7Steakhouse").length === 0 && <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">Nenhuma sessão lançada.</div>}
               </div>
@@ -564,7 +564,7 @@ function VendasPage() {
   );
 }
 
-function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () => void; onDelete: () => void }) {
+function SessionRow({ session, drinks, onEdit, onDelete }: { session: any; drinks: any[]; onEdit: () => void; onDelete: () => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const isSteak = session.modalidade === "7Steakhouse";
   
@@ -583,7 +583,14 @@ function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () =>
   const calc = useMemo(() => {
     const rb = items.reduce((acc: number, i: any) => acc + (Number(i.precoUnitario || 0) * i.quantidade), 0);
     const rg = items.reduce((acc: number, i: any) => acc + (Number(i.custoUnitario || 0) * i.quantidade), 0);
-    const ci = items.reduce((acc: number, i: any) => acc + (Number(i.custoInsumo || i.custoUnitario || 0) * i.quantidade), 0);
+    const ci = items.reduce((acc: number, i: any) => {
+      const fallbackDrink = drinks.find(d => d.id === i.drinkId) || drinks.find(d => d.nome === i.nome || d.nome === i.drink_name);
+      const fallbackCost = isSteak
+        ? Number(fallbackDrink?.custoUnitario || 0)
+        : Number(fallbackDrink?.modalityConfig?.goatbotequim?.cost || 0);
+      const itemCost = Number(i.custoInsumo ?? fallbackCost);
+      return acc + (itemCost * i.quantidade);
+    }, 0);
     
     const lb = rb - ci;
     const rep = lb * 0.4;
@@ -604,7 +611,7 @@ function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () =>
       maoDeObra: mo,
       lucroFinal: isSteak ? (rg - ci - mo) : (saldo - mo)
     };
-  }, [session, isSteak]);
+  }, [session, isSteak, drinks]);
 
   return (
     <div className={`rounded-2xl border-2 transition-all duration-300 overflow-hidden ${isExpanded ? "border-primary bg-surface shadow-2xl shadow-primary/5" : "border-border bg-surface/40 hover:border-primary/30"}`}>
