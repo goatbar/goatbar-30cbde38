@@ -210,7 +210,13 @@ export const financialService = {
         return sum + (Number(liveIngredientCost) * item.quantidade);
       }, 0);
     }, 0);
-    const botLucro = (botReceita - botCusto) * 0.6 - botList.reduce((acc, s) => acc + (Number(s.maoDeObraValor || 0) * Number(s.maoDeObraQtd || 0)), 0);
+    const botLabor = botList.reduce((acc, s) => {
+      if (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0) {
+        return acc + s.maoDeObraDetalhes.reduce((a: number, b: any) => a + Number(b.valor || 0), 0);
+      }
+      return acc + (Number(s.maoDeObraValor || 0) * Number(s.maoDeObraQtd || 0));
+    }, 0);
+    const botLucro = (botReceita - botCusto) * 0.6 - botLabor;
 
     // Steakhouse
     const steakList = sessions.filter(s => s.modalidade === "7Steakhouse");

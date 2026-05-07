@@ -313,7 +313,12 @@ function VendasPage() {
               <StatCard label="Custo Drinks" value={fmtBRL(metrics.bot.custo)} />
               <StatCard label="Resultado Líquido" value={fmtBRL(metrics.bot.receita - metrics.bot.custo)} />
               <StatCard label="Repasse (40%)" value={fmtBRL((metrics.bot.receita - metrics.bot.custo) * 0.4)} />
-              <StatCard label="Mão de Obra" value={fmtBRL(filteredSessions.filter(s => s.modalidade === "Goat Botequim").reduce((acc, s) => acc + (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0 ? s.maoDeObraDetalhes.reduce((a: number, b: any) => a + Number(b.valor || 0), 0) : Number(s.maoDeObraValor || 0) * Number(s.maoDeObraQtd || 0)), 0))} />
+              <StatCard label="Mão de Obra" value={fmtBRL(filteredSessions.filter(s => s.modalidade === "Goat Botequim").reduce((acc, s) => {
+                if (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0) {
+                  return acc + s.maoDeObraDetalhes.reduce((a: number, b: any) => a + Number(b.valor || 0), 0);
+                }
+                return acc + (Number(s.maoDeObraValor || 0) * Number(s.maoDeObraQtd || 0));
+              }, 0))} />
               <StatCard label="Lucro Final" value={fmtBRL(metrics.bot.lucro)} highlight />
             </div>
 
@@ -601,6 +606,7 @@ function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () =>
       receitaBruta: rb,
       receitaGoat: rg,
       custoInsumos: ci,
+      lucroRetidoRest: rb - rg,
       lucroBruto: isSteak ? (rg - ci) : lb,
       repasse: rep,
       saldoGoat: saldo,
@@ -697,6 +703,15 @@ function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () =>
                           <span className="font-black">{fmtBRL(calc.lucroBruto)}</span>
                        </div>
                     </div>
+
+                    {isSteak && (
+                      <div className="space-y-2">
+                         <div className="flex justify-between text-xs">
+                            <span className="text-warning font-medium">Lucro Retido (Restaurante)</span>
+                            <span className="text-warning font-bold">{fmtBRL(calc.lucroRetidoRest)}</span>
+                         </div>
+                      </div>
+                    )}
 
                     {!isSteak && (
                       <div className="space-y-2">

@@ -174,7 +174,7 @@ function EventoInterna() {
     status: ev.status as any,
     lead_source: ev.lead_source || "",
     referral_name: ev.referral_name || "",
-    is_paid_full: false,
+    is_paid_full: ev.is_paid_full || false,
     drinksPorPessoa: 4,
     markupAdicionalDrinks: 0,
     equipe: {
@@ -186,11 +186,15 @@ function EventoInterna() {
     viagem: { incluir: false, valor: 0 },
     gastosDiversos: [],
     lucroDesejado: 0,
-    pagamento: { formaPagamento: "", percentualPago: 0 },
+    pagamento: { 
+      formaPagamento: ev.payment_method || "", 
+      percentualPago: ev.payment_percent_received || 0,
+      dataPagamento: ev.payment_due_date
+    },
     coposVinculados: {},
     historicoAlteracoes: [],
     historicoNegociacao: [],
-    valorNegociado: 0,
+    valorNegociado: ev.current_budget_value || 0,
     custoPrevisto: 0,
     desconto: 0,
     descontoMotivo: ""
@@ -226,14 +230,14 @@ function EventoInterna() {
     gastosDiversos: Array.isArray(b.miscellaneous_items) ? b.miscellaneous_items : [],
     lucroDesejado: b.profit_value,
     pagamento: { 
-        formaPagamento: b.payment_method || "", 
-        percentualPago: b.paid_percentage,
-        dataPagamento: b.pending_payment_date
+        formaPagamento: b.payment_method || ev.payment_method || "", 
+        percentualPago: b.paid_percentage || ev.payment_percent_received || 0,
+        dataPagamento: b.pending_payment_date || ev.payment_due_date
     },
     coposVinculados: (b.selected_drinks as any)?.copos || {},
     historicoAlteracoes: [],
     historicoNegociacao: [],
-    valorNegociado: b.final_budget_value,
+    valorNegociado: b.final_budget_value || ev.current_budget_value || 0,
     custoPrevisto: b.drinks_base_cost + b.team_total_value + b.ice_total_value + b.fuel_value + b.miscellaneous_total_value,
     desconto: b.discount_value,
     descontoMotivo: b.discount_description || ""
@@ -301,7 +305,8 @@ function EventoInterna() {
         current_budget_value: calc.valorTotalOrcamento,
         current_profit_value: draft.lucroDesejado,
         payment_due_date: draft.pagamento.dataPagamento,
-        payment_percent_received: draft.pagamento.percentualPago
+        payment_percent_received: draft.pagamento.percentualPago,
+        is_paid_full: draft.is_paid_full
       });
 
       // Salva orçamento
@@ -394,8 +399,8 @@ function EventoInterna() {
       // Atualiza no draft local
       setDraft(p => p ? ({ ...p, is_paid_full: newVal, pagamento: { ...p.pagamento, percentualPago: newPerc } }) : null);
       
-      // is_paid_full não existe na tabela events, apenas atualizamos o estado local e pedimos ao usuário para salvar
-      alert(newVal ? "Evento marcado como PAGO. Salve o orçamento para persistir." : "Evento marcado como PENDENTE. Salve o orçamento para persistir.");
+      // Mensagem instrutiva
+      alert(newVal ? "Evento marcado como PAGO. Salve o orçamento para persistir no Dashboard." : "Evento marcado como PENDENTE. Salve o orçamento para persistir.");
     } catch (e) {
       alert("Erro ao atualizar status de pagamento.");
     }
@@ -407,7 +412,7 @@ function EventoInterna() {
       const updatePayload: any = { status: newStatus };
       if (calc) {
         updatePayload.current_budget_value = calc.valorTotalOrcamento;
-        updatePayload.current_profit_value = calc.lucro;
+        updatePayload.current_profit_value = draft?.lucroDesejado || 0;
       }
 
       await eventBudgetService.updateNegotiationStatus(eventoId, newStatus, note);
@@ -437,6 +442,7 @@ function EventoInterna() {
     if (!selectedTemplate || !selectedSigner) { alert("Selecione um template e um assinante."); return; }
     
     try {
+      if(!draft) return;
       await eventContractsService.createContractForEvent(draft.id, selectedTemplate, selectedSigner);
       handleStatusChange("em_assinatura", "Contrato gerado no sistema.");
       alert("Contrato gerado com sucesso!");
@@ -448,6 +454,7 @@ function EventoInterna() {
 
   const handleRequestClientData = async () => {
     try {
+      if(!draft) return;
       const data = await clientContractFormService.createPublicFormToken(draft.id);
       const link = `${window.location.origin}/contrato/dados/${data.public_token}`;
       navigator.clipboard.writeText(link);
@@ -464,7 +471,7 @@ function EventoInterna() {
     try {
       setSaving(true);
       await eventBudgetService.deleteEvent(eventoId);
-      navigate({ to: "/eventos" });
+      window.history.back();
     } catch (e) {
       alert("Erro ao excluir evento.");
       setSaving(false);
@@ -585,7 +592,7 @@ function EventoInterna() {
                   onChange={(e) => handleStatusChange(e.target.value as EventoStatus)}
                   className="bg-surface border-2 border-primary/20 text-primary font-bold text-xs px-4 py-2 rounded-xl outline-none cursor-pointer hover:border-primary/40 transition-all shadow-sm"
                 >
-                                    <option value="NOVO">Novo Orçamento</option>
+                  <option value="NOVO">Novo Orçamento</option>
                   <option value="ORCAMENTO_ENVIADO">Orçamento Enviado</option>
                   <option value="AGUARDANDO_RESPOSTA">Aguardando Resposta</option>
                   <option value="DADOS_SOLICITADOS">Dados p/ Contrato</option>
@@ -738,7 +745,7 @@ function EventoInterna() {
                              {draft.drinks.includes(d.id) && (
                                <div className="absolute top-2 right-2 h-5 w-5 bg-primary rounded-full flex items-center justify-center text-white shadow-lg">
                                   <Check className="h-3 w-3 stroke-[4px]" />
-                               </div>
+                                </div>
                              )}
                           </div>
                           <div className="p-3 space-y-1">
@@ -899,7 +906,7 @@ function EventoInterna() {
                           const arr = [...draft.gastosDiversos];
                           arr[i].descricao = e.target.value;
                           setDraft(p => p ? ({...p, gastosDiversos: arr}) : null);
-                        }} className="flex-1 h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary outline-none transition-colors" placeholder="Descrição do item" />
+                        }} className="flex-1 h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary outline-none transition-all" placeholder="Descrição do item" />
                         <input type="number" value={g.valor || ""} onChange={e => {
                           const arr = [...draft.gastosDiversos];
                           arr[i].valor = e.target.value === "" ? 0 : Number(e.target.value);
@@ -1293,7 +1300,7 @@ function EventoInterna() {
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Data Limite Quitação</label>
-                        <input type="date" value={draft.pagamento.dataPagamento} onChange={e => setDraft(p => p ? ({...p, pagamento: { ...p.pagamento, dataPagamento: e.target.value }}) : null)} className="w-full h-12 px-4 rounded-xl bg-input border border-border text-sm font-medium" />
+                        <input type="date" value={draft.pagamento.dataPagamento || ""} onChange={e => setDraft(p => p ? ({...p, pagamento: { ...p.pagamento, dataPagamento: e.target.value }}) : null)} className="w-full h-12 px-4 rounded-xl bg-input border border-border text-sm font-medium" />
                       </div>
                    </div>
 
@@ -1363,7 +1370,7 @@ function EventoInterna() {
                           <div className="absolute left-0 top-0 bottom-0 w-px bg-border group-last:bg-transparent" />
                           <div className="absolute left-[-4px] top-1 h-2 w-2 rounded-full bg-primary shadow-[0_0_0_4px_rgba(var(--primary-rgb),0.1)]" />
                           
-                                                    <div className="bg-surface p-4 rounded-2xl border border-border hover:border-primary/30 transition-all hover:shadow-md relative group/note">
+                          <div className="bg-surface p-4 rounded-2xl border border-border hover:border-primary/30 transition-all hover:shadow-md relative group/note">
                               <div className="flex justify-between items-start mb-3">
                                  <div className="px-2 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">
                                     {n.status?.replace("_", " ") || "NOTA"}
@@ -1390,8 +1397,8 @@ function EventoInterna() {
                               </div>
                               <p className="text-sm text-foreground/80 leading-relaxed">{n.note}</p>
                            </div>
-                        </div>
-                      ))}
+                       </div>
+                     ))}
                     </div>
                   </div>
                 </SectionCard>
@@ -1570,4 +1577,3 @@ function Row({ k, v, highlight }: { k: string; v: string; highlight?: boolean })
     </div>
   );
 }
-

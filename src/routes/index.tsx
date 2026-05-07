@@ -117,7 +117,7 @@ function Dashboard() {
   const proximosEventos = [...eventosSupabase]
     .filter(e => {
       const s = e.status?.toUpperCase();
-      return ["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(s);
+      return s === "CONFIRMADO" || s === "PROPOSTA_ACEITA";
     })
     .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime())
     .filter(e => new Date(e.date || 0).getTime() >= new Date().setHours(0,0,0,0))
