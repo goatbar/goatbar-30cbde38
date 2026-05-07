@@ -210,6 +210,9 @@ function Dashboard() {
                     <div className="text-xs text-muted-foreground mt-0.5">
                       {e.date ? format(parseISO(e.date), "dd/MMM", { locale: ptBR }) : "--"} · {e.guests || e.convidados} convidados
                     </div>
+                    <div className="text-[11px] text-muted-foreground/90 mt-0.5 truncate">
+                      {[e.event_type, e.city].filter(Boolean).join(" · ") || "Tipo/cidade não informados"}
+                    </div>
                   </div>
                   <StatusBadge status={e.status} />
                   <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />

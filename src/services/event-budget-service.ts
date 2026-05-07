@@ -111,7 +111,38 @@ export const eventBudgetService = {
       .select("*")
       .order("date", { ascending: true });
     if (error) throw error;
-    return data as Event[];
+
+    const events = (data || []) as Event[];
+    if (events.length === 0) return events;
+
+    const { data: currentBudgets, error: budgetError } = await supabase
+      .from("event_budget_versions")
+      .select("event_id, profit_value, paid_percentage, pending_payment_date, final_budget_value, discount_value")
+      .eq("is_current", true);
+
+    if (budgetError) {
+      console.warn("Falha ao carregar versões atuais de orçamento. Usando dados base de events.", budgetError);
+      return events;
+    }
+
+    const budgetByEvent = new Map((currentBudgets || []).map((b: any) => [b.event_id, b]));
+
+    return events.map((event) => {
+      const budget = budgetByEvent.get(event.id);
+      if (!budget) return event;
+
+      const discount = Number(budget.discount_value || 0);
+      const budgetProfit = Number(budget.profit_value || 0);
+      const reconciledProfit = budgetProfit > 0 ? budgetProfit : Number(event.current_profit_value || 0) + discount;
+
+      return {
+        ...event,
+        current_budget_value: Number(budget.final_budget_value || event.current_budget_value || 0),
+        current_profit_value: reconciledProfit,
+        payment_percent_received: Number(budget.paid_percentage ?? event.payment_percent_received ?? 0),
+        payment_due_date: budget.pending_payment_date || event.payment_due_date,
+      };
+    });
   },
 
   async getEventById(id: string) {
