@@ -182,11 +182,11 @@ function VendasPage() {
     };
 
     try {
-       await financialService.createSession(payload);
-       // Also update local store if still using it partially
        if (editingSessionId) {
+         await financialService.updateSession(editingSessionId, payload);
          updateFinancialSession(editingSessionId, payload);
        } else {
+         await financialService.createSession(payload);
          addFinancialSession(payload);
        }
        setShowModal(false);
