@@ -126,6 +126,8 @@ function ContratoDadosPublicPage() {
       paymentSummary += ` | Parcelas no Cartão: ${parcelas}x`;
     }
 
+    const brEventDate = eventDate ? eventDate.split('-').reverse().join('/') : "";
+
     setSubmitting(true);
     try {
       await clientContractFormService.submitClientData(token, {
@@ -134,7 +136,7 @@ function ContratoDadosPublicPage() {
         email,
         address,
         notes: [
-          `Data do Evento: ${eventDate}`,
+          `Data do Evento: ${brEventDate}`,
           `Horário: ${eventTime}`,
           `Convidados: ${guestCount}`,
           paymentSummary,
