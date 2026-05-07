@@ -313,17 +313,6 @@ function EventoInterna() {
     }
   };
 
-  const handleDeleteVersion = async (budgetId: string) => {
-    if (!confirm("Tem certeza que deseja excluir esta versão? Esta ação será registrada no log e não pode ser desfeita.")) return;
-    try {
-      await eventBudgetService.deleteBudgetVersion(budgetId);
-      alert("Versão excluída com sucesso.");
-      loadAllData();
-    } catch (e: any) {
-      alert(`Erro ao excluir versão: ${e.message}`);
-    }
-  };
-
   const handleDeleteVersion = async (versionId: string) => {
     if (!confirm("Tem certeza que deseja excluir esta versão do orçamento? Esta ação não pode ser desfeita.")) return;
     try {

@@ -274,7 +274,6 @@ function Dashboard() {
             </div>
           </SectionCard>
         </div>
-        </div>
 
         {/* Resumo por Modalidade */}
         <SectionCard title="Resumo por Modalidade" subtitle="Consolidado de resultados líquidos">
