@@ -126,7 +126,8 @@ export const financialService = {
           ...i,
           nome: i.drink_name,
           precoUnitario: i.unit_price,
-          custoUnitario: i.unit_cost
+          custoUnitario: i.unit_cost,
+          custoInsumo: i.ingredient_cost
         }))
       }));
 
@@ -182,7 +183,8 @@ export const financialService = {
           drink_name: i.nome,
           quantity: i.quantidade,
           unit_price: i.precoUnitario,
-          unit_cost: i.custoUnitario
+          unit_cost: i.custoUnitario,
+          ingredient_cost: i.custoInsumo
         }));
 
         const { error: iError } = await supabase
@@ -228,7 +230,8 @@ export const financialService = {
         drink_name: i.nome,
         quantity: i.quantidade,
         unit_price: i.precoUnitario,
-        unit_cost: i.custoUnitario
+        unit_cost: i.custoUnitario,
+        ingredient_cost: i.custoInsumo
       }));
       const { error: iError } = await supabase
         .from("financial_session_items")
