@@ -200,13 +200,20 @@ export const financialService = {
   },
 
   calculateMetrics(sessions: any[], events: any[], drinks: any[]) {
+    const resolveFallbackCost = (item: any, modalidade: string) => {
+      const d = drinks.find(x => x.id === item.drinkId);
+      if (!d) return 0;
+      if (modalidade === "7Steakhouse") return Number(d.custoUnitario || 0);
+      if (modalidade === "Goat Botequim") return Number(d.modalityConfig?.goatbotequim?.cost || 0);
+      return Number(d.custoUnitario || 0);
+    };
+
     // Botequim
     const botList = sessions.filter(s => s.modalidade === "Goat Botequim");
     const botReceita = botList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (Number(item.precoUnitario || 0) * item.quantidade), 0), 0);
     const botCusto = botList.reduce((acc, s) => {
       return acc + (s.items || []).reduce((sum: number, item: any) => {
-        const d = drinks.find(x => x.id === item.drinkId);
-        const liveIngredientCost = item.custoInsumo || item.custoUnitario || d?.custoUnitario || 0;
+        const liveIngredientCost = item.custoInsumo ?? resolveFallbackCost(item, "Goat Botequim");
         return sum + (Number(liveIngredientCost) * item.quantidade);
       }, 0);
     }, 0);
@@ -225,8 +232,7 @@ export const financialService = {
     // Custo Insumos = O que o Goat Bar gasta para fazer (custoInsumo no item ou custoUnitario base do drink)
     const steakCusto = steakList.reduce((acc, s) => {
       return acc + (s.items || []).reduce((sum: number, item: any) => {
-        const d = drinks.find(x => x.id === item.drinkId);
-        const liveIngredientCost = item.custoInsumo || item.custoUnitario || d?.custoUnitario || 0;
+        const liveIngredientCost = item.custoInsumo ?? resolveFallbackCost(item, "7Steakhouse");
         return sum + (Number(liveIngredientCost) * item.quantidade);
       }, 0);
     }, 0);

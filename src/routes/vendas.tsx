@@ -171,10 +171,25 @@ function VendasPage() {
   };
 
   const handleSave = async () => {
+    const modalityKey = activeTab === "7Steakhouse" ? "steakhouse" : "goatbotequim";
+    const normalizedItems = modalItems.map((item) => {
+      const drink = allDrinks.find((d) => d.id === item.drinkId);
+      const cfg = drink?.modalityConfig?.[modalityKey];
+      if (!drink || !cfg) return item;
+      const custoInsumo = activeTab === "7Steakhouse" ? Number(drink.custoUnitario || 0) : Number(cfg.cost || 0);
+      return {
+        ...item,
+        nome: drink.nome,
+        precoUnitario: Number(cfg.price || 0),
+        custoUnitario: Number(cfg.cost || 0),
+        custoInsumo,
+      };
+    });
+
     const payload = {
       data: modalDate,
       modalidade: activeTab,
-      items: modalItems,
+      items: normalizedItems,
       maoDeObraValor,
       maoDeObraQtd,
       maoDeObraNomes,
