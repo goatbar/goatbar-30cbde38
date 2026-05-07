@@ -3,14 +3,6 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { StatCard, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
 import { TrendingUp, ShoppingBag, CalendarRange, Wine, ChevronRight, Calculator } from "lucide-react";
-import { useAppStore } from "@/lib/app-store";
-import { calcularOrcamentoEvento } from "@/lib/mock-data";
-import { useState, useMemo, useEffect } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { AppShell, PageHeader } from "@/components/AppShell";
-import { StatCard, SectionCard, StatusBadge } from "@/components/ui-bits";
-import { fmtBRL } from "@/lib/format";
-import { TrendingUp, ShoppingBag, CalendarRange, Wine, ChevronRight, Calculator } from "lucide-react";
 import { eventBudgetService } from "@/services/event-budget-service";
 import { financialService } from "@/services/financial-service";
 import { goatbarService } from "@/services/goatbar-service";
@@ -48,7 +40,7 @@ function Dashboard() {
     loadData();
   }, []);
 
-  // Gastos da controladoria - Agora vem direto do financialSessions se mapeado corretamente
+  // Gastos da controladoria
   const totalGastos = financialSessions.reduce((a: number, b: any) => a + Number(b.amount || 0), 0);
 
   // Filtros Globais Baseados no Período Selecionado
@@ -77,8 +69,8 @@ function Dashboard() {
   // Goat Botequim
   const botStats = useMemo(() => {
     const list = filteredSessions.filter(s => s.modalidade === "Goat Botequim");
-    const receitaBruta = list.reduce((acc, s) => acc + s.items.reduce((sum: number, item: any) => sum + (item.precoUnitario * item.quantidade), 0), 0);
-    const custoDrinks = list.reduce((acc, s) => acc + s.items.reduce((sum: number, item: any) => sum + (item.custoUnitario * item.quantidade), 0), 0);
+    const receitaBruta = list.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (item.precoUnitario * item.quantidade), 0), 0);
+    const custoDrinks = list.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (item.custoUnitario * item.quantidade), 0), 0);
     const resLiq = receitaBruta - custoDrinks;
     const maoDeObra = list.reduce((acc, s) => acc + (s.maoDeObraValor * s.maoDeObraQtd), 0);
     const lucroFinal = (resLiq * 0.6) - maoDeObra;
@@ -88,9 +80,9 @@ function Dashboard() {
   // 7Steakhouse
   const steakStats = useMemo(() => {
     const list = filteredSessions.filter(s => s.modalidade === "7Steakhouse");
-    const receitaGoatbar = list.reduce((acc, s) => acc + s.items.reduce((sum: number, item: any) => sum + (item.custoUnitario * item.quantidade), 0), 0);
+    const receitaGoatbar = list.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (item.custoUnitario * item.quantidade), 0), 0);
     const custoDrinks = list.reduce((acc, s) => {
-      return acc + s.items.reduce((sum: number, item: any) => {
+      return acc + (s.items || []).reduce((sum: number, item: any) => {
         const d = allDrinks.find(x => x.id === item.drinkId);
         return sum + ((d?.custoUnitario || 0) * item.quantidade);
       }, 0);
@@ -127,7 +119,7 @@ function Dashboard() {
     const map = new Map<string, { nome: string; qtd: number; receita: number; lucro: number }>();
     filteredSessions.forEach((s) => {
       const isSteakhouse = s.modalidade === "7Steakhouse";
-      s.items.forEach((item: any) => {
+      (s.items || []).forEach((item: any) => {
         const cur = map.get(item.drinkId) || { nome: item.nome, qtd: 0, receita: 0, lucro: 0 };
         cur.qtd += item.quantidade;
         
@@ -163,6 +155,22 @@ function Dashboard() {
       const s = e.status?.toUpperCase();
       const isPaid = (e.payment_percent_received || 0) >= 100;
       return ["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(s) && !isPaid;
+    })
+    .map(e => {
+       const total = Number(e.current_budget_value || 0);
+       const pago = total * (Number(e.payment_percent_received || 0) / 100);
+       const pendente = total - pago;
+       return { ...e, valorPendente: pendente };
+    })
+    .filter(e => e.valorPendente > 0)
+    .sort((a, b) => new Date(a.payment_due_date || a.date || 0).getTime() - new Date(b.payment_due_date || b.date || 0).getTime())
+    .slice(0, 5);
+
+  return (
+    <>
+      <PageHeader
+        title="Dashboard"
+        subtitle="Visão geral consolidada do Goat Bar Management System."
         periodo={
           <div className="relative">
             <select
@@ -181,7 +189,6 @@ function Dashboard() {
       />
 
       <div className="px-8 py-7 space-y-7">
-        {/* Main Financial Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
           <StatCard label="Receita Consolidada" value={fmtBRL(totalReceita)} icon={<TrendingUp className="h-4 w-4" />} />
           <StatCard label="Lucro Total Goat Bar" value={fmtBRL(totalLucro)} icon={<ShoppingBag className="h-4 w-4" />} highlight />
@@ -190,7 +197,6 @@ function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-          {/* Top Drinks */}
           <SectionCard title="Drinks mais rentáveis" subtitle="Participação no lucro por sessões diretas">
             <div className="space-y-3">
               {topDrinks.map((d, i) => {
@@ -223,7 +229,6 @@ function Dashboard() {
             </div>
           </SectionCard>
 
-          {/* Próximos Eventos */}
           <SectionCard title="Próximos eventos" subtitle="Agenda operacional" action={
             <Link to="/eventos" className="text-xs text-primary hover:text-primary/80 transition-colors font-medium">
               Ver todos
@@ -243,7 +248,7 @@ function Dashboard() {
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm truncate">{e.nome}</div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {e.data ? format(parseISO(e.data), "dd/MMM", { locale: ptBR }) : "--"} · {e.convidados} convidados
+                      {e.date ? format(parseISO(e.date), "dd/MMM", { locale: ptBR }) : "--"} · {e.convidados} convidados
                     </div>
                   </div>
                   <StatusBadge status={e.status} />
@@ -253,7 +258,6 @@ function Dashboard() {
             </div>
           </SectionCard>
 
-          {/* Próximos Pagamentos */}
           <SectionCard title="Próximos Pagamentos" subtitle="Fluxo de caixa de eventos confirmados" className="border-amber-500/20 shadow-lg shadow-amber-500/5">
             <div className="space-y-3">
               {proximosPagamentos.length === 0 && (
@@ -285,7 +289,6 @@ function Dashboard() {
           </SectionCard>
         </div>
 
-        {/* Resumo por Modalidade */}
         <SectionCard title="Resumo por Modalidade" subtitle="Consolidado de resultados líquidos">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="p-4 rounded-xl border border-border bg-background/40">
