@@ -36,21 +36,31 @@ const parseDiscountsFromDescription = (discountValue: number, discountDescriptio
   return discountValue > 0 ? [{ valor: discountValue, motivo: discountDescription }] : [];
 };
 
-const HeaderField = ({ label, value, isEditing, onChange, icon, type = "text" }: { label: string, value: string, isEditing: boolean, onChange: (v: string) => void, icon?: React.ReactNode, type?: string }) => (
-  <div className="space-y-1">
-    <div className="label-eyebrow flex items-center gap-1">{icon} {label}</div>
-    {isEditing ? (
-      <input 
-        type={type}
-        value={value || ""} 
-        onChange={e => onChange(e.target.value)}
-        className="w-full h-8 px-2 rounded bg-input border border-border text-xs focus:ring-1 focus:ring-primary outline-none transition-all"
-      />
-    ) : (
-      <div className="text-sm font-bold truncate" title={value}>{value || "---"}</div>
-    )}
-  </div>
-);
+const HeaderField = ({ label, value, isEditing, onChange, icon, type = "text" }: { label: string, value: string, isEditing: boolean, onChange: (v: string) => void, icon?: React.ReactNode, type?: string }) => {
+  let displayValue = value || "---";
+  if (!isEditing && type === "date" && value) {
+    try {
+      // Formata YYYY-MM-DD para DD/MM/YYYY
+      const [y, m, d] = value.split("-");
+      if (y && m && d) displayValue = `${d}/${m}/${y}`;
+    } catch {}
+  }
+  return (
+    <div className="space-y-1">
+      <div className="label-eyebrow flex items-center gap-1">{icon} {label}</div>
+      {isEditing ? (
+        <input 
+          type={type}
+          value={value || ""} 
+          onChange={e => onChange(e.target.value)}
+          className="w-full h-8 px-2 rounded bg-input border border-border text-xs focus:ring-1 focus:ring-primary outline-none transition-all"
+        />
+      ) : (
+        <div className="text-sm font-bold truncate" title={displayValue}>{displayValue}</div>
+      )}
+    </div>
+  );
+};
 
 function EventoInterna() {
   const { eventoId } = Route.useParams();
@@ -1188,7 +1198,7 @@ function EventoInterna() {
                       <div className="md:col-span-2 mt-2 pt-4 border-t border-primary/10">
                         <div className="text-[10px] font-bold text-primary uppercase tracking-widest mb-3">Detalhes e Pagamento Informados pelo Cliente</div>
                         <div className="whitespace-pre-wrap text-sm text-foreground/80 font-medium leading-relaxed bg-background p-4 rounded-xl border border-primary/10">
-                          {realClientData.notes}
+                          {realClientData.notes.replace(/(\d{4})-(\d{2})-(\d{2})/g, '$3/$2/$1')}
                         </div>
                       </div>
                     )}
