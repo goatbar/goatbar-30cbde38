@@ -218,14 +218,20 @@ function VendasPage() {
       
       const sessionReceita = (s.items || []).reduce((acc: number, item: any) => acc + (item.precoUnitario * item.quantidade), 0);
       const sessionCusto = (s.items || []).reduce((acc: number, item: any) => {
-        // Usa o custoInsumo gravado no item; fallback por modalidade do drink
+        const d = allDrinks.find(x => x.id === item.drinkId);
+
+        if (s.modalidade === "Goat Botequim") {
+          // No Botequim, custo vem da modalidade Goat Botequim (não da ficha técnica)
+          const goatCost = Number(item.custoUnitario ?? d?.modalityConfig?.goatbotequim?.cost ?? 0);
+          return acc + (goatCost * item.quantidade);
+        }
+
+        // Steakhouse/Evento: usa ficha técnica (custoInsumo) com fallback de modalidade
         if (item.custoInsumo !== undefined && item.custoInsumo !== null) {
           return acc + (item.custoInsumo * item.quantidade);
         }
-        const d = allDrinks.find(x => x.id === item.drinkId);
-        const fallbackCost = s.modalidade === "7Steakhouse"
-          ? Number(d?.modalityConfig?.evento?.cost || d?.custoUnitario || 0)
-          : Number(d?.modalityConfig?.goatbotequim?.cost || 0);
+
+        const fallbackCost = Number(d?.modalityConfig?.evento?.cost || d?.custoUnitario || 0);
         return acc + (fallbackCost * item.quantidade);
       }, 0);
       
@@ -602,8 +608,8 @@ function SessionRow({ session, drinks, onEdit, onDelete }: { session: any; drink
       const fallbackDrink = drinks.find(d => d.id === i.drinkId) || drinks.find(d => d.nome === i.nome || d.nome === i.drink_name);
       const fallbackCost = isSteak
         ? Number(fallbackDrink?.modalityConfig?.evento?.cost || fallbackDrink?.custoUnitario || 0)
-        : Number(fallbackDrink?.modalityConfig?.goatbotequim?.cost || 0);
-      const itemCost = Number(i.custoInsumo ?? fallbackCost);
+        : Number(i.custoUnitario ?? fallbackDrink?.modalityConfig?.goatbotequim?.cost ?? 0);
+      const itemCost = isSteak ? Number(i.custoInsumo ?? fallbackCost) : Number(fallbackCost);
       return acc + (itemCost * i.quantidade);
     }, 0);
     

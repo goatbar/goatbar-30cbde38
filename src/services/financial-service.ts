@@ -245,7 +245,7 @@ export const financialService = {
       const d = drinks.find(x => x.id === item.drinkId) || drinks.find(x => x.nome === item.nome || x.nome === item.drink_name);
       if (!d) return 0;
       if (modalidade === "7Steakhouse") return Number(d.modalityConfig?.evento?.cost || d.custoUnitario || 0);
-      if (modalidade === "Goat Botequim") return Number(d.modalityConfig?.goatbotequim?.cost || 0);
+      if (modalidade === "Goat Botequim") return Number(item.custoUnitario ?? d.modalityConfig?.goatbotequim?.cost ?? 0);
       return Number(d.custoUnitario || 0);
     };
 
@@ -254,7 +254,7 @@ export const financialService = {
     const botReceita = botList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (Number(item.precoUnitario || 0) * item.quantidade), 0), 0);
     const botCusto = botList.reduce((acc, s) => {
       return acc + (s.items || []).reduce((sum: number, item: any) => {
-        const liveIngredientCost = item.custoInsumo ?? resolveFallbackCost(item, "Goat Botequim");
+        const liveIngredientCost = resolveFallbackCost(item, "Goat Botequim");
         return sum + (Number(liveIngredientCost) * item.quantidade);
       }, 0);
     }, 0);
