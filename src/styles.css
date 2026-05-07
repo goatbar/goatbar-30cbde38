@@ -134,6 +134,7 @@
     color: var(--color-foreground);
     font-feature-settings: "ss01", "cv01";
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
   }
 
   h1, h2, h3, h4, h5, h6, .font-display {
@@ -171,4 +172,18 @@
   ::-webkit-scrollbar-track { background: var(--background); }
   ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+  input, select, textarea, button {
+    font-size: 16px;
+  }
+}
+
+@layer utilities {
+  .page-container {
+    @apply px-4 py-5 sm:px-6 lg:px-8 lg:py-7;
+  }
+
+  .responsive-grid-kpi {
+    @apply grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 sm:gap-5;
+  }
 }
