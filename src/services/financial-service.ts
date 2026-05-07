@@ -113,8 +113,8 @@ export const financialService = {
         throw error;
       }
       
-      // Map Supabase fields back to mock-like structure if needed
-      return (data || []).map(s => ({
+      const localSessions = this.getLocalSessions();
+      const remoteSessions = (data || []).map(s => ({
         ...s,
         data: s.date,
         modalidade: s.modality,
@@ -129,6 +129,16 @@ export const financialService = {
           custoUnitario: i.unit_cost
         }))
       }));
+
+      // Merge avoiding duplicates by id (prefer remote if same id exists)
+      const merged = [...remoteSessions];
+      localSessions.forEach((ls: any) => {
+        if (!merged.find(ms => ms.id === ls.id)) {
+          merged.push(ls);
+        }
+      });
+
+      return merged;
     } catch (e) {
       console.warn("Erro ao buscar sessões do Supabase, tentando LocalStorage:", e);
       return this.getLocalSessions();

@@ -117,7 +117,7 @@ function Dashboard() {
   const proximosEventos = [...eventosSupabase]
     .filter(e => {
       const s = e.status?.toUpperCase();
-      return !["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
+      return ["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(s);
     })
     .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime())
     .filter(e => new Date(e.date || 0).getTime() >= new Date().setHours(0,0,0,0))
@@ -131,12 +131,17 @@ function Dashboard() {
     })
     .map(e => {
        const total = Number(e.current_budget_value || 0);
-       const pago = total * (Number(e.payment_percent_received || 0) / 100);
+       const percentPago = Number(e.payment_percent_received || 0);
+       const pago = total * (percentPago / 100);
        const pendente = total - pago;
        return { ...e, valorPendente: pendente };
     })
     .filter(e => e.valorPendente > 0)
-    .sort((a, b) => new Date(a.payment_due_date || a.date || 0).getTime() - new Date(b.payment_due_date || b.date || 0).getTime())
+    .sort((a, b) => {
+      const dateA = a.payment_due_date || a.date || "9999-12-31";
+      const dateB = b.payment_due_date || b.date || "9999-12-31";
+      return new Date(dateA).getTime() - new Date(dateB).getTime();
+    })
     .slice(0, 5);
 
   return (

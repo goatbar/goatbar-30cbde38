@@ -85,9 +85,30 @@ export function StatusBadge({ status }: { status: string }) {
     FINALIZADO: { bg: "bg-success/10", fg: "text-success", label: "Finalizado" },
     CANCELADO: { bg: "bg-destructive/10", fg: "text-destructive", label: "Cancelado" },
     NOVO: { bg: "bg-primary/10", fg: "text-primary", label: "Novo" },
+    REALIZADO: { 
+      bg: "bg-[rgba(22,163,74,0.15)]", 
+      fg: "text-[#22c55e]", 
+      label: "Realizado",
+      border: "border-[rgba(34,197,94,0.35)]" 
+    },
+    PROPOSTA_ACEITA: { 
+      bg: "bg-[rgba(22,163,74,0.15)]", 
+      fg: "text-[#22c55e]", 
+      label: "Proposta Aceita",
+      border: "border-[rgba(34,197,94,0.35)]" 
+    },
+    novo_orcamento: { bg: "bg-primary/10", fg: "text-primary", label: "Novo Orçamento" },
+    orcamento_enviado: { bg: "bg-warning/10", fg: "text-warning", label: "Orçamento Enviado" },
+    aguardando_retorno: { bg: "bg-secondary", fg: "text-muted-foreground", label: "Aguardando Retorno" },
+    em_assinatura: { bg: "bg-primary/10", fg: "text-primary", label: "Em Assinatura" },
 
     // Legado e Outros
-    confirmado: { bg: "bg-success/10", fg: "text-success", label: "Confirmado" },
+    confirmado: { 
+      bg: "bg-[rgba(22,163,74,0.15)]", 
+      fg: "text-[#22c55e]", 
+      label: "Confirmado",
+      border: "border-[rgba(34,197,94,0.35)]" 
+    },
     em_andamento: { bg: "bg-warning/10", fg: "text-warning", label: "Em andamento" },
     rascunho: { bg: "bg-muted", fg: "text-muted-foreground", label: "Rascunho" },
     concluido: { bg: "bg-secondary", fg: "text-foreground", label: "Concluído" },

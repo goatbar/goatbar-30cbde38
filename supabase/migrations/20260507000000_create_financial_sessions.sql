@@ -29,5 +29,8 @@ ALTER TABLE public.financial_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.financial_session_items ENABLE ROW LEVEL SECURITY;
 
 -- Permissive policies for initial phase
+DROP POLICY IF EXISTS "public full access financial_sessions" ON public.financial_sessions;
 CREATE POLICY "public full access financial_sessions" ON public.financial_sessions FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "public full access financial_session_items" ON public.financial_session_items;
 CREATE POLICY "public full access financial_session_items" ON public.financial_session_items FOR ALL USING (true) WITH CHECK (true);

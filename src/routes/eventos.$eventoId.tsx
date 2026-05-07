@@ -174,7 +174,7 @@ function EventoInterna() {
     status: ev.status as any,
     lead_source: ev.lead_source || "",
     referral_name: ev.referral_name || "",
-    is_paid_full: b.paid_percentage >= 100,
+    is_paid_full: false,
     drinksPorPessoa: 4,
     markupAdicionalDrinks: 0,
     equipe: {
@@ -299,7 +299,9 @@ function EventoInterna() {
         lead_source: draft.lead_source,
         referral_name: draft.referral_name,
         current_budget_value: calc.valorTotalOrcamento,
-        current_profit_value: calc.lucro
+        current_profit_value: draft.lucroDesejado,
+        payment_due_date: draft.pagamento.dataPagamento,
+        payment_percent_received: draft.pagamento.percentualPago
       });
 
       // Salva orçamento
@@ -1454,15 +1456,16 @@ function EventoInterna() {
                               <div className="text-sm font-bold">{v.average_value_per_person > 0 ? Math.round(v.final_budget_value / v.average_value_per_person) : '--'}</div>
                            </div>
                            <div className="text-center">
-                              <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Custo Total</div>
-                              <div className="text-sm font-bold">{fmtBRL(v.drinks_base_cost + v.team_total_value + v.ice_total_value + v.fuel_value + v.miscellaneous_total_value)}</div>
+                              <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Subtotal (Base)</div>
+                              <div className="text-sm font-bold">{fmtBRL(v.drinks_final_value + v.team_total_value + v.ice_total_value + v.fuel_value + v.miscellaneous_total_value)}</div>
                            </div>
                            <div className="text-center">
-                              <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Margem</div>
+                              <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Lucro</div>
                               <div className="text-sm font-bold text-success">{fmtBRL(v.profit_value)}</div>
                            </div>
                         </div>
                       </div>
+
                     ))}
                   </div>
                 </SectionCard>

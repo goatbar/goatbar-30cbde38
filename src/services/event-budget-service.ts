@@ -17,6 +17,10 @@ export interface Event {
   lead_source?: string;
   referral_name?: string;
   is_paid_full: boolean;
+  payment_due_date?: string;
+  payment_percent_received?: number;
+  current_budget_value?: number;
+  current_profit_value?: number;
   created_at: string;
   updated_at: string;
 }
