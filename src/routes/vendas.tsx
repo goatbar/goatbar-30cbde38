@@ -276,6 +276,30 @@ function VendasPage() {
     return Object.values(meses).sort((a, b) => b.mes.localeCompare(a.mes));
   }, [filteredSessions, filteredEventos, allDrinks]);
 
+  const ganhosTerceiros = useMemo(() => {
+    const valorRepassadoGoatBotequim = filteredSessions
+      .filter(s => s.modalidade === "7Steakhouse")
+      .reduce((acc, s) => {
+        const repassadoSessao = (s.items || []).reduce(
+          (sum: number, item: any) => sum + (Number(item.precoUnitario || 0) * Number(item.quantidade || 0)),
+          0
+        );
+        return acc + repassadoSessao;
+      }, 0);
+
+    const valorRetido7Steakhouse = filteredSessions
+      .filter(s => s.modalidade === "7Steakhouse")
+      .reduce((acc, s) => {
+        const retidoSessao = (s.items || []).reduce(
+          (sum: number, item: any) => sum + ((Number(item.precoUnitario || 0) - Number(item.custoUnitario || 0)) * Number(item.quantidade || 0)),
+          0
+        );
+        return acc + retidoSessao;
+      }, 0);
+
+    return { valorRepassadoGoatBotequim, valorRetido7Steakhouse };
+  }, [filteredSessions]);
+
   return (
     <div className="min-h-screen bg-background">
       <PageHeader
@@ -444,6 +468,23 @@ function VendasPage() {
               <StatCard label="Custos Consolidados" value={fmtBRL(metrics.consolidated.receita - metrics.consolidated.lucro)} />
               <StatCard label="Lucro Total Goat Bar" value={fmtBRL(metrics.consolidated.lucro)} highlight />
             </div>
+
+            <SectionCard title="Ganhos de Terceiros" subtitle="Valores repassados e retidos nas operações do 7Steakhouse">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <SummaryCard
+                  label="Repassado para Goat Botequim"
+                  value={ganhosTerceiros.valorRepassadoGoatBotequim}
+                  color="bg-primary"
+                  icon={<ShoppingBag className="h-4 w-4" />}
+                />
+                <SummaryCard
+                  label="Retido pela 7Steakhouse"
+                  value={ganhosTerceiros.valorRetido7Steakhouse}
+                  color="bg-success"
+                  icon={<Utensils className="h-4 w-4" />}
+                />
+              </div>
+            </SectionCard>
 
             <SectionCard title="Evolução Mensal" subtitle="Resumo consolidado por mês de operação">
               <div className="overflow-x-auto -mx-6">
