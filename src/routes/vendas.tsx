@@ -177,7 +177,14 @@ function VendasPage() {
   const statsBotequim = useMemo(() => {
     const list = financialSessions.filter(s => s.modalidade === "Goat Botequim");
     const receitaBruta = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0), 0);
-    const custoDrinks = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.custoUnitario * item.quantidade), 0), 0);
+    const custoDrinks = list.reduce((acc, s) => {
+      return acc + s.items.reduce((sum, item) => {
+        const d = allDrinks.find(x => x.id === item.drinkId);
+        const configCost = d?.modalityConfig?.goatbotequim?.cost;
+        const liveCost = (configCost !== undefined && configCost !== null && configCost > 0) ? configCost : (d?.custoUnitario || 0);
+        return sum + (liveCost * item.quantidade);
+      }, 0);
+    }, 0);
     const resultadoLiquido = receitaBruta - custoDrinks;
     const repasse = resultadoLiquido * 0.4;
     const saldoAposRepasse = resultadoLiquido * 0.6;
@@ -185,7 +192,7 @@ function VendasPage() {
     const lucroFinal = saldoAposRepasse - maoDeObra;
 
     return { receitaBruta, custoDrinks, resultadoLiquido, repasse, maoDeObra, lucroFinal };
-  }, [financialSessions]);
+  }, [financialSessions, allDrinks]);
 
   const statsSteakhouse = useMemo(() => {
     const list = financialSessions.filter(s => s.modalidade === "7Steakhouse");
@@ -221,6 +228,68 @@ function VendasPage() {
 
     return { receita, custos, lucro };
   }, [eventosValidos]);
+
+  const statsMensal = useMemo(() => {
+    const meses: Record<string, { mes: string, receita: number, custos: number, lucro: number, bot: number, steak: number, event: number }> = {};
+    
+    // Process financial sessions (Botequim and Steakhouse)
+    financialSessions.forEach(s => {
+      const date = new Date(s.data);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!meses[key]) {
+        meses[key] = { mes: key, receita: 0, custos: 0, lucro: 0, bot: 0, steak: 0, event: 0 };
+      }
+      
+      const sessionReceita = s.items.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
+      const sessionCusto = s.items.reduce((acc, item) => {
+        const d = allDrinks.find(x => x.id === item.drinkId);
+        if (s.modalidade === "Goat Botequim") {
+          const configCost = d?.modalityConfig?.goatbotequim?.cost;
+          const liveCost = (configCost !== undefined && configCost !== null && configCost > 0) ? configCost : (d?.custoUnitario || 0);
+          return acc + (liveCost * item.quantidade);
+        }
+        return acc + ((d?.custoUnitario || 0) * item.quantidade);
+      }, 0);
+      
+      const maoDeObra = s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0 
+        ? s.maoDeObraDetalhes.reduce((a, b) => a + b.valor, 0)
+        : (s.maoDeObraValor * s.maoDeObraQtd);
+
+      if (s.modalidade === "Goat Botequim") {
+        const resLiq = sessionReceita - sessionCusto;
+        const sessionLucro = (resLiq * 0.6) - maoDeObra;
+        meses[key].receita += sessionReceita;
+        meses[key].custos += sessionCusto + (resLiq * 0.4) + maoDeObra;
+        meses[key].lucro += sessionLucro;
+        meses[key].bot += sessionLucro;
+      } else {
+        // Steakhouse: Receita Goat = Repasse (stored in custoUnitario)
+        const receitaGoat = s.items.reduce((acc, item) => acc + (item.custoUnitario * item.quantidade), 0);
+        const sessionLucro = (receitaGoat - sessionCusto) - maoDeObra;
+        meses[key].receita += receitaGoat;
+        meses[key].custos += sessionCusto + maoDeObra;
+        meses[key].lucro += sessionLucro;
+        meses[key].steak += sessionLucro;
+      }
+    });
+
+    // Process Events
+    eventosValidos.forEach(e => {
+      const date = new Date(e.date || e.data || 0);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!meses[key]) {
+        meses[key] = { mes: key, receita: 0, custos: 0, lucro: 0, bot: 0, steak: 0, event: 0 };
+      }
+      const receita = e.current_budget_value || 0;
+      const lucro = e.current_profit_value || 0;
+      meses[key].receita += receita;
+      meses[key].custos += (receita - lucro);
+      meses[key].lucro += lucro;
+      meses[key].event += lucro;
+    });
+
+    return Object.values(meses).sort((a, b) => b.mes.localeCompare(a.mes));
+  }, [financialSessions, eventosValidos, allDrinks]);
 
   return (
     <>
@@ -365,7 +434,40 @@ function VendasPage() {
               <StatCard label="Lucro Total Goat Bar" value={fmtBRL(statsBotequim.lucroFinal + statsSteakhouse.lucroFinal + statsEventos.lucro)} highlight />
             </div>
 
-            <SectionCard title="Distribuição por Modalidade" subtitle="Participação de cada unidade no lucro total">
+            <SectionCard title="Evolução Mensal" subtitle="Resumo consolidado por mês de operação">
+              <div className="overflow-x-auto -mx-6">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left border-y border-border">
+                      <th className="px-6 py-3 label-eyebrow">Mês</th>
+                      <th className="px-6 py-3 label-eyebrow">Receita Consolidada</th>
+                      <th className="px-6 py-3 label-eyebrow">Custos/Operação</th>
+                      <th className="px-6 py-3 label-eyebrow text-success">Lucro Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {statsMensal.map(m => {
+                      const [year, month] = m.mes.split('-');
+                      const date = new Date(Number(year), Number(month) - 1, 1);
+                      const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                      return (
+                        <tr key={m.mes} className="border-b border-border/60 hover:bg-surface/50 transition-colors">
+                          <td className="px-6 py-4 font-medium capitalize">{monthName}</td>
+                          <td className="px-6 py-4">{fmtBRL(m.receita)}</td>
+                          <td className="px-6 py-4 text-muted-foreground">{fmtBRL(m.custos)}</td>
+                          <td className="px-6 py-4 text-success font-semibold">{fmtBRL(m.lucro)}</td>
+                        </tr>
+                      );
+                    })}
+                    {statsMensal.length === 0 && (
+                      <tr><td colSpan={4} className="px-6 py-10 text-center text-muted-foreground italic">Nenhum dado consolidado no período.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </SectionCard>
+
+            <SectionCard title="Distribuição por Modalidade (Geral)" subtitle="Participação de cada unidade no lucro acumulado">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <SummaryCard label="Goat Botequim" value={statsBotequim.lucroFinal} color="bg-primary" icon={<ShoppingBag className="h-4 w-4" />} />
                 <SummaryCard label="7Steakhouse" value={statsSteakhouse.lucroFinal} color="bg-success" icon={<Utensils className="h-4 w-4" />} />

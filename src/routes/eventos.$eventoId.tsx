@@ -116,7 +116,11 @@ function EventoInterna() {
 
     } catch (e: any) {
       console.error("Erro ao carregar dados do evento:", e);
-      alert(`Erro crítico ao carregar evento: ${e.message || "Verifique sua conexão"}`);
+      if (e.message?.includes("multiple (or no) rows returned")) {
+          alert("Aviso: Existem dados duplicados ou ausentes para este evento no banco. Por favor, contate o suporte ou verifique a integridade dos dados.");
+      } else {
+          alert(`Erro crítico ao carregar evento: ${e.message || "Verifique sua conexão"}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -269,6 +273,17 @@ function EventoInterna() {
       alert(`Erro ao salvar orçamento: ${e.message}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteVersion = async (budgetId: string) => {
+    if (!confirm("Tem certeza que deseja excluir esta versão? Esta ação será registrada no log e não pode ser desfeita.")) return;
+    try {
+      await eventBudgetService.deleteBudgetVersion(budgetId);
+      alert("Versão excluída com sucesso.");
+      loadAllData();
+    } catch (e: any) {
+      alert(`Erro ao excluir versão: ${e.message}`);
     }
   };
 
@@ -1172,8 +1187,14 @@ function EventoInterna() {
                              </div>
                           </div>
                           
-                          <div className="flex gap-2 w-full md:w-auto">
-                             <GhostButton onClick={() => setDraft(mapBudgetToDraft(evento!, v))} className="flex-1 md:flex-none h-10 px-4 text-[10px] font-bold">
+                          <div className="flex gap-2 w-full md:w-auto items-center">
+                             <GhostButton 
+                               onClick={() => {
+                                 setDraft(mapBudgetToDraft(evento!, v));
+                                 setActiveTab("Orçamento");
+                               }} 
+                               className="flex-1 md:flex-none h-10 px-4 text-[10px] font-bold"
+                             >
                                 CARREGAR NA TELA
                              </GhostButton>
                              {!v.is_current && (
@@ -1181,6 +1202,15 @@ function EventoInterna() {
                                  await eventBudgetService.setCurrentVersion(eventoId, v.id);
                                  loadAllData();
                                }} className="flex-1 md:flex-none h-10 px-4 text-[10px] font-bold">TORNAR ATUAL</PrimaryButton>
+                             )}
+                             {!v.is_current && (
+                                <button 
+                                  onClick={() => handleDeleteVersion(v.id)}
+                                  className="h-10 w-10 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors shrink-0"
+                                  title="Excluir Versão"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
                              )}
                           </div>
                         </div>
