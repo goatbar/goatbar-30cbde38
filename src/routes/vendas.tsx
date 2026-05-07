@@ -113,15 +113,16 @@ function VendasPage() {
 
   const addItem = () => {
     const firstDrink = filteredDrinks[0] || allDrinks[0];
-    const key = activeModalityKey as "steakhouse" | "goatbotequim" | "evento";
-    const config = firstDrink.modalityConfig?.[key];
+    const isSteak = activeTab === "7Steakhouse";
+    const config = firstDrink.modalityConfig?.[activeModalityKey as "steakhouse" | "goatbotequim"];
     
     setModalItems([...modalItems, { 
       drinkId: firstDrink.id, 
       nome: firstDrink.nome, 
       quantidade: 1, 
       precoUnitario: config?.price || 0, 
-      custoUnitario: config?.cost || 0 
+      custoUnitario: config?.cost || 0,
+      custoInsumo: isSteak ? firstDrink.custoUnitario : config?.cost
     }]);
   };
 
@@ -130,14 +131,15 @@ function VendasPage() {
     if (field === "drinkId") {
       const d = allDrinks.find(x => x.id === value);
       if (d) {
-        const key = activeModalityKey as "steakhouse" | "goatbotequim" | "evento";
-        const config = d.modalityConfig?.[key];
+        const isSteak = activeTab === "7Steakhouse";
+        const config = d.modalityConfig?.[activeModalityKey as "steakhouse" | "goatbotequim"];
         newItems[index] = {
           ...newItems[index],
           drinkId: d.id,
           nome: d.nome,
           precoUnitario: config?.price || 0,
-          custoUnitario: config?.cost || 0
+          custoUnitario: config?.cost || 0,
+          custoInsumo: isSteak ? d.custoUnitario : config?.cost
         };
       }
     } else {
@@ -216,12 +218,11 @@ function VendasPage() {
       
       const sessionReceita = (s.items || []).reduce((acc: number, item: any) => acc + (item.precoUnitario * item.quantidade), 0);
       const sessionCusto = (s.items || []).reduce((acc: number, item: any) => {
-        const d = allDrinks.find(x => x.id === item.drinkId);
-        if (s.modalidade === "Goat Botequim") {
-          const configCost = d?.modalityConfig?.goatbotequim?.cost;
-          const liveCost = (configCost !== undefined && configCost !== null && configCost > 0) ? configCost : (d?.custoUnitario || 0);
-          return acc + (liveCost * item.quantidade);
+        // Usa o custoInsumo gravado no item, fallback para o custoUnitario base do drink
+        if (item.custoInsumo !== undefined && item.custoInsumo !== null) {
+          return acc + (item.custoInsumo * item.quantidade);
         }
+        const d = allDrinks.find(x => x.id === item.drinkId);
         return acc + ((d?.custoUnitario || 0) * item.quantidade);
       }, 0);
       
@@ -584,28 +585,27 @@ function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () =>
   // Lucro Final: R$ 200.62
 
   const calc = useMemo(() => {
-    const rb = items.reduce((acc: number, i: any) => acc + (i.precoUnitario * i.quantidade), 0);
-    const cd = items.reduce((acc: number, i: any) => acc + (i.custoUnitario * i.quantidade), 0);
-    const lb = rb - cd;
+    const rb = items.reduce((acc: number, i: any) => acc + (Number(i.precoUnitario || 0) * i.quantidade), 0);
+    const rg = items.reduce((acc: number, i: any) => acc + (Number(i.custoUnitario || 0) * i.quantidade), 0);
+    const ci = items.reduce((acc: number, i: any) => acc + (Number(i.custoInsumo || i.custoUnitario || 0) * i.quantidade), 0);
+    
+    const lb = rb - ci;
     const rep = lb * 0.4;
     const saldo = lb - rep;
+    
     const mo = session.maoDeObraDetalhes && session.maoDeObraDetalhes.length > 0
       ? session.maoDeObraDetalhes.reduce((a: number, b: any) => a + Number(b.valor || 0), 0)
       : (Number(session.maoDeObraValor || 0) * Number(session.maoDeObraQtd || 0));
-    
-    // Steakhouse Logic
-    const rg = items.reduce((acc: number, i: any) => acc + (i.custoUnitario * i.quantidade), 0);
-    const lbg = rg - cd; // Simplificado para exemplo, geralmente custo unitario e custo insumo sao diferentes
 
     return {
       receitaBruta: rb,
-      custoDrinks: cd,
-      lucroBruto: lb,
+      receitaGoat: rg,
+      custoInsumos: ci,
+      lucroBruto: isSteak ? (rg - ci) : lb,
       repasse: rep,
       saldoGoat: saldo,
       maoDeObra: mo,
-      lucroFinal: isSteak ? (rg - cd - mo) : (saldo - mo),
-      receitaGoat: rg
+      lucroFinal: isSteak ? (rg - ci - mo) : (saldo - mo)
     };
   }, [session, isSteak]);
 
@@ -689,12 +689,12 @@ function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () =>
                           <span className="font-bold">{fmtBRL(isSteak ? calc.receitaGoat : calc.receitaBruta)}</span>
                        </div>
                        <div className="flex justify-between text-xs">
-                          <span className="text-muted-foreground">(-) Custo dos Drinks</span>
-                          <span className="text-muted-foreground">{fmtBRL(calc.custoDrinks)}</span>
+                          <span className="text-muted-foreground">(-) {isSteak ? "Custo Insumos (Produção)" : "Custo dos Drinks"}</span>
+                          <span className="text-muted-foreground">{fmtBRL(calc.custoInsumos)}</span>
                        </div>
                        <div className="flex justify-between text-sm pt-2 border-t border-border/20">
                           <span className="font-bold">(=) Lucro Bruto</span>
-                          <span className="font-black">{fmtBRL(isSteak ? (calc.receitaGoat - calc.custoDrinks) : calc.lucroBruto)}</span>
+                          <span className="font-black">{fmtBRL(calc.lucroBruto)}</span>
                        </div>
                     </div>
 

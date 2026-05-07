@@ -215,13 +215,14 @@ export const financialService = {
 
     // Steakhouse
     const steakList = sessions.filter(s => s.modalidade === "7Steakhouse");
-    // Receita Goatbar = Soma de (item.custoUnitario * qtd) -> O que o Goat Bar cobra do restaurante
-    const steakReceita = steakList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (item.custoUnitario * item.quantidade), 0), 0);
-    // Custo Insumos = Soma de (bebida.custoUnitario * qtd) -> O que o Goat Bar paga pela bebida
+    // Receita Goatbar = O que o restaurante paga ao Goat Bar (custoUnitario no item)
+    const steakReceita = steakList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (Number(item.custoUnitario || 0) * item.quantidade), 0), 0);
+    // Custo Insumos = O que o Goat Bar gasta para fazer (custoInsumo no item ou custoUnitario base do drink)
     const steakCusto = steakList.reduce((acc, s) => {
       return acc + (s.items || []).reduce((sum: number, item: any) => {
         const d = drinks.find(x => x.id === item.drinkId);
-        return sum + ((d?.custoUnitario || 0) * item.quantidade);
+        const liveIngredientCost = item.custoInsumo || d?.custoUnitario || 0;
+        return sum + (liveIngredientCost * item.quantidade);
       }, 0);
     }, 0);
     // Lucro Final = (Receita - Custo) - Mão de Obra

@@ -47,6 +47,7 @@ export interface SalesSessionItem {
   quantidade: number;
   precoUnitario: number;
   custoUnitario: number;
+  custoInsumo?: number;
 }
 
 export interface FinancialSession {
