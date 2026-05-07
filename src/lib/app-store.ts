@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { saveImage } from "@/lib/image-store";
 import {
   contratos as seedContratos,
   eventos as seedEventos,
@@ -98,13 +99,55 @@ function readStore(): AppStore {
 export function useAppStore() {
   const [store, setStore] = useState<AppStore>(() => readStore());
 
+  // One-time migration: move any Base64 images already stored in localStorage
+  // to IndexedDB, then update the store with the idb: reference.
+  useEffect(() => {
+    const hasBlobImages = store.drinks.some(
+      (d) => d.imagem && d.imagem.startsWith("data:")
+    );
+    if (!hasBlobImages) return;
+
+    const migrate = async () => {
+      const migratedDrinks = await Promise.all(
+        store.drinks.map(async (d) => {
+          if (d.imagem && d.imagem.startsWith("data:")) {
+            await saveImage(d.id, d.imagem);
+            return { ...d, imagem: `idb:${d.id}` };
+          }
+          return d;
+        })
+      );
+      setStore((prev) => ({ ...prev, drinks: migratedDrinks }));
+    };
+
+    migrate().catch(console.error);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+      // Strip Base64 image data from drinks before persisting – images are
+      // stored separately in IndexedDB via image-store.ts to avoid the
+      // ~5 MB localStorage quota limit.
+      const sanitized: AppStore = {
+        ...store,
+        drinks: store.drinks.map((d) => {
+          if (d.imagem && d.imagem.startsWith("data:")) {
+            return { ...d, imagem: `idb:${d.id}` };
+          }
+          return d;
+        }),
+      };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
     } catch (e) {
       if (e instanceof Error && e.name === "QuotaExceededError") {
         console.error("LocalStorage quota exceeded!");
-        alert("Erro: Espaço de armazenamento cheio. Tente usar imagens menores ou remover alguns registros.");
+        alert(
+          "Erro de armazenamento: o espaço local está cheio.\n" +
+          "Tente remover registros antigos ou usar imagens menores."
+        );
+      } else {
+        console.error("Falha ao salvar store:", e);
       }
     }
   }, [store]);
@@ -144,19 +187,23 @@ export function useAppStore() {
           drinks: prev.drinks.map((d) => {
             if (d.id !== id) return d;
             const updated = { ...d, ...payload };
-            if (payload.ingredientes) {
-              updated.custoUnitario = Number(payload.ingredientes.reduce((a, i) => a + i.custo, 0).toFixed(2));
+            // Recalculate custoUnitario from insumos if provided
+            const insumoSource = payload.insumos ?? payload.ingredientes;
+            if (insumoSource && insumoSource.length > 0) {
+              updated.custoUnitario = Number(insumoSource.reduce((a: number, i: { custo: number }) => a + i.custo, 0).toFixed(2));
             }
             return updated;
           }),
         }));
       },
-      addDrink(input: Omit<Drink, "id">) {
+      addDrink(input: Omit<Drink, "id"> & { _presetId?: string }) {
         setStore((prev) => {
-          const newDrink = {
-            ...input,
-            id: `d${Date.now()}`,
-            custoUnitario: Number(input.ingredientes.reduce((a, i) => a + i.custo, 0).toFixed(2))
+          const { _presetId, ...rest } = input as any;
+          const insumoSource = (rest.insumos ?? rest.ingredientes ?? []) as { custo: number }[];
+          const newDrink: Drink = {
+            ...rest,
+            id: _presetId ?? `d${Date.now()}`,
+            custoUnitario: Number(insumoSource.reduce((a: number, i: { custo: number }) => a + i.custo, 0).toFixed(2))
           };
           return {
             ...prev,

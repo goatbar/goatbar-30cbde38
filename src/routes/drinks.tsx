@@ -3,9 +3,10 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, StatCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
 import { Wine, TrendingUp, Search, Edit3, X, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { type Drink } from "@/lib/mock-data";
+import { useState, useEffect } from "react";
+import { type Drink, type ModalityConfig } from "@/lib/mock-data";
 import { useAppStore } from "@/lib/app-store";
+import { saveImage, loadImage } from "@/lib/image-store";
 
 export const Route = createFileRoute("/drinks")({ component: () => <AppShell><DrinksPage /></AppShell> });
 
@@ -40,11 +41,22 @@ function DrinksPage() {
   const custoMedio = ativos.length ? ativos.reduce((a, d) => a + d.custoUnitario, 0) / ativos.length : 0;
   const margemMedia = 45; // Valor ilustrativo consolidado
 
-  const handleSaveDrink = (id: string, updatePayload: Partial<Drink>) => {
+  const handleSaveDrink = async (id: string, updatePayload: Partial<Drink>) => {
+    // If the image is a Base64 Data URL, persist it to IndexedDB and keep
+    // only an "idb:<drinkId>" reference in the main store (saves localStorage space).
+    const drinkId = id === "new" ? `d${Date.now()}` : id;
+    let payload = { ...updatePayload };
+
+    if (payload.imagem && payload.imagem.startsWith("data:")) {
+      await saveImage(drinkId, payload.imagem);
+      payload = { ...payload, imagem: `idb:${drinkId}` };
+    }
+
     if (id === "new") {
-      addDrink({ ...blankDrink, ...updatePayload } as Omit<Drink, "id">);
+      // Pass _presetId so the store uses our pre-generated key (matches the IndexedDB key)
+      addDrink({ ...blankDrink, ...payload, _presetId: drinkId } as unknown as Omit<Drink, "id">);
     } else {
-      updateDrink(id, updatePayload);
+      updateDrink(id, payload);
     }
     setEditingDrink(null);
   };
@@ -109,8 +121,25 @@ function DrinksPage() {
 }
 
 function DrinkCard({ drink: d, onEdit }: { drink: Drink, onEdit: () => void }) {
-  const margem7S = ((d.precoVenda7Steakhouse - d.custoUnitario) / d.precoVenda7Steakhouse) * 100;
-  const margemGB = ((d.precoVendaGoatBotequim - d.custoUnitario) / d.precoVendaGoatBotequim) * 100;
+  const margem7S = d.modalityConfig?.steakhouse?.price
+    ? ((d.modalityConfig.steakhouse.price - d.custoUnitario) / d.modalityConfig.steakhouse.price) * 100
+    : 0;
+  const margemGB = d.modalityConfig?.goatbotequim?.price
+    ? ((d.modalityConfig.goatbotequim.price - d.custoUnitario) / d.modalityConfig.goatbotequim.price) * 100
+    : 0;
+
+  // Load image from IndexedDB if the stored value is an idb: reference
+  const [resolvedImage, setResolvedImage] = useState<string | null>(
+    d.imagem && !d.imagem.startsWith("idb:") ? d.imagem : null
+  );
+  useEffect(() => {
+    if (d.imagem && d.imagem.startsWith("idb:")) {
+      const key = d.imagem.slice(4); // strip "idb:"
+      loadImage(key).then((url) => setResolvedImage(url)).catch(() => setResolvedImage(null));
+    } else {
+      setResolvedImage(d.imagem ?? null);
+    }
+  }, [d.imagem]);
   
   return (
     <div className={`rounded-xl border transition-all ${d.status === "inativo" ? "border-border opacity-60" : "border-border hover:border-border-strong"} bg-surface/50 group relative`}>
@@ -118,9 +147,9 @@ function DrinkCard({ drink: d, onEdit }: { drink: Drink, onEdit: () => void }) {
         <Edit3 className="h-4 w-4" />
       </button>
 
-      {d.imagem ? (
+      {resolvedImage ? (
         <img
-          src={d.imagem}
+          src={resolvedImage}
           alt={d.nome}
           className="w-full h-40 object-cover rounded-t-xl"
           onError={(e) => { e.currentTarget.style.display = "none"; }}
