@@ -3,7 +3,7 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { calcularOrcamentoEvento, type Evento, type EventoStatus } from "@/lib/mock-data";
 import { fmtBRL } from "@/lib/format";
-import { Calendar, MapPin, Users, ArrowLeft, Save, Plus, Trash2, MessageCircle, FileSignature, CheckCircle2, Download, AlertCircle, Link as LinkIcon, Loader2, Copy, Megaphone, UserPlus, History, Clock } from "lucide-react";
+import { Calendar, MapPin, Users, ArrowLeft, Save, Plus, Trash2, MessageCircle, FileSignature, CheckCircle2, Download, AlertCircle, Link as LinkIcon, Loader2, Copy, Megaphone, UserPlus, History, Clock, Pencil } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAppStore } from "@/lib/app-store";
 import { 
@@ -24,6 +24,22 @@ import { Check, Search } from "lucide-react";
 export const Route = createFileRoute("/eventos/$eventoId")({
   component: EventoInterna,
 });
+
+const HeaderField = ({ label, value, isEditing, onChange, icon, type = "text" }: { label: string, value: string, isEditing: boolean, onChange: (v: string) => void, icon?: React.ReactNode, type?: string }) => (
+  <div className="space-y-1">
+    <div className="label-eyebrow flex items-center gap-1">{icon} {label}</div>
+    {isEditing ? (
+      <input 
+        type={type}
+        value={value || ""} 
+        onChange={e => onChange(e.target.value)}
+        className="w-full h-8 px-2 rounded bg-input border border-border text-xs focus:ring-1 focus:ring-primary outline-none transition-all"
+      />
+    ) : (
+      <div className="text-sm font-bold truncate" title={value}>{value || "---"}</div>
+    )}
+  </div>
+);
 
 function EventoInterna() {
   const { eventoId } = Route.useParams();
@@ -48,6 +64,7 @@ function EventoInterna() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("Orçamento");
+  const [isEditingHeader, setIsEditingHeader] = useState(false);
   const [buscaDrink, setBuscaDrink] = useState("");
 
   useEffect(() => {
@@ -142,6 +159,9 @@ function EventoInterna() {
     drinks: Array.isArray(ev.drinks) ? ev.drinks : [],
     observacoes: ev.notes || "",
     status: ev.status as any,
+    lead_source: ev.lead_source || "",
+    referral_name: ev.referral_name || "",
+    is_paid_full: ev.is_paid_full || false,
     drinksPorPessoa: 4,
     markupAdicionalDrinks: 0,
     equipe: {
@@ -178,6 +198,9 @@ function EventoInterna() {
     drinks: Array.isArray(ev.drinks) ? ev.drinks : [],
     observacoes: ev.notes || "",
     status: ev.status as any,
+    lead_source: ev.lead_source || "",
+    referral_name: ev.referral_name || "",
+    is_paid_full: ev.is_paid_full || false,
     drinksPorPessoa: b.drinks_per_person,
     markupAdicionalDrinks: b.drinks_markup_percentage,
     equipe: {
@@ -248,23 +271,36 @@ function EventoInterna() {
 
       // Atualiza evento base
       await eventBudgetService.updateEvent(eventoId, {
-        drinks: draft.drinks,
+        client_name: draft.cliente,
+        phone: draft.telefone,
+        email: draft.email,
+        date: draft.data,
+        event_time: draft.horario,
+        event_location: draft.local,
+        city: draft.cidade,
+        event_type: draft.tipo,
         guests: draft.convidados,
-        status: draft.status
+        drinks: draft.drinks,
+        notes: draft.observacoes,
+        status: draft.status,
+        lead_source: draft.lead_source,
+        referral_name: draft.referral_name
       });
 
       // Salva orçamento
       const newBudget = await eventBudgetService.createBudgetVersion(eventoId, budgetPayload, saveAsNew);
       
-      // Adiciona histórico
-      if (currentBudget && currentBudget.final_budget_value !== calc.valorTotalOrcamento) {
+      // Adiciona histórico apenas se houver mudança financeira real
+      const hasFinancialChange = !currentBudget || currentBudget.final_budget_value !== calc.valorTotalOrcamento;
+      
+      if (hasFinancialChange) {
           await eventBudgetService.addBudgetHistory({
             event_id: eventoId,
             budget_version_id: newBudget.id,
-            action: saveAsNew ? "Nova versão criada" : "Orçamento atualizado",
-            previous_final_value: currentBudget.final_budget_value,
+            action: saveAsNew ? "Nova versão criada" : "Valores financeiros atualizados",
+            previous_final_value: currentBudget?.final_budget_value || 0,
             new_final_value: calc.valorTotalOrcamento,
-            changed_fields: ["Valores ajustados"]
+            changed_fields: ["Ajuste de valores"]
           });
       }
 
@@ -285,6 +321,59 @@ function EventoInterna() {
       loadAllData();
     } catch (e: any) {
       alert(`Erro ao excluir versão: ${e.message}`);
+    }
+  };
+
+  const handleDeleteVersion = async (versionId: string) => {
+    if (!confirm("Tem certeza que deseja excluir esta versão do orçamento? Esta ação não pode ser desfeita.")) return;
+    try {
+      // Create audit log before deleting
+      const v = budgetVersions.find(x => x.id === versionId);
+      if (v) {
+        await eventBudgetService.addBudgetHistory({
+          event_id: eventoId,
+          action: "VERSÃO EXCLUÍDA",
+          previous_final_value: v.final_budget_value,
+          new_final_value: 0
+        });
+      }
+      
+      await eventBudgetService.deleteBudgetVersion(versionId);
+      loadAllData();
+    } catch (e) {
+      alert("Erro ao excluir versão.");
+    }
+  };
+
+  const handleUpdateNote = async (noteId: string) => {
+    const newNote = prompt("Editar anotação:");
+    if (newNote === null || newNote === "") return;
+    try {
+      await eventBudgetService.updateNegotiationNote(noteId, newNote);
+      loadAllData();
+    } catch (e) {
+      alert("Erro ao atualizar nota.");
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    if (!confirm("Excluir esta anotação permanentemente?")) return;
+    try {
+      await eventBudgetService.deleteNegotiationNote(noteId);
+      loadAllData();
+    } catch (e) {
+      alert("Erro ao excluir nota.");
+    }
+  };
+
+  const handleTogglePaidFull = async () => {
+    try {
+      const newVal = !draft.is_paid_full;
+      await eventBudgetService.updateEvent(eventoId, { is_paid_full: newVal });
+      setDraft(p => p ? ({ ...p, is_paid_full: newVal }) : null);
+      loadAllData();
+    } catch (e) {
+      alert("Erro ao atualizar status de pagamento.");
     }
   };
 
@@ -417,67 +506,138 @@ function EventoInterna() {
           </div>
         )}
 
-        {/* RESUMO FIXO TOP */}
-        <div className="card-premium p-6 relative overflow-hidden bg-surface flex flex-wrap gap-8 justify-between items-center">
-          <div className="flex gap-8">
-            <Info icon={<Calendar className="h-4 w-4 text-primary" />} label="Data" value={draft.data ? format(parseISO(draft.data), "dd/MM/yyyy", { locale: ptBR }) : "A definir"} />
-            <Info icon={<Users className="h-4 w-4 text-primary" />} label="Convidados" value={draft.convidados.toString()} />
-            <Info icon={<MapPin className="h-4 w-4 text-primary" />} label="Local" value={draft.local || "A definir"} />
-            
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-px bg-border mx-2 hidden md:block" />
-              <div className="space-y-1">
-                 <div className="label-eyebrow flex items-center gap-1"><Megaphone className="h-3 w-3" /> Origem</div>
-                 <select 
-                   value={draft.lead_source || ""} 
-                   onChange={e => setDraft(p => p ? ({...p, lead_source: e.target.value}) : null)}
-                   className="bg-transparent border-0 outline-none text-xs font-bold text-foreground cursor-pointer hover:text-primary transition-colors p-0 h-auto min-w-[100px]"
-                 >
-                   <option value="">A definir</option>
-                   <option value="Instagram">Instagram</option>
-                   <option value="Google">Google</option>
-                   <option value="WhatsApp">WhatsApp</option>
-                   <option value="Indicação">Indicação</option>
-                   <option value="Site">Site</option>
-                 </select>
+        {/* CABEÇALHO DO EVENTO — INFORMAÇÕES DO CLIENTE */}
+        <div className="card-premium p-6 relative overflow-hidden bg-surface">
+          <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-8 pb-6 border-b border-border/50">
+            <div className="flex gap-4 items-center">
+              <div className={`h-14 w-14 rounded-2xl flex items-center justify-center transition-all shadow-lg ${isEditingHeader ? "bg-success text-white shadow-success/20" : "bg-primary text-white shadow-primary/20"}`}>
+                {isEditingHeader ? <Check className="h-7 w-7" /> : <Users className="h-7 w-7" />}
+              </div>
+              <div>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-2xl font-display font-bold tracking-tight">
+                    {isEditingHeader ? "Editando Cabeçalho" : draft.cliente || draft.nome}
+                  </h2>
+                  <button 
+                    onClick={() => {
+                      if (isEditingHeader) handleSave(false);
+                      setIsEditingHeader(!isEditingHeader);
+                    }}
+                    className={`h-9 px-4 rounded-xl flex items-center gap-2 text-xs font-bold transition-all ${isEditingHeader ? "bg-success text-white hover:bg-success/90" : "bg-primary/10 text-primary hover:bg-primary/20"}`}
+                  >
+                    {isEditingHeader ? (
+                      <><Check className="h-3.5 w-3.5" /> SALVAR DADOS</>
+                    ) : (
+                      <><Pencil className="h-3.5 w-3.5" /> EDITAR CABEÇALHO</>
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground uppercase tracking-[0.2em] mt-1 font-medium">
+                  {draft.tipo} · {draft.cidade || "Local não definido"}
+                </p>
               </div>
             </div>
 
-            {draft.lead_source === "Indicação" && (
-              <div className="space-y-1 animate-in fade-in slide-in-from-left-2">
-                 <div className="label-eyebrow flex items-center gap-1"><UserPlus className="h-3 w-3" /> Referência</div>
-                 <input 
-                   type="text" 
-                   placeholder="Nome de quem indicou"
-                   value={draft.referral_name || ""} 
-                   onChange={e => setDraft(p => p ? ({...p, referral_name: e.target.value}) : null)}
-                   className="bg-transparent border-0 outline-none text-xs font-bold text-foreground placeholder:text-muted-foreground focus:text-primary transition-colors p-0 h-auto"
-                 />
+            <div className="flex items-center gap-8 self-end md:self-auto">
+              <div className="text-right">
+                <div className="label-eyebrow mb-1">Valor do Orçamento</div>
+                <div className="font-display text-3xl font-black text-primary">{fmtBRL(calc.valorTotalOrcamento)}</div>
+                <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">{fmtBRL(calc.mediaPorPessoa)} / PESSOA</div>
               </div>
-            )}
+              <div className="h-12 w-px bg-border/60 hidden lg:block" />
+              <div className="text-right">
+                <div className="label-eyebrow mb-2">Status da Negociação</div>
+                <select 
+                  value={draft.status} 
+                  onChange={(e) => handleStatusChange(e.target.value as EventoStatus)}
+                  className="bg-surface border-2 border-primary/20 text-primary font-bold text-xs px-4 py-2 rounded-xl outline-none cursor-pointer hover:border-primary/40 transition-all shadow-sm"
+                >
+                  <option value="novo_orcamento">Novo orçamento</option>
+                  <option value="orcamento_enviado">Orçamento enviado</option>
+                  <option value="aguardando_retorno">Aguardando retorno</option>
+                  <option value="dados_solicitados">Dados solicitados p/ Contrato</option>
+                  <option value="em_assinatura">Em assinatura de contrato</option>
+                  <option value="proposta_aceita">Proposta aceita</option>
+                  <option value="confirmado">Contrato Assinado / Confirmado</option>
+                  <option value="cancelado">Cancelado</option>
+                </select>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-6">
-            <div className="text-right">
-              <div className="label-eyebrow">Valor Final</div>
-              <div className="font-display text-2xl font-bold text-foreground">{fmtBRL(calc.valorTotalOrcamento)}</div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-y-8 gap-x-10">
+            {/* Coluna 1: Principal */}
+            <div className="space-y-5">
+              <HeaderField label="Nome do Solicitante" value={draft.cliente} isEditing={isEditingHeader} onChange={v => setDraft(p => p ? ({...p, cliente: v, nome: v}) : null)} icon={<Users className="h-3 w-3 text-primary/60" />} />
+              <HeaderField label="Tipo do Evento" value={draft.tipo} isEditing={isEditingHeader} onChange={v => setDraft(p => p ? ({...p, tipo: v}) : null)} icon={<Save className="h-3 w-3 text-primary/60" />} />
             </div>
-            <div className="text-right">
-              <div className="label-eyebrow mb-1">Status</div>
-              <select 
-                value={draft.status} 
-                onChange={(e) => handleStatusChange(e.target.value as EventoStatus)}
-                className="bg-primary/10 text-primary font-medium text-sm px-3 py-1.5 rounded-lg border-0 outline-none cursor-pointer hover:bg-primary/20 transition-colors"
-              >
-                <option value="novo_orcamento">Novo orçamento</option>
-                <option value="orcamento_enviado">Orçamento enviado</option>
-                <option value="aguardando_retorno">Aguardando retorno</option>
-                <option value="dados_solicitados">Dados solicitados p/ Contrato</option>
-                <option value="em_assinatura">Em assinatura de contrato</option>
-                <option value="proposta_aceita">Proposta aceita</option>
-                <option value="confirmado">Contrato Assinado / Confirmado</option>
-                <option value="cancelado">Cancelado</option>
-              </select>
+
+            {/* Coluna 2: Contato */}
+            <div className="space-y-5">
+              <HeaderField label="Telefone / WhatsApp" value={draft.telefone} isEditing={isEditingHeader} onChange={v => setDraft(p => p ? ({...p, telefone: v}) : null)} icon={<MessageCircle className="h-3 w-3 text-primary/60" />} />
+              <HeaderField label="E-mail de Contato" value={draft.email} isEditing={isEditingHeader} onChange={v => setDraft(p => p ? ({...p, email: v}) : null)} icon={<FileSignature className="h-3 w-3 text-primary/60" />} />
             </div>
+
+            {/* Coluna 3: Logística */}
+            <div className="space-y-5">
+              <HeaderField label="Data do Evento" type="date" value={draft.data} isEditing={isEditingHeader} onChange={v => setDraft(p => p ? ({...p, data: v}) : null)} icon={<Calendar className="h-3 w-3 text-primary/60" />} />
+              <HeaderField label="Local do Evento" value={draft.local} isEditing={isEditingHeader} onChange={v => setDraft(p => p ? ({...p, local: v}) : null)} icon={<MapPin className="h-3 w-3 text-primary/60" />} />
+            </div>
+
+            {/* Coluna 4: Detalhes */}
+            <div className="space-y-5">
+              <HeaderField label="Cidade" value={draft.cidade} isEditing={isEditingHeader} onChange={v => setDraft(p => p ? ({...p, cidade: v}) : null)} icon={<MapPin className="h-3 w-3 text-primary/60" />} />
+              <HeaderField label="Convidados" type="number" value={draft.convidados.toString()} isEditing={isEditingHeader} onChange={v => setDraft(p => p ? ({...p, convidados: Number(v)}) : null)} icon={<Users className="h-3 w-3 text-primary/60" />} />
+            </div>
+
+            {/* Coluna 5: Origem */}
+            <div className="space-y-5 bg-primary/5 p-4 rounded-2xl border border-primary/10">
+              <div className="space-y-1">
+                <div className="label-eyebrow flex items-center gap-1"><Megaphone className="h-3 w-3 text-primary" /> Canal de Origem</div>
+                {isEditingHeader ? (
+                  <select 
+                    value={draft.lead_source || ""} 
+                    onChange={e => setDraft(p => p ? ({...p, lead_source: e.target.value}) : null)}
+                    className="w-full h-9 px-3 rounded-lg bg-background border border-border text-xs font-bold focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                  >
+                    <option value="">A definir</option>
+                    <option value="Instagram">Instagram</option>
+                    <option value="Google">Google</option>
+                    <option value="WhatsApp">WhatsApp</option>
+                    <option value="Site">Site</option>
+                    <option value="Indicação">Indicação</option>
+                    <option value="Parceiro">Parceiro</option>
+                    <option value="Outros">Outros</option>
+                  </select>
+                ) : (
+                  <div className="text-sm font-black text-primary uppercase tracking-tight">{draft.lead_source || "NÃO DEFINIDO"}</div>
+                )}
+              </div>
+              
+              {draft.lead_source === "Indicação" && (
+                <div className="animate-in zoom-in-95 duration-300">
+                  <HeaderField label="Nome da Indicação" value={draft.referral_name || ""} isEditing={isEditingHeader} onChange={v => setDraft(p => p ? ({...p, referral_name: v}) : null)} icon={<UserPlus className="h-3 w-3 text-primary/60" />} />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-border/50">
+             <div className="label-eyebrow flex items-center gap-2 mb-3 text-muted-foreground"><History className="h-3.5 w-3.5" /> Observações Gerais do Evento</div>
+             {isEditingHeader ? (
+               <textarea 
+                 value={draft.observacoes || ""} 
+                 onChange={e => setDraft(p => p ? ({...p, observacoes: e.target.value}) : null)}
+                 className="w-full h-24 p-4 rounded-xl bg-input border border-border text-sm focus:ring-2 focus:ring-primary/20 outline-none resize-none transition-all shadow-inner"
+                 placeholder="Digite aqui observações importantes, detalhes do cliente ou particularidades da entrega..."
+               />
+             ) : (
+               <div className="p-4 rounded-xl bg-surface border border-border/40 min-h-[60px]">
+                 <p className="text-sm text-muted-foreground leading-relaxed italic">
+                   {draft.observacoes || "Nenhuma observação cadastrada para este evento."}
+                 </p>
+               </div>
+             )}
           </div>
         </div>
 
@@ -1094,26 +1254,39 @@ function EventoInterna() {
                       </div>
                    </div>
 
-                   <div className="p-6 rounded-2xl bg-surface border-2 border-border space-y-3 shadow-inner">
-                     <div className="flex justify-between items-center text-xs font-medium">
-                        <span className="text-muted-foreground uppercase tracking-widest">Total do Contrato</span>
-                        <span>{fmtBRL(calc.valorTotalOrcamento)}</span>
-                     </div>
-                     <div className="flex justify-between items-center text-sm font-bold">
-                        <span className="text-primary uppercase tracking-widest text-[10px]">Já Recebido (Sinal)</span>
-                        <span className="text-primary">{fmtBRL(calc.valorPago)}</span>
-                     </div>
-                     <div className="flex justify-between items-center text-sm font-bold">
-                        <span className="text-muted-foreground uppercase tracking-widest text-[10px]">Saldo Pendente ({calc.percPendente}%)</span>
-                        <span className="text-destructive">{fmtBRL(calc.valorPendente)}</span>
-                     </div>
-                     
-                     <div className="mt-4 pt-4 border-t border-border flex justify-between items-center">
-                        <span className="text-[10px] font-bold uppercase tracking-widest">Fluxo de Caixa</span>
-                        <div className={`px-3 py-1 rounded-full text-[10px] font-bold ${calc.statusPagamento === 'Pago integralmente' ? 'bg-success/10 text-success' : 'bg-primary/10 text-primary'}`}>
-                           {calc.statusPagamento.toUpperCase()}
+                   <div className="p-6 rounded-2xl bg-surface border-2 border-primary/20 space-y-4 shadow-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <div className="label-eyebrow text-primary">Status de Quitação</div>
+                          <h4 className="font-display font-bold text-lg">Contrato Pago?</h4>
                         </div>
-                     </div>
+                        <button 
+                          onClick={handleTogglePaidFull}
+                          className={`h-10 px-6 rounded-xl font-bold text-xs transition-all ${draft.is_paid_full ? "bg-success text-white shadow-lg shadow-success/20" : "bg-primary/10 text-primary border border-primary/20"}`}
+                        >
+                          {draft.is_paid_full ? "SIM, 100% PAGO" : "MARCAR COMO PAGO"}
+                        </button>
+                      </div>
+
+                      <div className="space-y-3 pt-3 border-t border-border">
+                        <div className="flex justify-between items-center text-xs font-medium">
+                           <span className="text-muted-foreground uppercase tracking-widest">Total do Contrato</span>
+                           <span>{fmtBRL(calc.valorTotalOrcamento)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm font-bold">
+                           <span className="text-primary uppercase tracking-widest text-[10px]">Já Recebido (Sinal)</span>
+                           <span className="text-primary">{fmtBRL(calc.valorPago)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm font-bold">
+                           <span className="text-muted-foreground uppercase tracking-widest text-[10px]">Saldo Pendente ({calc.percPendente}%)</span>
+                           <span className="text-destructive">{fmtBRL(calc.valorPendente)}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="p-3 rounded-lg bg-primary/5 text-[10px] text-muted-foreground italic flex gap-2 items-center mt-2">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                        Status automático: <span className="font-bold text-primary ml-1">{calc.statusPagamento.toUpperCase()}</span>
+                      </div>
                    </div>
                    
                    <PrimaryButton onClick={() => handleSave(false)} className="w-full h-12 font-bold">ATUALIZAR DADOS FINANCEIROS</PrimaryButton>

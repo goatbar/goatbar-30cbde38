@@ -129,6 +129,9 @@ export interface Evento {
   coposVinculados: Record<string, string>; // drinkId -> glasswareId
   historicoAlteracoes: EventoHistoricoAlteracao[];
   historicoNegociacao: EventoHistoricoNegociacao[];
+  lead_source?: string;
+  referral_name?: string;
+  is_paid_full?: boolean;
   
   // Legacy/Computed
   valorNegociado: number;

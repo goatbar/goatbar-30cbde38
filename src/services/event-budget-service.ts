@@ -16,6 +16,7 @@ export interface Event {
   status: string;
   lead_source?: string;
   referral_name?: string;
+  is_paid_full: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -177,29 +178,43 @@ export const eventBudgetService = {
   },
 
   async createBudgetVersion(eventId: string, payload: any, isNewVersion: boolean = true) {
-    // If isNewVersion is false, it might just be updating a draft of the current version
-    // But user wants versioning, so typically we create a new one.
-    
-    let versionNumber = 1;
-    if (isNewVersion) {
-        const { data: latest } = await supabase
+    if (!isNewVersion) {
+      // Try to find current version to update
+      const current = await this.getCurrentBudget(eventId);
+      if (current) {
+        const { data, error } = await supabase
           .from("event_budget_versions")
-          .select("version_number")
-          .eq("event_id", eventId)
-          .order("version_number", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        
-        if (latest) {
-            versionNumber = latest.version_number + 1;
-        }
-
-        // Set all others to NOT current
-        await supabase
-          .from("event_budget_versions")
-          .update({ is_current: false })
-          .eq("event_id", eventId);
+          .update({
+            ...payload,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", current.id)
+          .select()
+          .single();
+        if (error) throw error;
+        return data as BudgetVersion;
+      }
     }
+
+    // Otherwise, create a new version
+    let versionNumber = 1;
+    const { data: latest } = await supabase
+      .from("event_budget_versions")
+      .select("version_number")
+      .eq("event_id", eventId)
+      .order("version_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    if (latest) {
+        versionNumber = latest.version_number + 1;
+    }
+
+    // Set all others to NOT current
+    await supabase
+      .from("event_budget_versions")
+      .update({ is_current: false })
+      .eq("event_id", eventId);
 
     const { data, error } = await supabase
       .from("event_budget_versions")
@@ -319,5 +334,24 @@ export const eventBudgetService = {
       .order("created_at", { ascending: false });
     if (error) throw error;
     return data as NegotiationHistory[];
+  },
+
+  async updateNegotiationNote(noteId: string, note: string) {
+    const { data, error } = await supabase
+      .from("event_negotiation_history")
+      .update({ note })
+      .eq("id", noteId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async deleteNegotiationNote(noteId: string) {
+    const { error } = await supabase
+      .from("event_negotiation_history")
+      .delete()
+      .eq("id", noteId);
+    if (error) throw error;
   }
 };

@@ -301,7 +301,17 @@ export const clientContractFormService = {
   },
 
   async submitClientData(token: string, payload: any) {
-    const { data, error } = await supabase
+    // 1. Get the event_id first
+    const { data: form, error: fetchError } = await supabase
+      .from("event_contract_client_data")
+      .select("event_id")
+      .eq("public_token", token)
+      .single();
+    
+    if (fetchError) throw fetchError;
+
+    // 2. Update the client data record
+    const { data, error: updateError } = await supabase
       .from("event_contract_client_data")
       .update({
         ...payload,
@@ -310,7 +320,21 @@ export const clientContractFormService = {
       .eq("public_token", token)
       .select()
       .single();
-    if (error) throw error;
+    
+    if (updateError) throw updateError;
+
+    // 3. Sync critical info back to the main events table
+    if (form?.event_id) {
+        await supabase
+          .from("events")
+          .update({
+            client_name: payload.client_name,
+            phone: payload.phone,
+            email: payload.email
+          })
+          .eq("id", form.event_id);
+    }
+
     return data;
   }
 };

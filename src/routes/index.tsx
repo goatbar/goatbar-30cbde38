@@ -135,6 +135,19 @@ function Dashboard() {
     .filter(e => new Date(e.data || 0).getTime() >= new Date().setHours(0,0,0,0))
     .slice(0, 5);
 
+  const proximosPagamentos = [...eventosSupabase]
+    .filter(e => ["confirmado", "realizado", "proposta_aceita"].includes(e.status) && !e.is_paid_full)
+    .map(e => {
+       // Mock or approximate calculation if full calc not available here
+       const total = Number(e.current_budget_value || 0);
+       const pago = total * (Number(e.payment_percent_received || 0) / 100);
+       const pendente = total - pago;
+       return { ...e, valorPendente: pendente };
+    })
+    .filter(e => e.valorPendente > 0)
+    .sort((a, b) => new Date(a.payment_due_date || a.date || 0).getTime() - new Date(b.payment_due_date || b.date || 0).getTime())
+    .slice(0, 5);
+
   return (
     <>
       <PageHeader
@@ -229,6 +242,38 @@ function Dashboard() {
               ))}
             </div>
           </SectionCard>
+
+          {/* Próximos Pagamentos */}
+          <SectionCard title="Próximos Pagamentos" subtitle="Fluxo de caixa de eventos confirmados" className="border-amber-500/20 shadow-lg shadow-amber-500/5">
+            <div className="space-y-3">
+              {proximosPagamentos.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">Tudo em dia!</p>
+              )}
+              {proximosPagamentos.map((e) => (
+                <Link
+                  key={e.id}
+                  to="/eventos/$eventoId"
+                  params={{ eventoId: e.id }}
+                  className="flex items-center gap-4 p-3 rounded-xl border border-border bg-amber-500/5 hover:bg-amber-500/10 transition-all group"
+                >
+                  <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600 shrink-0">
+                    <Calculator className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm truncate">{e.nome}</div>
+                    <div className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mt-0.5">
+                      Vence em: {e.payment_due_date ? format(parseISO(e.payment_due_date), "dd/MM/yyyy") : (e.date ? format(parseISO(e.date), "dd/MM/yyyy") : "A definir")}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-sm font-black text-foreground">{fmtBRL(e.valorPendente)}</div>
+                    <div className="text-[9px] font-bold text-muted-foreground uppercase">Saldo Pendente</div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </SectionCard>
+        </div>
         </div>
 
         {/* Resumo por Modalidade */}
