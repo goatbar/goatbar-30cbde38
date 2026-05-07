@@ -46,14 +46,23 @@ function EventosIndex() {
     }
   };
 
-  const eventosAtivos = eventos.filter(e => !["cancelado", "proposta_recusada"].includes(e.status));
+  const eventosAtivos = eventos.filter(e => {
+    const s = e.status?.toUpperCase();
+    return !["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
+  });
   
   const receitaEnviados = eventosAtivos
-    .filter(e => ["orcamento_enviado", "aguardando_retorno", "em_assinatura"].includes(e.status))
+    .filter(e => {
+      const s = e.status?.toUpperCase();
+      return ["ORCAMENTO_ENVIADO", "AGUARDANDO_RESPOSTA", "DADOS_SOLICITADOS"].includes(s);
+    })
     .reduce((a, e) => a + (e.current_budget_value || 0), 0);
     
   const receitaConfirmados = eventosAtivos
-    .filter(e => ["confirmado", "realizado", "proposta_aceita"].includes(e.status))
+    .filter(e => {
+      const s = e.status?.toUpperCase();
+      return ["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(s);
+    })
     .reduce((a, e) => a + (e.current_budget_value || 0), 0);
 
   const mesmoDiaEventos = form.data ? eventos.filter(e => e.date === form.data && !["cancelado", "proposta_recusada"].includes(e.status)) : [];
@@ -98,7 +107,7 @@ function EventosIndex() {
       <div className="px-8 py-7 space-y-7">
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-5">
           <StatCard label="Total em pipeline" value={String(eventosAtivos.length)} />
-          <StatCard label="Aguardando resposta" value={String(eventosAtivos.filter(e => e.status === "aguardando_retorno" || e.status === "orcamento_enviado").length)} />
+          <StatCard label="Aguardando resposta" value={String(eventosAtivos.filter(e => ["ORCAMENTO_ENVIADO", "AGUARDANDO_RESPOSTA", "DADOS_SOLICITADOS"].includes(e.status?.toUpperCase())).length)} />
           <StatCard label="Orçamentos enviados" value={fmtBRL(receitaEnviados)} />
           <StatCard label="Eventos confirmados" value={fmtBRL(receitaConfirmados)} />
         </div>

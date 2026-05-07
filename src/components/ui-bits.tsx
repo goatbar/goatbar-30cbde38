@@ -71,7 +71,22 @@ export function SectionCard({
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { bg: string; fg: string; label: string }> = {
+  const map: Record<string, { bg: string; fg: string; label: string; border?: string }> = {
+    // Novos Status Padronizados
+    CONFIRMADO: { 
+      bg: "bg-[rgba(22,163,74,0.15)]", 
+      fg: "text-[#22c55e]", 
+      label: "Confirmado",
+      border: "border-[rgba(34,197,94,0.35)]" 
+    },
+    ORCAMENTO_ENVIADO: { bg: "bg-warning/10", fg: "text-warning", label: "Orçamento Enviado" },
+    DADOS_SOLICITADOS: { bg: "bg-primary/10", fg: "text-primary", label: "Dados Solicitados" },
+    AGUARDANDO_RESPOSTA: { bg: "bg-secondary", fg: "text-muted-foreground", label: "Aguardando Resposta" },
+    FINALIZADO: { bg: "bg-success/10", fg: "text-success", label: "Finalizado" },
+    CANCELADO: { bg: "bg-destructive/10", fg: "text-destructive", label: "Cancelado" },
+    NOVO: { bg: "bg-primary/10", fg: "text-primary", label: "Novo" },
+
+    // Legado e Outros
     confirmado: { bg: "bg-success/10", fg: "text-success", label: "Confirmado" },
     em_andamento: { bg: "bg-warning/10", fg: "text-warning", label: "Em andamento" },
     rascunho: { bg: "bg-muted", fg: "text-muted-foreground", label: "Rascunho" },
@@ -84,7 +99,7 @@ export function StatusBadge({ status }: { status: string }) {
   };
   const s = map[status] || { bg: "bg-secondary", fg: "text-foreground", label: status };
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-medium uppercase tracking-wider ${s.bg} ${s.fg}`}>
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-medium uppercase tracking-wider ${s.bg} ${s.fg} ${s.border ? `border ${s.border}` : ""}`}>
       {s.label}
     </span>
   );

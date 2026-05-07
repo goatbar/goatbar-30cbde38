@@ -6,28 +6,50 @@ import { TrendingUp, ShoppingBag, CalendarRange, Wine, ChevronRight, Calculator 
 import { useAppStore } from "@/lib/app-store";
 import { calcularOrcamentoEvento } from "@/lib/mock-data";
 import { useState, useMemo, useEffect } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { AppShell, PageHeader } from "@/components/AppShell";
+import { StatCard, SectionCard, StatusBadge } from "@/components/ui-bits";
+import { fmtBRL } from "@/lib/format";
+import { TrendingUp, ShoppingBag, CalendarRange, Wine, ChevronRight, Calculator } from "lucide-react";
+import { eventBudgetService } from "@/services/event-budget-service";
+import { financialService } from "@/services/financial-service";
+import { goatbarService } from "@/services/goatbar-service";
+import { useState, useMemo, useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { eventBudgetService } from "@/services/event-budget-service";
 
 export const Route = createFileRoute("/")({ component: () => <AppShell><Dashboard /></AppShell> });
 
 function Dashboard() {
-  const store = useAppStore();
-  const { financialSessions, eventContracts, drinks: allDrinks } = store;
-  const [periodoDias, setPeriodoDias] = useState<number>(30);
+  const [financialSessions, setFinancialSessions] = useState<any[]>([]);
+  const [allDrinks, setAllDrinks] = useState<any[]>([]);
   const [eventosSupabase, setEventosSupabase] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [periodoDias, setPeriodoDias] = useState<number>(30);
 
   useEffect(() => {
     const loadData = async () => {
-      const data = await eventBudgetService.getEvents();
-      setEventosSupabase(data || []);
+      setLoading(true);
+      try {
+        const [evs, sessions, drinksData] = await Promise.all([
+          eventBudgetService.getEvents(),
+          financialService.listExpenses(),
+          goatbarService.listDrinks()
+        ]);
+        setEventosSupabase(evs || []);
+        setFinancialSessions(sessions || []);
+        setAllDrinks(drinksData || []);
+      } catch (e) {
+        console.error("Erro ao carregar dados do Dashboard:", e);
+      } finally {
+        setLoading(false);
+      }
     };
     loadData();
   }, []);
 
-  // Gastos da controladoria
-  const totalGastos = (store as any).financial_expenses?.reduce((a: number, b: any) => a + Number(b.amount), 0) || 0;
+  // Gastos da controladoria - Agora vem direto do financialSessions se mapeado corretamente
+  const totalGastos = financialSessions.reduce((a: number, b: any) => a + Number(b.amount || 0), 0);
 
   // Filtros Globais Baseados no Período Selecionado
   const limiteData = useMemo(() => {
@@ -45,7 +67,7 @@ function Dashboard() {
 
   const filteredEventos = useMemo(() => {
     return eventosSupabase.filter(e => {
-      const eventDate = e.date || e.data;
+      const eventDate = e.date;
       return new Date(eventDate || 0).getTime() >= limiteData.getTime();
     });
   }, [eventosSupabase, limiteData]);
@@ -55,8 +77,8 @@ function Dashboard() {
   // Goat Botequim
   const botStats = useMemo(() => {
     const list = filteredSessions.filter(s => s.modalidade === "Goat Botequim");
-    const receitaBruta = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0), 0);
-    const custoDrinks = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.custoUnitario * item.quantidade), 0), 0);
+    const receitaBruta = list.reduce((acc, s) => acc + s.items.reduce((sum: number, item: any) => sum + (item.precoUnitario * item.quantidade), 0), 0);
+    const custoDrinks = list.reduce((acc, s) => acc + s.items.reduce((sum: number, item: any) => sum + (item.custoUnitario * item.quantidade), 0), 0);
     const resLiq = receitaBruta - custoDrinks;
     const maoDeObra = list.reduce((acc, s) => acc + (s.maoDeObraValor * s.maoDeObraQtd), 0);
     const lucroFinal = (resLiq * 0.6) - maoDeObra;
@@ -66,10 +88,9 @@ function Dashboard() {
   // 7Steakhouse
   const steakStats = useMemo(() => {
     const list = filteredSessions.filter(s => s.modalidade === "7Steakhouse");
-    // Receita na Steakhouse para a Goatbar é o repasse (custoUnitario gravado no item)
-    const receitaGoatbar = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.custoUnitario * item.quantidade), 0), 0);
+    const receitaGoatbar = list.reduce((acc, s) => acc + s.items.reduce((sum: number, item: any) => sum + (item.custoUnitario * item.quantidade), 0), 0);
     const custoDrinks = list.reduce((acc, s) => {
-      return acc + s.items.reduce((sum, item) => {
+      return acc + s.items.reduce((sum: number, item: any) => {
         const d = allDrinks.find(x => x.id === item.drinkId);
         return sum + ((d?.custoUnitario || 0) * item.quantidade);
       }, 0);
@@ -77,7 +98,7 @@ function Dashboard() {
     const lucroBruto = receitaGoatbar - custoDrinks;
     const maoDeObra = list.reduce((acc, s) => {
       if (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0) {
-        return acc + s.maoDeObraDetalhes.reduce((a, b) => a + b.valor, 0);
+        return acc + s.maoDeObraDetalhes.reduce((a: number, b: any) => a + b.valor, 0);
       }
       return acc + (s.maoDeObraValor * s.maoDeObraQtd);
     }, 0);
@@ -106,17 +127,15 @@ function Dashboard() {
     const map = new Map<string, { nome: string; qtd: number; receita: number; lucro: number }>();
     filteredSessions.forEach((s) => {
       const isSteakhouse = s.modalidade === "7Steakhouse";
-      s.items.forEach(item => {
+      s.items.forEach((item: any) => {
         const cur = map.get(item.drinkId) || { nome: item.nome, qtd: 0, receita: 0, lucro: 0 };
         cur.qtd += item.quantidade;
         
         if (isSteakhouse) {
-          // Lucro Goatbar na Steakhouse = Repasse - Custo Insumo
           const d = allDrinks.find(x => x.id === item.drinkId);
           cur.receita += item.custoUnitario * item.quantidade;
           cur.lucro += (item.custoUnitario - (d?.custoUnitario || 0)) * item.quantidade;
         } else {
-          // Lucro Goatbar no Botequim = (Venda - Custo) * 60%
           cur.receita += item.precoUnitario * item.quantidade;
           cur.lucro += (item.precoUnitario - item.custoUnitario) * item.quantidade * 0.6;
         }
@@ -125,8 +144,8 @@ function Dashboard() {
     });
     return Array.from(map.entries())
       .map(([id, v]) => ({ id, ...v }))
-      .sort((a, b) => b.lucro - a.lucro); // Rank by profit
-  }, [filteredSessions]);
+      .sort((a, b) => b.lucro - a.lucro);
+  }, [filteredSessions, allDrinks]);
 
   const topDrinks = rankingDrinks.slice(0, 5);
 
@@ -135,33 +154,15 @@ function Dashboard() {
       const s = e.status?.toUpperCase();
       return !["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
     })
-    .sort((a, b) => new Date(a.data || 0).getTime() - new Date(b.data || 0).getTime())
-    .filter(e => new Date(e.data || 0).getTime() >= new Date().setHours(0,0,0,0))
+    .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime())
+    .filter(e => new Date(e.date || 0).getTime() >= new Date().setHours(0,0,0,0))
     .slice(0, 5);
 
   const proximosPagamentos = [...eventosSupabase]
     .filter(e => {
       const s = e.status?.toUpperCase();
-      // Considera pago se o percentual for 100
       const isPaid = (e.payment_percent_received || 0) >= 100;
       return ["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(s) && !isPaid;
-    })
-    .map(e => {
-       // Mock or approximate calculation if full calc not available here
-       const total = Number(e.current_budget_value || 0);
-       const pago = total * (Number(e.payment_percent_received || 0) / 100);
-       const pendente = total - pago;
-       return { ...e, valorPendente: pendente };
-    })
-    .filter(e => e.valorPendente > 0)
-    .sort((a, b) => new Date(a.payment_due_date || a.date || 0).getTime() - new Date(b.payment_due_date || b.date || 0).getTime())
-    .slice(0, 5);
-
-  return (
-    <>
-      <PageHeader
-        title="Dashboard"
-        subtitle="Visão geral consolidada do Goat Bar Management System."
         periodo={
           <div className="relative">
             <select

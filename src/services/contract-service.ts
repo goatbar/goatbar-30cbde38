@@ -180,6 +180,14 @@ export const glasswareService = {
 
 // --- 4. Event Contracts Service ---
 export const eventContractsService = {
+  async listAllContracts() {
+    const { data, error } = await supabase
+      .from("event_contracts")
+      .select("*");
+    if (error) throw error;
+    return data as EventContract[];
+  },
+
   async getContractByEventId(eventId: string) {
     const { data, error } = await supabase
       .from("event_contracts")
@@ -226,11 +234,14 @@ export const eventContractsService = {
   },
 
   async compileContractVariables(eventId: string) {
-    // 1. Busca dados do evento no LocalStorage (via AppStore)
-    const store = JSON.parse(localStorage.getItem("goatbar-storage-v7") || "{}");
-    const evento = store.state?.eventos?.find((e: any) => e.id === eventId);
+    // 1. Busca dados do evento no Supabase (Fonte real de verdade)
+    const { data: evento, error: evError } = await supabase
+      .from("events")
+      .select("*")
+      .eq("id", eventId)
+      .single();
     
-    if (!evento) throw new Error("Evento não encontrado");
+    if (evError || !evento) throw new Error("Evento não encontrado no banco de dados");
 
     // 2. Busca dados do cliente no Supabase
     const { data: clientData } = await supabase
