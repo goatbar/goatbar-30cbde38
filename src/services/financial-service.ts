@@ -215,18 +215,21 @@ export const financialService = {
 
     // Steakhouse
     const steakList = sessions.filter(s => s.modalidade === "7Steakhouse");
+    // Receita Goatbar = Soma de (item.custoUnitario * qtd) -> O que o Goat Bar cobra do restaurante
     const steakReceita = steakList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (item.custoUnitario * item.quantidade), 0), 0);
+    // Custo Insumos = Soma de (bebida.custoUnitario * qtd) -> O que o Goat Bar paga pela bebida
     const steakCusto = steakList.reduce((acc, s) => {
       return acc + (s.items || []).reduce((sum: number, item: any) => {
         const d = drinks.find(x => x.id === item.drinkId);
         return sum + ((d?.custoUnitario || 0) * item.quantidade);
       }, 0);
     }, 0);
+    // Lucro Final = (Receita - Custo) - Mão de Obra
     const steakLucro = (steakReceita - steakCusto) - steakList.reduce((acc, s) => {
       if (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0) {
-        return acc + s.maoDeObraDetalhes.reduce((a: number, b: any) => a + b.valor, 0);
+        return acc + s.maoDeObraDetalhes.reduce((a: number, b: any) => a + Number(b.valor || 0), 0);
       }
-      return acc + (s.maoDeObraValor * s.maoDeObraQtd);
+      return acc + (Number(s.maoDeObraValor || 0) * Number(s.maoDeObraQtd || 0));
     }, 0);
 
     // Events

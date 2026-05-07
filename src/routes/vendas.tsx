@@ -237,7 +237,8 @@ function VendasPage() {
         meses[key].lucro += sessionLucro;
         meses[key].bot += sessionLucro;
       } else {
-        const receitaGoat = (s.items || []).reduce((acc: number, item: any) => acc + (item.custoUnitario * item.quantidade), 0);
+        // Steakhouse: Receita para o Goat Bar é o custo do insumo (o que o restaurante paga)
+        const receitaGoat = (s.items || []).reduce((acc: number, item: any) => acc + (Number(item.custoUnitario || 0) * item.quantidade), 0);
         const sessionLucro = (receitaGoat - sessionCusto) - maoDeObra;
         meses[key].receita += receitaGoat;
         meses[key].custos += sessionCusto + maoDeObra;
@@ -500,16 +501,50 @@ function VendasPage() {
                 ))}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-eyebrow block mb-2">Custo Mão de Obra (Dia)</label>
-                  <input type="number" value={maoDeObraValor} onChange={e => setMaoDeObraValor(Number(e.target.value))} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm" />
+              {activeTab === "7Steakhouse" ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="label-eyebrow">Mão de Obra Detalhada (Semanal)</label>
+                    <GhostButton onClick={() => setMaoDeObraDetalhes(generateSteakhouseDays(modalDate))} className="h-8 text-[10px] uppercase font-bold">Gerar Dias</GhostButton>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {maoDeObraDetalhes.map((d, i) => (
+                      <div key={i} className="p-3 rounded-xl border border-border bg-background/40 space-y-2">
+                        <div className="text-[10px] font-bold text-muted-foreground uppercase">{new Date(d.data + 'T12:00:00').toLocaleDateString('pt-BR', {weekday: 'long', day: '2-digit', month: '2-digit'})}</div>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <label className="text-[8px] uppercase text-muted-foreground block mb-1">Valor</label>
+                            <input type="number" value={d.valor} onChange={e => {
+                              const newD = [...maoDeObraDetalhes];
+                              newD[i].valor = Number(e.target.value);
+                              setMaoDeObraDetalhes(newD);
+                            }} className="w-full h-8 px-2 rounded bg-input border border-border text-xs" />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-[8px] uppercase text-muted-foreground block mb-1">Pessoas</label>
+                            <input type="number" value={d.qtdPessoas} onChange={e => {
+                              const newD = [...maoDeObraDetalhes];
+                              newD[i].qtdPessoas = Number(e.target.value);
+                              setMaoDeObraDetalhes(newD);
+                            }} className="w-full h-8 px-2 rounded bg-input border border-border text-xs" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div>
-                  <label className="label-eyebrow block mb-2">Qtd Dias/Equipe</label>
-                  <input type="number" value={maoDeObraQtd} onChange={e => setMaoDeObraQtd(Number(e.target.value))} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm" />
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label-eyebrow block mb-2">Custo Mão de Obra (Dia)</label>
+                    <input type="number" value={maoDeObraValor} onChange={e => setMaoDeObraValor(Number(e.target.value))} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm" />
+                  </div>
+                  <div>
+                    <label className="label-eyebrow block mb-2">Qtd Dias/Equipe</label>
+                    <input type="number" value={maoDeObraQtd} onChange={e => setMaoDeObraQtd(Number(e.target.value))} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm" />
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="p-6 border-t border-border flex justify-end gap-3">
@@ -524,14 +559,19 @@ function VendasPage() {
 }
 
 function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () => void; onDelete: () => void }) {
-  const receita = (session.items || []).reduce((acc: number, item: any) => acc + (item.precoUnitario * item.quantidade), 0);
+  const isSteak = session.modalidade === "7Steakhouse";
+  const receita = (session.items || []).reduce((acc: number, item: any) => {
+    return acc + ((isSteak ? item.custoUnitario : item.precoUnitario) * item.quantidade);
+  }, 0);
   return (
     <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-background/50 hover:bg-background transition-colors group">
       <div className="flex items-center gap-4">
-        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary"><ShoppingBag className="h-5 w-5" /></div>
+        <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${isSteak ? "bg-success/10 text-success" : "bg-primary/10 text-primary"}`}>
+          {isSteak ? <Utensils className="h-5 w-5" /> : <ShoppingBag className="h-5 w-5" />}
+        </div>
         <div>
-          <div className="font-bold text-sm">{new Date(session.data).toLocaleDateString("pt-BR")}</div>
-          <div className="text-xs text-muted-foreground">{(session.items || []).length} drinks · {fmtBRL(receita)} receita</div>
+          <div className="font-bold text-sm">{new Date(session.data + 'T12:00:00').toLocaleDateString("pt-BR")}</div>
+          <div className="text-xs text-muted-foreground">{(session.items || []).length} drinks · {fmtBRL(receita)} receita {isSteak && "(Goat)"}</div>
         </div>
       </div>
       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
