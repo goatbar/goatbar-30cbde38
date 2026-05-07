@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { StatCard, SectionCard, PrimaryButton, GhostButton, StatusBadge } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
-import { Plus, ShoppingBag, TrendingUp, X, Users, Utensils, Calendar, Calculator, Trash2, Pencil } from "lucide-react";
+import { Plus, ShoppingBag, TrendingUp, X, Users, Utensils, Calendar, Calculator, Trash2, Pencil, ChevronRight, CheckCircle2, AlertCircle } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useAppStore } from "@/lib/app-store";
 import { calcularOrcamentoEvento, type SalesSessionItem, type FinancialSession } from "@/lib/mock-data";
@@ -14,51 +14,90 @@ import { eventContractsService } from "@/services/contract-service";
 export const Route = createFileRoute("/vendas")({ component: () => <AppShell><VendasPage /></AppShell> });
 
 function VendasPage() {
+  const { addFinancialSession, updateFinancialSession, deleteFinancialSession } = useAppStore();
   const [financialSessions, setFinancialSessions] = useState<any[]>([]);
   const [allDrinks, setAllDrinks] = useState<any[]>([]);
   const [eventosSupabase, setEventosSupabase] = useState<any[]>([]);
   const [contractsSupabase, setContractsSupabase] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"Goat Botequim" | "7Steakhouse" | "Eventos" | "Consolidação">("Goat Botequim");
+  const [periodoDias, setPeriodoDias] = useState<number>(30);
+
+  const loadAllData = async () => {
+    setLoading(true);
+    try {
+      const [evs, sessions, drinksData, contracts] = await Promise.all([
+        eventBudgetService.listEvents(),
+        financialService.listSessions(),
+        goatbarService.listDrinks(),
+        eventContractsService.listAllContracts()
+      ]);
+      setEventosSupabase(evs || []);
+      setFinancialSessions(sessions || []);
+      setAllDrinks(drinksData || []);
+      setContractsSupabase(contracts || []);
+    } catch (err) {
+      console.error("Erro ao carregar dados:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadAllData = async () => {
-      setLoading(true);
-      try {
-        const [evs, sessions, drinksData, contracts] = await Promise.all([
-          eventBudgetService.getEvents(),
-          // Note: In a real system, financialSessions might be a different table than expenses
-          // For now, I'll assume we still use some mock data for sessions but fetch events/contracts/drinks from Supabase
-          // Wait, the user said "Remover mocks". If financial_sessions table doesn't exist yet, I'll stick to what's available.
-          // But I'll definitely fetch Events and Contracts from Supabase.
-          Promise.resolve([]), // Placeholder for real sessions if table exists
-          goatbarService.listDrinks(),
-          eventContractsService.listAllContracts()
-        ]);
-        setEventosSupabase(evs || []);
-        setAllDrinks(drinksData || []);
-        setContractsSupabase(contracts || []);
-      } catch (err) {
-        console.error("Erro ao carregar dados:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
     loadAllData();
   }, []);
+
   const [showModal, setShowModal] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   
-  // Modal states
   const [modalDate, setModalDate] = useState(new Date().toISOString().split("T")[0]);
   const [modalItems, setModalItems] = useState<SalesSessionItem[]>([]);
   const [maoDeObraValor, setMaoDeObraValor] = useState(0);
   const [maoDeObraQtd, setMaoDeObraQtd] = useState(0);
   const [maoDeObraNomes, setMaoDeObraNomes] = useState("");
   const [maoDeObraDetalhes, setMaoDeObraDetalhes] = useState<{data: string, valor: number, qtdPessoas: number, nomes?: string}[]>([]);
-  const [custosDetalhes, setCustosDetalhes] = useState<{descricao: string, valor: number}[]>([]);
 
-  // --- Helpers for Modal ---
+  // --- Date Filters ---
+  const limiteData = useMemo(() => {
+    if (periodoDias === 0) return new Date(0); // All time
+    if (periodoDias === -1) { // Este mês
+      const d = new Date();
+      return new Date(d.getFullYear(), d.getMonth(), 1);
+    }
+    if (periodoDias === -2) { // Mês anterior
+      const d = new Date();
+      return new Date(d.getFullYear(), d.getMonth() - 1, 1);
+    }
+    const d = new Date();
+    d.setDate(d.getDate() - periodoDias);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, [periodoDias]);
+
+  const dataFim = useMemo(() => {
+    if (periodoDias === -2) { // Mês anterior
+      const d = new Date();
+      return new Date(d.getFullYear(), d.getMonth(), 0, 23, 59, 59);
+    }
+    return new Date(2100, 0, 1);
+  }, [periodoDias]);
+
+  // --- Filtered Data ---
+  const filteredSessions = useMemo(() => {
+    return financialSessions.filter(s => {
+      const d = new Date(s.data).getTime();
+      return d >= limiteData.getTime() && d <= dataFim.getTime();
+    });
+  }, [financialSessions, limiteData, dataFim]);
+
+  const filteredEventos = useMemo(() => {
+    return eventosSupabase.filter(e => {
+      const eventDate = e.date || e.data;
+      const d = new Date(eventDate || 0).getTime();
+      return d >= limiteData.getTime() && d <= dataFim.getTime();
+    });
+  }, [eventosSupabase, limiteData, dataFim]);
+
   const activeModalityKey = useMemo(() => {
     if (activeTab === "7Steakhouse") return "steakhouse";
     if (activeTab === "Goat Botequim") return "goatbotequim";
@@ -84,10 +123,6 @@ function VendasPage() {
       precoUnitario: config?.price || 0, 
       custoUnitario: config?.cost || 0 
     }]);
-  };
-
-  const removeItem = (index: number) => {
-    setModalItems(modalItems.filter((_, i) => i !== index));
   };
 
   const updateItem = (index: number, field: keyof SalesSessionItem, value: any) => {
@@ -117,17 +152,12 @@ function VendasPage() {
     baseDate.setUTCHours(12);
     for (let i = 0; i < 4; i++) {
       const d = new Date(baseDate.getTime() + i * 24 * 60 * 60 * 1000);
-      days.push({
-        data: d.toISOString().split("T")[0],
-        valor: 0,
-        qtdPessoas: 1,
-        nomes: ""
-      });
+      days.push({ data: d.toISOString().split("T")[0], valor: 0, qtdPessoas: 1, nomes: "" });
     }
     return days;
   };
 
-  const handleEditSession = (session: FinancialSession) => {
+  const handleEditSession = (session: any) => {
     setEditingSessionId(session.id);
     setModalDate(session.data);
     setModalItems(JSON.parse(JSON.stringify(session.items)));
@@ -138,9 +168,7 @@ function VendasPage() {
     setShowModal(true);
   };
 
-  const handleSave = () => {
-    if (activeTab === "Eventos" || activeTab === "Consolidação") return;
-    
+  const handleSave = async () => {
     const payload = {
       data: modalDate,
       modalidade: activeTab,
@@ -151,106 +179,43 @@ function VendasPage() {
       maoDeObraDetalhes: activeTab === "7Steakhouse" ? maoDeObraDetalhes : undefined,
     };
 
-    if (editingSessionId) {
-      updateFinancialSession(editingSessionId, payload);
-    } else {
-      addFinancialSession(payload);
+    try {
+       await financialService.createSession(payload);
+       // Also update local store if still using it partially
+       if (editingSessionId) {
+         updateFinancialSession(editingSessionId, payload);
+       } else {
+         addFinancialSession(payload);
+       }
+       setShowModal(false);
+       loadAllData();
+    } catch (e) {
+       // Fallback to local if Supabase fails (e.g. table doesn't exist)
+       if (editingSessionId) {
+         updateFinancialSession(editingSessionId, payload);
+       } else {
+         addFinancialSession(payload);
+       }
+       setShowModal(false);
+       loadAllData();
     }
-    
-    setShowModal(false);
-    // Reset
-    setEditingSessionId(null);
-    setModalItems([]);
-    setMaoDeObraValor(0);
-    setMaoDeObraQtd(0);
-    setMaoDeObraNomes("");
-    setMaoDeObraDetalhes([]);
   };
 
-  // --- Calculations ---
-
-  // Event calculations
-  const eventosValidos = useMemo(() => {
-    return eventosSupabase.filter(e => {
-      const s = e.status?.toUpperCase();
-      // Inclui todos os confirmados e finalizados para o financeiro
-      return ["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(s);
-    });
-  }, [eventosSupabase]);
-  
-  // Filtered sessions
-  const sessions = financialSessions.filter(s => s.modalidade === activeTab);
-
-
-
-  const statsBotequim = useMemo(() => {
-    const list = financialSessions.filter(s => s.modalidade === "Goat Botequim");
-    const receitaBruta = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0), 0);
-    const custoDrinks = list.reduce((acc, s) => {
-      return acc + s.items.reduce((sum, item) => {
-        const d = allDrinks.find(x => x.id === item.drinkId);
-        const configCost = d?.modalityConfig?.goatbotequim?.cost;
-        const liveCost = (configCost !== undefined && configCost !== null && configCost > 0) ? configCost : (d?.custoUnitario || 0);
-        return sum + (liveCost * item.quantidade);
-      }, 0);
-    }, 0);
-    const resultadoLiquido = receitaBruta - custoDrinks;
-    const repasse = resultadoLiquido * 0.4;
-    const saldoAposRepasse = resultadoLiquido * 0.6;
-    const maoDeObra = list.reduce((acc, s) => acc + (s.maoDeObraValor * s.maoDeObraQtd), 0);
-    const lucroFinal = saldoAposRepasse - maoDeObra;
-
-    return { receitaBruta, custoDrinks, resultadoLiquido, repasse, maoDeObra, lucroFinal };
-  }, [financialSessions, allDrinks]);
-
-  const statsSteakhouse = useMemo(() => {
-    const list = financialSessions.filter(s => s.modalidade === "7Steakhouse");
-    const receitaGoatbar = list.reduce((acc, s) => acc + s.items.reduce((sum, item) => sum + (item.custoUnitario * item.quantidade), 0), 0);
-    const custoInsumos = list.reduce((acc, s) => {
-       return acc + s.items.reduce((sum, item) => {
-         const d = allDrinks.find(x => x.id === item.drinkId);
-         const custoReal = d ? d.custoUnitario : 0;
-         return sum + (custoReal * item.quantidade);
-       }, 0);
-    }, 0);
-    const lucroBrutoGoatbar = receitaGoatbar - custoInsumos;
-    const maoDeObra = list.reduce((acc, s) => {
-      if (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0) {
-        return acc + s.maoDeObraDetalhes.reduce((a, b) => a + b.valor, 0);
-      }
-      return acc + (s.maoDeObraValor * s.maoDeObraQtd);
-    }, 0);
-    const lucroFinal = lucroBrutoGoatbar - maoDeObra;
-
-    const lucroRestaurante = list.reduce((acc, s) => {
-       return acc + s.items.reduce((sum, item) => sum + ((item.precoUnitario - item.custoUnitario) * item.quantidade), 0);
-    }, 0);
-
-    return { receitaGoatbar, custoInsumos, lucroBrutoGoatbar, maoDeObra, lucroFinal, lucroRestaurante };
-  }, [financialSessions]);
-
-  const statsEventos = useMemo(() => {
-    // If the event has current_budget_value (cached in Supabase), use it.
-    const receita = eventosValidos.reduce((acc, e) => acc + (e.current_budget_value || 0), 0);
-    const lucro = eventosValidos.reduce((acc, e) => acc + (e.current_profit_value || 0), 0);
-    const custos = receita - lucro;
-
-    return { receita, custos, lucro };
-  }, [eventosValidos]);
+  // --- Metrics ---
+  const metrics = useMemo(() => {
+    return financialService.calculateMetrics(filteredSessions, filteredEventos, allDrinks);
+  }, [filteredSessions, filteredEventos, allDrinks]);
 
   const statsMensal = useMemo(() => {
     const meses: Record<string, { mes: string, receita: number, custos: number, lucro: number, bot: number, steak: number, event: number }> = {};
     
-    // Process financial sessions (Botequim and Steakhouse)
-    financialSessions.forEach(s => {
+    filteredSessions.forEach(s => {
       const date = new Date(s.data);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      if (!meses[key]) {
-        meses[key] = { mes: key, receita: 0, custos: 0, lucro: 0, bot: 0, steak: 0, event: 0 };
-      }
+      if (!meses[key]) meses[key] = { mes: key, receita: 0, custos: 0, lucro: 0, bot: 0, steak: 0, event: 0 };
       
-      const sessionReceita = s.items.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
-      const sessionCusto = s.items.reduce((acc, item) => {
+      const sessionReceita = (s.items || []).reduce((acc: number, item: any) => acc + (item.precoUnitario * item.quantidade), 0);
+      const sessionCusto = (s.items || []).reduce((acc: number, item: any) => {
         const d = allDrinks.find(x => x.id === item.drinkId);
         if (s.modalidade === "Goat Botequim") {
           const configCost = d?.modalityConfig?.goatbotequim?.cost;
@@ -261,7 +226,7 @@ function VendasPage() {
       }, 0);
       
       const maoDeObra = s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0 
-        ? s.maoDeObraDetalhes.reduce((a, b) => a + b.valor, 0)
+        ? s.maoDeObraDetalhes.reduce((a: number, b: any) => a + b.valor, 0)
         : (s.maoDeObraValor * s.maoDeObraQtd);
 
       if (s.modalidade === "Goat Botequim") {
@@ -272,8 +237,7 @@ function VendasPage() {
         meses[key].lucro += sessionLucro;
         meses[key].bot += sessionLucro;
       } else {
-        // Steakhouse: Receita Goat = Repasse (stored in custoUnitario)
-        const receitaGoat = s.items.reduce((acc, item) => acc + (item.custoUnitario * item.quantidade), 0);
+        const receitaGoat = (s.items || []).reduce((acc: number, item: any) => acc + (item.custoUnitario * item.quantidade), 0);
         const sessionLucro = (receitaGoat - sessionCusto) - maoDeObra;
         meses[key].receita += receitaGoat;
         meses[key].custos += sessionCusto + maoDeObra;
@@ -282,13 +246,14 @@ function VendasPage() {
       }
     });
 
-    // Process Events
-    eventosValidos.forEach(e => {
+    filteredEventos.forEach(e => {
+      const s = e.status?.toUpperCase();
+      if (!["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(s)) return;
+
       const date = new Date(e.date || e.data || 0);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      if (!meses[key]) {
-        meses[key] = { mes: key, receita: 0, custos: 0, lucro: 0, bot: 0, steak: 0, event: 0 };
-      }
+      if (!meses[key]) meses[key] = { mes: key, receita: 0, custos: 0, lucro: 0, bot: 0, steak: 0, event: 0 };
+      
       const receita = e.current_budget_value || 0;
       const lucro = e.current_profit_value || 0;
       meses[key].receita += receita;
@@ -298,42 +263,42 @@ function VendasPage() {
     });
 
     return Object.values(meses).sort((a, b) => b.mes.localeCompare(a.mes));
-  }, [financialSessions, eventosValidos, allDrinks]);
+  }, [filteredSessions, filteredEventos, allDrinks]);
 
   return (
-    <>
+    <div className="min-h-screen bg-background">
       <PageHeader
         title="Operações Financeiras"
-        subtitle="Controle de vendas, custos e resultados por modalidade."
-        action={
-          (activeTab === "Goat Botequim" || activeTab === "7Steakhouse") && (
-            <PrimaryButton onClick={() => {
-              const today = new Date().toISOString().split("T")[0];
-              setEditingSessionId(null);
-              setModalDate(today);
-              setModalItems([]);
-              setMaoDeObraValor(0);
-              setMaoDeObraQtd(0);
-              setMaoDeObraNomes("");
-              setMaoDeObraDetalhes(activeTab === "7Steakhouse" ? generateSteakhouseDays(today) : []);
-              setShowModal(true);
-            }}>
-              <Plus className="h-4 w-4" /> Lançar Sessão
-            </PrimaryButton>
-          )
+        subtitle="Controle de vendas, custos e lucratividade operacional."
+        periodo={
+          <div className="relative">
+            <select
+              value={periodoDias}
+              onChange={(e) => setPeriodoDias(Number(e.target.value))}
+              className="appearance-none inline-flex items-center gap-2 pl-4 pr-10 py-2 rounded-lg border border-border bg-surface text-sm font-medium hover:border-border-strong transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value={30}>Últimos 30 dias</option>
+              <option value={-1}>Este mês</option>
+              <option value={-2}>Mês anterior</option>
+              <option value={7}>Últimos 7 dias</option>
+              <option value={90}>Últimos 90 dias</option>
+              <option value={0}>Todo o período</option>
+            </select>
+            <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none rotate-90" />
+          </div>
         }
       />
 
-      <div className="px-4 lg:px-8 py-5 lg:py-7 space-y-5 lg:space-y-7">
+      <div className="px-8 py-7 space-y-7">
         {/* Tabs */}
-        <div className="flex overflow-x-auto gap-1 lg:gap-2 p-1 bg-surface border border-border rounded-xl w-full lg:w-fit scrollbar-hide">
-          {(["Goat Botequim", "7Steakhouse", "Eventos", "Consolidação"] as const).map((t) => (
+        <div className="flex items-center gap-1 p-1 bg-surface border border-border rounded-xl w-fit">
+          {["Goat Botequim", "7Steakhouse", "Eventos", "Consolidação"].map(tab => (
             <button
-              key={t}
-              onClick={() => setActiveTab(t)}
-              className={`whitespace-nowrap px-4 lg:px-5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === t ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              key={tab}
+              onClick={() => setActiveTab(tab as any)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-background/50"}`}
             >
-              {t}
+              {tab}
             </button>
           ))}
         </div>
@@ -342,20 +307,26 @@ function VendasPage() {
         {activeTab === "Goat Botequim" && (
           <div className="space-y-7">
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-              <StatCard label="Receita Bruta" value={fmtBRL(statsBotequim.receitaBruta)} />
-              <StatCard label="Custo Drinks" value={fmtBRL(statsBotequim.custoDrinks)} />
-              <StatCard label="Res. Líquido" value={fmtBRL(statsBotequim.resultadoLiquido)} />
-              <StatCard label="Repasse (40%)" value={fmtBRL(statsBotequim.repasse)} />
-              <StatCard label="Mão de Obra" value={fmtBRL(statsBotequim.maoDeObra)} />
-              <StatCard label="Lucro Final" value={fmtBRL(statsBotequim.lucroFinal)} highlight />
+              <StatCard label="Receita Bruta" value={fmtBRL(metrics.bot.receita)} />
+              <StatCard label="Custo Drinks" value={fmtBRL(metrics.bot.custo)} />
+              <StatCard label="Resultado Líquido" value={fmtBRL(metrics.bot.receita - metrics.bot.custo)} />
+              <StatCard label="Repasse (40%)" value={fmtBRL((metrics.bot.receita - metrics.bot.custo) * 0.4)} />
+              <StatCard label="Mão de Obra" value={fmtBRL(filteredSessions.filter(s => s.modalidade === "Goat Botequim").reduce((acc, s) => acc + (s.maoDeObraValor * s.maoDeObraQtd), 0))} />
+              <StatCard label="Lucro Final" value={fmtBRL(metrics.bot.lucro)} highlight />
+            </div>
+
+            <div className="flex justify-end">
+              <PrimaryButton onClick={() => { setEditingSessionId(null); setModalItems([]); setModalDate(new Date().toISOString().split("T")[0]); setShowModal(true); }}>
+                <Plus className="h-4 w-4 mr-2" /> Lançar Sessão Botequim
+              </PrimaryButton>
             </div>
 
             <SectionCard title="Sessões Lançadas" subtitle="Histórico de vendas consolidadas por dia">
               <div className="space-y-4">
-                {sessions.map(s => (
+                {filteredSessions.filter(s => s.modalidade === "Goat Botequim").map(s => (
                   <SessionRow key={s.id} session={s} onEdit={() => handleEditSession(s)} onDelete={() => deleteFinancialSession(s.id)} />
                 ))}
-                {sessions.length === 0 && <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">Nenhuma sessão lançada.</div>}
+                {filteredSessions.filter(s => s.modalidade === "Goat Botequim").length === 0 && <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">Nenhuma sessão lançada.</div>}
               </div>
             </SectionCard>
           </div>
@@ -365,20 +336,26 @@ function VendasPage() {
         {activeTab === "7Steakhouse" && (
           <div className="space-y-7">
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-              <StatCard label="Receita Goatbar" value={fmtBRL(statsSteakhouse.receitaGoatbar)} />
-              <StatCard label="Custo Insumos" value={fmtBRL(statsSteakhouse.custoInsumos)} />
-              <StatCard label="Lucro Bruto" value={fmtBRL(statsSteakhouse.lucroBrutoGoatbar)} />
-              <StatCard label="Lucro Retido Rest." value={fmtBRL(statsSteakhouse.lucroRestaurante)} />
-              <StatCard label="Mão de Obra" value={fmtBRL(statsSteakhouse.maoDeObra)} />
-              <StatCard label="Lucro F. Goatbar" value={fmtBRL(statsSteakhouse.lucroFinal)} highlight />
+              <StatCard label="Receita Goatbar" value={fmtBRL(metrics.steak.receita)} />
+              <StatCard label="Custo Insumos" value={fmtBRL(metrics.steak.custo)} />
+              <StatCard label="Lucro Bruto" value={fmtBRL(metrics.steak.receita - metrics.steak.custo)} />
+              <StatCard label="Lucro Retido Rest." value={fmtBRL(filteredSessions.filter(s => s.modalidade === "7Steakhouse").reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + ((item.precoUnitario - item.custoUnitario) * item.quantidade), 0), 0))} />
+              <StatCard label="Mão de Obra" value={fmtBRL(filteredSessions.filter(s => s.modalidade === "7Steakhouse").reduce((acc, s) => acc + (s.maoDeObraDetalhes ? s.maoDeObraDetalhes.reduce((a: number, b: any) => a + b.valor, 0) : s.maoDeObraValor * s.maoDeObraQtd), 0))} />
+              <StatCard label="Lucro F. Goatbar" value={fmtBRL(metrics.steak.lucro)} highlight />
             </div>
 
-            <SectionCard title="Sessões Semanais Lançadas" subtitle="Vendas diárias agregadas por semana (Quinta a Domingo)">
+            <div className="flex justify-end">
+              <PrimaryButton onClick={() => { setEditingSessionId(null); setModalItems([]); setModalDate(new Date().toISOString().split("T")[0]); setShowModal(true); }}>
+                <Plus className="h-4 w-4 mr-2" /> Lançar Semana Steakhouse
+              </PrimaryButton>
+            </div>
+
+            <SectionCard title="Sessões Semanais Lançadas" subtitle="Vendas diárias agregadas por semana">
               <div className="space-y-4">
-                {sessions.map(s => (
+                {filteredSessions.filter(s => s.modalidade === "7Steakhouse").map(s => (
                   <SessionRow key={s.id} session={s} onEdit={() => handleEditSession(s)} onDelete={() => deleteFinancialSession(s.id)} />
                 ))}
-                {sessions.length === 0 && <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">Nenhuma sessão lançada.</div>}
+                {filteredSessions.filter(s => s.modalidade === "7Steakhouse").length === 0 && <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">Nenhuma sessão lançada.</div>}
               </div>
             </SectionCard>
           </div>
@@ -388,9 +365,9 @@ function VendasPage() {
         {activeTab === "Eventos" && (
           <div className="space-y-7">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              <StatCard label="Receita Total" value={fmtBRL(statsEventos.receita)} />
-              <StatCard label="Custos Totais" value={fmtBRL(statsEventos.custos)} />
-              <StatCard label="Lucro Acumulado" value={fmtBRL(statsEventos.lucro)} highlight />
+              <StatCard label="Receita Total" value={fmtBRL(metrics.events.receita)} />
+              <StatCard label="Custos Totais" value={fmtBRL(metrics.events.custo)} />
+              <StatCard label="Lucro Acumulado" value={fmtBRL(metrics.events.lucro)} highlight />
             </div>
 
             <SectionCard title="Eventos Integrados" subtitle="Eventos confirmados e finalizados aparecem aqui automaticamente">
@@ -406,7 +383,7 @@ function VendasPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {eventosValidos.map(e => {
+                    {filteredEventos.filter(e => ["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(e.status?.toUpperCase())).map(e => {
                       const receita = e.current_budget_value || 0;
                       const lucro = e.current_profit_value || 0;
                       const custo = receita - lucro;
@@ -416,7 +393,7 @@ function VendasPage() {
                       return (
                         <tr key={e.id} className="border-b border-border/60 hover:bg-surface/50 transition-colors">
                           <td className="px-6 py-4 font-medium">
-                            <div>{e.nome || e.client_name}</div>
+                            <div>{e.client_name || e.nome}</div>
                             <div className="mt-1">
                               {isSigned ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-success/10 text-success text-[9px] font-bold uppercase tracking-widest border border-success/20">
@@ -436,13 +413,6 @@ function VendasPage() {
                         </tr>
                       );
                     })}
-                    {eventosValidos.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="px-6 py-10 text-center text-muted-foreground italic">
-                          {loading ? "Carregando eventos do Supabase..." : "Nenhum evento qualificado para o financeiro."}
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
               </div>
@@ -454,9 +424,9 @@ function VendasPage() {
         {activeTab === "Consolidação" && (
           <div className="space-y-7">
              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              <StatCard label="Receita Consolidada" value={fmtBRL(statsBotequim.receitaBruta + statsSteakhouse.receitaGoatbar + statsEventos.receita)} />
-              <StatCard label="Custos Consolidados" value={fmtBRL(statsBotequim.custoDrinks + statsSteakhouse.custoInsumos + statsEventos.custos)} />
-              <StatCard label="Lucro Total Goat Bar" value={fmtBRL(statsBotequim.lucroFinal + statsSteakhouse.lucroFinal + statsEventos.lucro)} highlight />
+              <StatCard label="Receita Consolidada" value={fmtBRL(metrics.consolidated.receita)} />
+              <StatCard label="Custos Consolidados" value={fmtBRL(metrics.consolidated.receita - metrics.consolidated.lucro)} />
+              <StatCard label="Lucro Total Goat Bar" value={fmtBRL(metrics.consolidated.lucro)} highlight />
             </div>
 
             <SectionCard title="Evolução Mensal" subtitle="Resumo consolidado por mês de operação">
@@ -484,9 +454,6 @@ function VendasPage() {
                         </tr>
                       );
                     })}
-                    {statsMensal.length === 0 && (
-                      <tr><td colSpan={4} className="px-6 py-10 text-center text-muted-foreground italic">Nenhum dado consolidado no período.</td></tr>
-                    )}
                   </tbody>
                 </table>
               </div>
@@ -494,440 +461,60 @@ function VendasPage() {
 
             <SectionCard title="Distribuição por Modalidade (Geral)" subtitle="Participação de cada unidade no lucro acumulado">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <SummaryCard label="Goat Botequim" value={statsBotequim.lucroFinal} color="bg-primary" icon={<ShoppingBag className="h-4 w-4" />} />
-                <SummaryCard label="7Steakhouse" value={statsSteakhouse.lucroFinal} color="bg-success" icon={<Utensils className="h-4 w-4" />} />
-                <SummaryCard label="Eventos" value={statsEventos.lucro} color="bg-amber-500" icon={<Calendar className="h-4 w-4" />} />
+                <SummaryCard label="Goat Botequim" value={metrics.bot.lucro} color="bg-primary" icon={<ShoppingBag className="h-4 w-4" />} />
+                <SummaryCard label="7Steakhouse" value={metrics.steak.lucro} color="bg-success" icon={<Utensils className="h-4 w-4" />} />
+                <SummaryCard label="Eventos" value={metrics.events.lucro} color="bg-amber-500" icon={<Calendar className="h-4 w-4" />} />
               </div>
             </SectionCard>
           </div>
         )}
       </div>
 
-      {/* --- MODAL DE LANÇAMENTO --- */}
+      {/* --- MODAL --- */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-2 lg:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="w-full max-w-2xl bg-surface border border-border rounded-2xl shadow-2xl my-auto">
-            <div className="flex items-center justify-between px-4 lg:px-6 pt-5 lg:pt-6 pb-4 border-b border-border">
-              <h2 className="font-display text-base lg:text-lg font-semibold truncate pr-2">{editingSessionId ? "Editar Sessão" : "Lançar Sessão"} — {activeTab}</h2>
-              <button onClick={() => setShowModal(false)} className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors shrink-0"><X className="h-4 w-4" /></button>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h2 className="font-display text-lg font-semibold">{editingSessionId ? "Editar Sessão" : "Lançar Sessão"} — {activeTab}</h2>
+              <button onClick={() => setShowModal(false)} className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40"><X className="h-4 w-4" /></button>
             </div>
             
-            <div className="p-4 lg:p-6 space-y-6 max-h-[75vh] overflow-y-auto">
-              {/* Data */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label-eyebrow block mb-2">{activeTab === "7Steakhouse" ? "Data Inicial da Semana (Ex: Quinta-feira)" : "Data da Operação"}</label>
-                  <input
-                    type="date"
-                    value={modalDate}
-                    onChange={e => {
-                      const newDate = e.target.value;
-                      setModalDate(newDate);
-                      if (activeTab === "7Steakhouse" && !editingSessionId) {
-                        setMaoDeObraDetalhes(generateSteakhouseDays(newDate));
-                      }
-                    }}
-                    className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <hr className="border-border" />
-
-              {/* Lista de Drinks */}
+            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
               <div>
-                <div className="flex items-center justify-between mb-3">
+                <label className="label-eyebrow block mb-2">Data da Operação</label>
+                <input type="date" value={modalDate} onChange={e => setModalDate(e.target.value)} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm" />
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
                   <label className="label-eyebrow">Drinks Vendidos</label>
-                  <GhostButton onClick={addItem} className="h-8 text-xs px-2"><Plus className="h-3 w-3 mr-1" /> Adicionar Drink</GhostButton>
+                  <GhostButton onClick={addItem} className="h-8 text-xs"><Plus className="h-3 w-3 mr-1" /> Adicionar</GhostButton>
                 </div>
-                <div className="space-y-2">
-                  {modalItems.map((item, idx) => (
-                    <div key={idx} className="flex gap-2 items-center">
-                      <select
-                        value={item.drinkId}
-                        onChange={e => updateItem(idx, "drinkId", e.target.value)}
-                        className="flex-1 h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                      >
-                        {filteredDrinks.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}
-                      </select>
-                      <input
-                        type="number"
-                        min={1}
-                        value={item.quantidade}
-                        onChange={e => updateItem(idx, "quantidade", Number(e.target.value))}
-                        className="w-20 h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                      />
-                      <div className="w-24 text-right text-sm font-medium pr-2">
-                        {fmtBRL(item.precoUnitario * item.quantidade)}
-                      </div>
-                      <button onClick={() => removeItem(idx)} className="h-9 w-9 flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-md">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                  {modalItems.length === 0 && <div className="text-center py-6 text-xs text-muted-foreground border border-dashed border-border rounded-lg">Nenhum drink lançado.</div>}
-                </div>
-              </div>
-
-              <hr className="border-border" />
-
-              {/* Mão de Obra */}
-              {activeTab === "7Steakhouse" ? (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="label-eyebrow block">Mão de Obra (Diárias da Equipe)</label>
-                    <GhostButton onClick={() => setMaoDeObraDetalhes([...maoDeObraDetalhes, { data: new Date().toISOString().split("T")[0], valor: 0, qtdPessoas: 1 }])} className="h-8 text-xs px-2"><Plus className="h-3 w-3 mr-1" /> Adicionar Dia</GhostButton>
+                {modalItems.map((item, idx) => (
+                  <div key={idx} className="flex gap-2 items-center">
+                    <select value={item.drinkId} onChange={e => updateItem(idx, "drinkId", e.target.value)} className="flex-1 h-10 px-3 rounded-lg bg-input border border-border text-sm">
+                      {filteredDrinks.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}
+                    </select>
+                    <input type="number" value={item.quantidade} onChange={e => updateItem(idx, "quantidade", Number(e.target.value))} className="w-20 h-10 px-3 rounded-lg bg-input border border-border text-sm" />
                   </div>
-                  <div className="space-y-2">
-                    {maoDeObraDetalhes.map((m, i) => (
-                      <div key={i} className="flex flex-col gap-2 p-3 bg-surface/50 border border-border/50 rounded-lg">
-                        <div className="flex gap-2">
-                          <input
-                            type="date"
-                            value={m.data}
-                            onChange={e => {
-                              const arr = [...maoDeObraDetalhes];
-                              arr[i].data = e.target.value;
-                              setMaoDeObraDetalhes(arr);
-                            }}
-                            className="w-32 h-9 px-3 rounded-md bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                          />
-                          <div className="flex-1 flex gap-2">
-                             <input
-                               type="number"
-                               placeholder="R$ Total"
-                               value={m.valor || ""}
-                               onChange={e => {
-                                 const arr = [...maoDeObraDetalhes];
-                                 arr[i].valor = Number(e.target.value);
-                                 setMaoDeObraDetalhes(arr);
-                               }}
-                               className="flex-1 h-9 px-3 rounded-md bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                             />
-                             <input
-                               type="number"
-                               placeholder="Pessoas"
-                               value={m.qtdPessoas || ""}
-                               onChange={e => {
-                                 const arr = [...maoDeObraDetalhes];
-                                 arr[i].qtdPessoas = Number(e.target.value);
-                                 setMaoDeObraDetalhes(arr);
-                               }}
-                               className="w-20 h-9 px-3 rounded-md bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                             />
-                          </div>
-                          <button onClick={() => setMaoDeObraDetalhes(maoDeObraDetalhes.filter((_, idx) => idx !== i))} className="h-9 w-9 flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-md">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <input
-                          type="text"
-                          placeholder="Nomes (Opcional. Ex: João, Maria)"
-                          value={m.nomes || ""}
-                          onChange={e => {
-                            const arr = [...maoDeObraDetalhes];
-                            arr[i].nomes = e.target.value;
-                            setMaoDeObraDetalhes(arr);
-                          }}
-                          className="w-full h-9 px-3 rounded-md bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                        />
-                      </div>
-                    ))}
-                    {maoDeObraDetalhes.length === 0 && <div className="text-[11px] text-muted-foreground italic mb-2">Nenhum dia de trabalho lançado.</div>}
-                    {maoDeObraDetalhes.length > 0 && (
-                      <div className="text-right text-sm font-bold pt-2">
-                        Total Mão de Obra: <span className="text-destructive">{fmtBRL(maoDeObraDetalhes.reduce((a, b) => a + b.valor, 0))}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="label-eyebrow block mb-2">Valor da Diária p/ Pessoa (R$)</label>
-                      <input
-                        type="number"
-                        value={maoDeObraValor}
-                        onChange={e => setMaoDeObraValor(Number(e.target.value))}
-                        className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="label-eyebrow block mb-2">Qtd de Pessoas</label>
-                      <input
-                        type="number"
-                        value={maoDeObraQtd}
-                        onChange={e => setMaoDeObraQtd(Number(e.target.value))}
-                        className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="label-eyebrow block mb-2">Nomes da Equipe (Opcional)</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Pedro, Lucas"
-                      value={maoDeObraNomes}
-                      onChange={e => setMaoDeObraNomes(e.target.value)}
-                      className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                    />
-                  </div>
-                </div>
-              )}
-
-
-            </div>
-
-            <div className="flex items-center justify-end gap-3 px-6 py-4 bg-background/50 border-t border-border sticky bottom-0">
-              <GhostButton onClick={() => setShowModal(false)}>Cancelar</GhostButton>
-              <PrimaryButton onClick={handleSave}>{editingSessionId ? "Salvar Alterações" : "Salvar Sessão"}</PrimaryButton>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-function SessionRow({ session, onEdit, onDelete }: { session: FinancialSession; onEdit: () => void; onDelete: () => void }) {
-  const { drinks: allDrinks } = useAppStore();
-  const [isExpanded, setIsExpanded] = useState(false);
-  
-  let lucro = 0;
-  let receitaGoatbarRow = 0;
-  let custoInsumosRow = 0;
-  let lucroRestauranteRow = 0;
-  
-  const totalDrinks = session.items.reduce((acc, item) => acc + item.quantidade, 0);
-
-  let maoDeObraCalculada = 0;
-  if (session.modalidade === "7Steakhouse" && session.maoDeObraDetalhes && session.maoDeObraDetalhes.length > 0) {
-    maoDeObraCalculada = session.maoDeObraDetalhes.reduce((a, b) => a + b.valor, 0);
-  } else {
-    maoDeObraCalculada = session.maoDeObraValor * session.maoDeObraQtd;
-  }
-
-  if (session.modalidade === "7Steakhouse") {
-    receitaGoatbarRow = session.items.reduce((a, b) => a + (b.custoUnitario * b.quantidade), 0);
-    custoInsumosRow = session.items.reduce((a, b) => {
-      const d = allDrinks.find(x => x.id === b.drinkId);
-      return a + ((d ? d.custoUnitario : 0) * b.quantidade);
-    }, 0);
-    const resLiq = receitaGoatbarRow - custoInsumosRow;
-    lucro = resLiq - maoDeObraCalculada;
-    lucroRestauranteRow = session.items.reduce((a, b) => a + ((b.precoUnitario - b.custoUnitario) * b.quantidade), 0);
-  } else {
-    receitaGoatbarRow = session.items.reduce((a, b) => a + (b.precoUnitario * b.quantidade), 0);
-    custoInsumosRow = session.items.reduce((a, b) => a + (b.custoUnitario * b.quantidade), 0);
-    const resLiq = receitaGoatbarRow - custoInsumosRow;
-    lucro = (resLiq * 0.6) - maoDeObraCalculada;
-  }
-
-  // Format date correctly based on modality
-  let dateFormatted = "";
-  if (session.modalidade === "7Steakhouse") {
-    const startDate = new Date(session.data);
-    startDate.setUTCHours(12); // avoid timezone bugs
-    const endDate = new Date(startDate.getTime() + 3 * 24 * 60 * 60 * 1000);
-    dateFormatted = `Semana de ${startDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} a ${endDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
-  } else {
-    const d = new Date(session.data);
-    d.setUTCHours(12);
-    dateFormatted = d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
-  }
-
-  return (
-    <div className="rounded-xl border border-border bg-background/40 hover:border-border-strong transition-all group overflow-hidden">
-      <div 
-        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 cursor-pointer"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <div className="flex items-center gap-4">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
-            <Calculator className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="font-medium text-sm capitalize">{dateFormatted}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-            {totalDrinks} drinks • {session.modalidade === "7Steakhouse" && session.maoDeObraDetalhes && session.maoDeObraDetalhes.length > 0 ? `Equipe: ${session.maoDeObraDetalhes.length} dias (${fmtBRL(maoDeObraCalculada)})` : (session.modalidade === "7Steakhouse" ? `Equipe: ${session.maoDeObraQtd} dias x ${fmtBRL(session.maoDeObraValor)}` : `Eqp: ${session.maoDeObraQtd}x ${fmtBRL(session.maoDeObraValor)}`)}
-          </div>
-          </div>
-        </div>
-        
-        <div className="flex items-center justify-between gap-4 w-full sm:w-auto">
-          <div className="text-left sm:text-right">
-            <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">{session.modalidade === "7Steakhouse" ? "Receita Goat" : "Receita"}</div>
-            <div className="text-sm font-medium">{fmtBRL(receitaGoatbarRow)}</div>
-          </div>
-          <div className="text-right">
-            <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Lucro Final</div>
-            <div className="text-sm font-bold text-success">{fmtBRL(lucro)}</div>
-          </div>
-          <div className="flex items-center gap-1">
-            <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 opacity-0 group-hover:opacity-100 transition-all shrink-0">
-              <Pencil className="h-4 w-4" />
-            </button>
-            <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all shrink-0">
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {isExpanded && (
-        <div className="p-4 border-t border-border/50 bg-surface/30 text-sm space-y-6 overflow-x-hidden">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Drinks Box */}
-            <div>
-              <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider mb-3">Itens Vendidos</h4>
-              <ul className="space-y-2">
-                {session.items.map((item, idx) => (
-                  <li key={idx} className="flex justify-between text-xs border-b border-border/40 pb-2">
-                    <div className="flex flex-col">
-                      <span className="font-medium">{item.quantidade}x {item.nome}</span>
-                      {session.modalidade === "7Steakhouse" && (
-                        <span className="text-[10px] text-muted-foreground mt-0.5">
-                          Repasse Goatbar: {item.quantidade}x {fmtBRL(item.custoUnitario)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-end">
-                      {session.modalidade === "7Steakhouse" ? (
-                        <>
-                          <span className="font-bold">{fmtBRL(item.quantidade * item.custoUnitario)}</span>
-                          <span className="text-[10px] text-muted-foreground opacity-70 mt-0.5">Venda Final: {fmtBRL(item.quantidade * item.precoUnitario)}</span>
-                        </>
-                      ) : (
-                        <span className="font-bold">{fmtBRL(item.quantidade * item.precoUnitario)}</span>
-                      )}
-                    </div>
-                  </li>
                 ))}
-              </ul>
-              
-              {session.modalidade === "7Steakhouse" ? (
-                <div className="mt-4 space-y-1.5 text-xs">
-                  <div className="flex justify-between font-bold border-t border-border/80 pt-2 text-foreground">
-                    <span>Total Repasse (Receita Goatbar)</span>
-                    <span>{fmtBRL(receitaGoatbarRow)}</span>
-                  </div>
-                  <div className="flex justify-between text-[11px] text-muted-foreground">
-                    <span>Receita Venda Total Rest.</span>
-                    <span>{fmtBRL(receitaGoatbarRow + lucroRestauranteRow)}</span>
-                  </div>
-                  <div className="flex justify-between text-[10px] text-amber-500/80">
-                    <span>Lucro Retido Restaurante</span>
-                    <span>{fmtBRL(lucroRestauranteRow)}</span>
-                  </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label-eyebrow block mb-2">Custo Mão de Obra (Dia)</label>
+                  <input type="number" value={maoDeObraValor} onChange={e => setMaoDeObraValor(Number(e.target.value))} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm" />
                 </div>
-              ) : (
-                <div className="flex justify-between mt-3 pt-2 text-xs font-bold border-t border-border/80">
-                  <span>Total Receita</span>
-                  <span>{fmtBRL(receitaGoatbarRow)}</span>
+                <div>
+                  <label className="label-eyebrow block mb-2">Qtd Dias/Equipe</label>
+                  <input type="number" value={maoDeObraQtd} onChange={e => setMaoDeObraQtd(Number(e.target.value))} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm" />
                 </div>
-              )}
+              </div>
             </div>
 
-            {/* Calculations Box */}
-            <div>
-              <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider mb-3">Cálculo de Lucro</h4>
-              <div className="space-y-2 bg-background/50 p-4 rounded-xl border border-border/50">
-                
-                {session.modalidade === "7Steakhouse" ? (
-                  <>
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Receita Goatbar (Venda ao Rest.)</span>
-                      <span>{fmtBRL(receitaGoatbarRow)}</span>
-                    </div>
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>(-) Custo Insumos (Ficha Téc.)</span>
-                      <span>{fmtBRL(custoInsumosRow)}</span>
-                    </div>
-                    <div className="flex justify-between text-xs font-bold border-b border-border/40 pb-2 mb-2">
-                      <span>(=) Lucro Bruto Goatbar</span>
-                      <span>{fmtBRL(receitaGoatbarRow - custoInsumosRow)}</span>
-                    </div>
-
-                    <div className="pt-2">
-                      <span className="text-xs text-destructive block mb-1">(-) Mão de Obra da Semana:</span>
-                      {session.maoDeObraDetalhes && session.maoDeObraDetalhes.length > 0 ? (
-                        <ul className="pl-2 space-y-1.5 border-l-2 border-destructive/20 ml-1">
-                          {session.maoDeObraDetalhes.map((m, i) => {
-                             const d = new Date(m.data);
-                             d.setUTCHours(12);
-                             return (
-                               <li key={i} className="flex flex-col text-[10px] text-muted-foreground pb-1.5 mb-1.5 border-b border-border/30 last:border-0 last:pb-0 last:mb-0">
-                                 <div className="flex justify-between">
-                                   <span>{d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} • {m.qtdPessoas} pessoas</span>
-                                   <span>{fmtBRL(m.valor)}</span>
-                                 </div>
-                                 {m.nomes && <span className="text-[9px] text-muted-foreground/70 italic mt-0.5 pr-2 truncate">{m.nomes}</span>}
-                               </li>
-                             );
-                          })}
-                        </ul>
-                      ) : (
-                        <div className="flex flex-col text-xs text-destructive">
-                          <div className="flex justify-between">
-                            <span>({session.maoDeObraQtd} dias x {fmtBRL(session.maoDeObraValor)}/dia equipe)</span>
-                            <span>{fmtBRL(maoDeObraCalculada)}</span>
-                          </div>
-                          {session.maoDeObraNomes && (
-                            <span className="text-[10px] text-muted-foreground/70 italic mt-0.5">Equipe: {session.maoDeObraNomes}</span>
-                          )}
-                        </div>
-                      )}
-                      {session.maoDeObraDetalhes && session.maoDeObraDetalhes.length > 0 && (
-                        <div className="flex justify-between text-[10px] font-bold text-destructive mt-1 pl-3 border-t border-destructive/10 pt-1">
-                          <span>Total Mão de Obra</span>
-                          <span>{fmtBRL(maoDeObraCalculada)}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex justify-between text-sm font-bold text-success border-y border-border/80 py-3 mt-3">
-                      <span>Lucro Final Goatbar</span>
-                      <span>{fmtBRL(lucro)}</span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Receita Bruta</span>
-                      <span>{fmtBRL(receitaGoatbarRow)}</span>
-                    </div>
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>(-) Custo dos Drinks</span>
-                      <span>{fmtBRL(custoInsumosRow)}</span>
-                    </div>
-                    <div className="flex justify-between text-xs font-bold border-b border-border/40 pb-2 mb-2">
-                      <span>(=) Lucro Bruto</span>
-                      <span>{fmtBRL(receitaGoatbarRow - custoInsumosRow)}</span>
-                    </div>
-
-                    <div className="flex justify-between text-xs text-warning">
-                      <span>(-) Repasse 40% Restaurante</span>
-                      <span>{fmtBRL((receitaGoatbarRow - custoInsumosRow) * 0.4)}</span>
-                    </div>
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>(=) Saldo Operacional (GoatBar)</span>
-                      <span>{fmtBRL((receitaGoatbarRow - custoInsumosRow) * 0.6)}</span>
-                    </div>
-
-                    <div className="flex justify-between text-xs text-destructive pt-2">
-                      <span>(-) Mão de Obra da Semana ({session.maoDeObraQtd}x)</span>
-                      <span>{fmtBRL(session.maoDeObraValor * session.maoDeObraQtd)}</span>
-                    </div>
-
-                    <div className="flex justify-between text-sm font-bold text-success border-t border-border/80 pt-3 mt-3">
-                      <span>Lucro Final</span>
-                      <span>{fmtBRL(lucro)}</span>
-                    </div>
-                  </>
-                )}
-              </div>
+            <div className="p-6 border-t border-border flex justify-end gap-3">
+              <GhostButton onClick={() => setShowModal(false)}>Cancelar</GhostButton>
+              <PrimaryButton onClick={handleSave}>Salvar Lançamento</PrimaryButton>
             </div>
           </div>
         </div>
@@ -936,17 +523,34 @@ function SessionRow({ session, onEdit, onDelete }: { session: FinancialSession; 
   );
 }
 
+function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () => void; onDelete: () => void }) {
+  const receita = (session.items || []).reduce((acc: number, item: any) => acc + (item.precoUnitario * item.quantidade), 0);
+  return (
+    <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-background/50 hover:bg-background transition-colors group">
+      <div className="flex items-center gap-4">
+        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary"><ShoppingBag className="h-5 w-5" /></div>
+        <div>
+          <div className="font-bold text-sm">{new Date(session.data).toLocaleDateString("pt-BR")}</div>
+          <div className="text-xs text-muted-foreground">{(session.items || []).length} drinks · {fmtBRL(receita)} receita</div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button onClick={onEdit} className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-surface border border-border"><Pencil className="h-3.5 w-3.5" /></button>
+        <button onClick={onDelete} className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-destructive/10 text-destructive border border-destructive/20"><Trash2 className="h-3.5 w-3.5" /></button>
+      </div>
+    </div>
+  );
+}
+
 function SummaryCard({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) {
   return (
     <div className="p-5 rounded-2xl border border-border bg-surface/50">
       <div className="flex items-center gap-3 mb-4">
-        <div className={`h-8 w-8 rounded-lg ${color} text-white flex items-center justify-center`}>
-          {icon}
-        </div>
+        <div className={`h-8 w-8 rounded-lg ${color} text-white flex items-center justify-center`}>{icon}</div>
         <div className="font-medium text-sm">{label}</div>
       </div>
       <div className="text-2xl font-bold font-display">{fmtBRL(value)}</div>
-      <div className="mt-2 text-xs text-muted-foreground">Lucro líquido acumulado</div>
+      <div className="mt-2 text-xs text-muted-foreground">Lucro acumulado</div>
     </div>
   );
 }

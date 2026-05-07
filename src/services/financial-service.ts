@@ -92,5 +92,147 @@ export const financialService = {
       .getPublicUrl(filePath);
 
     return publicUrl;
+  },
+
+  // --- Sessions (Goat Botequim / 7Steakhouse) ---
+  async listSessions() {
+    try {
+      const { data, error } = await supabase
+        .from("financial_sessions")
+        .select(`
+          *,
+          items:financial_session_items(*)
+        `)
+        .order("date", { ascending: false });
+
+      if (error) {
+        if (error.code === 'PGRST204' || error.code === '42P01') {
+          console.warn("Tabela financial_sessions não encontrada. Usando LocalStorage.");
+          return this.getLocalSessions();
+        }
+        throw error;
+      }
+      
+      // Map Supabase fields back to mock-like structure if needed
+      return (data || []).map(s => ({
+        ...s,
+        data: s.date,
+        modalidade: s.modality,
+        maoDeObraValor: s.labor_value,
+        maoDeObraQtd: s.labor_quantity,
+        maoDeObraNomes: s.labor_names,
+        maoDeObraDetalhes: s.labor_details,
+        items: (s.items || []).map((i: any) => ({
+          ...i,
+          nome: i.drink_name,
+          precoUnitario: i.unit_price,
+          custoUnitario: i.unit_cost
+        }))
+      }));
+    } catch (e) {
+      console.warn("Erro ao buscar sessões do Supabase, tentando LocalStorage:", e);
+      return this.getLocalSessions();
+    }
+  },
+
+  getLocalSessions() {
+    const STORAGE_KEY = "goatbar-functional-store-v11";
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    try {
+      const store = JSON.parse(raw);
+      return store.financialSessions || [];
+    } catch {
+      return [];
+    }
+  },
+
+  async createSession(payload: any) {
+    // Try Supabase first
+    try {
+      const { data: session, error: sError } = await supabase
+        .from("financial_sessions")
+        .insert({
+          date: payload.data,
+          modality: payload.modalidade,
+          labor_value: payload.maoDeObraValor,
+          labor_quantity: payload.maoDeObraQtd,
+          labor_names: payload.maoDeObraNomes,
+          labor_details: payload.maoDeObraDetalhes
+        })
+        .select()
+        .single();
+
+      if (sError) throw sError;
+
+      if (payload.items && payload.items.length > 0) {
+        const itemsPayload = payload.items.map((i: any) => ({
+          session_id: session.id,
+          drink_id: i.drinkId,
+          drink_name: i.nome,
+          quantity: i.quantidade,
+          unit_price: i.precoUnitario,
+          unit_cost: i.custoUnitario
+        }));
+
+        const { error: iError } = await supabase
+          .from("financial_session_items")
+          .insert(itemsPayload);
+        
+        if (iError) throw iError;
+      }
+
+      return session;
+    } catch (e) {
+      console.warn("Erro ao criar sessão no Supabase, verifique se a tabela existe.", e);
+      throw e;
+    }
+  },
+
+  calculateMetrics(sessions: any[], events: any[], drinks: any[]) {
+    // Botequim
+    const botList = sessions.filter(s => s.modalidade === "Goat Botequim");
+    const botReceita = botList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (item.precoUnitario * item.quantidade), 0), 0);
+    const botCusto = botList.reduce((acc, s) => {
+      return acc + (s.items || []).reduce((sum: number, item: any) => {
+        const d = drinks.find(x => x.id === item.drinkId);
+        const configCost = d?.modalityConfig?.goatbotequim?.cost;
+        const liveCost = (configCost !== undefined && configCost !== null && configCost > 0) ? configCost : (d?.custoUnitario || 0);
+        return sum + (liveCost * item.quantidade);
+      }, 0);
+    }, 0);
+    const botLucro = (botReceita - botCusto) * 0.6 - botList.reduce((acc, s) => acc + (s.maoDeObraValor * s.maoDeObraQtd), 0);
+
+    // Steakhouse
+    const steakList = sessions.filter(s => s.modalidade === "7Steakhouse");
+    const steakReceita = steakList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (item.custoUnitario * item.quantidade), 0), 0);
+    const steakCusto = steakList.reduce((acc, s) => {
+      return acc + (s.items || []).reduce((sum: number, item: any) => {
+        const d = drinks.find(x => x.id === item.drinkId);
+        return sum + ((d?.custoUnitario || 0) * item.quantidade);
+      }, 0);
+    }, 0);
+    const steakLucro = (steakReceita - steakCusto) - steakList.reduce((acc, s) => {
+      if (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0) {
+        return acc + s.maoDeObraDetalhes.reduce((a: number, b: any) => a + b.valor, 0);
+      }
+      return acc + (s.maoDeObraValor * s.maoDeObraQtd);
+    }, 0);
+
+    // Events
+    const confirmedEvents = events.filter(e => ["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(e.status?.toUpperCase()));
+    const eventReceita = confirmedEvents.reduce((acc, e) => acc + (e.current_budget_value || 0), 0);
+    const eventLucro = confirmedEvents.reduce((acc, e) => acc + (e.current_profit_value || 0), 0);
+    const eventCustos = eventReceita - eventLucro;
+
+    return {
+      bot: { receita: botReceita, custo: botCusto, lucro: botLucro },
+      steak: { receita: steakReceita, custo: steakCusto, lucro: steakLucro },
+      events: { receita: eventReceita, custo: eventCustos, lucro: eventLucro, count: confirmedEvents.length },
+      consolidated: {
+        receita: botReceita + steakReceita + eventReceita,
+        lucro: botLucro + steakLucro + eventLucro
+      }
+    };
   }
 };
