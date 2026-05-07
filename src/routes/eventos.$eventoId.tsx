@@ -314,18 +314,32 @@ function EventoInterna() {
   };
 
   const handleDeleteVersion = async (versionId: string) => {
-    if (!confirm("Tem certeza que deseja excluir esta versão do orçamento? Esta ação não pode ser desfeita.")) return;
+    if (budgetVersions.length <= 1) {
+      alert("Não é possível excluir a única versão do orçamento existente.");
+      return;
+    }
+
+    if (!confirm("Tem certeza que deseja excluir esta versão do orçamento? Esta ação não poderá ser desfeita.")) return;
+    
     try {
-      // Create audit log before deleting
-      const v = budgetVersions.find(x => x.id === versionId);
-      if (v) {
-        await eventBudgetService.addBudgetHistory({
-          event_id: eventoId,
-          action: "VERSÃO EXCLUÍDA",
-          previous_final_value: v.final_budget_value,
-          new_final_value: 0
-        });
+      const vToDelete = budgetVersions.find(x => x.id === versionId);
+      if (!vToDelete) return;
+
+      // Se for a versão atual, precisamos promover outra antes de deletar
+      if (vToDelete.is_current) {
+        const otherVersions = budgetVersions.filter(x => x.id !== versionId);
+        // Pega a versão com maior número (mais recente) entre as que sobraram
+        const nextCurrent = otherVersions.sort((a, b) => b.version_number - a.version_number)[0];
+        await eventBudgetService.setCurrentVersion(eventoId, nextCurrent.id);
       }
+
+      // Log de Auditoria
+      await eventBudgetService.addBudgetHistory({
+        event_id: eventoId,
+        action: `VERSÃO V${vToDelete.version_number} EXCLUÍDA`,
+        previous_final_value: vToDelete.final_budget_value,
+        new_final_value: 0
+      });
       
       await eventBudgetService.deleteBudgetVersion(versionId);
       loadAllData();
@@ -346,7 +360,7 @@ function EventoInterna() {
   };
 
   const handleDeleteNote = async (noteId: string) => {
-    if (!confirm("Excluir esta anotação permanentemente?")) return;
+    if (!confirm("Deseja realmente excluir esta anotação? Esta ação não poderá ser desfeita.")) return;
     try {
       await eventBudgetService.deleteNegotiationNote(noteId);
       loadAllData();
@@ -635,7 +649,7 @@ function EventoInterna() {
         <div className="flex flex-wrap gap-2 border-b border-border">
           {[
             { id: "Orçamento", icon: <Save className="h-4 w-4" /> },
-            { id: "Negociação & Pagamento", icon: <MessageCircle className="h-4 w-4" /> },
+            { id: "Contatos & Negociação", icon: <MessageCircle className="h-4 w-4" /> },
             { id: "Contrato", icon: <FileSignature className="h-4 w-4" /> },
             { id: "Histórico & Versões", icon: <History className="h-4 w-4" /> }
           ].map((t) => (
@@ -1023,12 +1037,23 @@ function EventoInterna() {
                                   <div className="text-[10px] text-muted-foreground">{new Date(v.created_at).toLocaleDateString()}</div>
                                </div>
                             </div>
-                            {!v.is_current && (
-                               <button onClick={() => {
-                                 const selected = budgetVersions.find(x => x.id === v.id);
-                                 if(selected) setDraft(mapBudgetToDraft(evento!, selected));
-                               }} className="text-[10px] font-bold text-primary hover:underline">CARREGAR</button>
-                            )}
+                            <div className="flex items-center gap-2">
+                               {!v.is_current && (
+                                  <button onClick={() => {
+                                    const selected = budgetVersions.find(x => x.id === v.id);
+                                    if(selected) setDraft(mapBudgetToDraft(evento!, selected));
+                                  }} className="text-[10px] font-bold text-primary hover:underline">CARREGAR</button>
+                               )}
+                               {budgetVersions.length > 1 && (
+                                  <button 
+                                    onClick={() => handleDeleteVersion(v.id)}
+                                    className="p-1.5 text-muted-foreground hover:text-white hover:bg-destructive rounded-md transition-all"
+                                    title="Excluir Versão"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                               )}
+                             </div>
                          </div>
                       ))}
                       <GhostButton onClick={() => setActiveTab("Histórico & Versões")} className="w-full text-[10px] font-bold mt-2">VER TODAS AS VERSÕES</GhostButton>
@@ -1219,8 +1244,8 @@ function EventoInterna() {
         )}
 
 
-        {/* TAB NEGOCIAÇÃO E PAGAMENTO */}
-        {activeTab === "Negociação & Pagamento" && (
+        {/* TAB CONTATOS & NEGOCIAÇÃO */}
+        {activeTab === "Contatos & Negociação" && (
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-7 animate-in fade-in duration-500">
             <div className="xl:col-span-5 space-y-6">
                <SectionCard title="Controle Financeiro" subtitle="Regras de pagamento e prazos">
@@ -1309,16 +1334,33 @@ function EventoInterna() {
                           <div className="absolute left-0 top-0 bottom-0 w-px bg-border group-last:bg-transparent" />
                           <div className="absolute left-[-4px] top-1 h-2 w-2 rounded-full bg-primary shadow-[0_0_0_4px_rgba(var(--primary-rgb),0.1)]" />
                           
-                          <div className="bg-surface p-4 rounded-2xl border border-border hover:border-primary/30 transition-all hover:shadow-md">
-                             <div className="flex justify-between items-start mb-3">
-                                <div className="px-2 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">
-                                   {n.status.replace("_", " ")}
-                                </div>
-                                <span className="text-[10px] text-muted-foreground font-mono">{new Date(n.created_at).toLocaleString("pt-BR")}</span>
-                             </div>
-                             <p className="text-sm text-foreground/80 leading-relaxed">{n.note}</p>
-                          </div>
-                       </div>
+                                                    <div className="bg-surface p-4 rounded-2xl border border-border hover:border-primary/30 transition-all hover:shadow-md relative group/note">
+                              <div className="flex justify-between items-start mb-3">
+                                 <div className="px-2 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">
+                                    {n.status?.replace("_", " ") || "NOTA"}
+                                 </div>
+                                 <div className="flex items-center gap-3">
+                                    <span className="text-[10px] text-muted-foreground font-mono">{new Date(n.created_at).toLocaleString("pt-BR")}</span>
+                                    <div className="flex gap-1 opacity-0 group-hover/note:opacity-100 transition-opacity">
+                                       <button 
+                                          onClick={() => handleUpdateNote(n.id)}
+                                          className="p-1 hover:bg-primary/10 rounded text-primary transition-colors"
+                                          title="Editar"
+                                       >
+                                          <Pencil className="h-3 w-3" />
+                                       </button>
+                                       <button 
+                                          onClick={() => handleDeleteNote(n.id)}
+                                          className="p-1 hover:bg-destructive/10 rounded text-destructive transition-colors"
+                                          title="Excluir"
+                                       >
+                                          <Trash2 className="h-3 w-3" />
+                                       </button>
+                                    </div>
+                                 </div>
+                              </div>
+                              <p className="text-sm text-foreground/80 leading-relaxed">{n.note}</p>
+                           </div>
                      ))}
                    </div>
                  </div>
@@ -1366,10 +1408,10 @@ function EventoInterna() {
                                  loadAllData();
                                }} className="flex-1 md:flex-none h-10 px-4 text-[10px] font-bold">TORNAR ATUAL</PrimaryButton>
                              )}
-                             {!v.is_current && (
+                             {budgetVersions.length > 1 && (
                                 <button 
                                   onClick={() => handleDeleteVersion(v.id)}
-                                  className="h-10 w-10 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors shrink-0"
+                                  className="h-10 w-10 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-white hover:bg-destructive hover:border-destructive transition-all shrink-0"
                                   title="Excluir Versão"
                                 >
                                   <Trash2 className="h-4 w-4" />
