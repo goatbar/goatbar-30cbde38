@@ -5,6 +5,7 @@ import { Plus, Calendar, MapPin, Users, ChevronRight, X, AlertTriangle, LayoutGr
 import { useState, useEffect } from "react";
 import { eventBudgetService, type Event as RealEvent } from "@/services/event-budget-service";
 import { PageHeader } from "@/components/AppShell";
+import { hasLocalData, migrateLocalStorageToSupabase } from "@/lib/migration";
 
 export const Route = createFileRoute("/eventos/")({
   component: EventosIndex,
@@ -29,6 +30,8 @@ function EventosIndex() {
     lead_source: "",
     referral_name: ""
   });
+  const [showMigrationBanner, setShowMigrationBanner] = useState(hasLocalData());
+  const [migrating, setMigrating] = useState(false);
 
   useEffect(() => {
     loadEvents();
@@ -66,6 +69,19 @@ function EventosIndex() {
     .reduce((a, e) => a + (e.current_budget_value || 0), 0);
 
   const mesmoDiaEventos = form.data ? eventos.filter(e => e.date === form.data && !["cancelado", "proposta_recusada"].includes(e.status)) : [];
+
+  const handleMigrate = async () => {
+    setMigrating(true);
+    const result = await migrateLocalStorageToSupabase();
+    if (result.success) {
+      alert(result.message);
+      setShowMigrationBanner(false);
+      loadEvents();
+    } else {
+      alert(result.message);
+    }
+    setMigrating(false);
+  };
 
   const handleCreate = async () => {
     if (!form.nome || !form.data) return;
@@ -105,6 +121,28 @@ function EventosIndex() {
       />
 
       <div className="px-8 py-7 space-y-7">
+        {showMigrationBanner && (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-amber-900">Dados locais detectados</h4>
+                <p className="text-xs text-amber-800/80">Encontramos eventos salvos no seu navegador que ainda não estão no banco de dados real.</p>
+              </div>
+            </div>
+            <PrimaryButton 
+              onClick={handleMigrate} 
+              disabled={migrating}
+              className="bg-amber-600 hover:bg-amber-700 text-white border-none shrink-0"
+            >
+              {migrating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Calculator className="h-4 w-4 mr-2" />}
+              Migrar agora para o Supabase
+            </PrimaryButton>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-5">
           <StatCard label="Total em pipeline" value={String(eventosAtivos.length)} />
           <StatCard label="Aguardando resposta" value={String(eventosAtivos.filter(e => ["ORCAMENTO_ENVIADO", "AGUARDANDO_RESPOSTA", "DADOS_SOLICITADOS"].includes(e.status?.toUpperCase())).length)} />
