@@ -313,7 +313,7 @@ function VendasPage() {
               <StatCard label="Custo Drinks" value={fmtBRL(metrics.bot.custo)} />
               <StatCard label="Resultado Líquido" value={fmtBRL(metrics.bot.receita - metrics.bot.custo)} />
               <StatCard label="Repasse (40%)" value={fmtBRL((metrics.bot.receita - metrics.bot.custo) * 0.4)} />
-              <StatCard label="Mão de Obra" value={fmtBRL(filteredSessions.filter(s => s.modalidade === "Goat Botequim").reduce((acc, s) => acc + (s.maoDeObraValor * s.maoDeObraQtd), 0))} />
+              <StatCard label="Mão de Obra" value={fmtBRL(filteredSessions.filter(s => s.modalidade === "Goat Botequim").reduce((acc, s) => acc + (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0 ? s.maoDeObraDetalhes.reduce((a: number, b: any) => a + Number(b.valor || 0), 0) : Number(s.maoDeObraValor || 0) * Number(s.maoDeObraQtd || 0)), 0))} />
               <StatCard label="Lucro Final" value={fmtBRL(metrics.bot.lucro)} highlight />
             </div>
 
@@ -342,7 +342,7 @@ function VendasPage() {
               <StatCard label="Custo Insumos" value={fmtBRL(metrics.steak.custo)} />
               <StatCard label="Lucro Bruto" value={fmtBRL(metrics.steak.receita - metrics.steak.custo)} />
               <StatCard label="Lucro Retido Rest." value={fmtBRL(filteredSessions.filter(s => s.modalidade === "7Steakhouse").reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + ((item.precoUnitario - item.custoUnitario) * item.quantidade), 0), 0))} />
-              <StatCard label="Mão de Obra" value={fmtBRL(filteredSessions.filter(s => s.modalidade === "7Steakhouse").reduce((acc, s) => acc + (s.maoDeObraDetalhes ? s.maoDeObraDetalhes.reduce((a: number, b: any) => a + b.valor, 0) : s.maoDeObraValor * s.maoDeObraQtd), 0))} />
+              <StatCard label="Mão de Obra" value={fmtBRL(filteredSessions.filter(s => s.modalidade === "7Steakhouse").reduce((acc, s) => acc + (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0 ? s.maoDeObraDetalhes.reduce((a: number, b: any) => a + Number(b.valor || 0), 0) : Number(s.maoDeObraValor || 0) * Number(s.maoDeObraQtd || 0)), 0))} />
               <StatCard label="Lucro F. Goatbar" value={fmtBRL(metrics.steak.lucro)} highlight />
             </div>
 

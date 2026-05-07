@@ -202,16 +202,15 @@ export const financialService = {
   calculateMetrics(sessions: any[], events: any[], drinks: any[]) {
     // Botequim
     const botList = sessions.filter(s => s.modalidade === "Goat Botequim");
-    const botReceita = botList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (item.precoUnitario * item.quantidade), 0), 0);
+    const botReceita = botList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (Number(item.precoUnitario || 0) * item.quantidade), 0), 0);
     const botCusto = botList.reduce((acc, s) => {
       return acc + (s.items || []).reduce((sum: number, item: any) => {
         const d = drinks.find(x => x.id === item.drinkId);
-        const configCost = d?.modalityConfig?.goatbotequim?.cost;
-        const liveCost = (configCost !== undefined && configCost !== null && configCost > 0) ? configCost : (d?.custoUnitario || 0);
-        return sum + (liveCost * item.quantidade);
+        const liveIngredientCost = item.custoInsumo || item.custoUnitario || d?.custoUnitario || 0;
+        return sum + (Number(liveIngredientCost) * item.quantidade);
       }, 0);
     }, 0);
-    const botLucro = (botReceita - botCusto) * 0.6 - botList.reduce((acc, s) => acc + (s.maoDeObraValor * s.maoDeObraQtd), 0);
+    const botLucro = (botReceita - botCusto) * 0.6 - botList.reduce((acc, s) => acc + (Number(s.maoDeObraValor || 0) * Number(s.maoDeObraQtd || 0)), 0);
 
     // Steakhouse
     const steakList = sessions.filter(s => s.modalidade === "7Steakhouse");
@@ -222,7 +221,7 @@ export const financialService = {
       return acc + (s.items || []).reduce((sum: number, item: any) => {
         const d = drinks.find(x => x.id === item.drinkId);
         const liveIngredientCost = item.custoInsumo || d?.custoUnitario || 0;
-        return sum + (liveIngredientCost * item.quantidade);
+        return sum + (Number(liveIngredientCost) * item.quantidade);
       }, 0);
     }, 0);
     // Lucro Final = (Receita - Custo) - Mão de Obra
