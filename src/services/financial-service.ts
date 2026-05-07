@@ -226,7 +226,7 @@ export const financialService = {
     const steakCusto = steakList.reduce((acc, s) => {
       return acc + (s.items || []).reduce((sum: number, item: any) => {
         const d = drinks.find(x => x.id === item.drinkId);
-        const liveIngredientCost = item.custoInsumo || d?.custoUnitario || 0;
+        const liveIngredientCost = item.custoInsumo || item.custoUnitario || d?.custoUnitario || 0;
         return sum + (Number(liveIngredientCost) * item.quantidade);
       }, 0);
     }, 0);
