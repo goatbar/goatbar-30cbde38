@@ -174,7 +174,7 @@ function EventoInterna() {
     status: ev.status as any,
     lead_source: ev.lead_source || "",
     referral_name: ev.referral_name || "",
-    is_paid_full: ev.is_paid_full || false,
+    is_paid_full: (ev.payment_percent_received || 0) >= 100,
     drinksPorPessoa: 4,
     markupAdicionalDrinks: 0,
     equipe: {
@@ -217,7 +217,7 @@ function EventoInterna() {
     status: ev.status as any,
     lead_source: ev.lead_source || "",
     referral_name: ev.referral_name || "",
-    is_paid_full: ev.is_paid_full || false,
+    is_paid_full: (ev.payment_percent_received || 0) >= 100,
     drinksPorPessoa: b.drinks_per_person,
     markupAdicionalDrinks: b.drinks_markup_percentage,
     equipe: {
@@ -305,8 +305,7 @@ function EventoInterna() {
         current_budget_value: calc.valorTotalOrcamento,
         current_profit_value: draft.lucroDesejado,
         payment_due_date: draft.pagamento.dataPagamento,
-        payment_percent_received: draft.pagamento.percentualPago,
-        is_paid_full: draft.is_paid_full
+        payment_percent_received: draft.pagamento.percentualPago
       });
 
       // Salva orçamento
@@ -1284,7 +1283,7 @@ function EventoInterna() {
         {activeTab === "Contatos & Negociação" && (
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-7 animate-in fade-in duration-500">
             <div className="xl:col-span-5 space-y-6">
-               <SectionCard title="Controle Financeiro" subtitle="Regras de pagamento e prazos">
+               <SectionCard title="Controle Financeiro" subtitle="As informações de pagamento em negociação e pagamento só serão realizadas após a confirmação do evento.">
                  <div className="space-y-5">
                    <div className="space-y-2">
                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Condição de Pagamento</label>
