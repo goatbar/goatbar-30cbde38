@@ -174,7 +174,7 @@ function EventoInterna() {
     status: ev.status as any,
     lead_source: ev.lead_source || "",
     referral_name: ev.referral_name || "",
-    is_paid_full: ev.is_paid_full || false,
+    is_paid_full: b.paid_percentage >= 100,
     drinksPorPessoa: 4,
     markupAdicionalDrinks: 0,
     equipe: {
@@ -208,7 +208,7 @@ function EventoInterna() {
     cidade: ev.city || "",
     tipo: ev.event_type,
     convidados: ev.guests || 0,
-    drinks: Array.isArray(b.selected_drinks) ? (b.selected_drinks as any).ids : [],
+    drinks: (b.selected_drinks as any)?.ids || [],
     observacoes: ev.notes || "",
     status: ev.status as any,
     lead_source: ev.lead_source || "",
@@ -230,7 +230,7 @@ function EventoInterna() {
         percentualPago: b.paid_percentage,
         dataPagamento: b.pending_payment_date
     },
-    coposVinculados: typeof (b.selected_drinks as any)?.copos === 'object' ? (b.selected_drinks as any).copos : {},
+    coposVinculados: (b.selected_drinks as any)?.copos || {},
     historicoAlteracoes: [],
     historicoNegociacao: [],
     valorNegociado: b.final_budget_value,
@@ -583,14 +583,13 @@ function EventoInterna() {
                   onChange={(e) => handleStatusChange(e.target.value as EventoStatus)}
                   className="bg-surface border-2 border-primary/20 text-primary font-bold text-xs px-4 py-2 rounded-xl outline-none cursor-pointer hover:border-primary/40 transition-all shadow-sm"
                 >
-                  <option value="novo_orcamento">Novo orçamento</option>
-                  <option value="orcamento_enviado">Orçamento enviado</option>
-                  <option value="aguardando_retorno">Aguardando retorno</option>
-                  <option value="dados_solicitados">Dados solicitados p/ Contrato</option>
-                  <option value="em_assinatura">Em assinatura de contrato</option>
-                  <option value="proposta_aceita">Proposta aceita</option>
-                  <option value="confirmado">Contrato Assinado / Confirmado</option>
-                  <option value="cancelado">Cancelado</option>
+                                    <option value="NOVO">Novo Orçamento</option>
+                  <option value="ORCAMENTO_ENVIADO">Orçamento Enviado</option>
+                  <option value="AGUARDANDO_RESPOSTA">Aguardando Resposta</option>
+                  <option value="DADOS_SOLICITADOS">Dados p/ Contrato</option>
+                  <option value="CONFIRMADO">Confirmado</option>
+                  <option value="FINALIZADO">Finalizado</option>
+                  <option value="CANCELADO">Cancelado</option>
                 </select>
               </div>
             </div>
@@ -1470,7 +1469,24 @@ function EventoInterna() {
              </div>
 
              <div className="xl:col-span-5">
-                <SectionCard title="Log de Auditoria de Valores" subtitle="Rastreabilidade de mudanças críticas">
+                <SectionCard 
+                  title="Log de Auditoria de Valores" 
+                  subtitle="Rastreabilidade de mudanças críticas"
+                  action={
+                    budgetHistory.length > 0 ? (
+                      <button 
+                        onClick={async () => {
+                          if (!confirm("Tem certeza que deseja apagar TODO o histórico de auditoria deste evento?")) return;
+                          await supabase.from("event_budget_history").delete().eq("event_id", eventoId);
+                          loadAllData();
+                        }}
+                        className="text-[10px] font-bold text-destructive uppercase hover:underline"
+                      >
+                        Resetar Logs de Teste
+                      </button>
+                    ) : undefined
+                  }
+                >
                    <div className="space-y-4">
                       {budgetHistory.length === 0 && (
                         <div className="py-20 text-center bg-surface rounded-2xl border-2 border-dashed">

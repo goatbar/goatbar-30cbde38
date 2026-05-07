@@ -90,7 +90,14 @@ export interface EventoHistoricoNegociacao {
   observacao: string;
 }
 
-export type EventoStatus = "novo_orcamento" | "esperando_envio" | "orcamento_enviado" | "aguardando_retorno" | "fazer_contato" | "dados_solicitados" | "em_assinatura" | "proposta_aceita" | "proposta_recusada" | "confirmado" | "realizado" | "cancelado" | "rascunho" | "em_andamento" | "concluido";
+export type EventoStatus = 
+  | "DADOS_SOLICITADOS" 
+  | "ORCAMENTO_ENVIADO" 
+  | "AGUARDANDO_RESPOSTA" 
+  | "CONFIRMADO" 
+  | "FINALIZADO" 
+  | "CANCELADO"
+  | "NOVO";
 
 export interface Evento {
   id: string;

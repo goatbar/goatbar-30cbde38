@@ -88,7 +88,8 @@ function Dashboard() {
   // Eventos
   const eventStats = useMemo(() => {
     const validos = filteredEventos.filter(e => {
-      return ["confirmado", "realizado", "proposta_aceita"].includes(e.status);
+      const s = e.status?.toUpperCase();
+      return ["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(s);
     });
     const receita = validos.reduce((acc, e) => acc + (e.current_budget_value || 0), 0);
     const lucro = validos.reduce((acc, e) => acc + (e.current_profit_value || 0), 0);
@@ -130,13 +131,21 @@ function Dashboard() {
   const topDrinks = rankingDrinks.slice(0, 5);
 
   const proximosEventos = [...filteredEventos]
-    .filter(e => !["cancelado", "proposta_recusada"].includes(e.status))
+    .filter(e => {
+      const s = e.status?.toUpperCase();
+      return !["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
+    })
     .sort((a, b) => new Date(a.data || 0).getTime() - new Date(b.data || 0).getTime())
     .filter(e => new Date(e.data || 0).getTime() >= new Date().setHours(0,0,0,0))
     .slice(0, 5);
 
   const proximosPagamentos = [...eventosSupabase]
-    .filter(e => ["confirmado", "realizado", "proposta_aceita"].includes(e.status) && !e.is_paid_full)
+    .filter(e => {
+      const s = e.status?.toUpperCase();
+      // Considera pago se o percentual for 100
+      const isPaid = (e.payment_percent_received || 0) >= 100;
+      return ["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(s) && !isPaid;
+    })
     .map(e => {
        // Mock or approximate calculation if full calc not available here
        const total = Number(e.current_budget_value || 0);
