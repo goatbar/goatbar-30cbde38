@@ -144,8 +144,8 @@ export function useAppStore() {
           drinks: prev.drinks.map((d) => {
             if (d.id !== id) return d;
             const updated = { ...d, ...payload };
-            if (payload.ingredientes) {
-              updated.custoUnitario = Number(payload.ingredientes.reduce((a, i) => a + i.custo, 0).toFixed(2));
+            if (payload.insumos) {
+              updated.custoUnitario = Number(payload.insumos.reduce((a, i) => a + i.custo, 0).toFixed(2));
             }
             return updated;
           }),
@@ -156,7 +156,7 @@ export function useAppStore() {
           const newDrink = {
             ...input,
             id: `d${Date.now()}`,
-            custoUnitario: Number(input.ingredientes.reduce((a, i) => a + i.custo, 0).toFixed(2))
+            custoUnitario: Number((input.insumos ?? []).reduce((a, i) => a + i.custo, 0).toFixed(2))
           };
           return {
             ...prev,
