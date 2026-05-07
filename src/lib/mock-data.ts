@@ -144,6 +144,9 @@ export interface Evento {
   // Legacy/Computed
   valorNegociado: number;
   custoPrevisto: number;
+  desconto?: number;
+  descontoMotivo?: string;
+  descontos?: { valor: number; motivo: string }[];
 }
 
 
@@ -1064,7 +1067,8 @@ export function calcularOrcamentoEvento(evento: Evento, drinksList: Drink[] = dr
   const custoTotalOrcamento = valorDrinksEvento + valorEquipe + valorGelo + valorGasolina + valorGastosDiversos;
   const lucroDesejado = Number(evento.lucroDesejado) || 0;
   const valorTotalSemDesconto = custoTotalOrcamento + lucroDesejado;
-  const valorDesconto = Number(evento.desconto) || 0;
+  const valorDescontoLista = (evento.descontos || []).reduce((acc, d) => acc + (Number(d.valor) || 0), 0);
+  const valorDesconto = valorDescontoLista > 0 ? valorDescontoLista : Number(evento.desconto) || 0;
   const valorTotalOrcamento = valorTotalSemDesconto - valorDesconto;
   
   const lucro = valorTotalOrcamento - custoTotalOrcamento;
