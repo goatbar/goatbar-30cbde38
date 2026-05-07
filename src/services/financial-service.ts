@@ -239,7 +239,7 @@ export const financialService = {
 
   calculateMetrics(sessions: any[], events: any[], drinks: any[]) {
     const resolveFallbackCost = (item: any, modalidade: string) => {
-      const d = drinks.find(x => x.id === item.drinkId);
+      const d = drinks.find(x => x.id === item.drinkId) || drinks.find(x => x.nome === item.nome || x.nome === item.drink_name);
       if (!d) return 0;
       if (modalidade === "7Steakhouse") return Number(d.custoUnitario || 0);
       if (modalidade === "Goat Botequim") return Number(d.modalityConfig?.goatbotequim?.cost || 0);
