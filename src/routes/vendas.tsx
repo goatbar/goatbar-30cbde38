@@ -632,6 +632,7 @@ function SessionRow({ session, drinks, onEdit, onDelete }: { session: any; drink
   
   // Cálculos Básicos
   const items = session.items || [];
+  const totalDrinks = items.reduce((acc: number, i: any) => acc + Number(i.quantidade || 0), 0);
 
   // No print do usuário para Botequim:
   // Receita Bruta: R$ 627
@@ -692,7 +693,7 @@ function SessionRow({ session, drinks, onEdit, onDelete }: { session: any; drink
                  <ChevronRight className={`h-4 w-4 text-primary transition-transform duration-300 ${isExpanded ? "rotate-90" : ""}`} />
               </div>
               <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mt-0.5">
-                 {items.length} drinks · Eqp: {session.maoDeObraQtd}x {fmtBRL(session.maoDeObraValor)}
+                 {totalDrinks} drinks · Eqp: {session.maoDeObraQtd}x {fmtBRL(session.maoDeObraValor)}
               </div>
            </div>
         </div>
