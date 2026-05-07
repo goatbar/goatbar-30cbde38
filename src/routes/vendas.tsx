@@ -122,7 +122,7 @@ function VendasPage() {
       quantidade: 1, 
       precoUnitario: config?.price || 0, 
       custoUnitario: config?.cost || 0,
-      custoInsumo: isSteak ? firstDrink.custoUnitario : config?.cost
+      custoInsumo: isSteak ? (firstDrink.modalityConfig?.evento?.cost ?? firstDrink.custoUnitario) : config?.cost
     }]);
   };
 
@@ -139,7 +139,7 @@ function VendasPage() {
           nome: d.nome,
           precoUnitario: config?.price || 0,
           custoUnitario: config?.cost || 0,
-          custoInsumo: isSteak ? d.custoUnitario : config?.cost
+          custoInsumo: isSteak ? (d.modalityConfig?.evento?.cost ?? d.custoUnitario) : config?.cost
         };
       }
     } else {
@@ -218,12 +218,15 @@ function VendasPage() {
       
       const sessionReceita = (s.items || []).reduce((acc: number, item: any) => acc + (item.precoUnitario * item.quantidade), 0);
       const sessionCusto = (s.items || []).reduce((acc: number, item: any) => {
-        // Usa o custoInsumo gravado no item, fallback para o custoUnitario base do drink
+        // Usa o custoInsumo gravado no item; fallback por modalidade do drink
         if (item.custoInsumo !== undefined && item.custoInsumo !== null) {
           return acc + (item.custoInsumo * item.quantidade);
         }
         const d = allDrinks.find(x => x.id === item.drinkId);
-        return acc + ((d?.custoUnitario || 0) * item.quantidade);
+        const fallbackCost = s.modalidade === "7Steakhouse"
+          ? Number(d?.modalityConfig?.evento?.cost || d?.custoUnitario || 0)
+          : Number(d?.modalityConfig?.goatbotequim?.cost || 0);
+        return acc + (fallbackCost * item.quantidade);
       }, 0);
       
       const maoDeObra = s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0 
