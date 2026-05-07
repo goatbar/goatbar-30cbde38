@@ -299,9 +299,7 @@ function EventoInterna() {
         lead_source: draft.lead_source,
         referral_name: draft.referral_name,
         current_budget_value: calc.valorTotalOrcamento,
-        current_profit_value: calc.lucro,
-        payment_due_date: draft.pagamento.dataPagamento,
-        payment_percent_received: draft.pagamento.percentualPago
+        current_profit_value: calc.lucro
       });
 
       // Salva orçamento
@@ -388,10 +386,14 @@ function EventoInterna() {
 
   const handleTogglePaidFull = async () => {
     try {
-      const newVal = !draft.is_paid_full;
-      await eventBudgetService.updateEvent(eventoId, { is_paid_full: newVal });
-      setDraft(p => p ? ({ ...p, is_paid_full: newVal }) : null);
-      loadAllData();
+      const newVal = !draft?.is_paid_full;
+      const newPerc = newVal ? 100 : 0;
+      
+      // Atualiza no draft local
+      setDraft(p => p ? ({ ...p, is_paid_full: newVal, pagamento: { ...p.pagamento, percentualPago: newPerc } }) : null);
+      
+      // is_paid_full não existe na tabela events, apenas atualizamos o estado local e pedimos ao usuário para salvar
+      alert(newVal ? "Evento marcado como PAGO. Salve o orçamento para persistir." : "Evento marcado como PENDENTE. Salve o orçamento para persistir.");
     } catch (e) {
       alert("Erro ao atualizar status de pagamento.");
     }
@@ -404,8 +406,6 @@ function EventoInterna() {
       if (calc) {
         updatePayload.current_budget_value = calc.valorTotalOrcamento;
         updatePayload.current_profit_value = calc.lucro;
-        updatePayload.payment_due_date = draft?.pagamento.dataPagamento;
-        updatePayload.payment_percent_received = draft?.pagamento.percentualPago;
       }
 
       await eventBudgetService.updateNegotiationStatus(eventoId, newStatus, note);
