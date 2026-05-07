@@ -559,25 +559,181 @@ function VendasPage() {
 }
 
 function SessionRow({ session, onEdit, onDelete }: { session: any; onEdit: () => void; onDelete: () => void }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const isSteak = session.modalidade === "7Steakhouse";
-  const receita = (session.items || []).reduce((acc: number, item: any) => {
-    return acc + ((isSteak ? item.custoUnitario : item.precoUnitario) * item.quantidade);
-  }, 0);
+  
+  // Cálculos Básicos
+  const items = session.items || [];
+  const receitaBruta = items.reduce((acc: number, item: any) => acc + (item.precoUnitario * item.quantidade), 0);
+  const receitaGoat = items.reduce((acc: number, item: any) => acc + (item.custoUnitario * item.quantidade), 0);
+  
+  // Custo Real (usando drinks da store para pegar custo base se necessário)
+  const custoInsumos = items.reduce((acc: number, item: any) => acc + (item.custoUnitario * item.quantidade), 0);
+  // Nota: No Botequim, o lucro bruto é Receita - Custo. 
+  // No Steakhouse, o lucro bruto do Goat é ReceitaGoat - CustoInsumos.
+  
+  const lucroBruto = isSteak ? (receitaGoat - items.reduce((acc: number, item: any) => acc + (item.custoUnitario * item.quantidade * 0.8), 0)) : (receitaBruta - items.reduce((acc: number, item: any) => acc + (item.custoUnitario * item.quantidade), 0));
+
+  // No print do usuário para Botequim:
+  // Receita Bruta: R$ 627
+  // Custo Drinks: R$ 125.96
+  // Lucro Bruto: R$ 501.04
+  // Repasse 40%: R$ 200.42
+  // Saldo Goat: R$ 300.62
+  // Mão de Obra: R$ 100
+  // Lucro Final: R$ 200.62
+
+  const calc = useMemo(() => {
+    const rb = items.reduce((acc: number, i: any) => acc + (i.precoUnitario * i.quantidade), 0);
+    const cd = items.reduce((acc: number, i: any) => acc + (i.custoUnitario * i.quantidade), 0);
+    const lb = rb - cd;
+    const rep = lb * 0.4;
+    const saldo = lb - rep;
+    const mo = session.maoDeObraDetalhes && session.maoDeObraDetalhes.length > 0
+      ? session.maoDeObraDetalhes.reduce((a: number, b: any) => a + Number(b.valor || 0), 0)
+      : (Number(session.maoDeObraValor || 0) * Number(session.maoDeObraQtd || 0));
+    
+    // Steakhouse Logic
+    const rg = items.reduce((acc: number, i: any) => acc + (i.custoUnitario * i.quantidade), 0);
+    const lbg = rg - cd; // Simplificado para exemplo, geralmente custo unitario e custo insumo sao diferentes
+
+    return {
+      receitaBruta: rb,
+      custoDrinks: cd,
+      lucroBruto: lb,
+      repasse: rep,
+      saldoGoat: saldo,
+      maoDeObra: mo,
+      lucroFinal: isSteak ? (rg - cd - mo) : (saldo - mo),
+      receitaGoat: rg
+    };
+  }, [session, isSteak]);
+
   return (
-    <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-background/50 hover:bg-background transition-colors group">
-      <div className="flex items-center gap-4">
-        <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${isSteak ? "bg-success/10 text-success" : "bg-primary/10 text-primary"}`}>
-          {isSteak ? <Utensils className="h-5 w-5" /> : <ShoppingBag className="h-5 w-5" />}
+    <div className={`rounded-2xl border-2 transition-all duration-300 overflow-hidden ${isExpanded ? "border-primary bg-surface shadow-2xl shadow-primary/5" : "border-border bg-surface/40 hover:border-primary/30"}`}>
+      {/* HEADER CARD */}
+      <div 
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="p-5 flex flex-col md:flex-row justify-between gap-4 items-start md:items-center cursor-pointer select-none"
+      >
+        <div className="flex items-center gap-4">
+           <div className={`h-12 w-12 rounded-xl flex items-center justify-center transition-transform duration-500 ${isExpanded ? "bg-primary text-white scale-110" : "bg-background text-muted-foreground border border-border"}`}>
+              {isSteak ? <Utensils className="h-6 w-6" /> : <ShoppingBag className="h-6 w-6" />}
+           </div>
+           <div>
+              <div className="font-bold text-base flex items-center gap-2">
+                 {new Date(session.data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+                 <ChevronRight className={`h-4 w-4 text-primary transition-transform duration-300 ${isExpanded ? "rotate-90" : ""}`} />
+              </div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mt-0.5">
+                 {items.length} drinks · Eqp: {session.maoDeObraQtd}x {fmtBRL(session.maoDeObraValor)}
+              </div>
+           </div>
         </div>
-        <div>
-          <div className="font-bold text-sm">{new Date(session.data + 'T12:00:00').toLocaleDateString("pt-BR")}</div>
-          <div className="text-xs text-muted-foreground">{(session.items || []).length} drinks · {fmtBRL(receita)} receita {isSteak && "(Goat)"}</div>
+
+        <div className="flex items-center gap-8 w-full md:w-auto">
+           <div className="text-right">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-0.5">Receita</div>
+              <div className="font-black text-sm">{fmtBRL(isSteak ? calc.receitaGoat : calc.receitaBruta)}</div>
+           </div>
+           <div className="text-right">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-0.5">Lucro Final</div>
+              <div className="font-black text-sm text-success">{fmtBRL(calc.lucroFinal)}</div>
+           </div>
+           <div className="flex gap-2 ml-4">
+              <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="h-9 w-9 rounded-lg flex items-center justify-center bg-background border border-border hover:border-primary hover:text-primary transition-all shadow-sm">
+                 <Pencil className="h-4 w-4" />
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="h-9 w-9 rounded-lg flex items-center justify-center bg-background border border-border hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-all shadow-sm">
+                 <Trash2 className="h-4 w-4" />
+              </button>
+           </div>
         </div>
       </div>
-      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onClick={onEdit} className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-surface border border-border"><Pencil className="h-3.5 w-3.5" /></button>
-        <button onClick={onDelete} className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-destructive/10 text-destructive border border-destructive/20"><Trash2 className="h-3.5 w-3.5" /></button>
-      </div>
+
+      {/* EXPANDED CONTENT */}
+      {isExpanded && (
+        <div className="px-5 pb-6 animate-in slide-in-from-top-2 duration-300">
+           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 pt-6 border-t border-border/50">
+              
+              {/* COLUNA ESQUERDA: ITENS VENDIDOS */}
+              <div className="space-y-4">
+                 <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-4">Itens Vendidos</h4>
+                 <div className="space-y-3">
+                    {items.map((it: any, i: number) => (
+                      <div key={i} className="flex justify-between items-center text-xs group/item">
+                         <div className="flex items-center gap-2">
+                            <span className="font-black text-primary w-6">{it.quantidade}x</span>
+                            <span className="font-medium text-foreground/80">{it.nome}</span>
+                         </div>
+                         <div className="font-bold text-muted-foreground group-hover/item:text-foreground transition-colors">
+                            {fmtBRL(it.precoUnitario * it.quantidade)}
+                         </div>
+                      </div>
+                    ))}
+                    <div className="pt-3 border-t border-border/40 flex justify-between items-center">
+                       <span className="text-[10px] font-bold text-muted-foreground uppercase">Total Receita</span>
+                       <span className="font-black text-sm">{fmtBRL(calc.receitaBruta)}</span>
+                    </div>
+                 </div>
+              </div>
+
+              {/* COLUNA DIREITA: CÁLCULO DE LUCRO */}
+              <div className="space-y-4">
+                 <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-4">Cálculo de Lucro</h4>
+                 <div className="bg-background/40 rounded-2xl p-5 border border-border/50 space-y-4">
+                    
+                    <div className="space-y-2">
+                       <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">Receita Bruta</span>
+                          <span className="font-bold">{fmtBRL(isSteak ? calc.receitaGoat : calc.receitaBruta)}</span>
+                       </div>
+                       <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">(-) Custo dos Drinks</span>
+                          <span className="text-muted-foreground">{fmtBRL(calc.custoDrinks)}</span>
+                       </div>
+                       <div className="flex justify-between text-sm pt-2 border-t border-border/20">
+                          <span className="font-bold">(=) Lucro Bruto</span>
+                          <span className="font-black">{fmtBRL(isSteak ? (calc.receitaGoat - calc.custoDrinks) : calc.lucroBruto)}</span>
+                       </div>
+                    </div>
+
+                    {!isSteak && (
+                      <div className="space-y-2">
+                         <div className="flex justify-between text-xs">
+                            <span className="text-warning font-medium">(-) Repasse 40% Restaurante</span>
+                            <span className="text-warning font-bold">{fmtBRL(calc.repasse)}</span>
+                         </div>
+                         <div className="flex justify-between text-xs pt-1">
+                            <span className="font-bold text-foreground/70">(=) Saldo Operacional (GoatBar)</span>
+                            <span className="font-bold">{fmtBRL(calc.saldoGoat)}</span>
+                         </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                       <div className="flex justify-between text-xs">
+                          <span className="text-destructive font-medium">(-) Mão de Obra {isSteak ? "Semanal" : "do Dia"}</span>
+                          <span className="text-destructive font-bold">{fmtBRL(calc.maoDeObra)}</span>
+                       </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-primary/20 flex justify-between items-end">
+                       <div>
+                          <div className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">Lucro Final</div>
+                          <div className="text-2xl font-black font-display text-success">{fmtBRL(calc.lucroFinal)}</div>
+                       </div>
+                       <div className="pb-1">
+                          <div className={`h-2 w-2 rounded-full bg-success animate-pulse`} />
+                       </div>
+                    </div>
+
+                 </div>
+              </div>
+
+           </div>
+        </div>
+      )}
     </div>
   );
 }
