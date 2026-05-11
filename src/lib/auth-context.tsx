@@ -1,56 +1,57 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-
-type MockUser = { email: string };
+import type { Session, User } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AuthContextValue {
-  session: { user: MockUser } | null;
-  user: MockUser | null;
+  session: Session | null;
+  user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
-const AUTH_KEY = "goatbar_auth";
-const ADMIN_EMAILS = ["drinksgoatbar@gmail.com"];
-const ADMIN_PASSWORDS = ["Goatbar@1234"];
-
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<MockUser | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(AUTH_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as MockUser;
-        if (parsed?.email) setUser(parsed);
-      }
-    } finally {
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setSession(data.session ?? null);
       setLoading(false);
-    }
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession ?? null);
+      setLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!ADMIN_EMAILS.includes(normalizedEmail) || !ADMIN_PASSWORDS.includes(password)) {
-      return { error: "E-mail ou senha incorretos." };
-    }
-    const nextUser = { email: normalizedEmail };
-    localStorage.setItem(AUTH_KEY, JSON.stringify(nextUser));
-    setUser(nextUser);
-    return { error: null };
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+
+    return { error: error?.message ?? null };
   };
 
   const signOut = async () => {
-    localStorage.removeItem(AUTH_KEY);
-    setUser(null);
+    await supabase.auth.signOut();
   };
 
   const value = useMemo(
-    () => ({ session: user ? { user } : null, user, loading, signIn, signOut }),
-    [user, loading],
+    () => ({ session, user: session?.user ?? null, loading, signIn, signOut }),
+    [session, loading],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

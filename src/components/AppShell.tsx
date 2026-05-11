@@ -17,25 +17,30 @@ import {
   Menu,
   X
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import logo from "@/assets/goatbar-logo.png";
 
-const nav: { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean }[] = [
+const nav: { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean; roles?: string[] }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/vendas", label: "Vendas", icon: ShoppingBag },
   { to: "/drinks", label: "Drinks", icon: Wine },
   { to: "/inventario", label: "Inventário", icon: Package },
   { to: "/eventos", label: "Eventos", icon: CalendarRange },
-  { to: "/controladoria", label: "Controladoria", icon: BarChart3 },
-  { to: "/contratos", label: "Contratos", icon: FileText },
-  { to: "/configuracoes", label: "Configurações", icon: Settings },
+  { to: "/controladoria", label: "Controladoria", icon: BarChart3, roles: ["admin", "financeiro"] },
+  { to: "/contratos", label: "Contratos", icon: FileText, roles: ["admin", "comercial"] },
+  { to: "/configuracoes", label: "Configurações", icon: Settings, roles: ["admin"] },
 ];
 
 export function AppShell({ children }: { children?: ReactNode }) {
   const location = useLocation();
   const { session, loading, user, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const role = (user?.user_metadata?.role as string | undefined)?.toLowerCase() ?? "admin";
+  const visibleNav = useMemo(
+    () => nav.filter((item) => !item.roles || item.roles.includes(role)),
+    [role],
+  );
 
   if (loading) {
     return (
@@ -51,7 +56,6 @@ export function AppShell({ children }: { children?: ReactNode }) {
 
   const initials = (user?.email ?? "GB").slice(0, 2).toUpperCase();
   const displayName = user?.email?.split("@")[0] ?? "Gestor";
-
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
       {/* MOBILE TOPBAR */}
@@ -81,7 +85,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
             
             <div className="px-3 mb-2 label-eyebrow">Operação</div>
             <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
-              {nav.map((item) => {
+              {visibleNav.map((item) => {
                 const Icon = item.icon;
                 const active = item.exact
                   ? location.pathname === item.to
@@ -140,7 +144,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
 
         <div className="px-3 mb-2 label-eyebrow">Operação</div>
         <nav className="flex-1 px-3 space-y-1">
-          {nav.map((item) => {
+          {visibleNav.map((item) => {
             const Icon = item.icon;
             const active = item.exact
               ? location.pathname === item.to
@@ -184,13 +188,13 @@ export function AppShell({ children }: { children?: ReactNode }) {
       </aside>
 
       {/* MAIN */}
-      <main className="flex-1 min-w-0 flex flex-col pb-20 lg:pb-0">
+      <main className="flex-1 min-w-0 flex flex-col pb-[calc(5.25rem+env(safe-area-inset-bottom))] lg:pb-0">
         {children ?? <Outlet />}
       </main>
 
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
         <div className="grid grid-cols-5 px-2 py-2">
-          {nav.slice(0, 5).map((item) => {
+          {visibleNav.slice(0, 5).map((item) => {
             const Icon = item.icon;
             const active = item.exact
               ? location.pathname === item.to
