@@ -40,7 +40,7 @@ function writeStore(store: AppStore) {
     ...store,
     drinks: store.drinks.map((d) => {
       if (d.imagem && d.imagem.startsWith("data:")) {
-        return { ...d, imagem: `idb:${d.id}` };
+        return { ...d, imagem: `idb:` };
       }
       return d;
     }),
@@ -86,32 +86,111 @@ function seedStore(): AppStore {
   };
 }
 
-function readStore(): AppStore {
-  if (typeof window === "undefined") return seedStore();
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) return seedStore();
+
+function readLegacyFunctionalStores(): AppStore[] {
+  if (typeof window === "undefined") return [];
+
+  const keys = Object.keys(window.localStorage)
+    .filter((key) => key.startsWith("goatbar-functional-store-v") && key !== STORAGE_KEY);
+
+  const parsed = keys
+    .map((key) => window.localStorage.getItem(key))
+    .filter(Boolean)
+    .map((raw) => {
+      try {
+        return JSON.parse(raw as string) as AppStore;
+      } catch {
+        return null;
+      }
+    })
+    .filter((v): v is AppStore => Boolean(v));
+
+  return parsed;
+}
+
+function mergeById<T extends { id: string }>(...lists: T[][]): T[] {
+  const map = new Map<string, T>();
+  lists.flat().forEach((item) => {
+    if (!map.has(item.id)) map.set(item.id, item);
+  });
+  return Array.from(map.values());
+}
+
+function recoverFromMockDb(store: AppStore): AppStore {
+  if (typeof window === "undefined") return store;
+  const raw = window.localStorage.getItem("goatbar_mock_db_v1");
+  if (!raw) return store;
+
   try {
-    const parsed = JSON.parse(raw) as AppStore;
+    const mock = JSON.parse(raw);
+    const recoveredInventory = (Array.isArray(mock?.inventory) ? mock.inventory : []).map((item: any) => ({
+      id: item.id ?? `inv${Date.now()}${Math.random()}`,
+      nome: item.name ?? item.nome ?? "Item",
+      quantidadeTotal: Number(item.quantity ?? item.quantidadeTotal ?? 0),
+      observacoes: item.observacoes ?? "",
+    }));
+
+    const recoveredVendas = (Array.isArray(mock?.sales) ? mock.sales : []).map((sale: any) => ({
+      id: sale.id ?? `v${Date.now()}${Math.random()}`,
+      data: sale.date ?? new Date().toISOString(),
+      local: "Goat Botequim",
+      itens: [],
+      totalReceita: Number(sale.total_revenue ?? 0),
+      totalCusto: Number(sale.total_cost ?? 0),
+      lucro: Number(sale.total_revenue ?? 0) - Number(sale.total_cost ?? 0),
+      repassePercentual: 0,
+      valorRepasse: 0,
+      lucroLiquido: Number(sale.total_revenue ?? 0) - Number(sale.total_cost ?? 0),
+    }));
+
     return {
-      vendas: parsed.vendas ?? seedVendas,
-      eventos: parsed.eventos ?? seedEventos,
-      contratos: parsed.contratos ?? seedContratos,
-      parametros: parsed.parametros ?? seedParametros,
-      drinks: parsed.drinks ?? seedDrinks,
-      contractTemplates: parsed.contractTemplates ?? seedContractTemplates,
-      contractSigners: parsed.contractSigners ?? seedContractSigners,
-      glasswares: parsed.glasswares ?? seedGlasswares,
-      eventContracts: parsed.eventContracts ?? seedEventContracts,
-      eventContractClientDatas: parsed.eventContractClientDatas ?? seedEventContractClientDatas,
-      contractHistories: parsed.contractHistories ?? seedContractHistories,
-      contractSignatureHistories: parsed.contractSignatureHistories ?? seedContractSignatureHistories,
-      financialSessions: parsed.financialSessions ?? seedFinancialSessions,
-      inventoryItems: parsed.inventoryItems ?? seedInventoryItems,
+      ...store,
+      inventoryItems: store.inventoryItems.length > 0 ? store.inventoryItems : recoveredInventory,
+      vendas: store.vendas.length > 0 ? store.vendas : recoveredVendas,
     };
   } catch {
-    return seedStore();
+    return store;
   }
 }
+function readStore(): AppStore {
+  if (typeof window === "undefined") return seedStore();
+
+  const activeRaw = window.localStorage.getItem(STORAGE_KEY);
+  const legacyStores = readLegacyFunctionalStores();
+
+  const safeParse = (raw: string | null): AppStore | null => {
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as AppStore;
+    } catch {
+      return null;
+    }
+  };
+
+  const activeStore = safeParse(activeRaw);
+  const base = activeStore ?? seedStore();
+
+  const merged: AppStore = {
+    ...base,
+    vendas: mergeById(base.vendas ?? [], ...legacyStores.map((s) => s.vendas ?? [])),
+    eventos: mergeById(base.eventos ?? [], ...legacyStores.map((s) => s.eventos ?? [])),
+    contratos: mergeById(base.contratos ?? [], ...legacyStores.map((s) => s.contratos ?? [])),
+    parametros: base.parametros ?? seedParametros,
+    drinks: mergeById(base.drinks ?? [], ...legacyStores.map((s) => s.drinks ?? [])),
+    contractTemplates: mergeById(base.contractTemplates ?? [], ...legacyStores.map((s) => s.contractTemplates ?? [])),
+    contractSigners: mergeById(base.contractSigners ?? [], ...legacyStores.map((s) => s.contractSigners ?? [])),
+    glasswares: mergeById(base.glasswares ?? [], ...legacyStores.map((s) => s.glasswares ?? [])),
+    eventContracts: mergeById(base.eventContracts ?? [], ...legacyStores.map((s) => s.eventContracts ?? [])),
+    eventContractClientDatas: mergeById(base.eventContractClientDatas ?? [], ...legacyStores.map((s) => s.eventContractClientDatas ?? [])),
+    contractHistories: mergeById(base.contractHistories ?? [], ...legacyStores.map((s) => s.contractHistories ?? [])),
+    contractSignatureHistories: mergeById(base.contractSignatureHistories ?? [], ...legacyStores.map((s) => s.contractSignatureHistories ?? [])),
+    financialSessions: mergeById(base.financialSessions ?? [], ...legacyStores.map((s) => s.financialSessions ?? [])),
+    inventoryItems: mergeById(base.inventoryItems ?? [], ...legacyStores.map((s) => s.inventoryItems ?? [])),
+  };
+
+  return recoverFromMockDb(merged);
+}
+
 
 export function useAppStore() {
   const [store, setStore] = useState<AppStore>(() => readStore());

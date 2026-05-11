@@ -10,17 +10,17 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { session, loading: sessionLoading, signIn } = useAuth();
+  const { user, loading: sessionLoading, signIn } = useAuth();
   const [email, setEmail] = useState("drinksgoatbar@gmail.com");
   const [password, setPassword] = useState("Goatbar@1234");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!sessionLoading && session) {
+    if (!sessionLoading && user) {
       navigate({ to: "/", replace: true });
     }
-  }, [sessionLoading, session, navigate]);
+  }, [sessionLoading, user, navigate]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
