@@ -12,6 +12,16 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function getAuthErrorMessage(message: string | undefined) {
+  if (!message) return null;
+
+  if (message === "Invalid login credentials") {
+    return "Credenciais inválidas";
+  }
+
+  return message;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
     });
 
-    return { error: error?.message ?? null };
+    return { error: getAuthErrorMessage(error?.message) };
   };
 
   const signOut = async () => {
