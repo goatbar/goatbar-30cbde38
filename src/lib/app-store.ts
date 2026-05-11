@@ -32,6 +32,23 @@ import {
 } from "@/lib/mock-data";
 
 const STORAGE_KEY = "goatbar-functional-store-v11";
+const STORE_SYNC_EVENT = "goatbar-store-sync";
+
+function writeStore(store: AppStore) {
+  if (typeof window === "undefined") return;
+  const sanitized: AppStore = {
+    ...store,
+    drinks: store.drinks.map((d) => {
+      if (d.imagem && d.imagem.startsWith("data:")) {
+        return { ...d, imagem: `idb:${d.id}` };
+      }
+      return d;
+    }),
+  };
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
+  window.dispatchEvent(new CustomEvent(STORE_SYNC_EVENT));
+}
+
 
 type AppStore = {
   vendas: Venda[];
@@ -126,19 +143,7 @@ export function useAppStore() {
 
   useEffect(() => {
     try {
-      // Strip Base64 image data from drinks before persisting – images are
-      // stored separately in IndexedDB via image-store.ts to avoid the
-      // ~5 MB localStorage quota limit.
-      const sanitized: AppStore = {
-        ...store,
-        drinks: store.drinks.map((d) => {
-          if (d.imagem && d.imagem.startsWith("data:")) {
-            return { ...d, imagem: `idb:${d.id}` };
-          }
-          return d;
-        }),
-      };
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
+      writeStore(store);
     } catch (e) {
       if (e instanceof Error && e.name === "QuotaExceededError") {
         console.error("LocalStorage quota exceeded!");
@@ -151,6 +156,16 @@ export function useAppStore() {
       }
     }
   }, [store]);
+
+  useEffect(() => {
+    const syncStore = () => setStore(readStore());
+    window.addEventListener("storage", syncStore);
+    window.addEventListener(STORE_SYNC_EVENT, syncStore);
+    return () => {
+      window.removeEventListener("storage", syncStore);
+      window.removeEventListener(STORE_SYNC_EVENT, syncStore);
+    };
+  }, []);
 
   const actions = useMemo(
     () => ({
