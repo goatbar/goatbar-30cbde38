@@ -137,6 +137,11 @@
     overflow-x: hidden;
   }
 
+  #root {
+    min-height: 100dvh;
+    overflow-x: clip;
+  }
+
   h1, h2, h3, h4, h5, h6, .font-display {
     font-family: var(--font-display);
     letter-spacing: -0.02em;
@@ -176,6 +181,11 @@
   input, select, textarea, button {
     font-size: 16px;
   }
+
+  table {
+    width: 100%;
+    table-layout: auto;
+  }
 }
 
 @layer utilities {
@@ -185,5 +195,13 @@
 
   .responsive-grid-kpi {
     @apply grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 sm:gap-5;
+  }
+
+  .content-safe-bottom {
+    padding-bottom: calc(5.25rem + env(safe-area-inset-bottom));
+  }
+
+  .responsive-table-wrap {
+    @apply w-full overflow-x-auto rounded-xl border border-border;
   }
 }
