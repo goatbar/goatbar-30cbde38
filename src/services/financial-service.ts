@@ -250,7 +250,7 @@ export const financialService = {
     };
 
     // Botequim
-    const botList = sessions.filter(s => s.modalidade === "Goat Botequim");
+    const botList = sessions.filter(s => ["Goat Botequim", "Goatbotequim"].includes(String(s.modalidade || "").trim()));
     const botReceita = botList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (Number(item.precoUnitario || 0) * item.quantidade), 0), 0);
     const botCusto = botList.reduce((acc, s) => {
       return acc + (s.items || []).reduce((sum: number, item: any) => {

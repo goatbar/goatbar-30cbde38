@@ -51,7 +51,20 @@ const seed = {
 };
 
 function needsMigration(db: any) {
-  return !Array.isArray(db?.drinks) || db.drinks.length < initialDrinks.length;
+  return !Array.isArray(db?.drinks);
+}
+
+function mergeDrinksWithSeed(drinks: any[]) {
+  const existingById = new Map((drinks || []).map((d: any) => [d.id, d]));
+  const merged = [...(drinks || [])];
+
+  initialDrinks.forEach((seedDrink) => {
+    if (!existingById.has(seedDrink.id)) {
+      merged.push(seedDrink);
+    }
+  });
+
+  return merged;
 }
 
 function readDb() {
@@ -62,10 +75,17 @@ function readDb() {
   }
   const parsed = JSON.parse(raw);
   if (needsMigration(parsed)) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
-    return structuredClone(seed);
+    const recovered = {
+      drinks: initialDrinks,
+      sales: Array.isArray(parsed?.sales) ? parsed.sales : [],
+      events: Array.isArray(parsed?.events) ? parsed.events : [],
+      inventory: Array.isArray(parsed?.inventory) ? parsed.inventory : [],
+      movements: Array.isArray(parsed?.movements) ? parsed.movements : [],
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(recovered));
+    return recovered;
   }
-  parsed.drinks = parsed.drinks.map((d: any) => {
+  parsed.drinks = mergeDrinksWithSeed(parsed.drinks).map((d: any) => {
     const nome = d.nome ?? d.name;
     const custoUnitario = Number(d.custoUnitario ?? d.cost ?? 0);
     const precoVenda = Number(d.precoVenda ?? d.price ?? 0);
