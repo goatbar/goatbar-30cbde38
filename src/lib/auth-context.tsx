@@ -19,6 +19,14 @@ function getAuthErrorMessage(message: string | undefined) {
     return "Credenciais inválidas";
   }
 
+  if (message === "Email not confirmed") {
+    return "E-mail ainda não confirmado";
+  }
+
+  if (message.toLowerCase().includes("captcha")) {
+    return "Falha na validação de segurança. Tente novamente em instantes.";
+  }
+
   return message;
 }
 
@@ -47,12 +55,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password,
-    });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
 
-    return { error: getAuthErrorMessage(error?.message) };
+      return { error: getAuthErrorMessage(error?.message) };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erro inesperado ao autenticar";
+      return { error: getAuthErrorMessage(message) ?? "Não foi possível realizar o login agora." };
+    }
   };
 
   const signOut = async () => {
