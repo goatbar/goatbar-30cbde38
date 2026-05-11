@@ -1,5 +1,5 @@
-import { createFileRoute, useNavigate, Navigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState, type FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import logo from "@/assets/goatbar-logo.png";
@@ -16,9 +16,11 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!sessionLoading && session) {
-    return <Navigate to="/" />;
-  }
+  useEffect(() => {
+    if (!sessionLoading && session) {
+      navigate({ to: "/", replace: true });
+    }
+  }, [sessionLoading, session, navigate]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -33,7 +35,7 @@ function LoginPage() {
       return;
     }
 
-    navigate({ to: "/" });
+    setLoading(false);
   };
 
   return (
