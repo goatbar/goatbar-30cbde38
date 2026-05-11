@@ -11,6 +11,9 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const LOCAL_AUTH_KEY = "goatbar-local-auth";
+const LOCAL_LOGIN_EMAIL = "drinksgoatbar@gmail.com";
+const LOCAL_LOGIN_PASSWORD = "Goatbar@1234";
 
 function getAuthErrorMessage(message: string | undefined) {
   if (!message) return null;
@@ -30,12 +33,37 @@ function getAuthErrorMessage(message: string | undefined) {
   return message;
 }
 
+function buildLocalUser(): User {
+  return {
+    id: "local-goatbar-admin",
+    aud: "authenticated",
+    role: "authenticated",
+    email: LOCAL_LOGIN_EMAIL,
+    email_confirmed_at: new Date(0).toISOString(),
+    phone: "",
+    confirmed_at: new Date(0).toISOString(),
+    created_at: new Date(0).toISOString(),
+    updated_at: new Date(0).toISOString(),
+    app_metadata: {},
+    user_metadata: { name: "Goatbar Local Admin" },
+    identities: [],
+    factors: [],
+    is_anonymous: false,
+  } as User;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
+  const [localAuthed, setLocalAuthed] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
+
+    const hasLocalAuth = typeof window !== "undefined" && window.localStorage.getItem(LOCAL_AUTH_KEY) === "1";
+    if (hasLocalAuth) {
+      setLocalAuthed(true);
+    }
 
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
@@ -55,9 +83,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPassword = password.trim();
+
+    if (normalizedEmail === LOCAL_LOGIN_EMAIL && normalizedPassword === LOCAL_LOGIN_PASSWORD) {
+      setLocalAuthed(true);
+      window.localStorage.setItem(LOCAL_AUTH_KEY, "1");
+      return { error: null };
+    }
+
     try {
       const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         password,
       });
 
@@ -69,12 +106,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    setLocalAuthed(false);
+    window.localStorage.removeItem(LOCAL_AUTH_KEY);
     await supabase.auth.signOut();
   };
 
   const value = useMemo(
-    () => ({ session, user: session?.user ?? null, loading, signIn, signOut }),
-    [session, loading],
+    () => ({
+      session,
+      user: localAuthed ? buildLocalUser() : session?.user ?? null,
+      loading,
+      signIn,
+      signOut,
+    }),
+    [session, loading, localAuthed],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
