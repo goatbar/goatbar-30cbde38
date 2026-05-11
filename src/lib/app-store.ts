@@ -40,7 +40,7 @@ function writeStore(store: AppStore) {
     ...store,
     drinks: store.drinks.map((d) => {
       if (d.imagem && d.imagem.startsWith("data:")) {
-        return { ...d, imagem: `idb:${d.id}` };
+        return { ...d, imagem: `idb:` };
       }
       return d;
     }),
@@ -86,13 +86,68 @@ function seedStore(): AppStore {
   };
 }
 
+
+function readLegacyFunctionalStore(): AppStore | null {
+  if (typeof window === "undefined") return null;
+  const legacyKey = Object.keys(window.localStorage)
+    .filter((key) => key.startsWith("goatbar-functional-store-v"))
+    .sort()
+    .reverse()[0];
+  if (!legacyKey || legacyKey === STORAGE_KEY) return null;
+  const raw = window.localStorage.getItem(legacyKey);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as AppStore;
+  } catch {
+    return null;
+  }
+}
+
+function recoverFromMockDb(store: AppStore): AppStore {
+  if (typeof window === "undefined") return store;
+  const raw = window.localStorage.getItem("goatbar_mock_db_v1");
+  if (!raw) return store;
+
+  try {
+    const mock = JSON.parse(raw);
+    const recoveredInventory = (Array.isArray(mock?.inventory) ? mock.inventory : []).map((item: any) => ({
+      id: item.id ?? `inv${Date.now()}${Math.random()}`,
+      nome: item.name ?? item.nome ?? "Item",
+      quantidadeTotal: Number(item.quantity ?? item.quantidadeTotal ?? 0),
+      observacoes: item.observacoes ?? "",
+    }));
+
+    const recoveredVendas = (Array.isArray(mock?.sales) ? mock.sales : []).map((sale: any) => ({
+      id: sale.id ?? `v${Date.now()}${Math.random()}`,
+      data: sale.date ?? new Date().toISOString(),
+      local: "Goat Botequim",
+      itens: [],
+      totalReceita: Number(sale.total_revenue ?? 0),
+      totalCusto: Number(sale.total_cost ?? 0),
+      lucro: Number(sale.total_revenue ?? 0) - Number(sale.total_cost ?? 0),
+      repassePercentual: 0,
+      valorRepasse: 0,
+      lucroLiquido: Number(sale.total_revenue ?? 0) - Number(sale.total_cost ?? 0),
+    }));
+
+    return {
+      ...store,
+      inventoryItems: store.inventoryItems.length > 0 ? store.inventoryItems : recoveredInventory,
+      vendas: store.vendas.length > 0 ? store.vendas : recoveredVendas,
+    };
+  } catch {
+    return store;
+  }
+}
 function readStore(): AppStore {
   if (typeof window === "undefined") return seedStore();
   const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) return seedStore();
+  const fallback = readLegacyFunctionalStore();
+  if (!raw && !fallback) return recoverFromMockDb(seedStore());
+  const source = raw ?? JSON.stringify(fallback);
   try {
-    const parsed = JSON.parse(raw) as AppStore;
-    return {
+    const parsed = JSON.parse(source) as AppStore;
+    return recoverFromMockDb({
       vendas: parsed.vendas ?? seedVendas,
       eventos: parsed.eventos ?? seedEventos,
       contratos: parsed.contratos ?? seedContratos,
@@ -107,11 +162,12 @@ function readStore(): AppStore {
       contractSignatureHistories: parsed.contractSignatureHistories ?? seedContractSignatureHistories,
       financialSessions: parsed.financialSessions ?? seedFinancialSessions,
       inventoryItems: parsed.inventoryItems ?? seedInventoryItems,
-    };
+    });
   } catch {
-    return seedStore();
+    return recoverFromMockDb(seedStore());
   }
 }
+
 
 export function useAppStore() {
   const [store, setStore] = useState<AppStore>(() => readStore());
