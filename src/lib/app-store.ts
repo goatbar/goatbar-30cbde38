@@ -87,20 +87,33 @@ function seedStore(): AppStore {
 }
 
 
-function readLegacyFunctionalStore(): AppStore | null {
-  if (typeof window === "undefined") return null;
-  const legacyKey = Object.keys(window.localStorage)
-    .filter((key) => key.startsWith("goatbar-functional-store-v"))
-    .sort()
-    .reverse()[0];
-  if (!legacyKey || legacyKey === STORAGE_KEY) return null;
-  const raw = window.localStorage.getItem(legacyKey);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as AppStore;
-  } catch {
-    return null;
-  }
+function readLegacyFunctionalStores(): AppStore[] {
+  if (typeof window === "undefined") return [];
+
+  const keys = Object.keys(window.localStorage)
+    .filter((key) => key.startsWith("goatbar-functional-store-v") && key !== STORAGE_KEY);
+
+  const parsed = keys
+    .map((key) => window.localStorage.getItem(key))
+    .filter(Boolean)
+    .map((raw) => {
+      try {
+        return JSON.parse(raw as string) as AppStore;
+      } catch {
+        return null;
+      }
+    })
+    .filter((v): v is AppStore => Boolean(v));
+
+  return parsed;
+}
+
+function mergeById<T extends { id: string }>(...lists: T[][]): T[] {
+  const map = new Map<string, T>();
+  lists.flat().forEach((item) => {
+    if (!map.has(item.id)) map.set(item.id, item);
+  });
+  return Array.from(map.values());
 }
 
 function recoverFromMockDb(store: AppStore): AppStore {
@@ -141,31 +154,41 @@ function recoverFromMockDb(store: AppStore): AppStore {
 }
 function readStore(): AppStore {
   if (typeof window === "undefined") return seedStore();
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  const fallback = readLegacyFunctionalStore();
-  if (!raw && !fallback) return recoverFromMockDb(seedStore());
-  const source = raw ?? JSON.stringify(fallback);
-  try {
-    const parsed = JSON.parse(source) as AppStore;
-    return recoverFromMockDb({
-      vendas: parsed.vendas ?? seedVendas,
-      eventos: parsed.eventos ?? seedEventos,
-      contratos: parsed.contratos ?? seedContratos,
-      parametros: parsed.parametros ?? seedParametros,
-      drinks: parsed.drinks ?? seedDrinks,
-      contractTemplates: parsed.contractTemplates ?? seedContractTemplates,
-      contractSigners: parsed.contractSigners ?? seedContractSigners,
-      glasswares: parsed.glasswares ?? seedGlasswares,
-      eventContracts: parsed.eventContracts ?? seedEventContracts,
-      eventContractClientDatas: parsed.eventContractClientDatas ?? seedEventContractClientDatas,
-      contractHistories: parsed.contractHistories ?? seedContractHistories,
-      contractSignatureHistories: parsed.contractSignatureHistories ?? seedContractSignatureHistories,
-      financialSessions: parsed.financialSessions ?? seedFinancialSessions,
-      inventoryItems: parsed.inventoryItems ?? seedInventoryItems,
-    });
-  } catch {
-    return recoverFromMockDb(seedStore());
-  }
+
+  const activeRaw = window.localStorage.getItem(STORAGE_KEY);
+  const legacyStores = readLegacyFunctionalStores();
+
+  const safeParse = (raw: string | null): AppStore | null => {
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as AppStore;
+    } catch {
+      return null;
+    }
+  };
+
+  const activeStore = safeParse(activeRaw);
+  const base = activeStore ?? seedStore();
+
+  const merged: AppStore = {
+    ...base,
+    vendas: mergeById(base.vendas ?? [], ...legacyStores.map((s) => s.vendas ?? [])),
+    eventos: mergeById(base.eventos ?? [], ...legacyStores.map((s) => s.eventos ?? [])),
+    contratos: mergeById(base.contratos ?? [], ...legacyStores.map((s) => s.contratos ?? [])),
+    parametros: base.parametros ?? seedParametros,
+    drinks: mergeById(base.drinks ?? [], ...legacyStores.map((s) => s.drinks ?? [])),
+    contractTemplates: mergeById(base.contractTemplates ?? [], ...legacyStores.map((s) => s.contractTemplates ?? [])),
+    contractSigners: mergeById(base.contractSigners ?? [], ...legacyStores.map((s) => s.contractSigners ?? [])),
+    glasswares: mergeById(base.glasswares ?? [], ...legacyStores.map((s) => s.glasswares ?? [])),
+    eventContracts: mergeById(base.eventContracts ?? [], ...legacyStores.map((s) => s.eventContracts ?? [])),
+    eventContractClientDatas: mergeById(base.eventContractClientDatas ?? [], ...legacyStores.map((s) => s.eventContractClientDatas ?? [])),
+    contractHistories: mergeById(base.contractHistories ?? [], ...legacyStores.map((s) => s.contractHistories ?? [])),
+    contractSignatureHistories: mergeById(base.contractSignatureHistories ?? [], ...legacyStores.map((s) => s.contractSignatureHistories ?? [])),
+    financialSessions: mergeById(base.financialSessions ?? [], ...legacyStores.map((s) => s.financialSessions ?? [])),
+    inventoryItems: mergeById(base.inventoryItems ?? [], ...legacyStores.map((s) => s.inventoryItems ?? [])),
+  };
+
+  return recoverFromMockDb(merged);
 }
 
 
