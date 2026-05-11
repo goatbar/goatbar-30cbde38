@@ -8,13 +8,12 @@ import { useAppStore } from "@/lib/app-store";
 import { calcularOrcamentoEvento, type SalesSessionItem, type FinancialSession } from "@/lib/mock-data";
 import { eventBudgetService } from "@/services/event-budget-service";
 import { financialService } from "@/services/financial-service";
-import { goatbarService } from "@/services/goatbar-service";
 import { eventContractsService } from "@/services/contract-service";
 
 export const Route = createFileRoute("/vendas")({ component: () => <AppShell><VendasPage /></AppShell> });
 
 function VendasPage() {
-  const { addFinancialSession, updateFinancialSession, deleteFinancialSession } = useAppStore();
+  const { drinks: storeDrinks, addFinancialSession, updateFinancialSession, deleteFinancialSession } = useAppStore();
   const [financialSessions, setFinancialSessions] = useState<any[]>([]);
   const [allDrinks, setAllDrinks] = useState<any[]>([]);
   const [eventosSupabase, setEventosSupabase] = useState<any[]>([]);
@@ -26,15 +25,13 @@ function VendasPage() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [evs, sessions, drinksData, contracts] = await Promise.all([
+      const [evs, sessions, contracts] = await Promise.all([
         eventBudgetService.listEvents(),
         financialService.listSessions(),
-        goatbarService.listDrinks(),
         eventContractsService.listAllContracts()
       ]);
       setEventosSupabase(evs || []);
       setFinancialSessions(sessions || []);
-      setAllDrinks(drinksData || []);
       setContractsSupabase(contracts || []);
     } catch (err) {
       console.error("Erro ao carregar dados:", err);
@@ -46,6 +43,18 @@ function VendasPage() {
   useEffect(() => {
     loadAllData();
   }, []);
+
+  useEffect(() => {
+    const normalized = (storeDrinks || []).map((d) => ({
+      ...d,
+      modalityConfig: d.modalityConfig ?? {
+        evento: { active: true, cost: Number(d.custoUnitario || 0), price: Number(d.precoVenda || 0) },
+        steakhouse: { active: true, cost: Number(d.custoUnitario || 0), price: Number(d.precoVenda || 0) },
+        goatbotequim: { active: true, cost: Number(d.custoUnitario || 0), price: Number(d.precoVenda || 0) },
+      },
+    }));
+    setAllDrinks(normalized);
+  }, [storeDrinks]);
 
   const [showModal, setShowModal] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
@@ -129,7 +138,7 @@ function VendasPage() {
   const updateItem = (index: number, field: keyof SalesSessionItem, value: any) => {
     const newItems = [...modalItems];
     if (field === "drinkId") {
-      const d = allDrinks.find(x => x.id === value);
+    const d = allDrinks.find(x => x.id === value) || allDrinks.find(x => x.nome === value);
       if (d) {
         const isSteak = activeTab === "7Steakhouse";
         const config = d.modalityConfig?.[activeModalityKey as "steakhouse" | "goatbotequim"];
@@ -550,11 +559,17 @@ function VendasPage() {
                   <GhostButton onClick={addItem} className="h-8 text-xs"><Plus className="h-3 w-3 mr-1" /> Adicionar</GhostButton>
                 </div>
                 {modalItems.map((item, idx) => (
-                  <div key={idx} className="flex gap-2 items-center">
+                  <div key={idx} className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
                     <select value={item.drinkId} onChange={e => updateItem(idx, "drinkId", e.target.value)} className="flex-1 h-10 px-3 rounded-lg bg-input border border-border text-sm">
                       {filteredDrinks.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}
                     </select>
                     <input type="number" value={item.quantidade} onChange={e => updateItem(idx, "quantidade", Number(e.target.value))} className="w-20 h-10 px-3 rounded-lg bg-input border border-border text-sm" />
+                    <div className="text-xs text-muted-foreground px-2">
+                      Venda: <span className="text-foreground font-medium">{fmtBRL(Number(item.precoUnitario || 0))}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground px-2">
+                      Custo: <span className="text-foreground font-medium">{fmtBRL(Number(item.custoUnitario || 0))}</span>
+                    </div>
                   </div>
                 ))}
               </div>
