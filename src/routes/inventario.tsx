@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { useAppStore } from "@/lib/app-store";
-import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
 import { Package, Plus, Search, Edit2, Trash2, X } from "lucide-react";
 
 export const Route = createFileRoute("/inventario")({
@@ -14,7 +15,8 @@ export const Route = createFileRoute("/inventario")({
 });
 
 function InventoryPage() {
-  const { inventoryItems, addInventoryItem, updateInventoryItem, deleteInventoryItem } = useAppStore();
+  const { inventoryItems: localInventoryItems, addInventoryItem, updateInventoryItem, deleteInventoryItem } = useAppStore();
+  const [inventoryItems, setInventoryItems] = useState(localInventoryItems);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -22,6 +24,32 @@ function InventoryPage() {
   const [formNome, setFormNome] = useState("");
   const [formQtd, setFormQtd] = useState(0);
   const [formObs, setFormObs] = useState("");
+
+  useEffect(() => {
+    const loadInventory = async () => {
+      try {
+        const { data, error } = await supabase.from("inventory").select("id, name, quantity").order("created_at", { ascending: false });
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          const mapped = data.map((item: any) => ({
+            id: item.id,
+            nome: item.name ?? "Item",
+            quantidadeTotal: Number(item.quantity ?? 0),
+            observacoes: "",
+          }));
+          setInventoryItems(mapped);
+          return;
+        }
+      } catch (e) {
+        console.warn("Falha ao carregar inventário do Supabase, usando armazenamento local.", e);
+      }
+
+      setInventoryItems(localInventoryItems);
+    };
+
+    loadInventory();
+  }, [localInventoryItems]);
 
   const filteredItems = inventoryItems.filter((i) => i.nome.toLowerCase().includes(search.toLowerCase()));
 
@@ -33,19 +61,43 @@ function InventoryPage() {
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formNome.trim()) return;
-    if (editingId) {
-      updateInventoryItem(editingId, { nome: formNome, quantidadeTotal: formQtd, observacoes: formObs });
-    } else {
-      addInventoryItem({ nome: formNome, quantidadeTotal: formQtd, observacoes: formObs });
+
+    try {
+      if (editingId) {
+        const { error } = await supabase.from("inventory").update({ name: formNome, quantity: formQtd, updated_at: new Date().toISOString() }).eq("id", editingId);
+        if (error) throw error;
+        setInventoryItems((prev) => prev.map((i) => (i.id === editingId ? { ...i, nome: formNome, quantidadeTotal: formQtd, observacoes: formObs } : i)));
+      } else {
+        const { data, error } = await supabase.from("inventory").insert({ name: formNome, quantity: formQtd }).select("id").single();
+        if (error) throw error;
+        setInventoryItems((prev) => [{ id: data.id, nome: formNome, quantidadeTotal: formQtd, observacoes: formObs }, ...prev]);
+      }
+    } catch (e) {
+      if (editingId) {
+        updateInventoryItem(editingId, { nome: formNome, quantidadeTotal: formQtd, observacoes: formObs });
+        setInventoryItems((prev) => prev.map((i) => (i.id === editingId ? { ...i, nome: formNome, quantidadeTotal: formQtd, observacoes: formObs } : i)));
+      } else {
+        const localId = `inv${Date.now()}`;
+        addInventoryItem({ nome: formNome, quantidadeTotal: formQtd, observacoes: formObs });
+        setInventoryItems((prev) => [{ id: localId, nome: formNome, quantidadeTotal: formQtd, observacoes: formObs }, ...prev]);
+      }
     }
+
     setShowModal(false);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este item?")) {
+  const handleDelete = async (id: string) => {
+    if (!confirm("Tem certeza que deseja excluir este item?")) return;
+
+    try {
+      const { error } = await supabase.from("inventory").delete().eq("id", id);
+      if (error) throw error;
+      setInventoryItems((prev) => prev.filter((item) => item.id !== id));
+    } catch {
       deleteInventoryItem(id);
+      setInventoryItems((prev) => prev.filter((item) => item.id !== id));
     }
   };
 
