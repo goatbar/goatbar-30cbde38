@@ -22,6 +22,11 @@ function VendasPage() {
   const [activeTab, setActiveTab] = useState<"Goat Botequim" | "7Steakhouse" | "Eventos" | "Consolidação">("Goat Botequim");
   const [periodoDias, setPeriodoDias] = useState<number>(30);
 
+  const normalizeSessionForUI = (session: any) => ({
+    ...session,
+    modalidade: session.modalidade === "Goatbotequim" ? "Goat Botequim" : session.modalidade,
+  });
+
   const loadAllData = async () => {
     setLoading(true);
     try {
@@ -191,24 +196,28 @@ function VendasPage() {
     };
 
     try {
-       if (editingSessionId) {
-         await financialService.updateSession(editingSessionId, payload);
-         updateFinancialSession(editingSessionId, payload);
-       } else {
-         await financialService.createSession(payload);
-         addFinancialSession(payload);
-       }
-       setShowModal(false);
-       loadAllData();
+      if (editingSessionId) {
+        await financialService.updateSession(editingSessionId, payload);
+        updateFinancialSession(editingSessionId, payload);
+        setFinancialSessions((prev) => prev.map((s) => (s.id === editingSessionId ? normalizeSessionForUI({ ...s, ...payload, id: editingSessionId }) : s)));
+      } else {
+        const created = await financialService.createSession(payload);
+        addFinancialSession(payload);
+        setFinancialSessions((prev) => [normalizeSessionForUI({ ...payload, id: created?.id ?? `fs-${Date.now()}` }), ...prev]);
+      }
+      setShowModal(false);
+      loadAllData();
     } catch (e) {
-       // Fallback to local if Supabase fails (e.g. table doesn't exist)
-       if (editingSessionId) {
-         updateFinancialSession(editingSessionId, payload);
-       } else {
-         addFinancialSession(payload);
-       }
-       setShowModal(false);
-       loadAllData();
+      if (editingSessionId) {
+        updateFinancialSession(editingSessionId, payload);
+        setFinancialSessions((prev) => prev.map((s) => (s.id === editingSessionId ? normalizeSessionForUI({ ...s, ...payload, id: editingSessionId }) : s)));
+      } else {
+        const localId = `fs-${Date.now()}`;
+        addFinancialSession(payload);
+        setFinancialSessions((prev) => [normalizeSessionForUI({ ...payload, id: localId }), ...prev]);
+      }
+      setShowModal(false);
+      loadAllData();
     }
   };
 

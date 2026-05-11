@@ -34,7 +34,7 @@ const nav: { to: string; label: string; icon: typeof LayoutDashboard; exact?: bo
 
 export function AppShell({ children }: { children?: ReactNode }) {
   const location = useLocation();
-  const { session, loading, user, signOut } = useAuth();
+  const { loading, user, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const role = (user?.user_metadata?.role as string | undefined)?.toLowerCase() ?? "admin";
   const visibleNav = useMemo(
@@ -50,7 +50,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
     );
   }
 
-  if (!session) {
+  if (!user) {
     return <Navigate to="/login" />;
   }
 
