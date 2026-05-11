@@ -27,6 +27,15 @@ export interface FinancialExpense {
   updated_at: string;
 }
 
+
+const normalizeModality = (value: string | null | undefined): string => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "goatbotequim" || normalized === "goat botequim") return "Goat Botequim";
+  if (normalized === "7steakhouse" || normalized === "steakhouse") return "7Steakhouse";
+  if (normalized === "evento" || normalized === "evento(s)") return "Evento";
+  return value || "";
+};
+
 export const financialService = {
   async listExpenses(filters?: { 
     start_date?: string, 
@@ -117,7 +126,7 @@ export const financialService = {
       const remoteSessions = (data || []).map(s => ({
         ...s,
         data: s.date,
-        modalidade: s.modality,
+        modalidade: normalizeModality(s.modality),
         maoDeObraValor: s.labor_value,
         maoDeObraQtd: s.labor_quantity,
         maoDeObraNomes: s.labor_names,
@@ -139,7 +148,7 @@ export const financialService = {
         }
       });
 
-      return merged;
+      return merged.map((session: any) => ({ ...session, modalidade: normalizeModality(session.modalidade) }));
     } catch (e) {
       console.warn("Erro ao buscar sessões do Supabase, tentando LocalStorage:", e);
       return this.getLocalSessions();
@@ -250,7 +259,7 @@ export const financialService = {
     };
 
     // Botequim
-    const botList = sessions.filter(s => ["Goat Botequim", "Goatbotequim"].includes(String(s.modalidade || "").trim()));
+    const botList = sessions.filter(s => normalizeModality(s.modalidade) === "Goat Botequim");
     const botReceita = botList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (Number(item.precoUnitario || 0) * item.quantidade), 0), 0);
     const botCusto = botList.reduce((acc, s) => {
       return acc + (s.items || []).reduce((sum: number, item: any) => {
@@ -267,7 +276,7 @@ export const financialService = {
     const botLucro = (botReceita - botCusto) * 0.6 - botLabor;
 
     // Steakhouse
-    const steakList = sessions.filter(s => s.modalidade === "7Steakhouse");
+    const steakList = sessions.filter(s => normalizeModality(s.modalidade) === "7Steakhouse");
     // Receita Goatbar = O que o restaurante paga ao Goat Bar (custoUnitario no item)
     const steakReceita = steakList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (Number(item.custoUnitario || 0) * item.quantidade), 0), 0);
     // Custo Insumos = O que o Goat Bar gasta para fazer (custoInsumo no item ou custoUnitario base do drink)
