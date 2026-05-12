@@ -1,25 +1,32 @@
 import { supabase } from "@/integrations/supabase/client";
-import { eventBudgetService } from "@/services/event-budget-service";
 
 const STORAGE_KEY = "goatbar-functional-store-v11";
+const LEGACY_MIGRATED_KEY = "goatbar-legacy-migrated-v1";
 
-export async function migrateLocalStorageToSupabase() {
+type LegacyStore = Record<string, any>;
+
+function logDbError(context: string, table: string, payload: unknown, error: unknown) {
+  console.error(`[Supabase:${table}] ${context}`, { table, payload, error });
+}
+
+export async function migrateLegacyStoreToSupabase() {
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return { success: false, message: "Nenhum dado local encontrado para migração." };
+  if (!raw) return { success: true, migrated: false, message: "Sem dados legados." };
+  if (localStorage.getItem(LEGACY_MIGRATED_KEY) === "1") return { success: true, migrated: false, message: "Migração já executada." };
+
+  let store: LegacyStore;
+  try {
+    store = JSON.parse(raw);
+  } catch (error) {
+    logDbError("Falha no parse do localStorage legado", "localStorage", raw, error);
+    return { success: false, migrated: false, message: "Dados legados inválidos." };
+  }
 
   try {
-    const store = JSON.parse(raw);
-    const eventos = store.eventos || [];
-    
-    if (eventos.length === 0) {
-      return { success: false, message: "Nenhum evento encontrado no armazenamento local." };
-    }
-
-    let migratedCount = 0;
-
+    const eventos = Array.isArray(store.eventos) ? store.eventos : [];
     for (const ev of eventos) {
-      // 1. Criar o evento no Supabase
-      const eventPayload = {
+      const payload = {
+        id: ev.id,
         client_name: ev.client_name || ev.nome,
         phone: ev.phone || ev.telefone,
         email: ev.email,
@@ -27,54 +34,78 @@ export async function migrateLocalStorageToSupabase() {
         event_time: ev.event_time,
         event_location: ev.event_location || ev.local,
         city: ev.city || ev.cidade,
-        event_type: ev.event_type || ev.tipo,
-        guests: ev.guests || ev.convidados,
+        event_type: ev.event_type || ev.tipo || "Evento",
+        guests: Number(ev.guests || ev.convidados || 0),
         notes: ev.notes || ev.observacoes,
-        status: (ev.status || "NOVO").toUpperCase(),
-        lead_source: ev.lead_source,
-        referral_name: ev.referral_name,
-        current_budget_value: ev.current_budget_value || 0,
-        current_profit_value: ev.current_profit_value || 0
+        status: (ev.status || "novo_orcamento").toLowerCase(),
       };
+      const { error } = await supabase.from("events").upsert(payload, { onConflict: "id" });
+      if (error) logDbError("Erro ao migrar evento", "events", payload, error);
+    }
 
-      const { data: newEvent, error: evError } = await supabase
-        .from("events")
-        .insert(eventPayload)
-        .select()
-        .single();
+    const inventory = Array.isArray(store.inventoryItems) ? store.inventoryItems : [];
+    for (const item of inventory) {
+      const payload = {
+        id: item.id,
+        name: item.name || item.nome,
+        quantity: Number(item.quantity ?? item.quantidadeTotal ?? 0),
+        category: item.category || "geral",
+        unit: item.unit || "un",
+        cost_per_unit: Number(item.cost_per_unit || 0),
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from("inventory").upsert(payload, { onConflict: "id" });
+      if (error) logDbError("Erro ao migrar inventário", "inventory", payload, error);
+    }
 
-      if (evError) {
-        console.error("Erro ao migrar evento:", ev.nome, evError);
+    const sessions = Array.isArray(store.financialSessions) ? store.financialSessions : [];
+    for (const s of sessions) {
+      const sessionPayload = {
+        id: s.id,
+        date: s.date || s.data,
+        modality: s.modality || s.modalidade || "Goat Botequim",
+        labor_value: Number(s.labor_value ?? s.maoDeObraValor ?? 0),
+        labor_quantity: Number(s.labor_quantity ?? s.maoDeObraQtd ?? 0),
+        labor_names: s.labor_names ?? s.maoDeObraNomes,
+        labor_details: s.labor_details ?? s.maoDeObraDetalhes ?? [],
+      };
+      const { error: sessionError } = await supabase.from("financial_sessions").upsert(sessionPayload, { onConflict: "id" });
+      if (sessionError) {
+        logDbError("Erro ao migrar sessão financeira", "financial_sessions", sessionPayload, sessionError);
         continue;
       }
 
-      // 2. Tentar migrar o orçamento se existir (snapshotted in mock)
-      // No mock, o orçamento costuma estar dentro do evento ou em outra tabela
-      // Se houver lógica de orçamentos complexa, precisaríamos de mais mapeamento.
-      
-      migratedCount++;
+      const items = Array.isArray(s.items) ? s.items : [];
+      for (const i of items) {
+        const itemPayload = {
+          session_id: s.id,
+          drink_id: i.drink_id || i.drinkId,
+          drink_name: i.drink_name || i.nome || "Item",
+          quantity: Number(i.quantity ?? i.quantidade ?? 0),
+          unit_price: Number(i.unit_price ?? i.precoUnitario ?? 0),
+          unit_cost: Number(i.unit_cost ?? i.custoUnitario ?? 0),
+          ingredient_cost: Number(i.ingredient_cost ?? i.custoInsumo ?? 0),
+        };
+        const { error: itemError } = await supabase.from("financial_session_items").insert(itemPayload);
+        if (itemError && itemError.code !== "23505") {
+          logDbError("Erro ao migrar item de sessão", "financial_session_items", itemPayload, itemError);
+        }
+      }
     }
 
-    // Opcional: Limpar localStorage após migração bem-sucedida? 
-    // Melhor deixar para o usuário decidir ou marcar como migrado.
-
-    return { 
-      success: true, 
-      message: `${migratedCount} eventos migrados com sucesso para o banco de dados real.` 
-    };
-  } catch (e) {
-    console.error("Erro na migração:", e);
-    return { success: false, message: "Erro crítico durante a migração dos dados." };
+    localStorage.setItem(LEGACY_MIGRATED_KEY, "1");
+    localStorage.removeItem(STORAGE_KEY);
+    return { success: true, migrated: true, message: "Dados legados sincronizados com Supabase." };
+  } catch (error) {
+    logDbError("Falha geral da migração", "migration", null, error);
+    return { success: false, migrated: false, message: "Falha na migração para Supabase." };
   }
 }
 
+export async function migrateLocalStorageToSupabase() {
+  return migrateLegacyStoreToSupabase();
+}
+
 export function hasLocalData() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return false;
-  try {
-    const store = JSON.parse(raw);
-    return (store.eventos && store.eventos.length > 0);
-  } catch {
-    return false;
-  }
+  return Boolean(localStorage.getItem(STORAGE_KEY));
 }
