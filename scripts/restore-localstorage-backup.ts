@@ -41,6 +41,39 @@ function pickMapped(source: AnyRecord, mapping: Record<string, string[]>, table:
   return { payload, ignoredCount: ignored.length }
 }
 
+
+function parseMissingColumnFromError(message: string): string | null {
+  const m = message.match(/Could not find the ['"]([^'"]+)['"] column/i)
+  return m?.[1] ?? null
+}
+
+async function upsertWithMissingColumnTolerance(table: string, rows: AnyRecord[]) {
+  let sanitizedRows = rows
+  let attempt = 0
+
+  while (attempt < 20) {
+    const { error } = await supabase.from(table).upsert(sanitizedRows, { onConflict: 'id' })
+    if (!error) return sanitizedRows
+
+    const missingColumn = parseMissingColumnFromError(error.message)
+    if (!missingColumn) throw new Error(`Erro no upsert em ${table}: ${error.message}`)
+
+    const hadColumn = sanitizedRows.some((row) => Object.prototype.hasOwnProperty.call(row, missingColumn))
+    if (!hadColumn) throw new Error(`Erro no upsert em ${table}: ${error.message}`)
+
+    console.log(`⚠️ [${table}] Coluna inexistente ignorada: ${missingColumn}`)
+    sanitizedRows = sanitizedRows.map((row) => {
+      if (!Object.prototype.hasOwnProperty.call(row, missingColumn)) return row
+      const clone = { ...row }
+      delete clone[missingColumn]
+      return clone
+    })
+    attempt += 1
+  }
+
+  throw new Error(`Erro no upsert em ${table}: não foi possível estabilizar payload após múltiplas tentativas.`)
+}
+
 async function validateConnection() {
   const { error } = await supabase.from('drinks').select('id').limit(1)
   if (error) throw new Error(`Falha ao validar conexão Supabase: ${error.message}`)
@@ -64,8 +97,7 @@ async function importByUpsert(table: string, rows: AnyRecord[], ignored: number,
   const inserted = validRows.length - updated
 
   if (!dryRun) {
-    const { error } = await supabase.from(table).upsert(validRows, { onConflict: 'id' })
-    if (error) throw new Error(`Erro no upsert em ${table}: ${error.message}`)
+    await upsertWithMissingColumnTolerance(table, validRows)
   }
 
   return { inserted, updated, ignored: ignoredRows, total: rows.length }
