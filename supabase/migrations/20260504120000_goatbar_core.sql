@@ -64,9 +64,50 @@ alter table public.events enable row level security;
 alter table public.inventory enable row level security;
 alter table public.inventory_movements enable row level security;
 
-create policy if not exists "authenticated full access drinks" on public.drinks for all to authenticated using (true) with check (true);
-create policy if not exists "authenticated full access sales" on public.sales for all to authenticated using (true) with check (true);
-create policy if not exists "authenticated full access sales_items" on public.sales_items for all to authenticated using (true) with check (true);
-create policy if not exists "authenticated full access events" on public.events for all to authenticated using (true) with check (true);
-create policy if not exists "authenticated full access inventory" on public.inventory for all to authenticated using (true) with check (true);
-create policy if not exists "authenticated full access inventory_movements" on public.inventory_movements for all to authenticated using (true) with check (true);
+drop policy if exists "authenticated full access drinks" on public.drinks;
+create policy "authenticated full access drinks"
+on public.drinks
+for all
+to authenticated
+using (true)
+with check (true);
+
+drop policy if exists "authenticated full access sales" on public.sales;
+create policy "authenticated full access sales"
+on public.sales
+for all
+to authenticated
+using (true)
+with check (true);
+
+drop policy if exists "authenticated full access sales_items" on public.sales_items;
+create policy "authenticated full access sales_items"
+on public.sales_items
+for all
+to authenticated
+using (true)
+with check (true);
+
+drop policy if exists "authenticated full access events" on public.events;
+create policy "authenticated full access events"
+on public.events
+for all
+to authenticated
+using (true)
+with check (true);
+
+drop policy if exists "authenticated full access inventory" on public.inventory;
+create policy "authenticated full access inventory"
+on public.inventory
+for all
+to authenticated
+using (true)
+with check (true);
+
+drop policy if exists "authenticated full access inventory_movements" on public.inventory_movements;
+create policy "authenticated full access inventory_movements"
+on public.inventory_movements
+for all
+to authenticated
+using (true)
+with check (true);
