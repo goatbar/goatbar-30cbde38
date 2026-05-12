@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
-import { useAppStore } from "@/lib/app-store";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
+import { migrateLegacyStoreToSupabase } from "@/lib/migration";
 import { Package, Plus, Search, Edit2, Trash2, X } from "lucide-react";
 
 export const Route = createFileRoute("/inventario")({
@@ -15,8 +15,7 @@ export const Route = createFileRoute("/inventario")({
 });
 
 function InventoryPage() {
-  const { inventoryItems: localInventoryItems, addInventoryItem, updateInventoryItem, deleteInventoryItem } = useAppStore();
-  const [inventoryItems, setInventoryItems] = useState(localInventoryItems);
+  const [inventoryItems, setInventoryItems] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -28,10 +27,10 @@ function InventoryPage() {
   useEffect(() => {
     const loadInventory = async () => {
       try {
-        const { data, error } = await supabase.from("inventory").select("id, name, quantity").order("created_at", { ascending: false });
+        const { data, error } = await supabase.from("inventory").select("id, name, quantity, updated_at").order("updated_at", { ascending: false });
         if (error) throw error;
 
-        if (data && data.length > 0) {
+        if (data) {
           const mapped = data.map((item: any) => ({
             id: item.id,
             nome: item.name ?? "Item",
@@ -39,17 +38,14 @@ function InventoryPage() {
             observacoes: "",
           }));
           setInventoryItems(mapped);
-          return;
         }
       } catch (e) {
-        console.warn("Falha ao carregar inventário do Supabase, usando armazenamento local.", e);
+        console.error("Falha ao carregar inventário do Supabase.", { table: "inventory", query: "select id,name,quantity,updated_at order by updated_at", error: e });
       }
-
-      setInventoryItems(localInventoryItems);
     };
 
-    loadInventory();
-  }, [localInventoryItems]);
+    migrateLegacyStoreToSupabase().finally(loadInventory);
+  }, []);
 
   const filteredItems = inventoryItems.filter((i) => i.nome.toLowerCase().includes(search.toLowerCase()));
 
@@ -75,14 +71,9 @@ function InventoryPage() {
         setInventoryItems((prev) => [{ id: data.id, nome: formNome, quantidadeTotal: formQtd, observacoes: formObs }, ...prev]);
       }
     } catch (e) {
-      if (editingId) {
-        updateInventoryItem(editingId, { nome: formNome, quantidadeTotal: formQtd, observacoes: formObs });
-        setInventoryItems((prev) => prev.map((i) => (i.id === editingId ? { ...i, nome: formNome, quantidadeTotal: formQtd, observacoes: formObs } : i)));
-      } else {
-        const localId = `inv${Date.now()}`;
-        addInventoryItem({ nome: formNome, quantidadeTotal: formQtd, observacoes: formObs });
-        setInventoryItems((prev) => [{ id: localId, nome: formNome, quantidadeTotal: formQtd, observacoes: formObs }, ...prev]);
-      }
+      console.error("Erro ao salvar item no Supabase.", { table: "inventory", payload: { id: editingId, formNome, formQtd, formObs }, error: e });
+      alert("Erro ao salvar item. Verifique conexão/Supabase e tente novamente.");
+      return;
     }
 
     setShowModal(false);
@@ -95,9 +86,10 @@ function InventoryPage() {
       const { error } = await supabase.from("inventory").delete().eq("id", id);
       if (error) throw error;
       setInventoryItems((prev) => prev.filter((item) => item.id !== id));
-    } catch {
-      deleteInventoryItem(id);
-      setInventoryItems((prev) => prev.filter((item) => item.id !== id));
+    } catch (e) {
+      console.error("Erro ao excluir item no Supabase.", { table: "inventory", id, error: e });
+      alert("Erro ao excluir item.");
+      return;
     }
   };
 

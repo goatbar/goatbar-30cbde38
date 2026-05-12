@@ -121,15 +121,8 @@ export const financialService = {
         `)
         .order("date", { ascending: false });
 
-      if (error) {
-        if (error.code === 'PGRST204' || error.code === '42P01') {
-          console.warn("Tabela financial_sessions não encontrada. Usando LocalStorage.");
-          return this.getLocalSessions();
-        }
-        throw error;
-      }
-      
-      const localSessions = this.getLocalSessions();
+      if (error) throw error;
+
       const remoteSessions = (data || []).map(s => ({
         ...s,
         data: s.date,
@@ -147,30 +140,14 @@ export const financialService = {
         }))
       }));
 
-      // Merge avoiding duplicates by id (prefer remote if same id exists)
-      const merged = [...remoteSessions];
-      localSessions.forEach((ls: any) => {
-        if (!merged.find(ms => ms.id === ls.id)) {
-          merged.push(ls);
-        }
-      });
-
-      return merged.map((session: any) => ({ ...session, modalidade: normalizeModality(session.modalidade) }));
+      return remoteSessions.map((session: any) => ({ ...session, modalidade: normalizeModality(session.modalidade) }));
     } catch (e) {
-      console.warn("Erro ao buscar sessões do Supabase, tentando LocalStorage:", e);
-      return this.getLocalSessions();
-    }
-  },
-
-  getLocalSessions() {
-    const STORAGE_KEY = "goatbar-functional-store-v11";
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    try {
-      const store = JSON.parse(raw);
-      return store.financialSessions || [];
-    } catch {
-      return [];
+      console.error("Erro ao buscar sessões do Supabase.", {
+        table: "financial_sessions",
+        query: "select financial_sessions with financial_session_items order by date",
+        error: e
+      });
+      throw e;
     }
   },
 

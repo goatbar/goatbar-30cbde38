@@ -5,7 +5,7 @@ import { Plus, Calendar, MapPin, Users, ChevronRight, X, AlertTriangle, LayoutGr
 import { useState, useEffect } from "react";
 import { eventBudgetService, type Event as RealEvent } from "@/services/event-budget-service";
 import { PageHeader } from "@/components/AppShell";
-import { hasLocalData, migrateLocalStorageToSupabase } from "@/lib/migration";
+import { hasLocalData, migrateLegacyStoreToSupabase, migrateLocalStorageToSupabase } from "@/lib/migration";
 
 export const Route = createFileRoute("/eventos/")({
   component: EventosIndex,
@@ -34,7 +34,9 @@ function EventosIndex() {
   const [migrating, setMigrating] = useState(false);
 
   useEffect(() => {
-    loadEvents();
+    migrateLegacyStoreToSupabase()
+      .catch((error) => console.error("Falha na migração automática de dados legados (eventos).", error))
+      .finally(loadEvents);
   }, []);
 
   const loadEvents = async () => {
@@ -409,4 +411,3 @@ function CalendarView({ eventosAtivos }: { eventosAtivos: RealEvent[] }) {
     </div>
   );
 }
-
