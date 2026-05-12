@@ -221,6 +221,20 @@ function VendasPage() {
     }
   };
 
+  const handleDeleteSession = async (sessionId: string) => {
+    try {
+      await financialService.deleteSession(sessionId);
+      deleteFinancialSession(sessionId);
+      setFinancialSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    } catch (e) {
+      console.error("Erro ao excluir sessão no Supabase:", e);
+      deleteFinancialSession(sessionId);
+      setFinancialSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    } finally {
+      loadAllData();
+    }
+  };
+
   // --- Metrics ---
   const metrics = useMemo(() => {
     return financialService.calculateMetrics(filteredSessions, filteredEventos, allDrinks);
@@ -384,7 +398,7 @@ function VendasPage() {
             <SectionCard title="Sessões Lançadas" subtitle="Histórico de vendas consolidadas por dia">
               <div className="space-y-4">
                 {filteredSessions.filter(s => s.modalidade === "Goat Botequim").map(s => (
-                  <SessionRow key={s.id} session={s} drinks={allDrinks} onEdit={() => handleEditSession(s)} onDelete={() => deleteFinancialSession(s.id)} />
+                  <SessionRow key={s.id} session={s} drinks={allDrinks} onEdit={() => handleEditSession(s)} onDelete={() => handleDeleteSession(s.id)} />
                 ))}
                 {filteredSessions.filter(s => s.modalidade === "Goat Botequim").length === 0 && <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">Nenhuma sessão lançada.</div>}
               </div>
@@ -413,7 +427,7 @@ function VendasPage() {
             <SectionCard title="Sessões Semanais Lançadas" subtitle="Vendas diárias agregadas por semana">
               <div className="space-y-4">
                 {filteredSessions.filter(s => s.modalidade === "7Steakhouse").map(s => (
-                  <SessionRow key={s.id} session={s} drinks={allDrinks} onEdit={() => handleEditSession(s)} onDelete={() => deleteFinancialSession(s.id)} />
+                  <SessionRow key={s.id} session={s} drinks={allDrinks} onEdit={() => handleEditSession(s)} onDelete={() => handleDeleteSession(s.id)} />
                 ))}
                 {filteredSessions.filter(s => s.modalidade === "7Steakhouse").length === 0 && <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">Nenhuma sessão lançada.</div>}
               </div>

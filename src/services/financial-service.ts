@@ -36,6 +36,13 @@ const normalizeModality = (value: string | null | undefined): string => {
   return value || "";
 };
 
+const toDatabaseModality = (value: string | null | undefined): string => {
+  const normalized = normalizeModality(value);
+  if (normalized === "Goat Botequim" || normalized === "7Steakhouse") return normalized;
+  // fallback seguro: sessões de vendas deste módulo só aceitam essas duas modalidades
+  return "Goat Botequim";
+};
+
 export const financialService = {
   async listExpenses(filters?: { 
     start_date?: string, 
@@ -174,7 +181,7 @@ export const financialService = {
         .from("financial_sessions")
         .insert({
           date: payload.data,
-          modality: payload.modalidade,
+          modality: toDatabaseModality(payload.modalidade),
           labor_value: payload.maoDeObraValor,
           labor_quantity: payload.maoDeObraQtd,
           labor_names: payload.maoDeObraNomes,
@@ -215,7 +222,7 @@ export const financialService = {
       .from("financial_sessions")
       .update({
         date: payload.data,
-        modality: payload.modalidade,
+        modality: toDatabaseModality(payload.modalidade),
         labor_value: payload.maoDeObraValor,
         labor_quantity: payload.maoDeObraQtd,
         labor_names: payload.maoDeObraNomes,
@@ -247,6 +254,15 @@ export const financialService = {
         .insert(itemsPayload);
       if (iError) throw iError;
     }
+  },
+
+  async deleteSession(id: string) {
+    const { error } = await supabase
+      .from("financial_sessions")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
   },
 
   calculateMetrics(sessions: any[], events: any[], drinks: any[]) {
