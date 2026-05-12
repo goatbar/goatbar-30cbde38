@@ -256,6 +256,15 @@ export const financialService = {
     }
   },
 
+  async deleteSession(id: string) {
+    const { error } = await supabase
+      .from("financial_sessions")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+  },
+
   calculateMetrics(sessions: any[], events: any[], drinks: any[]) {
     const resolveFallbackCost = (item: any, modalidade: string) => {
       const d = drinks.find(x => x.id === item.drinkId) || drinks.find(x => x.nome === item.nome || x.nome === item.drink_name);
