@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { StatCard, SectionCard, PrimaryButton, StatusBadge, GhostButton } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
-import { Plus, Calendar, MapPin, Users, ChevronRight, X, AlertTriangle, LayoutGrid, List, Loader2, Trash2 } from "lucide-react";
+import { Plus, Calendar, MapPin, Users, ChevronRight, X, AlertTriangle, LayoutGrid, List, Loader2, Trash2, Calculator } from "lucide-react";
 import { useState, useEffect } from "react";
 import { eventBudgetService, type Event as RealEvent } from "@/services/event-budget-service";
 import { PageHeader } from "@/components/AppShell";
