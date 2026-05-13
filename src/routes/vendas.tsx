@@ -669,6 +669,16 @@ function VendasPage() {
 function SessionRow({ session, drinks, onEdit, onDelete }: { session: any; drinks: any[]; onEdit: () => void; onDelete: () => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const isSteak = session.modalidade === "7Steakhouse";
+  const toFiniteNumber = (value: unknown): number => {
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+    if (typeof value === "string") {
+      const normalized = value.trim().replace(/\./g, "").replace(",", ".").replace(/[^0-9.-]/g, "");
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    const parsed = Number(value ?? 0);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
   
   // Cálculos Básicos
   const items = session.items || [];
@@ -684,15 +694,15 @@ function SessionRow({ session, drinks, onEdit, onDelete }: { session: any; drink
   // Lucro Final: R$ 200.62
 
   const calc = useMemo(() => {
-    const rb = items.reduce((acc: number, i: any) => acc + (Number(i.precoUnitario || 0) * Number(i.quantidade || 0)), 0);
-    const rg = items.reduce((acc: number, i: any) => acc + (Number(i.custoUnitario || 0) * Number(i.quantidade || 0)), 0);
+    const rb = items.reduce((acc: number, i: any) => acc + (toFiniteNumber(i.precoUnitario) * toFiniteNumber(i.quantidade)), 0);
+    const rg = items.reduce((acc: number, i: any) => acc + (toFiniteNumber(i.custoUnitario) * toFiniteNumber(i.quantidade)), 0);
     const ci = items.reduce((acc: number, i: any) => {
       const fallbackDrink = drinks.find(d => d.id === i.drinkId) || drinks.find(d => d.nome === i.nome || d.nome === i.drink_name);
       const fallbackCost = isSteak
-        ? Number(fallbackDrink?.modalityConfig?.evento?.cost || fallbackDrink?.custoUnitario || 0)
-        : Number(i.custoUnitario ?? fallbackDrink?.modalityConfig?.goatbotequim?.cost ?? 0);
-      const itemCost = isSteak ? Number(i.custoInsumo ?? fallbackCost) : Number(fallbackCost);
-      return acc + (itemCost * Number(i.quantidade || 0));
+        ? toFiniteNumber(fallbackDrink?.modalityConfig?.evento?.cost ?? fallbackDrink?.custoUnitario ?? 0)
+        : toFiniteNumber(i.custoUnitario ?? fallbackDrink?.modalityConfig?.goatbotequim?.cost ?? 0);
+      const itemCost = isSteak ? toFiniteNumber(i.custoInsumo ?? fallbackCost) : toFiniteNumber(fallbackCost);
+      return acc + (itemCost * toFiniteNumber(i.quantidade));
     }, 0);
     
     const lb = rb - ci;
@@ -700,8 +710,8 @@ function SessionRow({ session, drinks, onEdit, onDelete }: { session: any; drink
     const saldo = lb - rep;
     
     const mo = session.maoDeObraDetalhes && session.maoDeObraDetalhes.length > 0
-      ? session.maoDeObraDetalhes.reduce((a: number, b: any) => a + Number(b.valor || 0), 0)
-      : (Number(session.maoDeObraValor || 0) * Number(session.maoDeObraQtd || 0));
+      ? session.maoDeObraDetalhes.reduce((a: number, b: any) => a + toFiniteNumber(b.valor), 0)
+      : (toFiniteNumber(session.maoDeObraValor) * toFiniteNumber(session.maoDeObraQtd));
 
     return {
       receitaBruta: rb,
