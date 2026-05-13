@@ -784,7 +784,7 @@ function SessionRow({ session, drinks, onEdit, onDelete }: { session: any; drink
                             <span className="font-medium text-foreground/80">{it.nome}</span>
                          </div>
                          <div className="font-bold text-muted-foreground group-hover/item:text-foreground transition-colors">
-                            {fmtBRL(it.precoUnitario * it.quantidade)}
+                            {fmtBRL(toFiniteNumber(it.precoUnitario) * toFiniteNumber(it.quantidade))}
                          </div>
                       </div>
                     ))}
