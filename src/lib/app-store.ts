@@ -169,23 +169,25 @@ function readStore(): AppStore {
 
   const activeStore = safeParse(activeRaw);
   const base = activeStore ?? seedStore();
+  const shouldMergeLegacyStores = !activeStore;
+  const legacySources = shouldMergeLegacyStores ? legacyStores : [];
 
   const merged: AppStore = {
     ...base,
-    vendas: mergeById(base.vendas ?? [], ...legacyStores.map((s) => s.vendas ?? [])),
-    eventos: mergeById(base.eventos ?? [], ...legacyStores.map((s) => s.eventos ?? [])),
-    contratos: mergeById(base.contratos ?? [], ...legacyStores.map((s) => s.contratos ?? [])),
+    vendas: mergeById(base.vendas ?? [], ...legacySources.map((s) => s.vendas ?? [])),
+    eventos: mergeById(base.eventos ?? [], ...legacySources.map((s) => s.eventos ?? [])),
+    contratos: mergeById(base.contratos ?? [], ...legacySources.map((s) => s.contratos ?? [])),
     parametros: base.parametros ?? seedParametros,
-    drinks: mergeById(base.drinks ?? [], ...legacyStores.map((s) => s.drinks ?? [])),
-    contractTemplates: mergeById(base.contractTemplates ?? [], ...legacyStores.map((s) => s.contractTemplates ?? [])),
-    contractSigners: mergeById(base.contractSigners ?? [], ...legacyStores.map((s) => s.contractSigners ?? [])),
-    glasswares: mergeById(base.glasswares ?? [], ...legacyStores.map((s) => s.glasswares ?? [])),
-    eventContracts: mergeById(base.eventContracts ?? [], ...legacyStores.map((s) => s.eventContracts ?? [])),
-    eventContractClientDatas: mergeById(base.eventContractClientDatas ?? [], ...legacyStores.map((s) => s.eventContractClientDatas ?? [])),
-    contractHistories: mergeById(base.contractHistories ?? [], ...legacyStores.map((s) => s.contractHistories ?? [])),
-    contractSignatureHistories: mergeById(base.contractSignatureHistories ?? [], ...legacyStores.map((s) => s.contractSignatureHistories ?? [])),
-    financialSessions: mergeById(base.financialSessions ?? [], ...legacyStores.map((s) => s.financialSessions ?? [])),
-    inventoryItems: mergeById(base.inventoryItems ?? [], ...legacyStores.map((s) => s.inventoryItems ?? [])),
+    drinks: mergeById(base.drinks ?? [], ...legacySources.map((s) => s.drinks ?? [])),
+    contractTemplates: mergeById(base.contractTemplates ?? [], ...legacySources.map((s) => s.contractTemplates ?? [])),
+    contractSigners: mergeById(base.contractSigners ?? [], ...legacySources.map((s) => s.contractSigners ?? [])),
+    glasswares: mergeById(base.glasswares ?? [], ...legacySources.map((s) => s.glasswares ?? [])),
+    eventContracts: mergeById(base.eventContracts ?? [], ...legacySources.map((s) => s.eventContracts ?? [])),
+    eventContractClientDatas: mergeById(base.eventContractClientDatas ?? [], ...legacySources.map((s) => s.eventContractClientDatas ?? [])),
+    contractHistories: mergeById(base.contractHistories ?? [], ...legacySources.map((s) => s.contractHistories ?? [])),
+    contractSignatureHistories: mergeById(base.contractSignatureHistories ?? [], ...legacySources.map((s) => s.contractSignatureHistories ?? [])),
+    financialSessions: mergeById(base.financialSessions ?? [], ...legacySources.map((s) => s.financialSessions ?? [])),
+    inventoryItems: mergeById(base.inventoryItems ?? [], ...legacySources.map((s) => s.inventoryItems ?? [])),
   };
 
   return recoverFromMockDb(merged);
