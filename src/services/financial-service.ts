@@ -43,6 +43,14 @@ const toDatabaseModality = (value: string | null | undefined): string => {
   return "Goat Botequim";
 };
 
+const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const toSafeDrinkId = (drinkId: unknown): string | null => {
+  const value = typeof drinkId === "string" ? drinkId.trim() : "";
+  if (!value) return null;
+  return UUID_V4_REGEX.test(value) ? value : null;
+};
+
 export const financialService = {
   async listExpenses(filters?: { 
     start_date?: string, 
@@ -172,7 +180,7 @@ export const financialService = {
       if (payload.items && payload.items.length > 0) {
         const itemsPayload = payload.items.map((i: any) => ({
           session_id: session.id,
-          drink_id: i.drinkId,
+          drink_id: toSafeDrinkId(i.drinkId),
           drink_name: i.nome,
           quantity: i.quantidade,
           unit_price: i.precoUnitario,
@@ -219,7 +227,7 @@ export const financialService = {
     if (payload.items && payload.items.length > 0) {
       const itemsPayload = payload.items.map((i: any) => ({
         session_id: id,
-        drink_id: i.drinkId,
+        drink_id: toSafeDrinkId(i.drinkId),
         drink_name: i.nome,
         quantity: i.quantidade,
         unit_price: i.precoUnitario,
