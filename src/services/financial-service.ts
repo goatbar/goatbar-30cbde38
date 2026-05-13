@@ -43,6 +43,18 @@ const toDatabaseModality = (value: string | null | undefined): string => {
   return "Goat Botequim";
 };
 
+
+const toFiniteNumber = (value: unknown): number => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().replace(/\./g, "").replace(",", ".").replace(/[^0-9.-]/g, "");
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const toSafeDrinkId = (drinkId: unknown): string | null => {
@@ -254,45 +266,45 @@ export const financialService = {
     const resolveFallbackCost = (item: any, modalidade: string) => {
       const d = drinks.find(x => x.id === item.drinkId) || drinks.find(x => x.nome === item.nome || x.nome === item.drink_name);
       if (!d) return 0;
-      if (modalidade === "7Steakhouse") return Number(d.modalityConfig?.evento?.cost || d.custoUnitario || 0);
-      if (modalidade === "Goat Botequim") return Number(item.custoUnitario ?? d.modalityConfig?.goatbotequim?.cost ?? 0);
-      return Number(d.custoUnitario || 0);
+      if (modalidade === "7Steakhouse") return toFiniteNumber(d.modalityConfig?.evento?.cost ?? d.custoUnitario ?? 0);
+      if (modalidade === "Goat Botequim") return toFiniteNumber(item.custoUnitario ?? d.modalityConfig?.goatbotequim?.cost ?? 0);
+      return toFiniteNumber(d.custoUnitario ?? 0);
     };
 
     // Botequim
     const botList = sessions.filter(s => normalizeModality(s.modalidade) === "Goat Botequim");
-    const botReceita = botList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (Number(item.precoUnitario || 0) * item.quantidade), 0), 0);
+    const botReceita = botList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (toFiniteNumber(item.precoUnitario) * toFiniteNumber(item.quantidade)), 0), 0);
     const botCusto = botList.reduce((acc, s) => {
       return acc + (s.items || []).reduce((sum: number, item: any) => {
         const liveIngredientCost = resolveFallbackCost(item, "Goat Botequim");
-        return sum + (Number(liveIngredientCost) * item.quantidade);
+        return sum + (toFiniteNumber(liveIngredientCost) * toFiniteNumber(item.quantidade));
       }, 0);
     }, 0);
     const botLabor = botList.reduce((acc, s) => {
       if (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0) {
-        return acc + s.maoDeObraDetalhes.reduce((a: number, b: any) => a + Number(b.valor || 0), 0);
+        return acc + s.maoDeObraDetalhes.reduce((a: number, b: any) => a + toFiniteNumber(b.valor), 0);
       }
-      return acc + (Number(s.maoDeObraValor || 0) * Number(s.maoDeObraQtd || 0));
+      return acc + (toFiniteNumber(s.maoDeObraValor) * toFiniteNumber(s.maoDeObraQtd));
     }, 0);
     const botLucro = (botReceita - botCusto) * 0.6 - botLabor;
 
     // Steakhouse
     const steakList = sessions.filter(s => normalizeModality(s.modalidade) === "7Steakhouse");
     // Receita Goatbar = O que o restaurante paga ao Goat Bar (custoUnitario no item)
-    const steakReceita = steakList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (Number(item.custoUnitario || 0) * item.quantidade), 0), 0);
+    const steakReceita = steakList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (toFiniteNumber(item.custoUnitario) * toFiniteNumber(item.quantidade)), 0), 0);
     // Custo Insumos = O que o Goat Bar gasta para fazer (custoInsumo no item ou custoUnitario base do drink)
     const steakCusto = steakList.reduce((acc, s) => {
       return acc + (s.items || []).reduce((sum: number, item: any) => {
         const liveIngredientCost = item.custoInsumo ?? resolveFallbackCost(item, "7Steakhouse");
-        return sum + (Number(liveIngredientCost) * item.quantidade);
+        return sum + (toFiniteNumber(liveIngredientCost) * toFiniteNumber(item.quantidade));
       }, 0);
     }, 0);
     // Lucro Final = (Receita - Custo) - Mão de Obra
     const steakLucro = (steakReceita - steakCusto) - steakList.reduce((acc, s) => {
       if (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0) {
-        return acc + s.maoDeObraDetalhes.reduce((a: number, b: any) => a + Number(b.valor || 0), 0);
+        return acc + s.maoDeObraDetalhes.reduce((a: number, b: any) => a + toFiniteNumber(b.valor), 0);
       }
-      return acc + (Number(s.maoDeObraValor || 0) * Number(s.maoDeObraQtd || 0));
+      return acc + (toFiniteNumber(s.maoDeObraValor) * toFiniteNumber(s.maoDeObraQtd));
     }, 0);
 
     // Events
