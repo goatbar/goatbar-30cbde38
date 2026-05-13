@@ -200,14 +200,15 @@ export function useAppStore() {
   // One-time migration: move any Base64 images already stored in localStorage
   // to IndexedDB, then update the store with the idb: reference.
   useEffect(() => {
-    const hasBlobImages = store.drinks.some(
-      (d) => d.imagem && d.imagem.startsWith("data:")
-    );
-    if (!hasBlobImages) return;
-
     const migrate = async () => {
+      const current = readStore();
+      const hasBlobImages = current.drinks.some(
+        (d) => d.imagem && d.imagem.startsWith("data:")
+      );
+      if (!hasBlobImages) return;
+
       const migratedDrinks = await Promise.all(
-        store.drinks.map(async (d) => {
+        current.drinks.map(async (d) => {
           if (d.imagem && d.imagem.startsWith("data:")) {
             await saveImage(d.id, d.imagem);
             return { ...d, imagem: `idb:${d.id}` };
@@ -215,11 +216,15 @@ export function useAppStore() {
           return d;
         })
       );
-      setStore((prev) => ({ ...prev, drinks: migratedDrinks }));
+
+      setStore((prev) => {
+        const prevMap = new Map(prev.drinks.map((d) => [d.id, d]));
+        const nextDrinks = migratedDrinks.map((d) => prevMap.get(d.id) ?? d);
+        return { ...prev, drinks: nextDrinks };
+      });
     };
 
     migrate().catch(console.error);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
