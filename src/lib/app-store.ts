@@ -305,6 +305,12 @@ export function useAppStore() {
           };
         });
       },
+      deleteDrink(id: string) {
+        setStore((prev) => ({
+          ...prev,
+          drinks: prev.drinks.filter((d) => d.id !== id),
+        }));
+      },
       addEventContract(input: Omit<EventContract, "id">) {
         setStore((prev) => ({
           ...prev,

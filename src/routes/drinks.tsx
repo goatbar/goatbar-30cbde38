@@ -11,7 +11,7 @@ import { saveImage, loadImage } from "@/lib/image-store";
 export const Route = createFileRoute("/drinks")({ component: () => <AppShell><DrinksPage /></AppShell> });
 
 function DrinksPage() {
-  const { drinks: allDrinks, updateDrink, addDrink } = useAppStore();
+  const { drinks: allDrinks, updateDrink, addDrink, deleteDrink } = useAppStore();
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState("Todas");
   const [editingDrink, setEditingDrink] = useState<Drink | null>(null);
@@ -99,7 +99,18 @@ function DrinksPage() {
 
         <SectionCard title="Catálogo" subtitle={`${filtrados.length} drinks`}>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filtrados.map((d) => <DrinkCard key={d.id} drink={d} onEdit={() => setEditingDrink(d)} />)}
+            {filtrados.map((d) => (
+              <DrinkCard
+                key={d.id}
+                drink={d}
+                onEdit={() => setEditingDrink(d)}
+                onDelete={() => {
+                  if (window.confirm(`Excluir o drink "${d.nome}"? Esta ação não pode ser desfeita.`)) {
+                    deleteDrink(d.id);
+                  }
+                }}
+              />
+            ))}
             {filtrados.length === 0 && (
                <div className="col-span-full text-center py-10 text-sm text-muted-foreground border border-dashed border-border rounded-xl">
                  Nenhum drink encontrado com os filtros atuais.
@@ -120,7 +131,7 @@ function DrinksPage() {
   );
 }
 
-function DrinkCard({ drink: d, onEdit }: { drink: Drink, onEdit: () => void }) {
+function DrinkCard({ drink: d, onEdit, onDelete }: { drink: Drink, onEdit: () => void, onDelete: () => void }) {
   const margem7S = d.modalityConfig?.steakhouse?.price
     ? ((d.modalityConfig.steakhouse.price - d.custoUnitario) / d.modalityConfig.steakhouse.price) * 100
     : 0;
@@ -143,9 +154,14 @@ function DrinkCard({ drink: d, onEdit }: { drink: Drink, onEdit: () => void }) {
   
   return (
     <div className={`rounded-xl border transition-all ${d.status === "inativo" ? "border-border opacity-60" : "border-border hover:border-border-strong"} bg-surface/50 group relative`}>
-      <button onClick={onEdit} className="absolute top-2 right-2 h-8 w-8 rounded-lg bg-background/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Edit3 className="h-4 w-4" />
-      </button>
+      <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+        <button onClick={onEdit} className="h-8 w-8 rounded-lg bg-background/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary">
+          <Edit3 className="h-4 w-4" />
+        </button>
+        <button onClick={onDelete} className="h-8 w-8 rounded-lg bg-background/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-destructive">
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
 
       {resolvedImage ? (
         <img
