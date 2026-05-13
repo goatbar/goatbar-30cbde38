@@ -248,23 +248,23 @@ function VendasPage() {
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       if (!meses[key]) meses[key] = { mes: key, receita: 0, custos: 0, lucro: 0, bot: 0, steak: 0, event: 0 };
       
-      const sessionReceita = (s.items || []).reduce((acc: number, item: any) => acc + (item.precoUnitario * item.quantidade), 0);
+      const sessionReceita = (s.items || []).reduce((acc: number, item: any) => acc + (Number(item.precoUnitario || 0) * Number(item.quantidade || 0)), 0);
       const sessionCusto = (s.items || []).reduce((acc: number, item: any) => {
         const d = allDrinks.find(x => x.id === item.drinkId);
 
         if (s.modalidade === "Goat Botequim") {
           // No Botequim, custo vem da modalidade Goat Botequim (não da ficha técnica)
           const goatCost = Number(item.custoUnitario ?? d?.modalityConfig?.goatbotequim?.cost ?? 0);
-          return acc + (goatCost * item.quantidade);
+          return acc + (goatCost * Number(item.quantidade || 0));
         }
 
         // Steakhouse/Evento: usa ficha técnica (custoInsumo) com fallback de modalidade
         if (item.custoInsumo !== undefined && item.custoInsumo !== null) {
-          return acc + (item.custoInsumo * item.quantidade);
+          return acc + (Number(item.custoInsumo || 0) * Number(item.quantidade || 0));
         }
 
         const fallbackCost = Number(d?.modalityConfig?.evento?.cost || d?.custoUnitario || 0);
-        return acc + (fallbackCost * item.quantidade);
+        return acc + (fallbackCost * Number(item.quantidade || 0));
       }, 0);
       
       const maoDeObra = s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0 
@@ -280,7 +280,7 @@ function VendasPage() {
         meses[key].bot += sessionLucro;
       } else {
         // Steakhouse: Receita para o Goat Bar é o custo do insumo (o que o restaurante paga)
-        const receitaGoat = (s.items || []).reduce((acc: number, item: any) => acc + (Number(item.custoUnitario || 0) * item.quantidade), 0);
+        const receitaGoat = (s.items || []).reduce((acc: number, item: any) => acc + (Number(item.custoUnitario || 0) * Number(item.quantidade || 0)), 0);
         const sessionLucro = (receitaGoat - sessionCusto) - maoDeObra;
         meses[key].receita += receitaGoat;
         meses[key].custos += sessionCusto + maoDeObra;
@@ -413,7 +413,7 @@ function VendasPage() {
               <StatCard label="Receita Goatbar" value={fmtBRL(metrics.steak.receita)} />
               <StatCard label="Custo Insumos" value={fmtBRL(metrics.steak.custo)} />
               <StatCard label="Lucro Bruto" value={fmtBRL(metrics.steak.receita - metrics.steak.custo)} />
-              <StatCard label="Lucro Retido Rest." value={fmtBRL(filteredSessions.filter(s => s.modalidade === "7Steakhouse").reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + ((item.precoUnitario - item.custoUnitario) * item.quantidade), 0), 0))} />
+              <StatCard label="Lucro Retido Rest." value={fmtBRL(filteredSessions.filter(s => s.modalidade === "7Steakhouse").reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + ((Number(item.precoUnitario || 0) - Number(item.custoUnitario || 0)) * Number(item.quantidade || 0)), 0), 0))} />
               <StatCard label="Mão de Obra" value={fmtBRL(filteredSessions.filter(s => s.modalidade === "7Steakhouse").reduce((acc, s) => acc + (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0 ? s.maoDeObraDetalhes.reduce((a: number, b: any) => a + Number(b.valor || 0), 0) : Number(s.maoDeObraValor || 0) * Number(s.maoDeObraQtd || 0)), 0))} />
               <StatCard label="Lucro F. Goatbar" value={fmtBRL(metrics.steak.lucro)} highlight />
             </div>
@@ -684,15 +684,15 @@ function SessionRow({ session, drinks, onEdit, onDelete }: { session: any; drink
   // Lucro Final: R$ 200.62
 
   const calc = useMemo(() => {
-    const rb = items.reduce((acc: number, i: any) => acc + (Number(i.precoUnitario || 0) * i.quantidade), 0);
-    const rg = items.reduce((acc: number, i: any) => acc + (Number(i.custoUnitario || 0) * i.quantidade), 0);
+    const rb = items.reduce((acc: number, i: any) => acc + (Number(i.precoUnitario || 0) * Number(i.quantidade || 0)), 0);
+    const rg = items.reduce((acc: number, i: any) => acc + (Number(i.custoUnitario || 0) * Number(i.quantidade || 0)), 0);
     const ci = items.reduce((acc: number, i: any) => {
       const fallbackDrink = drinks.find(d => d.id === i.drinkId) || drinks.find(d => d.nome === i.nome || d.nome === i.drink_name);
       const fallbackCost = isSteak
         ? Number(fallbackDrink?.modalityConfig?.evento?.cost || fallbackDrink?.custoUnitario || 0)
         : Number(i.custoUnitario ?? fallbackDrink?.modalityConfig?.goatbotequim?.cost ?? 0);
       const itemCost = isSteak ? Number(i.custoInsumo ?? fallbackCost) : Number(fallbackCost);
-      return acc + (itemCost * i.quantidade);
+      return acc + (itemCost * Number(i.quantidade || 0));
     }, 0);
     
     const lb = rb - ci;
