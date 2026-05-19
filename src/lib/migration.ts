@@ -10,16 +10,26 @@ function logDbError(context: string, table: string, payload: unknown, error: unk
 }
 
 export async function migrateLegacyStoreToSupabase() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return { success: true, migrated: false, message: "Sem dados legados." };
-  if (localStorage.getItem(LEGACY_MIGRATED_KEY) === "1") return { success: true, migrated: false, message: "Migração já executada." };
+  const rawFunctional = localStorage.getItem(STORAGE_KEY);
+  const rawMockDb = localStorage.getItem("goatbar_mock_db_v1");
+  const migratedFlag = localStorage.getItem(LEGACY_MIGRATED_KEY) === "1";
 
-  let store: LegacyStore;
+  if (!rawFunctional && !rawMockDb) return { success: true, migrated: false, message: "Sem dados legados." };
+  if (migratedFlag && !rawFunctional && !rawMockDb) return { success: true, migrated: false, message: "Migração já executada." };
+
+  let functionalStore: LegacyStore = {};
+  let mockDbStore: LegacyStore = {};
   try {
-    store = JSON.parse(raw);
+    functionalStore = rawFunctional ? (JSON.parse(rawFunctional) as LegacyStore) : {};
   } catch (error) {
-    logDbError("Falha no parse do localStorage legado", "localStorage", raw, error);
-    return { success: false, migrated: false, message: "Dados legados inválidos." };
+    logDbError("Falha no parse do store funcional legado", "localStorage", rawFunctional, error);
+    return { success: false, migrated: false, message: "Dados legados inválidos (store funcional)." };
+  }
+  try {
+    mockDbStore = rawMockDb ? (JSON.parse(rawMockDb) as LegacyStore) : {};
+  } catch (error) {
+    logDbError("Falha no parse do mock db legado", "localStorage", rawMockDb, error);
+    return { success: false, migrated: false, message: "Dados legados inválidos (mock db)." };
   }
 
   try {
@@ -29,7 +39,9 @@ export async function migrateLegacyStoreToSupabase() {
     let migratedSessions = 0;
     let migratedSessionItems = 0;
 
-    const eventos = Array.isArray(store.eventos) ? store.eventos : [];
+    const functionalEventos = Array.isArray(functionalStore.eventos) ? functionalStore.eventos : [];
+    const mockEventos = Array.isArray(mockDbStore.events) ? mockDbStore.events : [];
+    const eventos = [...functionalEventos, ...mockEventos];
     for (const ev of eventos) {
       const payload = {
         id: ev.id,
@@ -54,7 +66,9 @@ export async function migrateLegacyStoreToSupabase() {
       }
     }
 
-    const inventory = Array.isArray(store.inventoryItems) ? store.inventoryItems : [];
+    const functionalInventory = Array.isArray(functionalStore.inventoryItems) ? functionalStore.inventoryItems : [];
+    const mockInventory = Array.isArray(mockDbStore.inventory) ? mockDbStore.inventory : [];
+    const inventory = [...functionalInventory, ...mockInventory];
     for (const item of inventory) {
       const payload = {
         id: item.id,
@@ -74,7 +88,7 @@ export async function migrateLegacyStoreToSupabase() {
       }
     }
 
-    const sessions = Array.isArray(store.financialSessions) ? store.financialSessions : [];
+    const sessions = Array.isArray(functionalStore.financialSessions) ? functionalStore.financialSessions : [];
     for (const s of sessions) {
       const sessionPayload = {
         id: s.id,
@@ -92,6 +106,8 @@ export async function migrateLegacyStoreToSupabase() {
         continue;
       }
       migratedSessions += 1;
+
+      await supabase.from("financial_session_items").delete().eq("session_id", s.id);
 
       const items = Array.isArray(s.items) ? s.items : [];
       for (const i of items) {
@@ -129,6 +145,7 @@ export async function migrateLegacyStoreToSupabase() {
 
     localStorage.setItem(LEGACY_MIGRATED_KEY, "1");
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem("goatbar_mock_db_v1");
     return {
       success: true,
       migrated: true,
@@ -148,5 +165,5 @@ export async function migrateLocalStorageToSupabase() {
 }
 
 export function hasLocalData() {
-  return Boolean(localStorage.getItem(STORAGE_KEY));
+  return Boolean(localStorage.getItem(STORAGE_KEY) || localStorage.getItem("goatbar_mock_db_v1"));
 }
