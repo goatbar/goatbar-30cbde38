@@ -164,6 +164,10 @@ function VendasPage() {
     setModalItems(newItems);
   };
 
+  const removeItem = (index: number) => {
+    setModalItems((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+  };
+
   const generateSteakhouseDays = (startDateStr: string) => {
     const days = [];
     const baseDate = new Date(startDateStr);
@@ -176,9 +180,29 @@ function VendasPage() {
   };
 
   const handleEditSession = (session: any) => {
+    const key = activeTab === "7Steakhouse" ? "steakhouse" : "goatbotequim";
+    const normalizedItems = (session.items || []).map((item: any) => {
+      const matchedDrink =
+        allDrinks.find((d) => d.id === item.drinkId) ||
+        allDrinks.find((d) => d.nome === item.nome || d.nome === item.drink_name);
+      const config = matchedDrink?.modalityConfig?.[key];
+
+      return {
+        ...item,
+        drinkId: matchedDrink?.id ?? item.drinkId,
+        nome: item.nome ?? item.drink_name ?? matchedDrink?.nome ?? "",
+        precoUnitario: Number(item.precoUnitario ?? config?.price ?? 0),
+        custoUnitario: Number(item.custoUnitario ?? config?.cost ?? 0),
+        custoInsumo:
+          activeTab === "7Steakhouse"
+            ? Number(item.custoInsumo ?? matchedDrink?.modalityConfig?.evento?.cost ?? matchedDrink?.custoUnitario ?? item.custoUnitario ?? 0)
+            : Number(item.custoInsumo ?? item.custoUnitario ?? config?.cost ?? 0),
+      } as SalesSessionItem;
+    });
+
     setEditingSessionId(session.id);
     setModalDate(session.data);
-    setModalItems(JSON.parse(JSON.stringify(session.items)));
+    setModalItems(normalizedItems);
     setMaoDeObraValor(session.maoDeObraValor);
     setMaoDeObraQtd(session.maoDeObraQtd);
     setMaoDeObraNomes(session.maoDeObraNomes || "");
@@ -591,7 +615,7 @@ function VendasPage() {
                   </div>
                 )}
                 {modalItems.map((item, idx) => (
-                  <div key={idx} className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
+                  <div key={idx} className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-center">
                     <select value={item.drinkId} onChange={e => updateItem(idx, "drinkId", e.target.value)} className="flex-1 h-10 px-3 rounded-lg bg-input border border-border text-sm">
                       {filteredDrinks.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}
                     </select>
@@ -603,6 +627,14 @@ function VendasPage() {
                     <div className="text-xs text-muted-foreground px-2">
                       {activeTab === "7Steakhouse" ? "Custo Insumo" : "Custo"}: <span className="text-foreground font-medium">{fmtBRL(Number(activeTab === "7Steakhouse" ? (item.custoInsumo ?? item.custoUnitario ?? 0) : item.custoUnitario || 0))}</span>
                     </div>
+                    <GhostButton
+                      onClick={() => removeItem(idx)}
+                      className="h-10 w-10 px-0 text-destructive hover:text-destructive justify-center"
+                      aria-label="Excluir drink lançado"
+                      title="Excluir drink lançado"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </GhostButton>
                   </div>
                 ))}
               </div>
@@ -634,6 +666,20 @@ function VendasPage() {
                               setMaoDeObraDetalhes(newD);
                             }} className="w-full h-8 px-2 rounded bg-input border border-border text-xs" />
                           </div>
+                        </div>
+                        <div>
+                          <label className="text-[8px] uppercase text-muted-foreground block mb-1">Nomes</label>
+                          <input
+                            type="text"
+                            value={d.nomes || ""}
+                            onChange={e => {
+                              const newD = [...maoDeObraDetalhes];
+                              newD[i].nomes = e.target.value;
+                              setMaoDeObraDetalhes(newD);
+                            }}
+                            placeholder="Ex.: João e Maria"
+                            className="w-full h-8 px-2 rounded bg-input border border-border text-xs"
+                          />
                         </div>
                       </div>
                     ))}
