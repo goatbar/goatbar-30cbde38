@@ -23,6 +23,12 @@ export async function migrateLegacyStoreToSupabase() {
   }
 
   try {
+    let errorCount = 0;
+    let migratedEvents = 0;
+    let migratedInventory = 0;
+    let migratedSessions = 0;
+    let migratedSessionItems = 0;
+
     const eventos = Array.isArray(store.eventos) ? store.eventos : [];
     for (const ev of eventos) {
       const payload = {
@@ -40,7 +46,12 @@ export async function migrateLegacyStoreToSupabase() {
         status: (ev.status || "novo_orcamento").toLowerCase(),
       };
       const { error } = await supabase.from("events").upsert(payload, { onConflict: "id" });
-      if (error) logDbError("Erro ao migrar evento", "events", payload, error);
+      if (error) {
+        errorCount += 1;
+        logDbError("Erro ao migrar evento", "events", payload, error);
+      } else {
+        migratedEvents += 1;
+      }
     }
 
     const inventory = Array.isArray(store.inventoryItems) ? store.inventoryItems : [];
@@ -55,7 +66,12 @@ export async function migrateLegacyStoreToSupabase() {
         updated_at: new Date().toISOString(),
       };
       const { error } = await supabase.from("inventory").upsert(payload, { onConflict: "id" });
-      if (error) logDbError("Erro ao migrar inventário", "inventory", payload, error);
+      if (error) {
+        errorCount += 1;
+        logDbError("Erro ao migrar inventário", "inventory", payload, error);
+      } else {
+        migratedInventory += 1;
+      }
     }
 
     const sessions = Array.isArray(store.financialSessions) ? store.financialSessions : [];
@@ -71,9 +87,11 @@ export async function migrateLegacyStoreToSupabase() {
       };
       const { error: sessionError } = await supabase.from("financial_sessions").upsert(sessionPayload, { onConflict: "id" });
       if (sessionError) {
+        errorCount += 1;
         logDbError("Erro ao migrar sessão financeira", "financial_sessions", sessionPayload, sessionError);
         continue;
       }
+      migratedSessions += 1;
 
       const items = Array.isArray(s.items) ? s.items : [];
       for (const i of items) {
@@ -88,14 +106,37 @@ export async function migrateLegacyStoreToSupabase() {
         };
         const { error: itemError } = await supabase.from("financial_session_items").insert(itemPayload);
         if (itemError && itemError.code !== "23505") {
+          errorCount += 1;
           logDbError("Erro ao migrar item de sessão", "financial_session_items", itemPayload, itemError);
+        } else {
+          migratedSessionItems += 1;
         }
       }
     }
 
+    if (errorCount > 0) {
+      return {
+        success: false,
+        migrated: false,
+        message:
+          `Migração incompleta: ${errorCount} erro(s). ` +
+          `Eventos: ${migratedEvents}/${eventos.length}, ` +
+          `Inventário: ${migratedInventory}/${inventory.length}, ` +
+          `Sessões: ${migratedSessions}/${sessions.length}, ` +
+          `Itens: ${migratedSessionItems}. Verifique o console para detalhes.`,
+      };
+    }
+
     localStorage.setItem(LEGACY_MIGRATED_KEY, "1");
     localStorage.removeItem(STORAGE_KEY);
-    return { success: true, migrated: true, message: "Dados legados sincronizados com Supabase." };
+    return {
+      success: true,
+      migrated: true,
+      message:
+        `Dados legados sincronizados com Supabase. ` +
+        `Eventos: ${migratedEvents}, Inventário: ${migratedInventory}, ` +
+        `Sessões: ${migratedSessions}, Itens: ${migratedSessionItems}.`,
+    };
   } catch (error) {
     logDbError("Falha geral da migração", "migration", null, error);
     return { success: false, migrated: false, message: "Falha na migração para Supabase." };

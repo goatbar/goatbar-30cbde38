@@ -843,22 +843,28 @@ function SessionRow({ session, drinks, onEdit, onDelete, onRefresh }: { session:
            </div>
            <div>
               <div className="font-bold text-base flex items-center gap-2">
-                 {sessionDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+                 {isSteak
+                  ? `${sessionDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })} até ${sessionEndDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })}`
+                  : sessionDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
                  <ChevronRight className={`h-4 w-4 text-primary transition-transform duration-300 ${isExpanded ? "rotate-90" : ""}`} />
               </div>
               <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mt-0.5">
-                 {isSteak
-                  ? `${sessionDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} até ${sessionEndDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} · ${totalDrinks} drinks`
-                  : `${totalDrinks} drinks`}
+                 {`${totalDrinks} drinks`}
               </div>
            </div>
         </div>
 
         <div className="flex items-center gap-8 w-full md:w-auto">
            <div className="text-right">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-0.5">Receita</div>
-              <div className="font-black text-sm">{fmtBRL(isSteak ? calc.receitaGoat : calc.receitaBruta)}</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-0.5">{isSteak ? "Venda Final" : "Receita"}</div>
+              <div className="font-black text-sm">{fmtBRL(calc.receitaBruta)}</div>
            </div>
+           {isSteak && (
+             <div className="text-right">
+                <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-0.5">Receita Goat Bar</div>
+                <div className="font-black text-sm text-primary">{fmtBRL(calc.receitaGoat)}</div>
+             </div>
+           )}
            <div className="text-right">
               <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-0.5">Lucro Final</div>
               <div className="font-black text-sm text-success">{fmtBRL(calc.lucroFinal)}</div>
@@ -898,8 +904,18 @@ function SessionRow({ session, drinks, onEdit, onDelete, onRefresh }: { session:
                       </div>
                     ))}
                     <div className="pt-3 border-t border-border/40 flex justify-between items-center">
-                       <span className="text-[10px] font-bold text-muted-foreground uppercase">Total Receita</span>
-                       <span className="font-black text-sm">{fmtBRL(isSteak ? calc.receitaGoat : calc.receitaBruta)}</span>
+                       <span className="text-[10px] font-bold text-muted-foreground uppercase">{isSteak ? "Valor de Venda Final" : "Total Receita"}</span>
+                       <span className="font-black text-sm">{fmtBRL(calc.receitaBruta)}</span>
+                    </div>
+                    {isSteak && (
+                      <div className="pt-2 flex justify-between items-center">
+                         <span className="text-[10px] font-bold text-muted-foreground uppercase">Receita Goat Bar</span>
+                         <span className="font-black text-sm text-primary">{fmtBRL(calc.receitaGoat)}</span>
+                      </div>
+                    )}
+                    <div className="pt-1 border-t border-border/20 flex justify-between items-center">
+                       <span className="text-[10px] font-bold text-muted-foreground uppercase">Lucro Final</span>
+                       <span className="font-black text-sm text-success">{fmtBRL(calc.lucroFinal)}</span>
                     </div>
                  </div>
               </div>
@@ -911,8 +927,8 @@ function SessionRow({ session, drinks, onEdit, onDelete, onRefresh }: { session:
                     
                     <div className="space-y-2">
                        <div className="flex justify-between text-xs">
-                          <span className="text-muted-foreground">Receita Bruta</span>
-                          <span className="font-bold">{fmtBRL(isSteak ? calc.receitaGoat : calc.receitaBruta)}</span>
+                          <span className="text-muted-foreground">{isSteak ? "Valor de Venda Final" : "Receita Bruta"}</span>
+                          <span className="font-bold">{fmtBRL(calc.receitaBruta)}</span>
                        </div>
                        <div className="flex justify-between text-xs">
                           <span className="text-muted-foreground">(-) {isSteak ? "Custo Insumos (Produção)" : "Custo dos Drinks"}</span>
@@ -926,6 +942,10 @@ function SessionRow({ session, drinks, onEdit, onDelete, onRefresh }: { session:
 
                     {isSteak && (
                       <div className="space-y-2">
+                         <div className="flex justify-between text-xs">
+                            <span className="text-primary font-medium">Receita Goat Bar</span>
+                            <span className="text-primary font-bold">{fmtBRL(calc.receitaGoat)}</span>
+                         </div>
                          <div className="flex justify-between text-xs">
                             <span className="text-warning font-medium">Lucro Retido (Restaurante)</span>
                             <span className="text-warning font-bold">{fmtBRL(calc.lucroRetidoRest)}</span>
