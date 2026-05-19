@@ -799,7 +799,23 @@ function SessionRow({ session, drinks, onEdit, onDelete, onRefresh }: { session:
 
   const calc = useMemo(() => {
     const rb = items.reduce((acc: number, i: any) => acc + (toFiniteNumber(i.precoUnitario) * toFiniteNumber(i.quantidade)), 0);
-    const rg = items.reduce((acc: number, i: any) => acc + (toFiniteNumber(i.custoUnitario) * toFiniteNumber(i.quantidade)), 0);
+    const rg = items.reduce((acc: number, i: any) => {
+      const fallbackDrink = drinks.find(d => d.id === i.drinkId) || drinks.find(d => d.nome === i.nome || d.nome === i.drink_name);
+      const steakOperationalCost = toFiniteNumber(
+        i.custoUnitario
+          ?? fallbackDrink?.modalityConfig?.steakhouse?.cost
+          ?? fallbackDrink?.custoUnitario
+          ?? 0
+      );
+      const goatOperationalCost = toFiniteNumber(
+        i.custoUnitario
+          ?? fallbackDrink?.modalityConfig?.goatbotequim?.cost
+          ?? fallbackDrink?.custoUnitario
+          ?? 0
+      );
+      const operationalCost = isSteak ? steakOperationalCost : goatOperationalCost;
+      return acc + (operationalCost * toFiniteNumber(i.quantidade));
+    }, 0);
     const ci = items.reduce((acc: number, i: any) => {
       const fallbackDrink = drinks.find(d => d.id === i.drinkId) || drinks.find(d => d.nome === i.nome || d.nome === i.drink_name);
       const fallbackCost = isSteak
