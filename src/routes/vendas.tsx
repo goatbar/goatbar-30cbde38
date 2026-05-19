@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { StatCard, SectionCard, PrimaryButton, GhostButton, StatusBadge } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
-import { Plus, ShoppingBag, TrendingUp, X, Users, Utensils, Calendar, Calculator, Trash2, Pencil, ChevronRight, CheckCircle2, AlertCircle } from "lucide-react";
+import { Plus, ShoppingBag, TrendingUp, X, Users, Utensils, Calendar, Calculator, Trash2, Pencil, ChevronRight, CheckCircle2, AlertCircle, RefreshCcw } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useAppStore } from "@/lib/app-store";
 import { calcularOrcamentoEvento, type SalesSessionItem, type FinancialSession } from "@/lib/mock-data";
@@ -261,6 +261,50 @@ function VendasPage() {
     }
   };
 
+  const handleRefreshSession = async (session: any) => {
+    const isSteak = session.modalidade === "7Steakhouse";
+    const refreshedItems = (session.items || []).map((item: any) => {
+      const matchedDrink =
+        allDrinks.find((d) => d.id === item.drinkId) ||
+        allDrinks.find((d) => d.nome === item.nome || d.nome === item.drink_name);
+
+      const modalidadeConfig = matchedDrink?.modalityConfig?.[isSteak ? "steakhouse" : "goatbotequim"];
+      const novoCustoUnitario = Number(modalidadeConfig?.cost ?? item.custoUnitario ?? 0);
+      const novoPrecoUnitario = Number(modalidadeConfig?.price ?? item.precoUnitario ?? 0);
+      const novoCustoInsumo = isSteak
+        ? Number(item.custoInsumo ?? matchedDrink?.modalityConfig?.evento?.cost ?? matchedDrink?.custoUnitario ?? novoCustoUnitario)
+        : Number(item.custoInsumo ?? novoCustoUnitario);
+
+      return {
+        ...item,
+        drinkId: matchedDrink?.id ?? item.drinkId,
+        nome: item.nome ?? item.drink_name ?? matchedDrink?.nome ?? "",
+        precoUnitario: novoPrecoUnitario,
+        custoUnitario: novoCustoUnitario,
+        custoInsumo: novoCustoInsumo,
+      };
+    });
+
+    const payload = {
+      data: session.data,
+      modalidade: session.modalidade,
+      items: refreshedItems,
+      maoDeObraValor: session.maoDeObraValor,
+      maoDeObraQtd: session.maoDeObraQtd,
+      maoDeObraNomes: session.maoDeObraNomes,
+      maoDeObraDetalhes: session.maoDeObraDetalhes,
+    };
+
+    try {
+      await financialService.updateSession(session.id, payload);
+      updateFinancialSession(session.id, payload);
+      setFinancialSessions((prev) => prev.map((s) => (s.id === session.id ? normalizeSessionForUI({ ...s, ...payload, id: session.id }) : s)));
+      loadAllData();
+    } catch (error) {
+      console.error("Erro ao atualizar dados da sessão:", error);
+    }
+  };
+
   // --- Metrics ---
   const metrics = useMemo(() => {
     return financialService.calculateMetrics(filteredSessions, filteredEventos, allDrinks);
@@ -424,7 +468,7 @@ function VendasPage() {
             <SectionCard title="Sessões Lançadas" subtitle="Histórico de vendas consolidadas por dia">
               <div className="space-y-4">
                 {filteredSessions.filter(s => s.modalidade === "Goat Botequim").map(s => (
-                  <SessionRow key={s.id} session={s} drinks={allDrinks} onEdit={() => handleEditSession(s)} onDelete={() => handleDeleteSession(s.id)} />
+                  <SessionRow key={s.id} session={s} drinks={allDrinks} onEdit={() => handleEditSession(s)} onDelete={() => handleDeleteSession(s.id)} onRefresh={() => handleRefreshSession(s)} />
                 ))}
                 {filteredSessions.filter(s => s.modalidade === "Goat Botequim").length === 0 && <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">Nenhuma sessão lançada.</div>}
               </div>
@@ -453,7 +497,7 @@ function VendasPage() {
             <SectionCard title="Sessões Semanais Lançadas" subtitle="Vendas diárias agregadas por semana">
               <div className="space-y-4">
                 {filteredSessions.filter(s => s.modalidade === "7Steakhouse").map(s => (
-                  <SessionRow key={s.id} session={s} drinks={allDrinks} onEdit={() => handleEditSession(s)} onDelete={() => handleDeleteSession(s.id)} />
+                  <SessionRow key={s.id} session={s} drinks={allDrinks} onEdit={() => handleEditSession(s)} onDelete={() => handleDeleteSession(s.id)} onRefresh={() => handleRefreshSession(s)} />
                 ))}
                 {filteredSessions.filter(s => s.modalidade === "7Steakhouse").length === 0 && <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">Nenhuma sessão lançada.</div>}
               </div>
@@ -722,7 +766,7 @@ function VendasPage() {
   );
 }
 
-function SessionRow({ session, drinks, onEdit, onDelete }: { session: any; drinks: any[]; onEdit: () => void; onDelete: () => void }) {
+function SessionRow({ session, drinks, onEdit, onDelete, onRefresh }: { session: any; drinks: any[]; onEdit: () => void; onDelete: () => void; onRefresh: () => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const isSteak = session.modalidade === "7Steakhouse";
   const toFiniteNumber = (value: unknown): number => {
@@ -739,6 +783,8 @@ function SessionRow({ session, drinks, onEdit, onDelete }: { session: any; drink
   // Cálculos Básicos
   const items = session.items || [];
   const totalDrinks = items.reduce((acc: number, i: any) => acc + Number(i.quantidade || 0), 0);
+  const sessionDate = new Date(session.data + 'T12:00:00');
+  const sessionEndDate = new Date(sessionDate.getTime() + (3 * 24 * 60 * 60 * 1000));
 
   // No print do usuário para Botequim:
   // Receita Bruta: R$ 627
@@ -795,11 +841,13 @@ function SessionRow({ session, drinks, onEdit, onDelete }: { session: any; drink
            </div>
            <div>
               <div className="font-bold text-base flex items-center gap-2">
-                 {new Date(session.data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+                 {sessionDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
                  <ChevronRight className={`h-4 w-4 text-primary transition-transform duration-300 ${isExpanded ? "rotate-90" : ""}`} />
               </div>
               <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mt-0.5">
-                 {totalDrinks} drinks · Eqp: {session.maoDeObraQtd}x {fmtBRL(session.maoDeObraValor)}
+                 {isSteak
+                  ? `${sessionDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} até ${sessionEndDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} · ${totalDrinks} drinks`
+                  : `${totalDrinks} drinks`}
               </div>
            </div>
         </div>
@@ -814,6 +862,9 @@ function SessionRow({ session, drinks, onEdit, onDelete }: { session: any; drink
               <div className="font-black text-sm text-success">{fmtBRL(calc.lucroFinal)}</div>
            </div>
            <div className="flex gap-2 ml-4">
+              <button onClick={(e) => { e.stopPropagation(); onRefresh(); }} className="h-9 w-9 rounded-lg flex items-center justify-center bg-background border border-border hover:border-primary hover:text-primary transition-all shadow-sm" title="Atualizar dados da sessão">
+                 <RefreshCcw className="h-4 w-4" />
+              </button>
               <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="h-9 w-9 rounded-lg flex items-center justify-center bg-background border border-border hover:border-primary hover:text-primary transition-all shadow-sm">
                  <Pencil className="h-4 w-4" />
               </button>
