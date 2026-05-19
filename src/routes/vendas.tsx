@@ -137,7 +137,7 @@ function VendasPage() {
       nome: firstDrink.nome, 
       quantidade: 1, 
       precoUnitario: config?.price || 0, 
-      custoUnitario: config?.cost || 0,
+      custoUnitario: isSteak ? (config?.price || 0) : (config?.cost || 0),
       custoInsumo: isSteak ? (firstDrink.modalityConfig?.evento?.cost ?? firstDrink.custoUnitario) : config?.cost
     }]);
   };
@@ -154,7 +154,7 @@ function VendasPage() {
           drinkId: d.id,
           nome: d.nome,
           precoUnitario: config?.price || 0,
-          custoUnitario: config?.cost || 0,
+          custoUnitario: isSteak ? (config?.price || 0) : (config?.cost || 0),
           custoInsumo: isSteak ? (d.modalityConfig?.evento?.cost ?? d.custoUnitario) : config?.cost
         };
       }
@@ -192,7 +192,7 @@ function VendasPage() {
         drinkId: matchedDrink?.id ?? item.drinkId,
         nome: item.nome ?? item.drink_name ?? matchedDrink?.nome ?? "",
         precoUnitario: Number(item.precoUnitario ?? config?.price ?? 0),
-        custoUnitario: Number(item.custoUnitario ?? config?.cost ?? 0),
+        custoUnitario: Number(item.custoUnitario ?? (activeTab === "7Steakhouse" ? config?.price : config?.cost) ?? 0),
         custoInsumo:
           activeTab === "7Steakhouse"
             ? Number(item.custoInsumo ?? matchedDrink?.modalityConfig?.evento?.cost ?? matchedDrink?.custoUnitario ?? item.custoUnitario ?? 0)
@@ -269,8 +269,10 @@ function VendasPage() {
         allDrinks.find((d) => d.nome === item.nome || d.nome === item.drink_name);
 
       const modalidadeConfig = matchedDrink?.modalityConfig?.[isSteak ? "steakhouse" : "goatbotequim"];
-      const novoCustoUnitario = Number(modalidadeConfig?.cost ?? item.custoUnitario ?? 0);
       const novoPrecoUnitario = Number(modalidadeConfig?.price ?? item.precoUnitario ?? 0);
+      const novoCustoUnitario = isSteak
+        ? Number(modalidadeConfig?.price ?? item.custoUnitario ?? novoPrecoUnitario)
+        : Number(modalidadeConfig?.cost ?? item.custoUnitario ?? 0);
       const novoCustoInsumo = isSteak
         ? Number(item.custoInsumo ?? matchedDrink?.modalityConfig?.evento?.cost ?? matchedDrink?.custoUnitario ?? novoCustoUnitario)
         : Number(item.custoInsumo ?? novoCustoUnitario);
