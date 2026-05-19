@@ -288,10 +288,21 @@ export function useAppStore() {
           drinks: prev.drinks.map((d) => {
             if (d.id !== id) return d;
             const updated = { ...d, ...payload };
-            // Recalculate custoUnitario from insumos if provided
+            // BUG 2 fix: priority for custoUnitario:
+            // 1. Sum of insumos (if any are provided with a positive total)
+            // 2. payload.custoUnitario (explicit value from the form)
+            // 3. Keep the existing value (never overwrite with zero inadvertently)
             const insumoSource = payload.insumos ?? payload.ingredientes;
             if (insumoSource && insumoSource.length > 0) {
-              updated.custoUnitario = Number(insumoSource.reduce((a: number, i: { custo: number }) => a + i.custo, 0).toFixed(2));
+              const insumosTotal = Number(insumoSource.reduce((a: number, i: { custo: number }) => a + i.custo, 0).toFixed(2));
+              if (insumosTotal > 0) {
+                updated.custoUnitario = insumosTotal;
+              } else if (payload.custoUnitario !== undefined && payload.custoUnitario > 0) {
+                updated.custoUnitario = payload.custoUnitario;
+              }
+              // else: keep existing d.custoUnitario (already in `updated` via spread)
+            } else if (payload.custoUnitario !== undefined && payload.custoUnitario > 0) {
+              updated.custoUnitario = payload.custoUnitario;
             }
             return updated;
           }),

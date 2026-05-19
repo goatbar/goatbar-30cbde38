@@ -263,21 +263,53 @@ export const financialService = {
   },
 
   calculateMetrics(sessions: any[], events: any[], drinks: any[]) {
+<<<<<<< HEAD
     const resolveFallbackCost = (item: any, modalidade: string) => {
       const d = drinks.find(x => x.id === item.drinkId) || drinks.find(x => x.nome === item.nome || x.nome === item.drink_name);
       if (!d) return 0;
       if (modalidade === "7Steakhouse") return toFiniteNumber(d.modalityConfig?.evento?.cost ?? d.custoUnitario ?? 0);
       if (modalidade === "Goat Botequim") return toFiniteNumber(item.custoUnitario ?? d.modalityConfig?.goatbotequim?.cost ?? 0);
       return toFiniteNumber(d.custoUnitario ?? 0);
+=======
+    // Resolve cost in a safe, prioritized way:
+    // 1. Use the cost PERSISTED in the session item at launch time (source of truth).
+    // 2. Fall back to the live drink cost only if the persisted value is absent.
+    const resolvePersistedCost = (item: any, modalidade: string): number => {
+      if (modalidade === "Goat Botequim") {
+        // For Botequim: item.custoUnitario is the per-modality cost persisted at launch time.
+        if (item.custoUnitario !== undefined && item.custoUnitario !== null) {
+          return Number(item.custoUnitario);
+        }
+        // Fallback: read from live drink
+        const d = drinks.find((x: any) => x.id === item.drinkId) || drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
+        return Number(d?.modalityConfig?.goatbotequim?.cost ?? d?.custoUnitario ?? 0);
+      }
+      if (modalidade === "7Steakhouse") {
+        // For Steakhouse: item.custoInsumo is the ingredient cost persisted at launch time.
+        if (item.custoInsumo !== undefined && item.custoInsumo !== null) {
+          return Number(item.custoInsumo);
+        }
+        // Fallback: read from live drink's evento cost (ficha técnica)
+        const d = drinks.find((x: any) => x.id === item.drinkId) || drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
+        return Number(d?.modalityConfig?.evento?.cost ?? d?.custoUnitario ?? 0);
+      }
+      return Number(item.custoUnitario ?? 0);
+>>>>>>> 863949b (everything)
     };
 
-    // Botequim
+    // BUG 5 fix: normalize modalidade before filtering to catch LocalStorage sessions
+    // that may have stored old values like "Goatbotequim" without a space.
     const botList = sessions.filter(s => normalizeModality(s.modalidade) === "Goat Botequim");
     const botReceita = botList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (toFiniteNumber(item.precoUnitario) * toFiniteNumber(item.quantidade)), 0), 0);
     const botCusto = botList.reduce((acc, s) => {
       return acc + (s.items || []).reduce((sum: number, item: any) => {
+<<<<<<< HEAD
         const liveIngredientCost = resolveFallbackCost(item, "Goat Botequim");
         return sum + (toFiniteNumber(liveIngredientCost) * toFiniteNumber(item.quantidade));
+=======
+        // BUG 3 fix: use persisted cost first
+        return sum + (resolvePersistedCost(item, "Goat Botequim") * Number(item.quantidade || 0));
+>>>>>>> 863949b (everything)
       }, 0);
     }, 0);
     const botLabor = botList.reduce((acc, s) => {
@@ -291,12 +323,20 @@ export const financialService = {
     // Steakhouse
     const steakList = sessions.filter(s => normalizeModality(s.modalidade) === "7Steakhouse");
     // Receita Goatbar = O que o restaurante paga ao Goat Bar (custoUnitario no item)
+<<<<<<< HEAD
     const steakReceita = steakList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (toFiniteNumber(item.custoUnitario) * toFiniteNumber(item.quantidade)), 0), 0);
     // Custo Insumos = O que o Goat Bar gasta para fazer (custoInsumo no item ou custoUnitario base do drink)
     const steakCusto = steakList.reduce((acc, s) => {
       return acc + (s.items || []).reduce((sum: number, item: any) => {
         const liveIngredientCost = item.custoInsumo ?? resolveFallbackCost(item, "7Steakhouse");
         return sum + (toFiniteNumber(liveIngredientCost) * toFiniteNumber(item.quantidade));
+=======
+    const steakReceita = steakList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (Number(item.custoUnitario || 0) * item.quantidade), 0), 0);
+    // Custo Insumos = O que o Goat Bar gasta para fazer (custoInsumo — BUG 3 fix: persisted first)
+    const steakCusto = steakList.reduce((acc, s) => {
+      return acc + (s.items || []).reduce((sum: number, item: any) => {
+        return sum + (resolvePersistedCost(item, "7Steakhouse") * Number(item.quantidade || 0));
+>>>>>>> 863949b (everything)
       }, 0);
     }, 0);
     // Lucro Final = (Receita - Custo) - Mão de Obra

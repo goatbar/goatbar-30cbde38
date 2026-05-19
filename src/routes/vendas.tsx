@@ -126,7 +126,9 @@ function VendasPage() {
   }, [activeModalityKey, allDrinks]);
 
   const addItem = () => {
+    // BUG 4 fix: guard against empty drink list to prevent crash
     const firstDrink = filteredDrinks[0] || allDrinks[0];
+    if (!firstDrink) return;
     const isSteak = activeTab === "7Steakhouse";
     const config = firstDrink.modalityConfig?.[activeModalityKey as "steakhouse" | "goatbotequim"];
     
@@ -581,17 +583,25 @@ function VendasPage() {
                   <label className="label-eyebrow">Drinks Vendidos</label>
                   <GhostButton onClick={addItem} className="h-8 text-xs"><Plus className="h-3 w-3 mr-1" /> Adicionar</GhostButton>
                 </div>
+                {modalItems.length === 0 && (
+                  <div className="text-center py-4 text-sm text-muted-foreground border border-dashed border-border rounded-lg">
+                    {filteredDrinks.length === 0
+                      ? `Nenhum drink configurado para ${activeTab}. Cadastre um drink com essa modalidade ativa.`
+                      : 'Clique em "Adicionar" para inserir drinks vendidos.'}
+                  </div>
+                )}
                 {modalItems.map((item, idx) => (
                   <div key={idx} className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
                     <select value={item.drinkId} onChange={e => updateItem(idx, "drinkId", e.target.value)} className="flex-1 h-10 px-3 rounded-lg bg-input border border-border text-sm">
                       {filteredDrinks.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}
                     </select>
                     <input type="number" value={item.quantidade} onChange={e => updateItem(idx, "quantidade", Number(e.target.value))} className="w-20 h-10 px-3 rounded-lg bg-input border border-border text-sm" />
+                    {/* BUG 6 fix: label differs by modality — for Steakhouse, custoUnitario = what restaurant pays GoatBar */}
                     <div className="text-xs text-muted-foreground px-2">
-                      Venda: <span className="text-foreground font-medium">{fmtBRL(Number(item.precoUnitario || 0))}</span>
+                      {activeTab === "7Steakhouse" ? "Repasse p/ GB" : "Venda"}: <span className="text-foreground font-medium">{fmtBRL(Number(activeTab === "7Steakhouse" ? item.custoUnitario : item.precoUnitario || 0))}</span>
                     </div>
                     <div className="text-xs text-muted-foreground px-2">
-                      Custo: <span className="text-foreground font-medium">{fmtBRL(Number(item.custoUnitario || 0))}</span>
+                      {activeTab === "7Steakhouse" ? "Custo Insumo" : "Custo"}: <span className="text-foreground font-medium">{fmtBRL(Number(activeTab === "7Steakhouse" ? (item.custoInsumo ?? item.custoUnitario ?? 0) : item.custoUnitario || 0))}</span>
                     </div>
                   </div>
                 ))}

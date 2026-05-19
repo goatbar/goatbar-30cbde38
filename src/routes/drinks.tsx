@@ -351,9 +351,24 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
                       </div>
                     </div>
 
-                    <div className="flex justify-between items-center border-t border-border pt-2">
-                      <label className="text-[10px] uppercase font-bold text-muted-foreground block">Custo Total / Custo Evento (R$)</label>
-                      <div className="font-bold text-sm text-primary">{fmtBRL(insumosTotal)}</div>
+                    {/* BUG 2 fix: when no insumos, show a direct cost input so custo never defaults to 0 */}
+                    <div className="flex justify-between items-center border-t border-border pt-2 gap-4">
+                      <label className="text-[10px] uppercase font-bold text-muted-foreground whitespace-nowrap">
+                        {insumos.length > 0 ? "Custo Total (Soma dos Insumos)" : "Custo Evento (R$) — sem ficha técnica"}
+                      </label>
+                      {insumos.length > 0 ? (
+                        <div className="font-bold text-sm text-primary">{fmtBRL(insumosTotal)}</div>
+                      ) : (
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={config.evento.cost || ""}
+                          onChange={e => updateModality("evento", "cost", Number(e.target.value))}
+                          placeholder="0.00"
+                          className="w-28 h-8 px-3 rounded-md bg-input border border-primary/60 text-sm font-bold text-primary focus:border-primary focus:outline-none"
+                        />
+                      )}
                     </div>
                   </div>
                 )}
@@ -404,7 +419,24 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
 
         <div className="flex items-center justify-end gap-3 px-6 py-4 bg-background/50 border-t border-border sticky bottom-0 z-10">
           <GhostButton onClick={onClose}>Cancelar</GhostButton>
-          <PrimaryButton onClick={() => onSave(drink.id, { nome, categoria, imagem, descricao, modalityConfig: config, custoUnitario: config.evento.active && insumos.length > 0 ? insumosTotal : config.evento.cost, insumos })}>Salvar Item</PrimaryButton>
+          <PrimaryButton onClick={() => {
+            // BUG 2 fix: custoUnitario priority:
+            // 1. Sum of insumos (if any are filled in)
+            // 2. config.evento.cost (manually entered)
+            // 3. The lowest active modality cost as last resort (never zero if any modality is configured)
+            const insumosHaveValue = insumos.length > 0 && insumosTotal > 0;
+            const eventoCost = config.evento.active ? (insumosHaveValue ? insumosTotal : (config.evento.cost || 0)) : 0;
+            const fallbackCost = eventoCost || config.steakhouse.cost || config.goatbotequim.cost || 0;
+            onSave(drink.id, {
+              nome,
+              categoria,
+              imagem,
+              descricao,
+              modalityConfig: config,
+              custoUnitario: Number(fallbackCost.toFixed(2)),
+              insumos
+            });
+          }}>Salvar Item</PrimaryButton>
         </div>
       </div>
     </div>
