@@ -153,10 +153,13 @@ export const financialService = {
         maoDeObraDetalhes: s.labor_details,
         items: (s.items || []).map((i: any) => ({
           ...i,
-          nome: i.drink_name,
-          precoUnitario: i.unit_price,
-          custoUnitario: i.unit_cost,
-          custoInsumo: i.ingredient_cost
+          // Map DB column names → app interface names (the root cause of all R$ 0,00)
+          drinkId: i.drink_id,          // drink_id → drinkId (needed by resolvePersistedCost)
+          nome: i.drink_name,           // drink_name → nome
+          quantidade: i.quantity,       // quantity → quantidade (was undefined → NaN → R$0)
+          precoUnitario: i.unit_price,  // unit_price → precoUnitario
+          custoUnitario: i.unit_cost,   // unit_cost → custoUnitario
+          custoInsumo: i.ingredient_cost // ingredient_cost → custoInsumo
         }))
       }));
 
