@@ -1,10 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export type FinancialModality = 'Evento' | 'Steakhouse' | 'Goatbotequim' | 'Geral';
-export type FinancialCategory = 'Fornecedor' | 'Equipe' | 'Insumos' | 'Operacional' | 'Outros';
-export type FinancialStatus = 'Pago' | 'Pendente';
-export type FinancialClassification = 'Direto' | 'Indireto';
-export type PaymentMethod = 'PIX' | 'Dinheiro' | 'Cartão' | 'Transferência' | 'Outros';
+export type FinancialModality = "Evento" | "Steakhouse" | "Goatbotequim" | "Geral";
+export type FinancialCategory = "Fornecedor" | "Equipe" | "Insumos" | "Operacional" | "Outros";
+export type FinancialStatus = "Pago" | "Pendente";
+export type FinancialClassification = "Direto" | "Indireto";
+export type PaymentMethod = "PIX" | "Dinheiro" | "Cartão" | "Transferência" | "Outros";
 
 export interface FinancialExpense {
   id: string;
@@ -27,9 +27,10 @@ export interface FinancialExpense {
   updated_at: string;
 }
 
-
 const normalizeModality = (value: string | null | undefined): string => {
-  const normalized = String(value || "").trim().toLowerCase();
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
   if (normalized === "goatbotequim" || normalized === "goat botequim") return "Goat Botequim";
   if (normalized === "7steakhouse" || normalized === "steakhouse") return "7Steakhouse";
   if (normalized === "evento" || normalized === "evento(s)") return "Evento";
@@ -43,11 +44,14 @@ const toDatabaseModality = (value: string | null | undefined): string => {
   return "Goat Botequim";
 };
 
-
 const toFiniteNumber = (value: unknown): number => {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   if (typeof value === "string") {
-    const normalized = value.trim().replace(/\./g, "").replace(",", ".").replace(/[^0-9.-]/g, "");
+    const normalized = value
+      .trim()
+      .replace(/\./g, "")
+      .replace(",", ".")
+      .replace(/[^0-9.-]/g, "");
     const parsed = Number(normalized);
     return Number.isFinite(parsed) ? parsed : 0;
   }
@@ -64,12 +68,12 @@ const toSafeDrinkId = (drinkId: unknown): string | null => {
 };
 
 export const financialService = {
-  async listExpenses(filters?: { 
-    start_date?: string, 
-    end_date?: string, 
-    modality?: string, 
-    status?: string, 
-    category?: string 
+  async listExpenses(filters?: {
+    start_date?: string;
+    end_date?: string;
+    modality?: string;
+    status?: string;
+    category?: string;
   }) {
     let query = supabase.from("financial_expenses").select("*").order("date", { ascending: false });
 
@@ -85,13 +89,21 @@ export const financialService = {
   },
 
   async getExpenseById(id: string) {
-    const { data, error } = await supabase.from("financial_expenses").select("*").eq("id", id).single();
+    const { data, error } = await supabase
+      .from("financial_expenses")
+      .select("*")
+      .eq("id", id)
+      .single();
     if (error) throw error;
     return data as FinancialExpense;
   },
 
   async createExpense(payload: Partial<FinancialExpense>) {
-    const { data, error } = await supabase.from("financial_expenses").insert(payload).select().single();
+    const { data, error } = await supabase
+      .from("financial_expenses")
+      .insert(payload)
+      .select()
+      .single();
     if (error) throw error;
     return data as FinancialExpense;
   },
@@ -112,20 +124,20 @@ export const financialService = {
     if (error) throw error;
   },
 
-  async uploadAttachment(file: File, type: 'invoice' | 'receipt') {
-    const fileExt = file.name.split('.').pop();
+  async uploadAttachment(file: File, type: "invoice" | "receipt") {
+    const fileExt = file.name.split(".").pop();
     const fileName = `${Date.now()}_${type}.${fileExt}`;
     const filePath = `${fileName}`;
 
     const { error: uploadError } = await supabase.storage
-      .from('financial_attachments')
+      .from("financial_attachments")
       .upload(filePath, file);
 
     if (uploadError) throw uploadError;
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('financial_attachments')
-      .getPublicUrl(filePath);
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("financial_attachments").getPublicUrl(filePath);
 
     return publicUrl;
   },
@@ -135,15 +147,17 @@ export const financialService = {
     try {
       const { data, error } = await supabase
         .from("financial_sessions")
-        .select(`
+        .select(
+          `
           *,
           items:financial_session_items(*)
-        `)
+        `,
+        )
         .order("date", { ascending: false });
 
       if (error) throw error;
 
-      const remoteSessions = (data || []).map(s => ({
+      const remoteSessions = (data || []).map((s) => ({
         ...s,
         data: s.date,
         modalidade: normalizeModality(s.modality),
@@ -151,24 +165,29 @@ export const financialService = {
         maoDeObraQtd: s.labor_quantity,
         maoDeObraNomes: s.labor_names,
         maoDeObraDetalhes: s.labor_details,
+        reposicaoRestaurante: s.reposicao_restaurante,
+        custosRestauranteDetalhes: s.custos_restaurante_detalhes,
         items: (s.items || []).map((i: any) => ({
           ...i,
           // Map DB column names → app interface names (the root cause of all R$ 0,00)
-          drinkId: i.drink_id,          // drink_id → drinkId (needed by resolvePersistedCost)
-          nome: i.drink_name,           // drink_name → nome
-          quantidade: i.quantity,       // quantity → quantidade (was undefined → NaN → R$0)
-          precoUnitario: i.unit_price,  // unit_price → precoUnitario
-          custoUnitario: i.unit_cost,   // unit_cost → custoUnitario
-          custoInsumo: i.ingredient_cost // ingredient_cost → custoInsumo
-        }))
+          drinkId: i.drink_id, // drink_id → drinkId (needed by resolvePersistedCost)
+          nome: i.drink_name, // drink_name → nome
+          quantidade: i.quantity, // quantity → quantidade (was undefined → NaN → R$0)
+          precoUnitario: i.unit_price, // unit_price → precoUnitario
+          custoUnitario: i.unit_cost, // unit_cost → custoUnitario
+          custoInsumo: i.ingredient_cost, // ingredient_cost → custoInsumo
+        })),
       }));
 
-      return remoteSessions.map((session: any) => ({ ...session, modalidade: normalizeModality(session.modalidade) }));
+      return remoteSessions.map((session: any) => ({
+        ...session,
+        modalidade: normalizeModality(session.modalidade),
+      }));
     } catch (e) {
       console.error("Erro ao buscar sessões do Supabase.", {
         table: "financial_sessions",
         query: "select financial_sessions with financial_session_items order by date",
-        error: e
+        error: e,
       });
       throw e;
     }
@@ -185,7 +204,9 @@ export const financialService = {
           labor_value: payload.maoDeObraValor,
           labor_quantity: payload.maoDeObraQtd,
           labor_names: payload.maoDeObraNomes,
-          labor_details: payload.maoDeObraDetalhes
+          labor_details: payload.maoDeObraDetalhes,
+          reposicao_restaurante: payload.reposicaoRestaurante || 0,
+          custos_restaurante_detalhes: payload.custosRestauranteDetalhes || [],
         })
         .select()
         .single();
@@ -200,13 +221,13 @@ export const financialService = {
           quantity: i.quantidade,
           unit_price: i.precoUnitario,
           unit_cost: i.custoUnitario,
-          ingredient_cost: i.custoInsumo
+          ingredient_cost: i.custoInsumo,
         }));
 
         const { error: iError } = await supabase
           .from("financial_session_items")
           .insert(itemsPayload);
-        
+
         if (iError) throw iError;
       }
 
@@ -227,7 +248,9 @@ export const financialService = {
         labor_quantity: payload.maoDeObraQtd,
         labor_names: payload.maoDeObraNomes,
         labor_details: payload.maoDeObraDetalhes,
-        updated_at: new Date().toISOString()
+        reposicao_restaurante: payload.reposicaoRestaurante || 0,
+        custos_restaurante_detalhes: payload.custosRestauranteDetalhes || [],
+        updated_at: new Date().toISOString(),
       })
       .eq("id", id);
 
@@ -247,20 +270,15 @@ export const financialService = {
         quantity: i.quantidade,
         unit_price: i.precoUnitario,
         unit_cost: i.custoUnitario,
-        ingredient_cost: i.custoInsumo
+        ingredient_cost: i.custoInsumo,
       }));
-      const { error: iError } = await supabase
-        .from("financial_session_items")
-        .insert(itemsPayload);
+      const { error: iError } = await supabase.from("financial_session_items").insert(itemsPayload);
       if (iError) throw iError;
     }
   },
 
   async deleteSession(id: string) {
-    const { error } = await supabase
-      .from("financial_sessions")
-      .delete()
-      .eq("id", id);
+    const { error } = await supabase.from("financial_sessions").delete().eq("id", id);
 
     if (error) throw error;
   },
@@ -275,14 +293,18 @@ export const financialService = {
         if (item.custoUnitario !== undefined && item.custoUnitario !== null) {
           return toFiniteNumber(item.custoUnitario);
         }
-        const d = drinks.find((x: any) => x.id === item.drinkId) || drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
+        const d =
+          drinks.find((x: any) => x.id === item.drinkId) ||
+          drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
         return toFiniteNumber(d?.modalityConfig?.goatbotequim?.cost ?? d?.custoUnitario ?? 0);
       }
       if (modalidade === "7Steakhouse") {
         if (item.custoInsumo !== undefined && item.custoInsumo !== null) {
           return toFiniteNumber(item.custoInsumo);
         }
-        const d = drinks.find((x: any) => x.id === item.drinkId) || drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
+        const d =
+          drinks.find((x: any) => x.id === item.drinkId) ||
+          drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
         return toFiniteNumber(d?.modalityConfig?.evento?.cost ?? d?.custoUnitario ?? 0);
       }
       return toFiniteNumber(item.custoUnitario ?? 0);
@@ -290,55 +312,103 @@ export const financialService = {
 
     // BUG 5 fix: normalize modalidade before filtering to catch LocalStorage sessions
     // that may have stored old values like "Goatbotequim" without a space.
-    const botList = sessions.filter(s => normalizeModality(s.modalidade) === "Goat Botequim");
-    const botReceita = botList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (toFiniteNumber(item.precoUnitario) * toFiniteNumber(item.quantidade)), 0), 0);
+    const botList = sessions.filter((s) => normalizeModality(s.modalidade) === "Goat Botequim");
+    const botReceita = botList.reduce(
+      (acc, s) =>
+        acc +
+        (s.items || []).reduce(
+          (sum: number, item: any) =>
+            sum + toFiniteNumber(item.precoUnitario) * toFiniteNumber(item.quantidade),
+          0,
+        ),
+      0,
+    );
     const botCusto = botList.reduce((acc, s) => {
-      return acc + (s.items || []).reduce((sum: number, item: any) => {
-        // BUG 3 fix: use persisted cost first, with toFiniteNumber for safety
-        return sum + (resolvePersistedCost(item, "Goat Botequim") * toFiniteNumber(item.quantidade));
-      }, 0);
+      return (
+        acc +
+        (s.items || []).reduce((sum: number, item: any) => {
+          // BUG 3 fix: use persisted cost first, with toFiniteNumber for safety
+          return (
+            sum + resolvePersistedCost(item, "Goat Botequim") * toFiniteNumber(item.quantidade)
+          );
+        }, 0)
+      );
     }, 0);
     const botLabor = botList.reduce((acc, s) => {
       if (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0) {
-        return acc + s.maoDeObraDetalhes.reduce((a: number, b: any) => a + toFiniteNumber(b.valor), 0);
+        return (
+          acc + s.maoDeObraDetalhes.reduce((a: number, b: any) => a + toFiniteNumber(b.valor), 0)
+        );
       }
-      return acc + (toFiniteNumber(s.maoDeObraValor) * toFiniteNumber(s.maoDeObraQtd));
+      return acc + toFiniteNumber(s.maoDeObraValor) * toFiniteNumber(s.maoDeObraQtd);
     }, 0);
     const botLucro = (botReceita - botCusto) * 0.6 - botLabor;
 
     // Steakhouse
-    const steakList = sessions.filter(s => normalizeModality(s.modalidade) === "7Steakhouse");
+    const steakList = sessions.filter((s) => normalizeModality(s.modalidade) === "7Steakhouse");
     // Receita Goatbar = O que o restaurante paga ao Goat Bar (custoUnitario no item)
-    const steakReceita = steakList.reduce((acc, s) => acc + (s.items || []).reduce((sum: number, item: any) => sum + (toFiniteNumber(item.custoUnitario) * toFiniteNumber(item.quantidade)), 0), 0);
+    const steakReceita = steakList.reduce(
+      (acc, s) =>
+        acc +
+        (s.items || []).reduce(
+          (sum: number, item: any) =>
+            sum + toFiniteNumber(item.custoUnitario) * toFiniteNumber(item.quantidade),
+          0,
+        ),
+      0,
+    );
     // Custo Insumos = O que o Goat Bar gasta para fazer (custoInsumo — BUG 3 fix: persisted first)
-    const steakCusto = steakList.reduce((acc, s) => {
-      return acc + (s.items || []).reduce((sum: number, item: any) => {
-        // BUG 3 fix: use persisted cost first, with toFiniteNumber for safety
-        return sum + (resolvePersistedCost(item, "7Steakhouse") * toFiniteNumber(item.quantidade));
+    const steakCustoInsumos = steakList.reduce((acc, s) => {
+      return (
+        acc +
+        (s.items || []).reduce((sum: number, item: any) => {
+          // BUG 3 fix: use persisted cost first, with toFiniteNumber for safety
+          return sum + resolvePersistedCost(item, "7Steakhouse") * toFiniteNumber(item.quantidade);
+        }, 0)
+      );
+    }, 0);
+    // Total reposição do restaurante nas sessões da Steakhouse
+    const steakReposicao = steakList.reduce(
+      (acc, s) => acc + toFiniteNumber(s.reposicaoRestaurante),
+      0,
+    );
+    const steakCustoTotal = steakCustoInsumos + steakReposicao;
+    // Lucro Final = (Receita - Custo Total) - Mão de Obra
+    const steakLucro =
+      steakReceita -
+      steakCustoTotal -
+      steakList.reduce((acc, s) => {
+        if (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0) {
+          return (
+            acc + s.maoDeObraDetalhes.reduce((a: number, b: any) => a + toFiniteNumber(b.valor), 0)
+          );
+        }
+        return acc + toFiniteNumber(s.maoDeObraValor) * toFiniteNumber(s.maoDeObraQtd);
       }, 0);
-    }, 0);
-    // Lucro Final = (Receita - Custo) - Mão de Obra
-    const steakLucro = (steakReceita - steakCusto) - steakList.reduce((acc, s) => {
-      if (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0) {
-        return acc + s.maoDeObraDetalhes.reduce((a: number, b: any) => a + toFiniteNumber(b.valor), 0);
-      }
-      return acc + (toFiniteNumber(s.maoDeObraValor) * toFiniteNumber(s.maoDeObraQtd));
-    }, 0);
 
     // Events
-    const confirmedEvents = events.filter(e => ["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(e.status?.toUpperCase()));
+    const confirmedEvents = events.filter((e) =>
+      ["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(
+        e.status?.toUpperCase(),
+      ),
+    );
     const eventReceita = confirmedEvents.reduce((acc, e) => acc + (e.current_budget_value || 0), 0);
     const eventLucro = confirmedEvents.reduce((acc, e) => acc + (e.current_profit_value || 0), 0);
     const eventCustos = eventReceita - eventLucro;
 
     return {
       bot: { receita: botReceita, custo: botCusto, lucro: botLucro },
-      steak: { receita: steakReceita, custo: steakCusto, lucro: steakLucro },
-      events: { receita: eventReceita, custo: eventCustos, lucro: eventLucro, count: confirmedEvents.length },
+      steak: { receita: steakReceita, custo: steakCustoTotal, lucro: steakLucro },
+      events: {
+        receita: eventReceita,
+        custo: eventCustos,
+        lucro: eventLucro,
+        count: confirmedEvents.length,
+      },
       consolidated: {
         receita: botReceita + steakReceita + eventReceita,
-        lucro: botLucro + steakLucro + eventLucro
-      }
+        lucro: botLucro + steakLucro + eventLucro,
+      },
     };
-  }
+  },
 };

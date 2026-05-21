@@ -104,21 +104,18 @@ export const contractTemplatesService = {
 
     if (error) throw error;
 
-    const { data: { publicUrl } } = supabase.storage
-      .from("contract-templates")
-      .getPublicUrl(filePath);
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("contract-templates").getPublicUrl(filePath);
 
     return { publicUrl, filePath };
-  }
+  },
 };
 
 // --- 2. Signers Service ---
 export const contractSignersService = {
   async listSigners() {
-    const { data, error } = await supabase
-      .from("contract_signers")
-      .select("*")
-      .order("name");
+    const { data, error } = await supabase.from("contract_signers").select("*").order("name");
     if (error) throw error;
     return data as ContractSigner[];
   },
@@ -142,26 +139,19 @@ export const contractSignersService = {
       .single();
     if (error) throw error;
     return data;
-  }
+  },
 };
 
 // --- 3. Glassware Service ---
 export const glasswareService = {
   async listGlassware() {
-    const { data, error } = await supabase
-      .from("glassware")
-      .select("*")
-      .order("name");
+    const { data, error } = await supabase.from("glassware").select("*").order("name");
     if (error) throw error;
     return data as Glassware[];
   },
 
   async createGlassware(payload: Omit<Glassware, "id" | "is_active">) {
-    const { data, error } = await supabase
-      .from("glassware")
-      .insert(payload)
-      .select()
-      .single();
+    const { data, error } = await supabase.from("glassware").insert(payload).select().single();
     if (error) throw error;
     return data;
   },
@@ -175,15 +165,13 @@ export const glasswareService = {
       .single();
     if (error) throw error;
     return data;
-  }
+  },
 };
 
 // --- 4. Event Contracts Service ---
 export const eventContractsService = {
   async listAllContracts() {
-    const { data, error } = await supabase
-      .from("event_contracts")
-      .select("*");
+    const { data, error } = await supabase.from("event_contracts").select("*");
     if (error) throw error;
     return data as EventContract[];
   },
@@ -191,15 +179,17 @@ export const eventContractsService = {
   async getContractByEventId(eventId: string) {
     const { data, error } = await supabase
       .from("event_contracts")
-      .select(`
+      .select(
+        `
         *,
         contract_templates (name),
         contract_signers (name)
-      `)
+      `,
+      )
       .eq("event_id", eventId)
       .limit(1);
     if (error) throw error;
-    return (data && data.length > 0) ? data[0] : null;
+    return data && data.length > 0 ? data[0] : null;
   },
 
   async createContractForEvent(eventId: string, templateId: string, signerId: string) {
@@ -210,7 +200,7 @@ export const eventContractsService = {
         template_id: templateId,
         signer_id: signerId,
         status: "draft",
-        version: 1
+        version: 1,
       })
       .select()
       .single();
@@ -221,10 +211,10 @@ export const eventContractsService = {
   async updateContractStatus(contractId: string, status: string) {
     const { data, error } = await supabase
       .from("event_contracts")
-      .update({ 
-        status, 
+      .update({
+        status,
         updated_at: new Date().toISOString(),
-        fully_signed_at: status === "signed" ? new Date().toISOString() : null
+        fully_signed_at: status === "signed" ? new Date().toISOString() : null,
       })
       .eq("id", contractId)
       .select()
@@ -240,7 +230,7 @@ export const eventContractsService = {
       .select("*")
       .eq("id", eventId)
       .single();
-    
+
     if (evError || !evento) throw new Error("Evento não encontrado no banco de dados");
 
     // 2. Busca dados do cliente no Supabase
@@ -251,10 +241,7 @@ export const eventContractsService = {
       .maybeSingle();
 
     // 3. Busca lista de copos para a tabela de reposição
-    const { data: glasses } = await supabase
-      .from("glassware")
-      .select("*")
-      .eq("is_active", true);
+    const { data: glasses } = await supabase.from("glassware").select("*").eq("is_active", true);
 
     // 4. Monta o dicionário de variáveis
     const variables = {
@@ -268,35 +255,41 @@ export const eventContractsService = {
       evento_convidados: evento.convidados,
       evento_valor_total: evento.orcamento?.valorTotal || 0,
       drinks_lista: (evento.drinks || []).join(", "),
-      tabela_reposicao: (evento.drinks || []).map((dId: string) => {
-        const glassId = evento.coposVinculados?.[dId];
-        const glass = glasses?.find(g => g.id === glassId);
-        return `${dId}: ${glass?.name || "Copo Padrão"} (R$ ${glass?.replacement_value || 15})`;
-      }).join("\n"),
-      data_emissao: new Date().toLocaleDateString("pt-BR")
+      tabela_reposicao: (evento.drinks || [])
+        .map((dId: string) => {
+          const glassId = evento.coposVinculados?.[dId];
+          const glass = glasses?.find((g) => g.id === glassId);
+          return `${dId}: ${glass?.name || "Copo Padrão"} (R$ ${glass?.replacement_value || 15})`;
+        })
+        .join("\n"),
+      data_emissao: new Date().toLocaleDateString("pt-BR"),
     };
 
     return variables;
-  }
+  },
 };
 
 // --- 5. Public Form Service ---
 export const clientContractFormService = {
   async createPublicFormToken(eventId: string) {
-    const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const token =
+      Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // Expira em 7 dias
 
     const { data, error } = await supabase
       .from("event_contract_client_data")
-      .upsert({
-        event_id: eventId,
-        public_token: token,
-        token_expires_at: expiresAt.toISOString(),
-      }, { onConflict: 'event_id' })
+      .upsert(
+        {
+          event_id: eventId,
+          public_token: token,
+          token_expires_at: expiresAt.toISOString(),
+        },
+        { onConflict: "event_id" },
+      )
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -318,7 +311,7 @@ export const clientContractFormService = {
       .select("event_id")
       .eq("public_token", token)
       .single();
-    
+
     if (fetchError) throw fetchError;
 
     // 2. Update the client data record
@@ -326,26 +319,26 @@ export const clientContractFormService = {
       .from("event_contract_client_data")
       .update({
         ...payload,
-        submitted_at: new Date().toISOString()
+        submitted_at: new Date().toISOString(),
       })
       .eq("public_token", token)
       .select()
       .single();
-    
+
     if (updateError) throw updateError;
 
     // 3. Sync critical info back to the main events table
     if (form?.event_id) {
-        await supabase
-          .from("events")
-          .update({
-            client_name: payload.client_name,
-            phone: payload.phone,
-            email: payload.email
-          })
-          .eq("id", form.event_id);
+      await supabase
+        .from("events")
+        .update({
+          client_name: payload.client_name,
+          phone: payload.phone,
+          email: payload.email,
+        })
+        .eq("id", form.event_id);
     }
 
     return data;
-  }
+  },
 };

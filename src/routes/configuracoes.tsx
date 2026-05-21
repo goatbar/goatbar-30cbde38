@@ -4,7 +4,15 @@ import { SectionCard, PrimaryButton } from "@/components/ui-bits";
 import { tiposEvento } from "@/lib/mock-data";
 import { useAppStore } from "@/lib/app-store";
 import { useEffect, useMemo, useState } from "react";
-import { Save, Settings as SettingsIcon, Sliders, Calendar, Layers, FileText, Building2 } from "lucide-react";
+import {
+  Save,
+  Settings as SettingsIcon,
+  Sliders,
+  Calendar,
+  Layers,
+  FileText,
+  Building2,
+} from "lucide-react";
 
 export const Route = createFileRoute("/configuracoes")({
   component: () => (
@@ -35,7 +43,12 @@ function ConfigPage() {
         title="Configurações"
         subtitle="Diretrizes editáveis aplicadas automaticamente em todos os cálculos."
         action={
-          <PrimaryButton onClick={() => { updateParametros(draft); window.alert("Configurações salvas com sucesso."); }}>
+          <PrimaryButton
+            onClick={() => {
+              updateParametros(draft);
+              window.alert("Configurações salvas com sucesso.");
+            }}
+          >
             <Save className="h-4 w-4" /> Salvar alterações
           </PrimaryButton>
         }
@@ -71,18 +84,31 @@ function ConfigPage() {
         </aside>
 
         <div className="xl:col-span-9 space-y-5">
-          {activeTab === "diretrizes" && grupos.map((g) => (
-            <SectionCard key={g} title={`Diretrizes · ${g}`} subtitle="Editáveis em tempo real">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {draft
-                  .filter((p) => p.grupo === g)
-                  .map((p) => (
-                    <ParamField key={p.id} label={p.label} value={p.valor} unidade={p.unidade} hint={p.descricao}
-                      onChange={(next) => setDraft((prev) => prev.map((item) => item.id === p.id ? { ...item, valor: next } : item))} />
-                  ))}
-              </div>
-            </SectionCard>
-          ))}
+          {activeTab === "diretrizes" &&
+            grupos.map((g) => (
+              <SectionCard key={g} title={`Diretrizes · ${g}`} subtitle="Editáveis em tempo real">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {draft
+                    .filter((p) => p.grupo === g)
+                    .map((p) => (
+                      <ParamField
+                        key={p.id}
+                        label={p.label}
+                        value={p.valor}
+                        unidade={p.unidade}
+                        hint={p.descricao}
+                        onChange={(next) =>
+                          setDraft((prev) =>
+                            prev.map((item) =>
+                              item.id === p.id ? { ...item, valor: next } : item,
+                            ),
+                          )
+                        }
+                      />
+                    ))}
+                </div>
+              </SectionCard>
+            ))}
 
           {activeTab === "tipos" && (
             <SectionCard title="Tipos de evento" subtitle="Parâmetros de consumo por categoria">
@@ -90,7 +116,13 @@ function ConfigPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left">
-                      {["Tipo", "Doses/pessoa", "Gelo (kg)/pessoa", "Insumos R$/pessoa", "Equipe/50 pessoas"].map((h) => (
+                      {[
+                        "Tipo",
+                        "Doses/pessoa",
+                        "Gelo (kg)/pessoa",
+                        "Insumos R$/pessoa",
+                        "Equipe/50 pessoas",
+                      ].map((h) => (
                         <th key={h} className="label-eyebrow px-6 py-3 border-y border-border">
                           {h}
                         </th>
@@ -114,7 +146,10 @@ function ConfigPage() {
           )}
 
           {["categorias", "templates", "unidades"].includes(activeTab) && (
-            <SectionCard title={sections.find(s => s.id === activeTab)?.label || ""} subtitle="Em desenvolvimento">
+            <SectionCard
+              title={sections.find((s) => s.id === activeTab)?.label || ""}
+              subtitle="Em desenvolvimento"
+            >
               <div className="py-12 text-center text-muted-foreground text-sm">
                 Módulo em construção. Disponível na próxima versão.
               </div>
@@ -126,7 +161,19 @@ function ConfigPage() {
   );
 }
 
-function ParamField({ label, value, unidade, hint, onChange }: { label: string; value: number; unidade: string; hint?: string; onChange: (value: number) => void }) {
+function ParamField({
+  label,
+  value,
+  unidade,
+  hint,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  unidade: string;
+  hint?: string;
+  onChange: (value: number) => void;
+}) {
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
   return (

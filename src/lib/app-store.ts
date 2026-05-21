@@ -49,7 +49,6 @@ function writeStore(store: AppStore) {
   window.dispatchEvent(new CustomEvent(STORE_SYNC_EVENT));
 }
 
-
 type AppStore = {
   vendas: Venda[];
   eventos: Evento[];
@@ -86,12 +85,12 @@ function seedStore(): AppStore {
   };
 }
 
-
 function readLegacyFunctionalStores(): AppStore[] {
   if (typeof window === "undefined") return [];
 
-  const keys = Object.keys(window.localStorage)
-    .filter((key) => key.startsWith("goatbar-functional-store-v") && key !== STORAGE_KEY);
+  const keys = Object.keys(window.localStorage).filter(
+    (key) => key.startsWith("goatbar-functional-store-v") && key !== STORAGE_KEY,
+  );
 
   const parsed = keys
     .map((key) => window.localStorage.getItem(key))
@@ -123,12 +122,14 @@ function recoverFromMockDb(store: AppStore): AppStore {
 
   try {
     const mock = JSON.parse(raw);
-    const recoveredInventory = (Array.isArray(mock?.inventory) ? mock.inventory : []).map((item: any) => ({
-      id: item.id ?? `inv${Date.now()}${Math.random()}`,
-      nome: item.name ?? item.nome ?? "Item",
-      quantidadeTotal: Number(item.quantity ?? item.quantidadeTotal ?? 0),
-      observacoes: item.observacoes ?? "",
-    }));
+    const recoveredInventory = (Array.isArray(mock?.inventory) ? mock.inventory : []).map(
+      (item: any) => ({
+        id: item.id ?? `inv${Date.now()}${Math.random()}`,
+        nome: item.name ?? item.nome ?? "Item",
+        quantidadeTotal: Number(item.quantity ?? item.quantidadeTotal ?? 0),
+        observacoes: item.observacoes ?? "",
+      }),
+    );
 
     const recoveredVendas = (Array.isArray(mock?.sales) ? mock.sales : []).map((sale: any) => ({
       id: sale.id ?? `v${Date.now()}${Math.random()}`,
@@ -179,20 +180,43 @@ function readStore(): AppStore {
     contratos: mergeById(base.contratos ?? [], ...legacySources.map((s) => s.contratos ?? [])),
     parametros: base.parametros ?? seedParametros,
     drinks: mergeById(base.drinks ?? [], ...legacySources.map((s) => s.drinks ?? [])),
-    contractTemplates: mergeById(base.contractTemplates ?? [], ...legacySources.map((s) => s.contractTemplates ?? [])),
-    contractSigners: mergeById(base.contractSigners ?? [], ...legacySources.map((s) => s.contractSigners ?? [])),
+    contractTemplates: mergeById(
+      base.contractTemplates ?? [],
+      ...legacySources.map((s) => s.contractTemplates ?? []),
+    ),
+    contractSigners: mergeById(
+      base.contractSigners ?? [],
+      ...legacySources.map((s) => s.contractSigners ?? []),
+    ),
     glasswares: mergeById(base.glasswares ?? [], ...legacySources.map((s) => s.glasswares ?? [])),
-    eventContracts: mergeById(base.eventContracts ?? [], ...legacySources.map((s) => s.eventContracts ?? [])),
-    eventContractClientDatas: mergeById(base.eventContractClientDatas ?? [], ...legacySources.map((s) => s.eventContractClientDatas ?? [])),
-    contractHistories: mergeById(base.contractHistories ?? [], ...legacySources.map((s) => s.contractHistories ?? [])),
-    contractSignatureHistories: mergeById(base.contractSignatureHistories ?? [], ...legacySources.map((s) => s.contractSignatureHistories ?? [])),
-    financialSessions: mergeById(base.financialSessions ?? [], ...legacySources.map((s) => s.financialSessions ?? [])),
-    inventoryItems: mergeById(base.inventoryItems ?? [], ...legacySources.map((s) => s.inventoryItems ?? [])),
+    eventContracts: mergeById(
+      base.eventContracts ?? [],
+      ...legacySources.map((s) => s.eventContracts ?? []),
+    ),
+    eventContractClientDatas: mergeById(
+      base.eventContractClientDatas ?? [],
+      ...legacySources.map((s) => s.eventContractClientDatas ?? []),
+    ),
+    contractHistories: mergeById(
+      base.contractHistories ?? [],
+      ...legacySources.map((s) => s.contractHistories ?? []),
+    ),
+    contractSignatureHistories: mergeById(
+      base.contractSignatureHistories ?? [],
+      ...legacySources.map((s) => s.contractSignatureHistories ?? []),
+    ),
+    financialSessions: mergeById(
+      base.financialSessions ?? [],
+      ...legacySources.map((s) => s.financialSessions ?? []),
+    ),
+    inventoryItems: mergeById(
+      base.inventoryItems ?? [],
+      ...legacySources.map((s) => s.inventoryItems ?? []),
+    ),
   };
 
   return recoverFromMockDb(merged);
 }
-
 
 export function useAppStore() {
   const [store, setStore] = useState<AppStore>(() => readStore());
@@ -202,9 +226,7 @@ export function useAppStore() {
   useEffect(() => {
     const migrate = async () => {
       const current = readStore();
-      const hasBlobImages = current.drinks.some(
-        (d) => d.imagem && d.imagem.startsWith("data:")
-      );
+      const hasBlobImages = current.drinks.some((d) => d.imagem && d.imagem.startsWith("data:"));
       if (!hasBlobImages) return;
 
       const migratedDrinks = await Promise.all(
@@ -214,7 +236,7 @@ export function useAppStore() {
             return { ...d, imagem: `idb:${d.id}` };
           }
           return d;
-        })
+        }),
       );
 
       setStore((prev) => {
@@ -235,7 +257,7 @@ export function useAppStore() {
         console.error("LocalStorage quota exceeded!");
         alert(
           "Erro de armazenamento: o espaço local está cheio.\n" +
-          "Tente remover registros antigos ou usar imagens menores."
+            "Tente remover registros antigos ou usar imagens menores.",
         );
       } else {
         console.error("Falha ao salvar store:", e);
@@ -270,7 +292,10 @@ export function useAppStore() {
       addContrato(input: Omit<Contrato, "id" | "criadoEm">) {
         setStore((prev) => ({
           ...prev,
-          contratos: [{ ...input, id: `c${Date.now()}`, criadoEm: new Date().toISOString() }, ...prev.contratos],
+          contratos: [
+            { ...input, id: `c${Date.now()}`, criadoEm: new Date().toISOString() },
+            ...prev.contratos,
+          ],
         }));
       },
       updateEvento(id: string, payload: Partial<Evento>) {
@@ -294,7 +319,9 @@ export function useAppStore() {
             // 3. Keep the existing value (never overwrite with zero inadvertently)
             const insumoSource = payload.insumos ?? payload.ingredientes;
             if (insumoSource && insumoSource.length > 0) {
-              const insumosTotal = Number(insumoSource.reduce((a: number, i: { custo: number }) => a + i.custo, 0).toFixed(2));
+              const insumosTotal = Number(
+                insumoSource.reduce((a: number, i: { custo: number }) => a + i.custo, 0).toFixed(2),
+              );
               if (insumosTotal > 0) {
                 updated.custoUnitario = insumosTotal;
               } else if (payload.custoUnitario !== undefined && payload.custoUnitario > 0) {
@@ -315,7 +342,9 @@ export function useAppStore() {
           const newDrink: Drink = {
             ...rest,
             id: _presetId ?? `d${Date.now()}`,
-            custoUnitario: Number(insumoSource.reduce((a: number, i: { custo: number }) => a + i.custo, 0).toFixed(2))
+            custoUnitario: Number(
+              insumoSource.reduce((a: number, i: { custo: number }) => a + i.custo, 0).toFixed(2),
+            ),
           };
           return {
             ...prev,
@@ -338,13 +367,18 @@ export function useAppStore() {
       updateEventContract(id: string, payload: Partial<EventContract>) {
         setStore((prev) => ({
           ...prev,
-          eventContracts: prev.eventContracts.map((ec) => (ec.id === id ? { ...ec, ...payload } : ec)),
+          eventContracts: prev.eventContracts.map((ec) =>
+            ec.id === id ? { ...ec, ...payload } : ec,
+          ),
         }));
       },
       addEventContractClientData(input: Omit<EventContractClientData, "id">) {
         setStore((prev) => ({
           ...prev,
-          eventContractClientDatas: [{ ...input, id: `ecd${Date.now()}` }, ...prev.eventContractClientDatas],
+          eventContractClientDatas: [
+            { ...input, id: `ecd${Date.now()}` },
+            ...prev.eventContractClientDatas,
+          ],
         }));
       },
       addContractHistory(input: Omit<ContractHistory, "id">) {
@@ -356,7 +390,10 @@ export function useAppStore() {
       addContractSignatureHistory(input: Omit<ContractSignatureHistory, "id">) {
         setStore((prev) => ({
           ...prev,
-          contractSignatureHistories: [{ ...input, id: `csh${Date.now()}` }, ...prev.contractSignatureHistories],
+          contractSignatureHistories: [
+            { ...input, id: `csh${Date.now()}` },
+            ...prev.contractSignatureHistories,
+          ],
         }));
       },
       addFinancialSession(input: Omit<FinancialSession, "id">) {
@@ -368,7 +405,9 @@ export function useAppStore() {
       updateFinancialSession(id: string, payload: Partial<FinancialSession>) {
         setStore((prev) => ({
           ...prev,
-          financialSessions: prev.financialSessions.map((fs) => (fs.id === id ? { ...fs, ...payload } : fs)),
+          financialSessions: prev.financialSessions.map((fs) =>
+            fs.id === id ? { ...fs, ...payload } : fs,
+          ),
         }));
       },
       deleteFinancialSession(id: string) {
@@ -386,7 +425,9 @@ export function useAppStore() {
       updateInventoryItem(id: string, payload: Partial<InventoryItem>) {
         setStore((prev) => ({
           ...prev,
-          inventoryItems: prev.inventoryItems.map((inv) => (inv.id === id ? { ...inv, ...payload } : inv)),
+          inventoryItems: prev.inventoryItems.map((inv) =>
+            inv.id === id ? { ...inv, ...payload } : inv,
+          ),
         }));
       },
       deleteInventoryItem(id: string) {

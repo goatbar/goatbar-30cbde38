@@ -8,7 +8,13 @@ import { type Drink, type ModalityConfig } from "@/lib/mock-data";
 import { useAppStore } from "@/lib/app-store";
 import { saveImage, loadImage } from "@/lib/image-store";
 
-export const Route = createFileRoute("/drinks")({ component: () => <AppShell><DrinksPage /></AppShell> });
+export const Route = createFileRoute("/drinks")({
+  component: () => (
+    <AppShell>
+      <DrinksPage />
+    </AppShell>
+  ),
+});
 
 function DrinksPage() {
   const { drinks: allDrinks, updateDrink, addDrink, deleteDrink } = useAppStore();
@@ -25,20 +31,24 @@ function DrinksPage() {
     modalityConfig: {
       evento: { active: true, cost: 0 },
       steakhouse: { active: false, cost: 0, price: 0 },
-      goatbotequim: { active: false, cost: 0, price: 0 }
-    }
+      goatbotequim: { active: false, cost: 0, price: 0 },
+    },
   };
 
   const CATEGORIAS = ["Todas", ...Array.from(new Set(allDrinks.map((d) => d.categoria)))];
 
-  const filtrados = allDrinks.filter((d) => {
-    const matchBusca = d.nome.toLowerCase().includes(busca.toLowerCase());
-    const matchCategoria = categoria === "Todas" || d.categoria === categoria;
-    return matchBusca && matchCategoria;
-  }).sort((a, b) => a.nome.localeCompare(b.nome));
+  const filtrados = allDrinks
+    .filter((d) => {
+      const matchBusca = d.nome.toLowerCase().includes(busca.toLowerCase());
+      const matchCategoria = categoria === "Todas" || d.categoria === categoria;
+      return matchBusca && matchCategoria;
+    })
+    .sort((a, b) => a.nome.localeCompare(b.nome));
 
   const ativos = allDrinks.filter((d) => d.modalityConfig?.evento?.active);
-  const custoMedio = ativos.length ? ativos.reduce((a, d) => a + d.custoUnitario, 0) / ativos.length : 0;
+  const custoMedio = ativos.length
+    ? ativos.reduce((a, d) => a + d.custoUnitario, 0) / ativos.length
+    : 0;
   const margemMedia = 45; // Valor ilustrativo consolidado
 
   const handleSaveDrink = async (id: string, updatePayload: Partial<Drink>) => {
@@ -63,16 +73,28 @@ function DrinksPage() {
 
   return (
     <>
-      <PageHeader 
-        title="Drinks" 
+      <PageHeader
+        title="Drinks"
         subtitle="Catálogo completo com fichas técnicas e precificação."
-        action={<PrimaryButton onClick={() => setEditingDrink(blankDrink)}><Plus className="h-4 w-4 mr-2" /> Novo Drink</PrimaryButton>}
+        action={
+          <PrimaryButton onClick={() => setEditingDrink(blankDrink)}>
+            <Plus className="h-4 w-4 mr-2" /> Novo Drink
+          </PrimaryButton>
+        }
       />
 
       <div className="px-8 py-7 space-y-7">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-          <StatCard label="Total no catálogo" value={String(allDrinks.length)} icon={<Wine className="h-4 w-4" />} />
-          <StatCard label="Custo médio" value={fmtBRL(custoMedio)} icon={<TrendingUp className="h-4 w-4" />} />
+          <StatCard
+            label="Total no catálogo"
+            value={String(allDrinks.length)}
+            icon={<Wine className="h-4 w-4" />}
+          />
+          <StatCard
+            label="Custo médio"
+            value={fmtBRL(custoMedio)}
+            icon={<TrendingUp className="h-4 w-4" />}
+          />
           <StatCard label="Margem média" value={`${margemMedia.toFixed(1)}%`} />
         </div>
 
@@ -93,7 +115,11 @@ function DrinksPage() {
             onChange={(e) => setCategoria(e.target.value)}
             className="h-10 px-4 rounded-lg border border-border bg-surface text-sm focus:border-primary focus:outline-none"
           >
-            {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
+            {CATEGORIAS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -105,60 +131,83 @@ function DrinksPage() {
                 drink={d}
                 onEdit={() => setEditingDrink(d)}
                 onDelete={() => {
-                  if (window.confirm(`Excluir o drink "${d.nome}"? Esta ação não pode ser desfeita.`)) {
+                  if (
+                    window.confirm(`Excluir o drink "${d.nome}"? Esta ação não pode ser desfeita.`)
+                  ) {
                     deleteDrink(d.id);
                   }
                 }}
               />
             ))}
             {filtrados.length === 0 && (
-               <div className="col-span-full text-center py-10 text-sm text-muted-foreground border border-dashed border-border rounded-xl">
-                 Nenhum drink encontrado com os filtros atuais.
-               </div>
+              <div className="col-span-full text-center py-10 text-sm text-muted-foreground border border-dashed border-border rounded-xl">
+                Nenhum drink encontrado com os filtros atuais.
+              </div>
             )}
           </div>
         </SectionCard>
       </div>
 
       {editingDrink && (
-        <EditModal 
-          drink={editingDrink} 
-          onClose={() => setEditingDrink(null)} 
-          onSave={handleSaveDrink} 
+        <EditModal
+          drink={editingDrink}
+          onClose={() => setEditingDrink(null)}
+          onSave={handleSaveDrink}
         />
       )}
     </>
   );
 }
 
-function DrinkCard({ drink: d, onEdit, onDelete }: { drink: Drink, onEdit: () => void, onDelete: () => void }) {
+function DrinkCard({
+  drink: d,
+  onEdit,
+  onDelete,
+}: {
+  drink: Drink;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const margem7S = d.modalityConfig?.steakhouse?.price
-    ? ((d.modalityConfig.steakhouse.price - d.custoUnitario) / d.modalityConfig.steakhouse.price) * 100
+    ? ((d.modalityConfig.steakhouse.price - d.custoUnitario) / d.modalityConfig.steakhouse.price) *
+      100
     : 0;
   const margemGB = d.modalityConfig?.goatbotequim?.price
-    ? ((d.modalityConfig.goatbotequim.price - d.custoUnitario) / d.modalityConfig.goatbotequim.price) * 100
+    ? ((d.modalityConfig.goatbotequim.price - d.custoUnitario) /
+        d.modalityConfig.goatbotequim.price) *
+      100
     : 0;
 
   // Load image from IndexedDB if the stored value is an idb: reference
   const [resolvedImage, setResolvedImage] = useState<string | null>(
-    d.imagem && !d.imagem.startsWith("idb:") ? d.imagem : null
+    d.imagem && !d.imagem.startsWith("idb:") ? d.imagem : null,
   );
   useEffect(() => {
     if (d.imagem && d.imagem.startsWith("idb:")) {
       const key = d.imagem.slice(4); // strip "idb:"
-      loadImage(key).then((url) => setResolvedImage(url)).catch(() => setResolvedImage(null));
+      loadImage(key)
+        .then((url) => setResolvedImage(url))
+        .catch(() => setResolvedImage(null));
     } else {
       setResolvedImage(d.imagem ?? null);
     }
   }, [d.imagem]);
-  
+
   return (
-    <div className={`rounded-xl border transition-all ${d.status === "inativo" ? "border-border opacity-60" : "border-border hover:border-border-strong"} bg-surface/50 group relative`}>
+    <div
+      className={`rounded-xl border transition-all ${d.status === "inativo" ? "border-border opacity-60" : "border-border hover:border-border-strong"} bg-surface/50 group relative`}
+    >
       <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-        <button onClick={onEdit} className="h-8 w-8 rounded-lg bg-background/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary">
+        <button
+          onClick={onEdit}
+          className="h-8 w-8 rounded-lg bg-background/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary"
+        >
           <Edit3 className="h-4 w-4" />
         </button>
-        <button onClick={onDelete} className="h-8 w-8 rounded-lg bg-background/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-destructive">
+        <button
+          onClick={onDelete}
+          className="h-8 w-8 rounded-lg bg-background/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-destructive"
+        >
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
@@ -168,7 +217,9 @@ function DrinkCard({ drink: d, onEdit, onDelete }: { drink: Drink, onEdit: () =>
           src={resolvedImage}
           alt={d.nome}
           className="w-full h-40 object-cover rounded-t-xl"
-          onError={(e) => { e.currentTarget.style.display = "none"; }}
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
         />
       ) : (
         <div className="w-full h-40 rounded-t-xl bg-primary/10 flex items-center justify-center">
@@ -183,12 +234,14 @@ function DrinkCard({ drink: d, onEdit, onDelete }: { drink: Drink, onEdit: () =>
           </div>
         </div>
         <p className="text-xs text-muted-foreground mt-2 line-clamp-2 min-h-8">{d.descricao}</p>
-        
+
         {d.insumos && d.insumos.length > 0 && (
           <div className="mt-3 pt-3 border-t border-border/60 bg-surface/30 rounded-lg p-2 -mx-2">
             <div className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1.5 flex justify-between items-center">
               <span>Ficha Técnica (Insumos)</span>
-              <span className="text-muted-foreground opacity-60">Total: {fmtBRL(d.custoUnitario)}</span>
+              <span className="text-muted-foreground opacity-60">
+                Total: {fmtBRL(d.custoUnitario)}
+              </span>
             </div>
             <ul className="space-y-1">
               {d.insumos.map((i, idx) => (
@@ -209,48 +262,93 @@ function DrinkCard({ drink: d, onEdit, onDelete }: { drink: Drink, onEdit: () =>
           <div>
             <div className="text-muted-foreground">7Steakhouse</div>
             <div className="font-medium mt-0.5 flex flex-col gap-0.5">
-              <span>{d.modalityConfig?.steakhouse?.active ? fmtBRL(d.modalityConfig.steakhouse.price || 0) : "---"}</span>
+              <span>
+                {d.modalityConfig?.steakhouse?.active
+                  ? fmtBRL(d.modalityConfig.steakhouse.price || 0)
+                  : "---"}
+              </span>
               {d.modalityConfig?.steakhouse?.active && (
-                <span className={`text-[9px] ${margem7S >= 50 ? "text-success" : "text-warning"}`}>MG: {margem7S.toFixed(0)}%</span>
+                <span className={`text-[9px] ${margem7S >= 50 ? "text-success" : "text-warning"}`}>
+                  MG: {margem7S.toFixed(0)}%
+                </span>
               )}
             </div>
           </div>
           <div>
             <div className="text-muted-foreground">Goat Botequim</div>
             <div className="font-medium mt-0.5 flex flex-col gap-0.5">
-              <span>{d.modalityConfig?.goatbotequim?.active ? (d.modalityConfig.goatbotequim.price ? fmtBRL(d.modalityConfig.goatbotequim.price) : "S/ Preço") : "---"}</span>
+              <span>
+                {d.modalityConfig?.goatbotequim?.active
+                  ? d.modalityConfig.goatbotequim.price
+                    ? fmtBRL(d.modalityConfig.goatbotequim.price)
+                    : "S/ Preço"
+                  : "---"}
+              </span>
               {d.modalityConfig?.goatbotequim?.active && d.modalityConfig.goatbotequim.price && (
-                <span className={`text-[9px] ${margemGB >= 50 ? "text-success" : "text-warning"}`}>MG: {margemGB.toFixed(0)}%</span>
+                <span className={`text-[9px] ${margemGB >= 50 ? "text-success" : "text-warning"}`}>
+                  MG: {margemGB.toFixed(0)}%
+                </span>
               )}
             </div>
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-1">
-          {d.modalityConfig?.evento?.active && <span className="px-2 py-0.5 rounded bg-amber-500/10 text-[9px] text-amber-600 font-bold uppercase">Evento</span>}
-          {d.modalityConfig?.steakhouse?.active && <span className="px-2 py-0.5 rounded bg-success/10 text-[9px] text-success font-bold uppercase">Steakhouse</span>}
-          {d.modalityConfig?.goatbotequim?.active && <span className="px-2 py-0.5 rounded bg-primary/10 text-[9px] text-primary font-bold uppercase">Botequim</span>}
+          {d.modalityConfig?.evento?.active && (
+            <span className="px-2 py-0.5 rounded bg-amber-500/10 text-[9px] text-amber-600 font-bold uppercase">
+              Evento
+            </span>
+          )}
+          {d.modalityConfig?.steakhouse?.active && (
+            <span className="px-2 py-0.5 rounded bg-success/10 text-[9px] text-success font-bold uppercase">
+              Steakhouse
+            </span>
+          )}
+          {d.modalityConfig?.goatbotequim?.active && (
+            <span className="px-2 py-0.5 rounded bg-primary/10 text-[9px] text-primary font-bold uppercase">
+              Botequim
+            </span>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => void, onSave: (id: string, payload: Partial<Drink>) => void }) {
+function EditModal({
+  drink,
+  onClose,
+  onSave,
+}: {
+  drink: Drink;
+  onClose: () => void;
+  onSave: (id: string, payload: Partial<Drink>) => void;
+}) {
   const [nome, setNome] = useState(drink.nome);
   const [categoria, setCategoria] = useState(drink.categoria);
   const [descricao, setDescricao] = useState(drink.descricao || "");
   const [imagem, setImagem] = useState(drink.imagem || "");
   const [config, setConfig] = useState(drink.modalityConfig);
-  const [insumos, setInsumos] = useState<{nome: string, custo: number}[]>(drink.insumos || []);
+  const [insumos, setInsumos] = useState<{ nome: string; custo: number }[]>(drink.insumos || []);
   const insumosTotal = insumos.reduce((a, b) => a + b.custo, 0);
 
-  const CATEGORIAS_SUGERIDAS = ["Whisky", "Rum", "Vodka", "Campari", "Cachaça", "Espumante", "Mocktail", "Gin", "Tequila", "Doses"];
+  const CATEGORIAS_SUGERIDAS = [
+    "Whisky",
+    "Rum",
+    "Vodka",
+    "Campari",
+    "Cachaça",
+    "Espumante",
+    "Mocktail",
+    "Gin",
+    "Tequila",
+    "Doses",
+  ];
   const allCategories = Array.from(new Set([...CATEGORIAS_SUGERIDAS]));
 
   const updateModality = (key: keyof typeof config, field: keyof ModalityConfig, val: any) => {
     setConfig({
       ...config,
-      [key]: { ...config[key], [field]: val }
+      [key]: { ...config[key], [field]: val },
     });
   };
 
@@ -259,63 +357,107 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
       <div className="w-full max-w-2xl bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden my-auto">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border sticky top-0 bg-surface z-10">
           <div>
-            <h2 className="font-display text-lg font-semibold">{drink.id === "new" ? "Cadastrar Novo Item" : "Gestão Multimodalidade"}</h2>
+            <h2 className="font-display text-lg font-semibold">
+              {drink.id === "new" ? "Cadastrar Novo Item" : "Gestão Multimodalidade"}
+            </h2>
             <p className="text-xs text-muted-foreground">{nome || "Novo Item"}</p>
           </div>
-          <button onClick={onClose} className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"><X className="h-4 w-4" /></button>
+          <button
+            onClick={onClose}
+            className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
-        
+
         <div className="p-6 space-y-8 max-h-[75vh] overflow-y-auto">
           {/* Informações Básicas */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label-eyebrow block mb-2">Nome</label>
-              <input type="text" value={nome} onChange={e => setNome(e.target.value)} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm" />
+              <input
+                type="text"
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm"
+              />
             </div>
             <div>
               <label className="label-eyebrow block mb-2">Categoria</label>
-              <select value={categoria} onChange={e => setCategoria(e.target.value)} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm">
-                {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
+              <select
+                value={categoria}
+                onChange={(e) => setCategoria(e.target.value)}
+                className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm"
+              >
+                {allCategories.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="sm:col-span-2">
               <label className="label-eyebrow block mb-2">Imagem (Upload)</label>
-              <input type="file" accept="image/*" onChange={e => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onloadend = () => {
-                    if (typeof reader.result === 'string') {
-                      setImagem(reader.result);
-                    }
-                  };
-                  reader.readAsDataURL(file);
-                }
-              }} className="w-full h-10 px-4 pt-1.5 rounded-lg bg-input border border-border text-sm file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20" />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      if (typeof reader.result === "string") {
+                        setImagem(reader.result);
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="w-full h-10 px-4 pt-1.5 rounded-lg bg-input border border-border text-sm file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+              />
             </div>
             <div className="sm:col-span-2">
               <label className="label-eyebrow block mb-2">Descrição Curta</label>
-              <input type="text" value={descricao} onChange={e => setDescricao(e.target.value)} className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm" />
+              <input
+                type="text"
+                value={descricao}
+                onChange={(e) => setDescricao(e.target.value)}
+                className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm"
+              />
             </div>
           </div>
 
           {/* Configuração por Modalidade */}
           <div className="space-y-4">
-            <h3 className="text-sm font-bold flex items-center gap-2"><TrendingUp className="h-4 w-4 text-primary" /> Canais de Venda e Precificação</h3>
-            
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-primary" /> Canais de Venda e Precificação
+            </h3>
+
             <div className="grid grid-cols-1 gap-4">
               {/* EVENTO */}
               <div className="p-4 rounded-xl border border-border bg-background/50 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-sm">Modalidade: Evento</span>
-                  <input type="checkbox" checked={config.evento.active} onChange={e => updateModality("evento", "active", e.target.checked)} className="h-4 w-4" />
+                  <input
+                    type="checkbox"
+                    checked={config.evento.active}
+                    onChange={(e) => updateModality("evento", "active", e.target.checked)}
+                    className="h-4 w-4"
+                  />
                 </div>
                 {config.evento.active && (
                   <div className="space-y-4">
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <label className="text-[10px] uppercase font-bold text-muted-foreground block">Insumos (Ficha Técnica)</label>
-                        <GhostButton onClick={() => setInsumos([...insumos, { nome: "", custo: 0 }])} className="h-6 text-[10px] px-2"><Plus className="h-3 w-3 mr-1" /> Adicionar Insumo</GhostButton>
+                        <label className="text-[10px] uppercase font-bold text-muted-foreground block">
+                          Insumos (Ficha Técnica)
+                        </label>
+                        <GhostButton
+                          onClick={() => setInsumos([...insumos, { nome: "", custo: 0 }])}
+                          className="h-6 text-[10px] px-2"
+                        >
+                          <Plus className="h-3 w-3 mr-1" /> Adicionar Insumo
+                        </GhostButton>
                       </div>
                       <div className="space-y-2">
                         {insumos.map((i, idx) => (
@@ -324,7 +466,7 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
                               type="text"
                               placeholder="Nome do insumo"
                               value={i.nome}
-                              onChange={e => {
+                              onChange={(e) => {
                                 const arr = [...insumos];
                                 arr[idx].nome = e.target.value;
                                 setInsumos(arr);
@@ -335,26 +477,35 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
                               type="number"
                               placeholder="R$"
                               value={i.custo || ""}
-                              onChange={e => {
+                              onChange={(e) => {
                                 const arr = [...insumos];
                                 arr[idx].custo = Number(e.target.value);
                                 setInsumos(arr);
                               }}
                               className="w-24 h-8 px-3 rounded-md bg-input border border-border text-xs focus:border-primary focus:outline-none"
                             />
-                            <button onClick={() => setInsumos(insumos.filter((_, iidx) => iidx !== idx))} className="h-8 w-8 flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-md">
+                            <button
+                              onClick={() => setInsumos(insumos.filter((_, iidx) => iidx !== idx))}
+                              className="h-8 w-8 flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-md"
+                            >
                               <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
                         ))}
-                        {insumos.length === 0 && <div className="text-[11px] text-muted-foreground italic">Nenhum insumo detalhado.</div>}
+                        {insumos.length === 0 && (
+                          <div className="text-[11px] text-muted-foreground italic">
+                            Nenhum insumo detalhado.
+                          </div>
+                        )}
                       </div>
                     </div>
 
                     {/* BUG 2 fix: when no insumos, show a direct cost input so custo never defaults to 0 */}
                     <div className="flex justify-between items-center border-t border-border pt-2 gap-4">
                       <label className="text-[10px] uppercase font-bold text-muted-foreground whitespace-nowrap">
-                        {insumos.length > 0 ? "Custo Total (Soma dos Insumos)" : "Custo Evento (R$) — sem ficha técnica"}
+                        {insumos.length > 0
+                          ? "Custo Total (Soma dos Insumos)"
+                          : "Custo Evento (R$) — sem ficha técnica"}
                       </label>
                       {insumos.length > 0 ? (
                         <div className="font-bold text-sm text-primary">{fmtBRL(insumosTotal)}</div>
@@ -364,7 +515,7 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
                           step="0.01"
                           min="0"
                           value={config.evento.cost || ""}
-                          onChange={e => updateModality("evento", "cost", Number(e.target.value))}
+                          onChange={(e) => updateModality("evento", "cost", Number(e.target.value))}
                           placeholder="0.00"
                           className="w-28 h-8 px-3 rounded-md bg-input border border-primary/60 text-sm font-bold text-primary focus:border-primary focus:outline-none"
                         />
@@ -378,17 +529,40 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
               <div className="p-4 rounded-xl border border-border bg-background/50 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-sm">Modalidade: 7Steakhouse</span>
-                  <input type="checkbox" checked={config.steakhouse.active} onChange={e => updateModality("steakhouse", "active", e.target.checked)} className="h-4 w-4" />
+                  <input
+                    type="checkbox"
+                    checked={config.steakhouse.active}
+                    onChange={(e) => updateModality("steakhouse", "active", e.target.checked)}
+                    className="h-4 w-4"
+                  />
                 </div>
                 {config.steakhouse.active && (
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">Custo Operacional (R$)</label>
-                      <input type="number" value={config.steakhouse.cost} onChange={e => updateModality("steakhouse", "cost", Number(e.target.value))} className="w-full h-9 px-3 rounded-lg bg-input border border-border text-sm" />
+                      <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">
+                        Custo Operacional (R$)
+                      </label>
+                      <input
+                        type="number"
+                        value={config.steakhouse.cost}
+                        onChange={(e) =>
+                          updateModality("steakhouse", "cost", Number(e.target.value))
+                        }
+                        className="w-full h-9 px-3 rounded-lg bg-input border border-border text-sm"
+                      />
                     </div>
                     <div>
-                      <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">Preço de Venda (R$)</label>
-                      <input type="number" value={config.steakhouse.price} onChange={e => updateModality("steakhouse", "price", Number(e.target.value))} className="w-full h-9 px-3 rounded-lg bg-input border border-border text-sm font-bold text-primary" />
+                      <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">
+                        Preço de Venda (R$)
+                      </label>
+                      <input
+                        type="number"
+                        value={config.steakhouse.price}
+                        onChange={(e) =>
+                          updateModality("steakhouse", "price", Number(e.target.value))
+                        }
+                        className="w-full h-9 px-3 rounded-lg bg-input border border-border text-sm font-bold text-primary"
+                      />
                     </div>
                   </div>
                 )}
@@ -398,17 +572,41 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
               <div className="p-4 rounded-xl border border-border bg-background/50 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-sm">Modalidade: Goat Botequim</span>
-                  <input type="checkbox" checked={config.goatbotequim.active} onChange={e => updateModality("goatbotequim", "active", e.target.checked)} className="h-4 w-4" />
+                  <input
+                    type="checkbox"
+                    checked={config.goatbotequim.active}
+                    onChange={(e) => updateModality("goatbotequim", "active", e.target.checked)}
+                    className="h-4 w-4"
+                  />
                 </div>
                 {config.goatbotequim.active && (
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">Custo (R$)</label>
-                      <input type="number" value={config.goatbotequim.cost} onChange={e => updateModality("goatbotequim", "cost", Number(e.target.value))} className="w-full h-9 px-3 rounded-lg bg-input border border-border text-sm" />
+                      <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">
+                        Custo (R$)
+                      </label>
+                      <input
+                        type="number"
+                        value={config.goatbotequim.cost}
+                        onChange={(e) =>
+                          updateModality("goatbotequim", "cost", Number(e.target.value))
+                        }
+                        className="w-full h-9 px-3 rounded-lg bg-input border border-border text-sm"
+                      />
                     </div>
                     <div>
-                      <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">Preço de Venda (Opcional R$)</label>
-                      <input type="number" value={config.goatbotequim.price} onChange={e => updateModality("goatbotequim", "price", Number(e.target.value))} className="w-full h-9 px-3 rounded-lg bg-input border border-border text-sm" placeholder="Ex: Doses" />
+                      <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">
+                        Preço de Venda (Opcional R$)
+                      </label>
+                      <input
+                        type="number"
+                        value={config.goatbotequim.price}
+                        onChange={(e) =>
+                          updateModality("goatbotequim", "price", Number(e.target.value))
+                        }
+                        className="w-full h-9 px-3 rounded-lg bg-input border border-border text-sm"
+                        placeholder="Ex: Doses"
+                      />
                     </div>
                   </div>
                 )}
@@ -419,24 +617,33 @@ function EditModal({ drink, onClose, onSave }: { drink: Drink, onClose: () => vo
 
         <div className="flex items-center justify-end gap-3 px-6 py-4 bg-background/50 border-t border-border sticky bottom-0 z-10">
           <GhostButton onClick={onClose}>Cancelar</GhostButton>
-          <PrimaryButton onClick={() => {
-            // BUG 2 fix: custoUnitario priority:
-            // 1. Sum of insumos (if any are filled in)
-            // 2. config.evento.cost (manually entered)
-            // 3. The lowest active modality cost as last resort (never zero if any modality is configured)
-            const insumosHaveValue = insumos.length > 0 && insumosTotal > 0;
-            const eventoCost = config.evento.active ? (insumosHaveValue ? insumosTotal : (config.evento.cost || 0)) : 0;
-            const fallbackCost = eventoCost || config.steakhouse.cost || config.goatbotequim.cost || 0;
-            onSave(drink.id, {
-              nome,
-              categoria,
-              imagem,
-              descricao,
-              modalityConfig: config,
-              custoUnitario: Number(fallbackCost.toFixed(2)),
-              insumos
-            });
-          }}>Salvar Item</PrimaryButton>
+          <PrimaryButton
+            onClick={() => {
+              // BUG 2 fix: custoUnitario priority:
+              // 1. Sum of insumos (if any are filled in)
+              // 2. config.evento.cost (manually entered)
+              // 3. The lowest active modality cost as last resort (never zero if any modality is configured)
+              const insumosHaveValue = insumos.length > 0 && insumosTotal > 0;
+              const eventoCost = config.evento.active
+                ? insumosHaveValue
+                  ? insumosTotal
+                  : config.evento.cost || 0
+                : 0;
+              const fallbackCost =
+                eventoCost || config.steakhouse.cost || config.goatbotequim.cost || 0;
+              onSave(drink.id, {
+                nome,
+                categoria,
+                imagem,
+                descricao,
+                modalityConfig: config,
+                custoUnitario: Number(fallbackCost.toFixed(2)),
+                insumos,
+              });
+            }}
+          >
+            Salvar Item
+          </PrimaryButton>
         </div>
       </div>
     </div>

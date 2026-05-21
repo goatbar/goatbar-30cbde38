@@ -15,13 +15,19 @@ import {
   BarChart3,
   Wallet,
   Menu,
-  X
+  X,
 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import logo from "@/assets/goatbar-logo.png";
 
-const nav: { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean; roles?: string[] }[] = [
+const nav: {
+  to: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  exact?: boolean;
+  roles?: string[];
+}[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/vendas", label: "Vendas", icon: ShoppingBag },
   { to: "/drinks", label: "Drinks", icon: Wine },
@@ -62,9 +68,14 @@ export function AppShell({ children }: { children?: ReactNode }) {
       <div className="lg:hidden flex items-center justify-between p-4 border-b border-border bg-surface sticky top-0 z-40">
         <Link to="/" className="flex items-center gap-3">
           <img src={logo} alt="GOAT BAR" className="h-8 w-auto" />
-          <div className="font-display text-[11px] font-semibold tracking-[0.18em] leading-none">GOAT BAR</div>
+          <div className="font-display text-[11px] font-semibold tracking-[0.18em] leading-none">
+            GOAT BAR
+          </div>
         </Link>
-        <button onClick={() => setMobileMenuOpen(true)} className="p-2 text-muted-foreground hover:text-foreground">
+        <button
+          onClick={() => setMobileMenuOpen(true)}
+          className="p-2 text-muted-foreground hover:text-foreground"
+        >
           <Menu className="h-6 w-6" />
         </button>
       </div>
@@ -72,17 +83,27 @@ export function AppShell({ children }: { children?: ReactNode }) {
       {/* MOBILE MENU DRAWER */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 flex lg:hidden">
-          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
+          <div
+            className="fixed inset-0 bg-background/80 backdrop-blur-sm"
+            onClick={() => setMobileMenuOpen(false)}
+          />
           <div className="relative w-72 max-w-[80vw] h-full bg-sidebar border-r border-sidebar-border shadow-2xl flex flex-col animate-in slide-in-from-left">
             <div className="flex items-center justify-between px-6 pt-7 pb-8">
-              <Link to="/" className="flex items-center gap-3" onClick={() => setMobileMenuOpen(false)}>
+              <Link
+                to="/"
+                className="flex items-center gap-3"
+                onClick={() => setMobileMenuOpen(false)}
+              >
                 <img src={logo} alt="GOAT BAR" className="h-10 w-auto" />
               </Link>
-              <button onClick={() => setMobileMenuOpen(false)} className="p-2 text-muted-foreground hover:text-foreground">
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-2 text-muted-foreground hover:text-foreground"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            
+
             <div className="px-3 mb-2 label-eyebrow">Operação</div>
             <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
               {visibleNav.map((item) => {
@@ -233,14 +254,14 @@ export function PageHeader({ title, subtitle, breadcrumb, action, periodo }: Pag
         <div className="flex-1 min-w-0 flex items-center justify-between w-full lg:w-auto">
           <div>
             {breadcrumb && <div className="label-eyebrow mb-1 lg:mb-2">{breadcrumb}</div>}
-            <h1 className="font-display text-xl lg:text-2xl font-semibold leading-tight">{title}</h1>
+            <h1 className="font-display text-xl lg:text-2xl font-semibold leading-tight">
+              {title}
+            </h1>
             {subtitle && (
               <p className="text-xs lg:text-sm text-muted-foreground mt-1">{subtitle}</p>
             )}
           </div>
-          <div className="lg:hidden">
-            {action}
-          </div>
+          <div className="lg:hidden">{action}</div>
         </div>
 
         <div className="hidden lg:flex items-center gap-3">
@@ -268,7 +289,7 @@ function NotificationsDropdown() {
 
   return (
     <div className="relative">
-      <button 
+      <button
         onClick={() => setOpen(!open)}
         onBlur={() => setTimeout(() => setOpen(false), 200)}
         className="relative h-10 w-10 inline-flex items-center justify-center rounded-lg border border-border bg-surface hover:border-border-strong transition-colors"
@@ -286,7 +307,9 @@ function NotificationsDropdown() {
               <Inbox className="h-5 w-5 text-primary" />
             </div>
             <p className="text-sm font-medium">Nenhuma notificação</p>
-            <p className="text-xs text-muted-foreground mt-1">Você ainda não possui notificações pendentes.</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Você ainda não possui notificações pendentes.
+            </p>
           </div>
         </div>
       )}

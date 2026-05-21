@@ -33,7 +33,11 @@ export function StatCard({
               positive ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
             }`}
           >
-            {positive ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+            {positive ? (
+              <ArrowUpRight className="h-3 w-3" />
+            ) : (
+              <ArrowDownRight className="h-3 w-3" />
+            )}
             {Math.abs(delta).toFixed(1)}%
           </span>
         )}
@@ -73,41 +77,49 @@ export function SectionCard({
 export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { bg: string; fg: string; label: string; border?: string }> = {
     // Novos Status Padronizados
-    CONFIRMADO: { 
-      bg: "bg-[rgba(22,163,74,0.15)]", 
-      fg: "text-[#22c55e]", 
+    CONFIRMADO: {
+      bg: "bg-[rgba(22,163,74,0.15)]",
+      fg: "text-[#22c55e]",
       label: "Confirmado",
-      border: "border-[rgba(34,197,94,0.35)]" 
+      border: "border-[rgba(34,197,94,0.35)]",
     },
     ORCAMENTO_ENVIADO: { bg: "bg-warning/10", fg: "text-warning", label: "Orçamento Enviado" },
     DADOS_SOLICITADOS: { bg: "bg-primary/10", fg: "text-primary", label: "Dados Solicitados" },
-    AGUARDANDO_RESPOSTA: { bg: "bg-secondary", fg: "text-muted-foreground", label: "Aguardando Resposta" },
+    AGUARDANDO_RESPOSTA: {
+      bg: "bg-secondary",
+      fg: "text-muted-foreground",
+      label: "Aguardando Resposta",
+    },
     FINALIZADO: { bg: "bg-success/10", fg: "text-success", label: "Finalizado" },
     CANCELADO: { bg: "bg-destructive/10", fg: "text-destructive", label: "Cancelado" },
     NOVO: { bg: "bg-primary/10", fg: "text-primary", label: "Novo" },
-    REALIZADO: { 
-      bg: "bg-[rgba(22,163,74,0.15)]", 
-      fg: "text-[#22c55e]", 
+    REALIZADO: {
+      bg: "bg-[rgba(22,163,74,0.15)]",
+      fg: "text-[#22c55e]",
       label: "Realizado",
-      border: "border-[rgba(34,197,94,0.35)]" 
+      border: "border-[rgba(34,197,94,0.35)]",
     },
-    PROPOSTA_ACEITA: { 
-      bg: "bg-[rgba(22,163,74,0.15)]", 
-      fg: "text-[#22c55e]", 
+    PROPOSTA_ACEITA: {
+      bg: "bg-[rgba(22,163,74,0.15)]",
+      fg: "text-[#22c55e]",
       label: "Proposta Aceita",
-      border: "border-[rgba(34,197,94,0.35)]" 
+      border: "border-[rgba(34,197,94,0.35)]",
     },
     novo_orcamento: { bg: "bg-primary/10", fg: "text-primary", label: "Novo Orçamento" },
     orcamento_enviado: { bg: "bg-warning/10", fg: "text-warning", label: "Orçamento Enviado" },
-    aguardando_retorno: { bg: "bg-secondary", fg: "text-muted-foreground", label: "Aguardando Retorno" },
+    aguardando_retorno: {
+      bg: "bg-secondary",
+      fg: "text-muted-foreground",
+      label: "Aguardando Retorno",
+    },
     em_assinatura: { bg: "bg-primary/10", fg: "text-primary", label: "Em Assinatura" },
 
     // Legado e Outros
-    confirmado: { 
-      bg: "bg-[rgba(22,163,74,0.15)]", 
-      fg: "text-[#22c55e]", 
+    confirmado: {
+      bg: "bg-[rgba(22,163,74,0.15)]",
+      fg: "text-[#22c55e]",
       label: "Confirmado",
-      border: "border-[rgba(34,197,94,0.35)]" 
+      border: "border-[rgba(34,197,94,0.35)]",
     },
     em_andamento: { bg: "bg-warning/10", fg: "text-warning", label: "Em andamento" },
     rascunho: { bg: "bg-muted", fg: "text-muted-foreground", label: "Rascunho" },
@@ -120,13 +132,18 @@ export function StatusBadge({ status }: { status: string }) {
   };
   const s = map[status] || { bg: "bg-secondary", fg: "text-foreground", label: status };
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-medium uppercase tracking-wider ${s.bg} ${s.fg} ${s.border ? `border ${s.border}` : ""}`}>
+    <span
+      className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-medium uppercase tracking-wider ${s.bg} ${s.fg} ${s.border ? `border ${s.border}` : ""}`}
+    >
       {s.label}
     </span>
   );
 }
 
-export function PrimaryButton({ children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+export function PrimaryButton({
+  children,
+  ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       {...rest}

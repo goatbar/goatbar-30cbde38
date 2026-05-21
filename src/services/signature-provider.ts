@@ -7,13 +7,13 @@ export interface SignatureProvider {
   createDocument(payload: {
     name: string;
     fileUrl: string;
-    signers: Array<{ name: string; email: string; role: 'client' | 'company' }>;
+    signers: Array<{ name: string; email: string; role: "client" | "company" }>;
   }): Promise<{ providerDocumentId: string; status: string }>;
-  
+
   getSignatureLink(providerDocumentId: string, signerEmail: string): Promise<string>;
-  
+
   syncStatus(providerDocumentId: string): Promise<{ status: string; fullySigned: boolean }>;
-  
+
   downloadSigned(providerDocumentId: string): Promise<{ fileUrl: string }>;
 }
 
@@ -23,12 +23,12 @@ export interface SignatureProvider {
  */
 export const mockSignatureProvider: SignatureProvider = {
   name: "MockSignature",
-  
+
   async createDocument(payload) {
     console.log("[Signature] Criando documento no provedor:", payload.name);
     return {
       providerDocumentId: `mock_doc_${Date.now()}`,
-      status: "pending"
+      status: "pending",
     };
   },
 
@@ -42,7 +42,7 @@ export const mockSignatureProvider: SignatureProvider = {
 
   async downloadSigned(id) {
     return { fileUrl: "https://example.com/signed-contract.pdf" };
-  }
+  },
 };
 
 // Hook/Service para obter o provedor ativo baseado em ENV
@@ -55,7 +55,7 @@ export const getActiveSignatureProvider = (): SignatureProvider => {
  */
 export const handleSignatureWebhook = async (provider: string, payload: any) => {
   console.log(`[Webhook] Recebido evento do provedor ${provider}:`, payload);
-  
+
   // Lógica genérica de atualização baseada no providerDocumentId
   let externalId = "";
   let newStatus = "";
@@ -79,15 +79,15 @@ export const handleSignatureWebhook = async (provider: string, payload: any) => 
       // 2. Atualiza o status
       const { error: updateError } = await supabase
         .from("event_contracts")
-        .update({ 
+        .update({
           status: newStatus,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq("id", contract.id);
-        
+
       return { success: true, contractId: contract.id };
     }
   }
-  
+
   return { success: false };
 };

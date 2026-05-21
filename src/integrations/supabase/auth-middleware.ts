@@ -7,59 +7,64 @@ import type { Database } from "./types";
 const BEARER_PREFIX = "Bearer ";
 const MAX_TOKEN_LENGTH = 4096;
 
-export const requireSupabaseAuth = createMiddleware({ type: "function" }).server(async ({ next }) => {
-  const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_PUBLISHABLE_KEY =
-    process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
+export const requireSupabaseAuth = createMiddleware({ type: "function" }).server(
+  async ({ next }) => {
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SUPABASE_PUBLISHABLE_KEY =
+      process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
 
-  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-    throw new Response("Server auth configuration error: missing Supabase URL or publishable key.", {
-      status: 500,
-    });
-  }
+    if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+      throw new Response(
+        "Server auth configuration error: missing Supabase URL or publishable key.",
+        {
+          status: 500,
+        },
+      );
+    }
 
-  const request = getRequest();
-  const authHeader = request?.headers?.get("authorization") ?? "";
+    const request = getRequest();
+    const authHeader = request?.headers?.get("authorization") ?? "";
 
-  if (!authHeader.startsWith(BEARER_PREFIX)) {
-    throw new Response("Unauthorized.", { status: 401 });
-  }
+    if (!authHeader.startsWith(BEARER_PREFIX)) {
+      throw new Response("Unauthorized.", { status: 401 });
+    }
 
-  const token = authHeader.slice(BEARER_PREFIX.length).trim();
+    const token = authHeader.slice(BEARER_PREFIX.length).trim();
 
-  if (!token || token.length > MAX_TOKEN_LENGTH) {
-    throw new Response("Unauthorized.", { status: 401 });
-  }
+    if (!token || token.length > MAX_TOKEN_LENGTH) {
+      throw new Response("Unauthorized.", { status: 401 });
+    }
 
-  const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    global: {
-      headers: {
-        Authorization: `${BEARER_PREFIX}${token}`,
+    const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      global: {
+        headers: {
+          Authorization: `${BEARER_PREFIX}${token}`,
+        },
       },
-    },
-    auth: {
-      storage: undefined,
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
+      auth: {
+        storage: undefined,
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
 
-  // Use getUser(token) instead of local-only claims parsing to ensure token is
-  // verified against Supabase Auth and not only structurally decoded.
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser(token);
+    // Use getUser(token) instead of local-only claims parsing to ensure token is
+    // verified against Supabase Auth and not only structurally decoded.
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
 
-  if (error || !user?.id) {
-    throw new Response("Unauthorized.", { status: 401 });
-  }
+    if (error || !user?.id) {
+      throw new Response("Unauthorized.", { status: 401 });
+    }
 
-  return next({
-    context: {
-      supabase,
-      userId: user.id,
-      claims: user.app_metadata,
-    },
-  });
-});
+    return next({
+      context: {
+        supabase,
+        userId: user.id,
+        claims: user.app_metadata,
+      },
+    });
+  },
+);

@@ -27,7 +27,10 @@ function InventoryPage() {
   useEffect(() => {
     const loadInventory = async () => {
       try {
-        const { data, error } = await supabase.from("inventory").select("id, name, quantity, updated_at").order("updated_at", { ascending: false });
+        const { data, error } = await supabase
+          .from("inventory")
+          .select("id, name, quantity, updated_at")
+          .order("updated_at", { ascending: false });
         if (error) throw error;
 
         if (data) {
@@ -40,16 +43,22 @@ function InventoryPage() {
           setInventoryItems(mapped);
         }
       } catch (e) {
-        console.error("Falha ao carregar inventário do Supabase.", { table: "inventory", query: "select id,name,quantity,updated_at order by updated_at", error: e });
+        console.error("Falha ao carregar inventário do Supabase.", {
+          table: "inventory",
+          query: "select id,name,quantity,updated_at order by updated_at",
+          error: e,
+        });
       }
     };
 
     migrateLegacyStoreToSupabase().finally(loadInventory);
   }, []);
 
-  const filteredItems = inventoryItems.filter((i) => i.nome.toLowerCase().includes(search.toLowerCase()));
+  const filteredItems = inventoryItems.filter((i) =>
+    i.nome.toLowerCase().includes(search.toLowerCase()),
+  );
 
-  const handleEdit = (item: typeof inventoryItems[0]) => {
+  const handleEdit = (item: (typeof inventoryItems)[0]) => {
     setEditingId(item.id);
     setFormNome(item.nome);
     setFormQtd(item.quantidadeTotal);
@@ -62,16 +71,36 @@ function InventoryPage() {
 
     try {
       if (editingId) {
-        const { error } = await supabase.from("inventory").update({ name: formNome, quantity: formQtd, updated_at: new Date().toISOString() }).eq("id", editingId);
+        const { error } = await supabase
+          .from("inventory")
+          .update({ name: formNome, quantity: formQtd, updated_at: new Date().toISOString() })
+          .eq("id", editingId);
         if (error) throw error;
-        setInventoryItems((prev) => prev.map((i) => (i.id === editingId ? { ...i, nome: formNome, quantidadeTotal: formQtd, observacoes: formObs } : i)));
+        setInventoryItems((prev) =>
+          prev.map((i) =>
+            i.id === editingId
+              ? { ...i, nome: formNome, quantidadeTotal: formQtd, observacoes: formObs }
+              : i,
+          ),
+        );
       } else {
-        const { data, error } = await supabase.from("inventory").insert({ name: formNome, quantity: formQtd }).select("id").single();
+        const { data, error } = await supabase
+          .from("inventory")
+          .insert({ name: formNome, quantity: formQtd })
+          .select("id")
+          .single();
         if (error) throw error;
-        setInventoryItems((prev) => [{ id: data.id, nome: formNome, quantidadeTotal: formQtd, observacoes: formObs }, ...prev]);
+        setInventoryItems((prev) => [
+          { id: data.id, nome: formNome, quantidadeTotal: formQtd, observacoes: formObs },
+          ...prev,
+        ]);
       }
     } catch (e) {
-      console.error("Erro ao salvar item no Supabase.", { table: "inventory", payload: { id: editingId, formNome, formQtd, formObs }, error: e });
+      console.error("Erro ao salvar item no Supabase.", {
+        table: "inventory",
+        payload: { id: editingId, formNome, formQtd, formObs },
+        error: e,
+      });
       alert("Erro ao salvar item. Verifique conexão/Supabase e tente novamente.");
       return;
     }
@@ -140,7 +169,8 @@ function InventoryPage() {
                     <div>
                       <div className="font-semibold">{item.nome}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        Estoque: {item.quantidadeTotal} {item.quantidadeTotal === 1 ? "unidade" : "unidades"}
+                        Estoque: {item.quantidadeTotal}{" "}
+                        {item.quantidadeTotal === 1 ? "unidade" : "unidades"}
                       </div>
                     </div>
                   </div>
@@ -213,7 +243,9 @@ function InventoryPage() {
               </div>
 
               <div>
-                <label className="label-eyebrow block mb-2">Observações / Locais de armazenamento</label>
+                <label className="label-eyebrow block mb-2">
+                  Observações / Locais de armazenamento
+                </label>
                 <textarea
                   placeholder="Ex:&#10;- Estoque casa: 8 unidades&#10;- 7 Steakhouse: 5 unidades"
                   value={formObs}

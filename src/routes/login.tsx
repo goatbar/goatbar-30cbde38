@@ -56,10 +56,13 @@ function LoginPage() {
         </div>
         <div className="relative px-14 pb-12 max-w-lg">
           <p className="font-display text-2xl leading-snug font-medium">
-            Hospitalidade premium,<br />
+            Hospitalidade premium,
+            <br />
             <span className="text-muted-foreground">gestão de alta performance.</span>
           </p>
-          <p className="text-sm text-muted-foreground mt-4">Eventos · 7Steakhouse · Goat Botequim</p>
+          <p className="text-sm text-muted-foreground mt-4">
+            Eventos · 7Steakhouse · Goat Botequim
+          </p>
         </div>
       </div>
 
@@ -71,8 +74,9 @@ function LoginPage() {
 
           <div className="label-eyebrow mb-3">Acesso interno</div>
           <h1 className="font-display text-3xl font-semibold leading-tight">Bem-vindo de volta</h1>
-          <p className="text-sm text-muted-foreground mt-2">Entre com suas credenciais para acessar o painel.</p>
-
+          <p className="text-sm text-muted-foreground mt-2">
+            Entre com suas credenciais para acessar o painel.
+          </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
             <div>
@@ -99,7 +103,11 @@ function LoginPage() {
               />
             </div>
 
-            {error && <div className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3">{error}</div>}
+            {error && (
+              <div className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3">
+                {error}
+              </div>
+            )}
 
             <button
               type="submit"

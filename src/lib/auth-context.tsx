@@ -60,7 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    const hasLocalAuth = typeof window !== "undefined" && window.localStorage.getItem(LOCAL_AUTH_KEY) === "1";
+    const hasLocalAuth =
+      typeof window !== "undefined" && window.localStorage.getItem(LOCAL_AUTH_KEY) === "1";
     if (hasLocalAuth) {
       setLocalAuthed(true);
     }
@@ -114,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       session,
-      user: localAuthed ? buildLocalUser() : session?.user ?? null,
+      user: localAuthed ? buildLocalUser() : (session?.user ?? null),
       loading,
       signIn,
       signOut,

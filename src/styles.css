@@ -58,10 +58,10 @@
   --radius: 0.75rem;
 
   /* Core palette — exact values from brief */
-  --background: oklch(0.18 0.005 180);          /* #0F1414 */
-  --surface: oklch(0.21 0.006 180);             /* #161C1C  cards */
-  --surface-2: oklch(0.24 0.007 180);           /* one step lighter */
-  --foreground: oklch(0.96 0.01 80);            /* #F7F4EF */
+  --background: oklch(0.18 0.005 180); /* #0F1414 */
+  --surface: oklch(0.21 0.006 180); /* #161C1C  cards */
+  --surface-2: oklch(0.24 0.007 180); /* one step lighter */
+  --foreground: oklch(0.96 0.01 80); /* #F7F4EF */
   --muted: oklch(0.24 0.007 180);
   --muted-foreground: oklch(0.68 0.01 180);
   --card: oklch(0.21 0.006 180);
@@ -69,7 +69,7 @@
   --popover: oklch(0.21 0.006 180);
   --popover-foreground: oklch(0.96 0.01 80);
 
-  --primary: oklch(0.42 0.13 22);               /* #701117 wine */
+  --primary: oklch(0.42 0.13 22); /* #701117 wine */
   --primary-foreground: oklch(0.97 0.01 80);
   --primary-glow: oklch(0.55 0.18 22);
 
@@ -83,7 +83,7 @@
   --success: oklch(0.65 0.14 155);
   --warning: oklch(0.78 0.14 75);
 
-  --border: oklch(0.28 0.008 180);              /* #222A2A */
+  --border: oklch(0.28 0.008 180); /* #222A2A */
   --border-strong: oklch(0.34 0.009 180);
   --input: oklch(0.24 0.007 180);
   --ring: oklch(0.42 0.13 22);
@@ -142,7 +142,13 @@
     overflow-x: clip;
   }
 
-  h1, h2, h3, h4, h5, h6, .font-display {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  .font-display {
     font-family: var(--font-display);
     letter-spacing: -0.02em;
   }
@@ -173,12 +179,25 @@
   }
 
   /* Scrollbar */
-  ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-track { background: var(--background); }
-  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--background);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 8px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+  }
 
-  input, select, textarea, button {
+  input,
+  select,
+  textarea,
+  button {
     font-size: 16px;
   }
 

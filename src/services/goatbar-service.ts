@@ -26,7 +26,14 @@ type Event = {
 };
 
 type Inventory = { id: string; name: string; quantity: number; unit?: string; updated_at?: string };
-type Movement = { id: string; inventory_id: string; type: "in" | "out" | "loss"; quantity: number; source: "event" | "sale" | "manual"; created_at: string };
+type Movement = {
+  id: string;
+  inventory_id: string;
+  type: "in" | "out" | "loss";
+  quantity: number;
+  source: "event" | "sale" | "manual";
+  created_at: string;
+};
 
 const STORAGE_KEY = "goatbar_mock_db_v1";
 
@@ -45,7 +52,16 @@ const seed = {
     { id: "s1", total_revenue: 4200, total_cost: 1680, date: new Date().toISOString() },
     { id: "s2", total_revenue: 3500, total_cost: 1400, date: new Date().toISOString() },
   ] satisfies Sale[],
-  events: [{ id: "e1", client_name: "Cliente Seed", event_type: "Corporativo", total_price: 6200, total_cost: 2800, date: new Date().toISOString() }] satisfies Event[],
+  events: [
+    {
+      id: "e1",
+      client_name: "Cliente Seed",
+      event_type: "Corporativo",
+      total_price: 6200,
+      total_cost: 2800,
+      date: new Date().toISOString(),
+    },
+  ] satisfies Event[],
   inventory: [] as Inventory[],
   movements: [] as Movement[],
 };
@@ -94,7 +110,7 @@ function readDb() {
     const modalityConfig = d.modalityConfig ?? {
       evento: { active: true, cost: custoUnitario },
       steakhouse: { active: true, cost: custoUnitario, price: precoVenda },
-      goatbotequim: { active: true, cost: custoUnitario, price: precoVenda }
+      goatbotequim: { active: true, cost: custoUnitario, price: precoVenda },
     };
 
     return { id: d.id, nome, custoUnitario, precoVenda, imagem, modalityConfig };
@@ -119,8 +135,8 @@ export const goatbarService = {
       modalityConfig: {
         evento: { active: true, cost: payload.cost },
         steakhouse: { active: true, cost: payload.cost, price: payload.price },
-        goatbotequim: { active: true, cost: payload.cost, price: payload.price }
-      }
+        goatbotequim: { active: true, cost: payload.cost, price: payload.price },
+      },
     });
     writeDb(db);
   },
@@ -130,11 +146,19 @@ export const goatbarService = {
     items: { drink_id: string; quantity: number; price: number; cost: number }[];
   }) => {
     const totals = payload.items.reduce(
-      (acc, i) => ({ revenue: acc.revenue + i.price * i.quantity, cost: acc.cost + i.cost * i.quantity }),
+      (acc, i) => ({
+        revenue: acc.revenue + i.price * i.quantity,
+        cost: acc.cost + i.cost * i.quantity,
+      }),
       { revenue: 0, cost: 0 },
     );
     const db = readDb();
-    db.sales.unshift({ id: crypto.randomUUID(), total_revenue: totals.revenue, total_cost: totals.cost, date: new Date().toISOString() });
+    db.sales.unshift({
+      id: crypto.randomUUID(),
+      total_revenue: totals.revenue,
+      total_cost: totals.cost,
+      date: new Date().toISOString(),
+    });
     writeDb(db);
   },
   listEvents: async () => readDb().events as Event[],
@@ -146,16 +170,32 @@ export const goatbarService = {
   listInventory: async () => readDb().inventory as Inventory[],
   createInventory: async (payload: any) => {
     const db = readDb();
-    db.inventory.unshift({ id: crypto.randomUUID(), ...payload, updated_at: new Date().toISOString() });
+    db.inventory.unshift({
+      id: crypto.randomUUID(),
+      ...payload,
+      updated_at: new Date().toISOString(),
+    });
     writeDb(db);
   },
-  updateInventoryQuantity: async (id: string, quantity: number, source: "event" | "sale" | "manual", type: "in" | "out" | "loss") => {
+  updateInventoryQuantity: async (
+    id: string,
+    quantity: number,
+    source: "event" | "sale" | "manual",
+    type: "in" | "out" | "loss",
+  ) => {
     const db = readDb();
     const row = db.inventory.find((i: Inventory) => i.id === id);
     if (!row) return;
     row.quantity = type === "in" ? row.quantity + quantity : Math.max(0, row.quantity - quantity);
     row.updated_at = new Date().toISOString();
-    db.movements.unshift({ id: crypto.randomUUID(), inventory_id: id, type, quantity, source, created_at: new Date().toISOString() });
+    db.movements.unshift({
+      id: crypto.randomUUID(),
+      inventory_id: id,
+      type,
+      quantity,
+      source,
+      created_at: new Date().toISOString(),
+    });
     writeDb(db);
   },
   listInventoryMovements: async () => readDb().movements as Movement[],

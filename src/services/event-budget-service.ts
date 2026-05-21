@@ -31,7 +31,7 @@ export interface BudgetVersion {
   version_number: number;
   is_current: boolean;
   status: string;
-  
+
   // Budget Details
   selected_drinks: any;
   drinks_per_person: number;
@@ -40,7 +40,7 @@ export interface BudgetVersion {
   average_drink_cost: number;
   drinks_base_cost: number;
   drinks_final_value: number;
-  
+
   // Staff
   bartender_quantity: number;
   bartender_unit_value: number;
@@ -49,27 +49,27 @@ export interface BudgetVersion {
   copeira_quantity: number;
   copeira_unit_value: number;
   team_total_value: number;
-  
+
   // Ice
   ice_packages_quantity: number;
   ice_package_unit_value: number;
   ice_total_value: number;
-  
+
   // Travel
   has_travel: boolean;
   fuel_value: number;
-  
+
   // Misc
   miscellaneous_items: any;
   miscellaneous_total_value: number;
-  
+
   // Profit & Final
   discount_value: number;
   discount_description?: string;
   profit_value: number;
   final_budget_value: number;
   average_value_per_person: number;
-  
+
   // Payment
   payment_method?: string;
   paid_percentage: number;
@@ -77,7 +77,7 @@ export interface BudgetVersion {
   pending_percentage: number;
   pending_value: number;
   pending_payment_date?: string;
-  
+
   created_at: string;
   updated_at: string;
 }
@@ -117,11 +117,16 @@ export const eventBudgetService = {
 
     const { data: currentBudgets, error: budgetError } = await supabase
       .from("event_budget_versions")
-      .select("event_id, profit_value, paid_percentage, pending_payment_date, final_budget_value, discount_value")
+      .select(
+        "event_id, profit_value, paid_percentage, pending_payment_date, final_budget_value, discount_value",
+      )
       .eq("is_current", true);
 
     if (budgetError) {
-      console.warn("Falha ao carregar versões atuais de orçamento. Usando dados base de events.", budgetError);
+      console.warn(
+        "Falha ao carregar versões atuais de orçamento. Usando dados base de events.",
+        budgetError,
+      );
       return events;
     }
 
@@ -133,34 +138,29 @@ export const eventBudgetService = {
 
       const discount = Number(budget.discount_value || 0);
       const budgetProfit = Number(budget.profit_value || 0);
-      const reconciledProfit = budgetProfit > 0 ? budgetProfit : Number(event.current_profit_value || 0) + discount;
+      const reconciledProfit =
+        budgetProfit > 0 ? budgetProfit : Number(event.current_profit_value || 0) + discount;
 
       return {
         ...event,
         current_budget_value: Number(budget.final_budget_value || event.current_budget_value || 0),
         current_profit_value: reconciledProfit,
-        payment_percent_received: Number(budget.paid_percentage ?? event.payment_percent_received ?? 0),
+        payment_percent_received: Number(
+          budget.paid_percentage ?? event.payment_percent_received ?? 0,
+        ),
         payment_due_date: budget.pending_payment_date || event.payment_due_date,
       };
     });
   },
 
   async getEventById(id: string) {
-    const { data, error } = await supabase
-      .from("events")
-      .select("*")
-      .eq("id", id)
-      .limit(1);
+    const { data, error } = await supabase.from("events").select("*").eq("id", id).limit(1);
     if (error) throw error;
-    return (data && data.length > 0) ? data[0] as Event : null;
+    return data && data.length > 0 ? (data[0] as Event) : null;
   },
 
   async createEvent(payload: Partial<Event>) {
-    const { data, error } = await supabase
-      .from("events")
-      .insert(payload)
-      .select()
-      .single();
+    const { data, error } = await supabase.from("events").insert(payload).select().single();
     if (error) throw error;
     return data as Event;
   },
@@ -182,10 +182,7 @@ export const eventBudgetService = {
   },
 
   async checkEventsSameDate(date: string) {
-    const { data, error } = await supabase
-      .from("events")
-      .select("*")
-      .eq("date", date);
+    const { data, error } = await supabase.from("events").select("*").eq("date", date);
     if (error) throw error;
     return data as Event[];
   },
@@ -199,7 +196,7 @@ export const eventBudgetService = {
       .eq("is_current", true)
       .limit(1);
     if (error) throw error;
-    return (data && data.length > 0) ? data[0] as BudgetVersion : null;
+    return data && data.length > 0 ? (data[0] as BudgetVersion) : null;
   },
 
   async listBudgetVersions(eventId: string) {
@@ -221,7 +218,7 @@ export const eventBudgetService = {
           .from("event_budget_versions")
           .update({
             ...payload,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
           })
           .eq("id", current.id)
           .select()
@@ -240,9 +237,9 @@ export const eventBudgetService = {
       .order("version_number", { ascending: false })
       .limit(1)
       .maybeSingle();
-    
+
     if (latest) {
-        versionNumber = latest.version_number + 1;
+      versionNumber = latest.version_number + 1;
     }
 
     // Set all others to NOT current
@@ -258,26 +255,20 @@ export const eventBudgetService = {
         event_id: eventId,
         version_number: versionNumber,
         is_current: true,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .select()
       .single();
-    
+
     if (error) throw error;
     return data as BudgetVersion;
   },
 
   async deleteBudgetVersion(budgetId: string) {
     // Delete history first (if no cascade in DB)
-    await supabase
-      .from("event_budget_history")
-      .delete()
-      .eq("budget_version_id", budgetId);
+    await supabase.from("event_budget_history").delete().eq("budget_version_id", budgetId);
 
-    const { error } = await supabase
-      .from("event_budget_versions")
-      .delete()
-      .eq("id", budgetId);
+    const { error } = await supabase.from("event_budget_versions").delete().eq("id", budgetId);
     if (error) throw error;
   },
 
@@ -297,14 +288,14 @@ export const eventBudgetService = {
       .from("event_budget_versions")
       .update({ is_current: false })
       .eq("event_id", eventId);
-    
+
     const { data, error } = await supabase
       .from("event_budget_versions")
       .update({ is_current: true })
       .eq("id", budgetId)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -341,11 +332,11 @@ export const eventBudgetService = {
       .insert({
         event_id: eventId,
         status,
-        note
+        note,
       })
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -372,10 +363,7 @@ export const eventBudgetService = {
   },
 
   async deleteNegotiationNote(noteId: string) {
-    const { error } = await supabase
-      .from("event_negotiation_history")
-      .delete()
-      .eq("id", noteId);
+    const { error } = await supabase.from("event_negotiation_history").delete().eq("id", noteId);
     if (error) throw error;
-  }
+  },
 };

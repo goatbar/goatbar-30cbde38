@@ -3,8 +3,16 @@ import { PrimaryButton, SectionCard } from "@/components/ui-bits";
 import { useState, useEffect } from "react";
 import logo from "@/assets/goatbar-logo.png";
 import {
-  CheckCircle2, Lock, Loader2, AlertTriangle,
-  User, Calendar, MapPin, CreditCard, Wallet, Hash
+  CheckCircle2,
+  Lock,
+  Loader2,
+  AlertTriangle,
+  User,
+  Calendar,
+  MapPin,
+  CreditCard,
+  Wallet,
+  Hash,
 } from "lucide-react";
 import { clientContractFormService } from "@/services/contract-service";
 
@@ -69,9 +77,7 @@ function PillOption({
         />
         <div>
           <div className="font-medium text-sm">{label}</div>
-          {desc && (
-            <div className="text-[11px] opacity-70 mt-0.5">{desc}</div>
-          )}
+          {desc && <div className="text-[11px] opacity-70 mt-0.5">{desc}</div>}
         </div>
       </div>
     </button>
@@ -109,7 +115,9 @@ function ContratoDadosPublicPage() {
   useEffect(() => {
     clientContractFormService
       .getFormByToken(token)
-      .then((data) => { if (data.submitted_at) setSubmitted(true); })
+      .then((data) => {
+        if (data.submitted_at) setSubmitted(true);
+      })
       .catch(() => setError("O link acessado é inválido ou já expirou."))
       .finally(() => setPageLoading(false));
   }, [token]);
@@ -126,7 +134,7 @@ function ContratoDadosPublicPage() {
       paymentSummary += ` | Parcelas no Cartão: ${parcelas}x`;
     }
 
-    const brEventDate = eventDate ? eventDate.split('-').reverse().join('/') : "";
+    const brEventDate = eventDate ? eventDate.split("-").reverse().join("/") : "";
 
     setSubmitting(true);
     try {
@@ -180,7 +188,8 @@ function ContratoDadosPublicPage() {
           </div>
           <h2 className="font-display text-2xl">Dados Recebidos!</h2>
           <p className="text-muted-foreground">
-            Suas informações foram enviadas com segurança. Em breve você receberá o contrato para assinatura digital.
+            Suas informações foram enviadas com segurança. Em breve você receberá o contrato para
+            assinatura digital.
           </p>
         </div>
       </div>
@@ -197,13 +206,13 @@ function ContratoDadosPublicPage() {
           Coleta de Dados <br /> para Contrato
         </h1>
         <p className="text-muted-foreground text-center mt-3 max-w-lg">
-          Para a formalização do seu contrato com a <strong>Goat Bar</strong>, preencha os dados abaixo.
+          Para a formalização do seu contrato com a <strong>Goat Bar</strong>, preencha os dados
+          abaixo.
         </p>
       </div>
 
       <div className="w-full max-w-2xl">
         <form onSubmit={handleSubmit} className="space-y-6">
-
           {/* ── Dados Pessoais ── */}
           <SectionCard title="Dados Pessoais" subtitle="Informações do contratante">
             <div className="flex items-center gap-2 mb-4 text-xs text-muted-foreground">
@@ -345,7 +354,7 @@ function ContratoDadosPublicPage() {
                     />
                   </div>
                 )}
-                
+
                 {needsCard && (
                   <div>
                     <label className="label-eyebrow block mb-2 flex items-center gap-1.5">
@@ -374,7 +383,9 @@ function ContratoDadosPublicPage() {
           {/* ── Resumo do pagamento ── */}
           {forma && (
             <div className="rounded-xl border border-success/30 bg-success/5 px-5 py-4 text-sm space-y-1">
-              <div className="font-semibold text-success text-xs uppercase tracking-wider mb-2">Resumo selecionado</div>
+              <div className="font-semibold text-success text-xs uppercase tracking-wider mb-2">
+                Resumo selecionado
+              </div>
               <div className="text-foreground">
                 <span className="text-muted-foreground">Forma de Pagamento: </span>
                 {formaInfo?.label}

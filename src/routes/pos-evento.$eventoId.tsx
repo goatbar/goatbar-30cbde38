@@ -31,7 +31,11 @@ function PosEvento() {
     <>
       <PageHeader
         breadcrumb={
-          <Link to="/eventos/$eventoId" params={{ eventoId: evento.id }} className="inline-flex items-center gap-1.5">
+          <Link
+            to="/eventos/$eventoId"
+            params={{ eventoId: evento.id }}
+            className="inline-flex items-center gap-1.5"
+          >
             <ArrowLeft className="h-3 w-3" /> {evento.nome}
           </Link>
         }
@@ -40,7 +44,9 @@ function PosEvento() {
         action={
           <div className="flex items-center gap-2">
             <GhostButton>Salvar rascunho</GhostButton>
-            <PrimaryButton><Save className="h-4 w-4" /> Concluir fechamento</PrimaryButton>
+            <PrimaryButton>
+              <Save className="h-4 w-4" /> Concluir fechamento
+            </PrimaryButton>
           </div>
         }
       />
@@ -83,7 +89,9 @@ function PosEvento() {
                   <button
                     key={o}
                     className={`px-4 py-2 rounded-lg border text-sm transition-colors ${
-                      i === 0 ? "border-primary bg-primary/10 text-foreground" : "border-border bg-surface text-muted-foreground hover:border-border-strong"
+                      i === 0
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border bg-surface text-muted-foreground hover:border-border-strong"
                     }`}
                   >
                     {o}
@@ -122,7 +130,15 @@ function PosEvento() {
   );
 }
 
-function Field({ label, suffix, placeholder }: { label: string; suffix: string; placeholder: string }) {
+function Field({
+  label,
+  suffix,
+  placeholder,
+}: {
+  label: string;
+  suffix: string;
+  placeholder: string;
+}) {
   return (
     <div>
       <label className="label-eyebrow">{label}</label>

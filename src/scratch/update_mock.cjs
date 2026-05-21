@@ -1,8 +1,8 @@
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
-const filePath = path.join('c:', 'Goatbar-system', 'src', 'lib', 'mock-data.ts');
-let content = fs.readFileSync(filePath, 'utf-8');
+const filePath = path.join("c:", "Goatbar-system", "src", "lib", "mock-data.ts");
+let content = fs.readFileSync(filePath, "utf-8");
 
 const drinkInterfaceOld = `export interface Drink {
   id: string;
@@ -674,7 +674,10 @@ const newDrinksStr = `export const drinks: Drink[] = [
   }
 ];`;
 
-content = content.replace(/export const drinks: Drink\[\] = \[.*?\n\};\napplyPrices\(\);\n/s, newDrinksStr + '\n');
+content = content.replace(
+  /export const drinks: Drink\[\] = \[.*?\n\};\napplyPrices\(\);\n/s,
+  newDrinksStr + "\n",
+);
 
-fs.writeFileSync(filePath, content, 'utf-8');
-console.log('Done!');
+fs.writeFileSync(filePath, content, "utf-8");
+console.log("Done!");

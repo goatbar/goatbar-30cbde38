@@ -1,10 +1,10 @@
-import puppeteer from 'puppeteer';
+import puppeteer from "puppeteer";
 
 (async () => {
   try {
     const browser = await puppeteer.launch({ headless: "new" });
     const page = await browser.newPage();
-    await page.goto('http://localhost:5173/login', { waitUntil: 'networkidle0', timeout: 10000 });
+    await page.goto("http://localhost:5173/login", { waitUntil: "networkidle0", timeout: 10000 });
 
     const inputRect = await page.evaluate(() => {
       const input = document.querySelector('input[type="email"]');
@@ -20,7 +20,7 @@ import puppeteer from 'puppeteer';
         return {
           tagName: el.tagName,
           className: el.className,
-          id: el.id
+          id: el.id,
         };
       }, inputRect);
       console.log("Blocking element:", blockingElement);
@@ -29,13 +29,13 @@ import puppeteer from 'puppeteer';
     }
 
     const images = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('img')).map(img => ({
+      return Array.from(document.querySelectorAll("img")).map((img) => ({
         src: img.src,
         width: img.width,
         height: img.height,
         naturalWidth: img.naturalWidth,
         naturalHeight: img.naturalHeight,
-        className: img.className
+        className: img.className,
       }));
     });
     console.log("Images found:", images);

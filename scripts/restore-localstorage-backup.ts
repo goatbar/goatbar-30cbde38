@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import readline from 'node:readline/promises'
@@ -209,37 +208,3 @@ async function run() {
 }
 
 run().catch((error) => { console.error('❌ Falha:', error); process.exit(1) })
-=======
-import fs from "fs";
-
-const backupPath = "C:\\Goatbar-system\\goatbar-localstorage-backup (1).json";
-
-if (!fs.existsSync(backupPath)) {
-  console.error("Backup não encontrado.");
-  process.exit(1);
-}
-
-const raw = fs.readFileSync(backupPath, "utf-8");
-const data = JSON.parse(raw);
-
-console.log("BACKUP ENCONTRADO");
-console.log(Object.keys(data));
-
-const storeRaw = data["goatbar-functional-store-v11"];
-
-if (!storeRaw) {
-  console.error("Store v11 não encontrada.");
-  process.exit(1);
-}
-
-const store = JSON.parse(storeRaw);
-
-console.log("\n===== RESUMO =====");
-console.log("Drinks:", store.drinks?.length || 0);
-console.log("Eventos:", store.eventos?.length || 0);
-console.log("Vendas:", store.vendas?.length || 0);
-console.log("Inventário:", store.inventoryItems?.length || 0);
-console.log("Sessões financeiras:", store.financialSessions?.length || 0);
-
-console.log("\nSCRIPT OK.");import fs from "fs";
->>>>>>> 863949b (everything)
