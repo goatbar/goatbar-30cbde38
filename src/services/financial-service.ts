@@ -311,14 +311,17 @@ export const financialService = {
     };
 
     const resolvePersistedCustoUnitario = (item: any, modalidade: string): number => {
+      if (item.custoUnitario !== undefined && item.custoUnitario !== null) {
+        return toFiniteNumber(item.custoUnitario);
+      }
       const d =
         drinks.find((x: any) => x.id === item.drinkId) ||
         drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
       
       if (modalidade === "7Steakhouse") {
-        return toFiniteNumber(d?.modalityConfig?.steakhouse?.cost ?? item.custoUnitario ?? 0);
+        return toFiniteNumber(d?.modalityConfig?.steakhouse?.cost ?? 0);
       }
-      return toFiniteNumber(item.custoUnitario ?? d?.modalityConfig?.goatbotequim?.cost ?? 0);
+      return toFiniteNumber(d?.modalityConfig?.goatbotequim?.cost ?? 0);
     };
 
     // BUG 5 fix: normalize modalidade before filtering to catch LocalStorage sessions

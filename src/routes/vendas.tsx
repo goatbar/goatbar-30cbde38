@@ -516,7 +516,9 @@ function VendasPage() {
         const receitaGoat = (s.items || []).reduce((acc: number, item: any) => {
           const d = allDrinks.find((x) => x.id === item.drinkId) ||
                     allDrinks.find((x) => x.nome === item.nome || x.nome === item.drink_name);
-          const cost = Number(d?.modalityConfig?.steakhouse?.cost ?? item.custoUnitario ?? 0);
+          const cost = item.custoUnitario !== undefined && item.custoUnitario !== null
+            ? Number(item.custoUnitario)
+            : Number(d?.modalityConfig?.steakhouse?.cost ?? 0);
           return acc + cost * Number(item.quantidade || 0);
         }, 0);
 
@@ -1017,30 +1019,48 @@ function VendasPage() {
                       className="w-20 h-10 px-3 rounded-lg bg-input border border-border text-sm"
                     />
 
-                    <div className="text-xs text-muted-foreground px-2">
-                      {activeTab === "7Steakhouse" ? "Repasse p/ GB" : "Venda"}:{" "}
-                      <span className="text-foreground font-medium">
-                        {fmtBRL(
-                          Number(
-                            activeTab === "7Steakhouse"
-                              ? item.custoUnitario
-                              : item.precoUnitario || 0,
-                          ),
-                        )}
-                      </span>
+                    <div className="flex flex-col text-xs text-muted-foreground px-2">
+                      {activeTab === "7Steakhouse" ? (
+                        <>
+                          <div>
+                            Venda Final:{" "}
+                            <span className="text-foreground font-medium">
+                              {fmtBRL(Number(item.precoUnitario || 0))}
+                            </span>
+                          </div>
+                          <div>
+                            Custo Op.:{" "}
+                            <span className="text-foreground font-medium text-primary">
+                              {fmtBRL(Number(item.custoUnitario || 0))}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <div>
+                          Venda:{" "}
+                          <span className="text-foreground font-medium">
+                            {fmtBRL(Number(item.precoUnitario || 0))}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="text-xs text-muted-foreground px-2">
-                      {activeTab === "7Steakhouse" ? "Custo Insumo" : "Custo"}:{" "}
-                      <span className="text-foreground font-medium">
-                        {fmtBRL(
-                          Number(
-                            activeTab === "7Steakhouse"
-                              ? (item.custoInsumo ?? item.custoUnitario ?? 0)
-                              : item.custoUnitario || 0,
-                          ),
-                        )}
-                      </span>
+                    <div className="flex flex-col text-xs text-muted-foreground px-2">
+                      {activeTab === "7Steakhouse" ? (
+                        <div>
+                          Custo Insumo:{" "}
+                          <span className="text-foreground font-medium">
+                            {fmtBRL(Number(item.custoInsumo ?? item.custoUnitario ?? 0))}
+                          </span>
+                        </div>
+                      ) : (
+                        <div>
+                          Custo:{" "}
+                          <span className="text-foreground font-medium">
+                            {fmtBRL(Number(item.custoUnitario || 0))}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <GhostButton
@@ -1311,17 +1331,15 @@ function SessionRow({
         drinks.find((d) => d.nome === i.nome || d.nome === i.drink_name);
 
       const steakOperationalCost = toFiniteNumber(
-        fallbackDrink?.modalityConfig?.steakhouse?.cost ??
-          i.custoUnitario ??
-          fallbackDrink?.custoUnitario ??
-          0,
+        i.custoUnitario !== undefined && i.custoUnitario !== null
+          ? i.custoUnitario
+          : (fallbackDrink?.modalityConfig?.steakhouse?.cost ?? fallbackDrink?.custoUnitario ?? 0),
       );
 
       const goatOperationalCost = toFiniteNumber(
-        fallbackDrink?.modalityConfig?.goatbotequim?.cost ??
-          i.custoUnitario ??
-          fallbackDrink?.custoUnitario ??
-          0,
+        i.custoUnitario !== undefined && i.custoUnitario !== null
+          ? i.custoUnitario
+          : (fallbackDrink?.modalityConfig?.goatbotequim?.cost ?? fallbackDrink?.custoUnitario ?? 0),
       );
 
       const operationalCost = isSteak ? steakOperationalCost : goatOperationalCost;
@@ -1496,7 +1514,9 @@ function SessionRow({
                   const drinkObj = drinks.find((d) => d.id === it.drinkId) ||
                                    drinks.find((d) => d.nome === it.nome || d.nome === it.drink_name);
                   const resolvedCustoUnitario = isSteak
-                    ? (drinkObj?.modalityConfig?.steakhouse?.cost ?? it.custoUnitario ?? 0)
+                    ? (it.custoUnitario !== undefined && it.custoUnitario !== null
+                        ? it.custoUnitario
+                        : (drinkObj?.modalityConfig?.steakhouse?.cost ?? 0))
                     : it.custoUnitario;
 
                   return (
