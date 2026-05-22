@@ -200,7 +200,7 @@ function VendasPage() {
         nome: firstDrink.nome,
         quantidade: 1,
         precoUnitario: config?.price || 0,
-        custoUnitario: isSteak ? (config?.price || 0) : (config?.cost || 0),
+        custoUnitario: config?.cost || 0,
         custoInsumo: isSteak
           ? (firstDrink.modalityConfig?.evento?.cost ?? firstDrink.custoUnitario)
           : config?.cost,
@@ -223,7 +223,7 @@ function VendasPage() {
           drinkId: d.id,
           nome: d.nome,
           precoUnitario: config?.price || 0,
-          custoUnitario: isSteak ? (config?.price || 0) : (config?.cost || 0),
+          custoUnitario: config?.cost || 0,
           custoInsumo: isSteak ? (d.modalityConfig?.evento?.cost ?? d.custoUnitario) : config?.cost,
         };
       }
@@ -277,20 +277,20 @@ function VendasPage() {
         ...item,
         drinkId: matchedDrink?.id ?? item.drinkId,
         nome: item.nome ?? item.drink_name ?? matchedDrink?.nome ?? "",
-        precoUnitario: Number(item.precoUnitario ?? config?.price ?? 0),
+        precoUnitario: Number(config?.price ?? item.precoUnitario ?? 0),
         custoUnitario: Number(
-          item.custoUnitario ?? (activeTab === "7Steakhouse" ? config?.price : config?.cost) ?? 0,
+          config?.cost ?? item.custoUnitario ?? 0,
         ),
         custoInsumo:
           activeTab === "7Steakhouse"
             ? Number(
-                item.custoInsumo ??
-                  matchedDrink?.modalityConfig?.evento?.cost ??
+                matchedDrink?.modalityConfig?.evento?.cost ??
                   matchedDrink?.custoUnitario ??
+                  item.custoInsumo ??
                   item.custoUnitario ??
                   0,
               )
-            : Number(item.custoInsumo ?? item.custoUnitario ?? config?.cost ?? 0),
+            : Number(config?.cost ?? item.custoInsumo ?? item.custoUnitario ?? 0),
       } as SalesSessionItem;
     });
 
@@ -402,18 +402,16 @@ function VendasPage() {
 
       const novoPrecoUnitario = Number(modalidadeConfig?.price ?? item.precoUnitario ?? 0);
 
-      const novoCustoUnitario = isSteak
-        ? Number(modalidadeConfig?.price ?? item.custoUnitario ?? novoPrecoUnitario)
-        : Number(modalidadeConfig?.cost ?? item.custoUnitario ?? 0);
+      const novoCustoUnitario = Number(modalidadeConfig?.cost ?? item.custoUnitario ?? 0);
 
       const novoCustoInsumo = isSteak
         ? Number(
-            item.custoInsumo ??
-              matchedDrink?.modalityConfig?.evento?.cost ??
+            matchedDrink?.modalityConfig?.evento?.cost ??
               matchedDrink?.custoUnitario ??
+              item.custoInsumo ??
               novoCustoUnitario,
           )
-        : Number(item.custoInsumo ?? novoCustoUnitario);
+        : Number(modalidadeConfig?.cost ?? item.custoInsumo ?? novoCustoUnitario);
 
       return {
         ...item,
@@ -515,11 +513,12 @@ function VendasPage() {
         meses[key].lucro += sessionLucro;
         meses[key].bot += sessionLucro;
       } else {
-        const receitaGoat = (s.items || []).reduce(
-          (acc: number, item: any) =>
-            acc + Number(item.custoUnitario || 0) * Number(item.quantidade || 0),
-          0,
-        );
+        const receitaGoat = (s.items || []).reduce((acc: number, item: any) => {
+          const d = allDrinks.find((x) => x.id === item.drinkId) ||
+                    allDrinks.find((x) => x.nome === item.nome || x.nome === item.drink_name);
+          const cost = Number(d?.modalityConfig?.steakhouse?.cost ?? item.custoUnitario ?? 0);
+          return acc + cost * Number(item.quantidade || 0);
+        }, 0);
 
         const reposicao = Number(s.reposicaoRestaurante || 0);
         const sessionLucro = receitaGoat - sessionCusto - maoDeObra - reposicao;
@@ -578,13 +577,15 @@ function VendasPage() {
     const valorRetido7Steakhouse = filteredSessions
       .filter((s) => s.modalidade === "7Steakhouse")
       .reduce((acc, s) => {
-        const retidoSessao = (s.items || []).reduce(
-          (sum: number, item: any) =>
+        const retidoSessao = (s.items || []).reduce((sum: number, item: any) => {
+          const d = allDrinks.find((x) => x.id === item.drinkId) ||
+                    allDrinks.find((x) => x.nome === item.nome || x.nome === item.drink_name);
+          const cost = Number(d?.modalityConfig?.steakhouse?.cost ?? item.custoUnitario ?? 0);
+          return (
             sum +
-            (Number(item.precoUnitario || 0) - Number(item.custoUnitario || 0)) *
-              Number(item.quantidade || 0),
-          0,
-        );
+            (Number(item.precoUnitario || 0) - cost) * Number(item.quantidade || 0)
+          );
+        }, 0);
 
         return acc + retidoSessao;
       }, 0);
@@ -717,22 +718,7 @@ function VendasPage() {
               />
               <StatCard
                 label="Lucro Retido Rest."
-                value={fmtBRL(
-                  filteredSessions
-                    .filter((s) => s.modalidade === "7Steakhouse")
-                    .reduce(
-                      (acc, s) =>
-                        acc +
-                        (s.items || []).reduce(
-                          (sum: number, item: any) =>
-                            sum +
-                            (Number(item.precoUnitario || 0) - Number(item.custoUnitario || 0)) *
-                              Number(item.quantidade || 0),
-                          0,
-                        ),
-                      0,
-                    ),
-                )}
+                value={fmtBRL(ganhosTerceiros.valorRetido7Steakhouse)}
               />
               <StatCard
                 label="Mão de Obra"
@@ -1325,15 +1311,15 @@ function SessionRow({
         drinks.find((d) => d.nome === i.nome || d.nome === i.drink_name);
 
       const steakOperationalCost = toFiniteNumber(
-        i.custoUnitario ??
-          fallbackDrink?.modalityConfig?.steakhouse?.cost ??
+        fallbackDrink?.modalityConfig?.steakhouse?.cost ??
+          i.custoUnitario ??
           fallbackDrink?.custoUnitario ??
           0,
       );
 
       const goatOperationalCost = toFiniteNumber(
-        i.custoUnitario ??
-          fallbackDrink?.modalityConfig?.goatbotequim?.cost ??
+        fallbackDrink?.modalityConfig?.goatbotequim?.cost ??
+          i.custoUnitario ??
           fallbackDrink?.custoUnitario ??
           0,
       );
@@ -1506,18 +1492,41 @@ function SessionRow({
               </h4>
 
               <div className="space-y-3">
-                {items.map((it: any, i: number) => (
-                  <div key={i} className="flex justify-between items-center text-xs group/item">
-                    <div className="flex items-center gap-2">
-                      <span className="font-black text-primary w-6">{it.quantidade}x</span>
-                      <span className="font-medium text-foreground/80">{it.nome}</span>
-                    </div>
+                {items.map((it: any, i: number) => {
+                  const drinkObj = drinks.find((d) => d.id === it.drinkId) ||
+                                   drinks.find((d) => d.nome === it.nome || d.nome === it.drink_name);
+                  const resolvedCustoUnitario = isSteak
+                    ? (drinkObj?.modalityConfig?.steakhouse?.cost ?? it.custoUnitario ?? 0)
+                    : it.custoUnitario;
 
-                    <div className="font-bold text-muted-foreground group-hover/item:text-foreground transition-colors">
-                      {fmtBRL(toFiniteNumber(it.precoUnitario) * toFiniteNumber(it.quantidade))}
+                  return (
+                    <div key={i} className="flex justify-between items-start text-xs group/item py-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-primary w-6">{it.quantidade}x</span>
+                        <span className="font-medium text-foreground/80">{it.nome}</span>
+                      </div>
+
+                      <div className="text-right">
+                        {isSteak ? (
+                          <>
+                            <div className="font-bold text-muted-foreground group-hover/item:text-foreground transition-colors">
+                              {fmtBRL(toFiniteNumber(it.precoUnitario) * toFiniteNumber(it.quantidade))}
+                              <span className="text-[10px] font-normal ml-1 text-muted-foreground/60">(Venda)</span>
+                            </div>
+                            <div className="text-[10px] text-primary font-bold">
+                              {fmtBRL(toFiniteNumber(resolvedCustoUnitario) * toFiniteNumber(it.quantidade))}
+                              <span className="text-[9px] font-normal ml-1 text-muted-foreground/60">(Custo Op.)</span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="font-bold text-muted-foreground group-hover/item:text-foreground transition-colors">
+                            {fmtBRL(toFiniteNumber(it.precoUnitario) * toFiniteNumber(it.quantidade))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 <div className="pt-3 border-t border-border/40 flex justify-between items-center">
                   <span className="text-[10px] font-bold text-muted-foreground uppercase">

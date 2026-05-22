@@ -310,6 +310,17 @@ export const financialService = {
       return toFiniteNumber(item.custoUnitario ?? 0);
     };
 
+    const resolvePersistedCustoUnitario = (item: any, modalidade: string): number => {
+      const d =
+        drinks.find((x: any) => x.id === item.drinkId) ||
+        drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
+      
+      if (modalidade === "7Steakhouse") {
+        return toFiniteNumber(d?.modalityConfig?.steakhouse?.cost ?? item.custoUnitario ?? 0);
+      }
+      return toFiniteNumber(item.custoUnitario ?? d?.modalityConfig?.goatbotequim?.cost ?? 0);
+    };
+
     // BUG 5 fix: normalize modalidade before filtering to catch LocalStorage sessions
     // that may have stored old values like "Goatbotequim" without a space.
     const botList = sessions.filter((s) => normalizeModality(s.modalidade) === "Goat Botequim");
@@ -352,7 +363,7 @@ export const financialService = {
         acc +
         (s.items || []).reduce(
           (sum: number, item: any) =>
-            sum + toFiniteNumber(item.custoUnitario) * toFiniteNumber(item.quantidade),
+            sum + resolvePersistedCustoUnitario(item, "7Steakhouse") * toFiniteNumber(item.quantidade),
           0,
         ),
       0,

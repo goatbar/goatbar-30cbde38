@@ -115,9 +115,12 @@ function Dashboard() {
         const cur = map.get(item.drinkId) || { nome: item.nome, qtd: 0, receita: 0, lucro: 0 };
         cur.qtd += item.quantidade;
         if (isSteakhouse) {
-          const d = allDrinks.find((x) => x.id === item.drinkId);
-          cur.receita += item.custoUnitario * item.quantidade;
-          cur.lucro += (item.custoUnitario - (d?.custoUnitario || 0)) * item.quantidade;
+          const d = allDrinks.find((x) => x.id === item.drinkId) ||
+                    allDrinks.find((x) => x.nome === item.nome || x.nome === item.drink_name);
+          const resolvedCost = Number(d?.modalityConfig?.steakhouse?.cost ?? item.custoUnitario ?? 0);
+          const resolvedIngredientCost = Number(item.custoInsumo ?? d?.modalityConfig?.evento?.cost ?? d?.custoUnitario ?? 0);
+          cur.receita += resolvedCost * item.quantidade;
+          cur.lucro += (resolvedCost - resolvedIngredientCost) * item.quantidade;
         } else {
           cur.receita += item.precoUnitario * item.quantidade;
           cur.lucro += (item.precoUnitario - item.custoUnitario) * item.quantidade * 0.6;
