@@ -65,7 +65,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
       {/* MOBILE TOPBAR */}
-      <div className="lg:hidden flex items-center justify-between p-4 border-b border-border bg-surface sticky top-0 z-40">
+      <div className="md:hidden flex items-center justify-between p-4 border-b border-border bg-surface sticky top-0 z-40">
         <Link to="/" className="flex items-center gap-3">
           <img src={logo} alt="GOAT BAR" className="h-8 w-auto" />
           <div className="font-display text-[11px] font-semibold tracking-[0.18em] leading-none">
@@ -82,7 +82,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
 
       {/* MOBILE MENU DRAWER */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 flex lg:hidden">
+        <div className="fixed inset-0 z-50 flex md:hidden">
           <div
             className="fixed inset-0 bg-background/80 backdrop-blur-sm"
             onClick={() => setMobileMenuOpen(false)}
@@ -150,7 +150,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
       )}
 
       {/* DESKTOP SIDEBAR */}
-      <aside className="hidden lg:flex flex-col w-64 shrink-0 bg-sidebar border-r border-sidebar-border sticky top-0 h-screen overflow-y-auto">
+      <aside className="hidden md:flex flex-col w-64 shrink-0 bg-sidebar border-r border-sidebar-border sticky top-0 h-screen overflow-y-auto">
         <div className="px-6 pt-7 pb-8">
           <Link to="/" className="flex items-center gap-3">
             <img src={logo} alt="GOAT BAR" className="h-12 w-auto" />
@@ -209,11 +209,11 @@ export function AppShell({ children }: { children?: ReactNode }) {
       </aside>
 
       {/* MAIN */}
-      <main className="flex-1 min-w-0 flex flex-col pb-[calc(5.25rem+env(safe-area-inset-bottom))] lg:pb-0">
+      <main className="flex-1 min-w-0 w-full flex flex-col pb-[calc(5.25rem+env(safe-area-inset-bottom))] md:pb-0">
         {children ?? <Outlet />}
       </main>
 
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
         <div className="grid grid-cols-5 px-2 py-2">
           {visibleNav.slice(0, 5).map((item) => {
             const Icon = item.icon;

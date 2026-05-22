@@ -673,8 +673,8 @@ function VendasPage() {
         }
       />
 
-      <div className="px-8 py-7 space-y-7">
-        <div className="flex items-center gap-1 p-1 bg-surface border border-border rounded-xl w-fit">
+      <div className="page-container space-y-7">
+        <div className="flex w-full max-w-full overflow-x-auto items-center gap-1 p-1 bg-surface border border-border rounded-xl md:w-fit">
           {["Goat Botequim", "7Steakhouse", "Eventos", "Consolidação"].map((tab) => (
             <button
               key={tab}
@@ -696,7 +696,7 @@ function VendasPage() {
 
         {activeTab === "Goat Botequim" && (
           <div className="space-y-7">
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
               <StatCard label="Receita Bruta" value={fmtBRL(metrics.bot.receita)} />
               <StatCard label="Custo Drinks" value={fmtBRL(metrics.bot.custo)} />
               <StatCard
@@ -730,7 +730,7 @@ function VendasPage() {
               <StatCard label="Lucro Final" value={fmtBRL(metrics.bot.lucro)} highlight />
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex justify-stretch sm:justify-end">
               <PrimaryButton onClick={openNewSessionModal}>
                 <Plus className="h-4 w-4 mr-2" /> Lançar Sessão Botequim
               </PrimaryButton>
@@ -766,7 +766,7 @@ function VendasPage() {
 
         {activeTab === "7Steakhouse" && (
           <div className="space-y-7">
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
               <StatCard label="Receita Goatbar" value={fmtBRL(metrics.steak.receita)} />
               <StatCard label="Custo Insumos" value={fmtBRL(metrics.steak.custo)} />
               <StatCard

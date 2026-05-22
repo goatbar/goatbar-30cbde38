@@ -94,7 +94,7 @@ function ContratosPage() {
         subtitle="Gestão de modelos, assinaturas e utilitários de contrato."
       />
 
-      <div className="px-8 py-7 grid grid-cols-1 xl:grid-cols-12 gap-5">
+      <div className="page-container grid grid-cols-1 xl:grid-cols-12 gap-5">
         {/* Sidebar */}
         <aside className="xl:col-span-3 space-y-2">
           {tabs.map((s) => {

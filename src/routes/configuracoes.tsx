@@ -54,7 +54,7 @@ function ConfigPage() {
         }
       />
 
-      <div className="px-8 py-7 grid grid-cols-1 xl:grid-cols-12 gap-5">
+      <div className="page-container grid grid-cols-1 xl:grid-cols-12 gap-5">
         {/* Sidebar interna */}
         <aside className="xl:col-span-3 space-y-2">
           {sections.map((s) => {
