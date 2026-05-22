@@ -36,12 +36,12 @@ function stringToUuid(str: string): string {
     hex.push((seed % 16).toString(16));
   }
 
-  hex[12] = '4'; // set version to 4
-  const yOptions = ['8', '9', 'a', 'b'];
+  hex[12] = "4"; // set version to 4
+  const yOptions = ["8", "9", "a", "b"];
   const yVal = parseInt(hex[16], 16) % 4;
   hex[16] = yOptions[yVal];
 
-  const s = hex.join('');
+  const s = hex.join("");
   return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20, 32)}`;
 }
 
@@ -70,7 +70,9 @@ async function upsertWithTolerance(table: string, payload: Record<string, any>) 
 
     if (!(missingColumn in sanitized)) return { error };
 
-    console.warn(`[Supabase:${table}] Ignoring non-existent column during upsert: ${missingColumn}`);
+    console.warn(
+      `[Supabase:${table}] Ignoring non-existent column during upsert: ${missingColumn}`,
+    );
     delete sanitized[missingColumn];
     attempt += 1;
   }
@@ -93,7 +95,9 @@ async function insertWithTolerance(table: string, payload: Record<string, any>) 
 
     if (!(missingColumn in sanitized)) return { error };
 
-    console.warn(`[Supabase:${table}] Ignoring non-existent column during insert: ${missingColumn}`);
+    console.warn(
+      `[Supabase:${table}] Ignoring non-existent column during insert: ${missingColumn}`,
+    );
     delete sanitized[missingColumn];
     attempt += 1;
   }
@@ -121,7 +125,11 @@ export async function migrateLegacyStoreToSupabase() {
     functionalStore = rawFunctional ? (JSON.parse(rawFunctional) as LegacyStore) : {};
   } catch (error) {
     logDbError("Falha no parse do store funcional legado", "localStorage", rawFunctional, error);
-    return { success: false, migrated: false, message: "Dados legados inválidos (store funcional)." };
+    return {
+      success: false,
+      migrated: false,
+      message: "Dados legados inválidos (store funcional).",
+    };
   }
 
   try {
@@ -214,14 +222,23 @@ export async function migrateLegacyStoreToSupabase() {
         labor_names: s.labor_names ?? s.maoDeObraNomes,
         labor_details: s.labor_details ?? s.maoDeObraDetalhes ?? [],
         reposicao_restaurante: Number(s.reposicaoRestaurante || s.reposicao_restaurante || 0),
-        custos_restaurante_detalhes: s.custosRestauranteDetalhes || s.custos_restaurante_detalhes || [],
+        custos_restaurante_detalhes:
+          s.custosRestauranteDetalhes || s.custos_restaurante_detalhes || [],
       };
 
-      const { error: sessionError } = await upsertWithTolerance("financial_sessions", sessionPayload);
+      const { error: sessionError } = await upsertWithTolerance(
+        "financial_sessions",
+        sessionPayload,
+      );
 
       if (sessionError) {
         errorCount += 1;
-        logDbError("Erro ao migrar sessão financeira", "financial_sessions", sessionPayload, sessionError);
+        logDbError(
+          "Erro ao migrar sessão financeira",
+          "financial_sessions",
+          sessionPayload,
+          sessionError,
+        );
         continue;
       }
 
@@ -242,11 +259,19 @@ export async function migrateLegacyStoreToSupabase() {
           ingredient_cost: Number(i.ingredient_cost ?? i.custoInsumo ?? 0),
         };
 
-        const { error: itemError } = await insertWithTolerance("financial_session_items", itemPayload);
+        const { error: itemError } = await insertWithTolerance(
+          "financial_session_items",
+          itemPayload,
+        );
 
         if (itemError) {
           errorCount += 1;
-          logDbError("Erro ao migrar item de sessão", "financial_session_items", itemPayload, itemError);
+          logDbError(
+            "Erro ao migrar item de sessão",
+            "financial_session_items",
+            itemPayload,
+            itemError,
+          );
         } else {
           migratedSessionItems += 1;
         }

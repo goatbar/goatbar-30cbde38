@@ -1,11 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
-import {
-  StatCard,
-  SectionCard,
-  PrimaryButton,
-  GhostButton,
-} from "@/components/ui-bits";
+import { StatCard, SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
 import {
   Plus,
@@ -22,9 +17,7 @@ import {
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useAppStore } from "@/lib/app-store";
-import {
-  type SalesSessionItem,
-} from "@/lib/mock-data";
+import { type SalesSessionItem } from "@/lib/mock-data";
 import { eventBudgetService } from "@/services/event-budget-service";
 import { financialService } from "@/services/financial-service";
 import { eventContractsService } from "@/services/contract-service";
@@ -278,9 +271,7 @@ function VendasPage() {
         drinkId: matchedDrink?.id ?? item.drinkId,
         nome: item.nome ?? item.drink_name ?? matchedDrink?.nome ?? "",
         precoUnitario: Number(config?.price ?? item.precoUnitario ?? 0),
-        custoUnitario: Number(
-          config?.cost ?? item.custoUnitario ?? 0,
-        ),
+        custoUnitario: Number(config?.cost ?? item.custoUnitario ?? 0),
         custoInsumo:
           activeTab === "7Steakhouse"
             ? Number(
@@ -398,7 +389,8 @@ function VendasPage() {
         allDrinks.find((d) => d.id === item.drinkId) ||
         allDrinks.find((d) => d.nome === item.nome || d.nome === item.drink_name);
 
-      const modalidadeConfig = matchedDrink?.modalityConfig?.[isSteak ? "steakhouse" : "goatbotequim"];
+      const modalidadeConfig =
+        matchedDrink?.modalityConfig?.[isSteak ? "steakhouse" : "goatbotequim"];
 
       const novoPrecoUnitario = Number(modalidadeConfig?.price ?? item.precoUnitario ?? 0);
 
@@ -514,11 +506,13 @@ function VendasPage() {
         meses[key].bot += sessionLucro;
       } else {
         const receitaGoat = (s.items || []).reduce((acc: number, item: any) => {
-          const d = allDrinks.find((x) => x.id === item.drinkId) ||
-                    allDrinks.find((x) => x.nome === item.nome || x.nome === item.drink_name);
-          const cost = item.custoUnitario !== undefined && item.custoUnitario !== null
-            ? Number(item.custoUnitario)
-            : Number(d?.modalityConfig?.steakhouse?.cost ?? 0);
+          const d =
+            allDrinks.find((x) => x.id === item.drinkId) ||
+            allDrinks.find((x) => x.nome === item.nome || x.nome === item.drink_name);
+          const cost =
+            item.custoUnitario !== undefined && item.custoUnitario !== null
+              ? Number(item.custoUnitario)
+              : Number(d?.modalityConfig?.steakhouse?.cost ?? 0);
           return acc + cost * Number(item.quantidade || 0);
         }, 0);
 
@@ -580,13 +574,11 @@ function VendasPage() {
       .filter((s) => s.modalidade === "7Steakhouse")
       .reduce((acc, s) => {
         const retidoSessao = (s.items || []).reduce((sum: number, item: any) => {
-          const d = allDrinks.find((x) => x.id === item.drinkId) ||
-                    allDrinks.find((x) => x.nome === item.nome || x.nome === item.drink_name);
+          const d =
+            allDrinks.find((x) => x.id === item.drinkId) ||
+            allDrinks.find((x) => x.nome === item.nome || x.nome === item.drink_name);
           const cost = Number(d?.modalityConfig?.steakhouse?.cost ?? item.custoUnitario ?? 0);
-          return (
-            sum +
-            (Number(item.precoUnitario || 0) - cost) * Number(item.quantidade || 0)
-          );
+          return sum + (Number(item.precoUnitario || 0) - cost) * Number(item.quantidade || 0);
         }, 0);
 
         return acc + retidoSessao;
@@ -637,9 +629,7 @@ function VendasPage() {
         </div>
 
         {loading && (
-          <div className="text-sm text-muted-foreground">
-            Carregando dados financeiros...
-          </div>
+          <div className="text-sm text-muted-foreground">Carregando dados financeiros...</div>
         )}
 
         {activeTab === "Goat Botequim" && (
@@ -684,7 +674,10 @@ function VendasPage() {
               </PrimaryButton>
             </div>
 
-            <SectionCard title="Sessões Lançadas" subtitle="Histórico de vendas consolidadas por dia">
+            <SectionCard
+              title="Sessões Lançadas"
+              subtitle="Histórico de vendas consolidadas por dia"
+            >
               <div className="space-y-4">
                 {filteredSessions
                   .filter((s) => s.modalidade === "Goat Botequim")
@@ -749,7 +742,10 @@ function VendasPage() {
               </PrimaryButton>
             </div>
 
-            <SectionCard title="Sessões Semanais Lançadas" subtitle="Vendas diárias agregadas por semana">
+            <SectionCard
+              title="Sessões Semanais Lançadas"
+              subtitle="Vendas diárias agregadas por semana"
+            >
               <div className="space-y-4">
                 {filteredSessions
                   .filter((s) => s.modalidade === "7Steakhouse")
@@ -1320,8 +1316,7 @@ function SessionRow({
 
   const calc = useMemo(() => {
     const rb = items.reduce(
-      (acc: number, i: any) =>
-        acc + toFiniteNumber(i.precoUnitario) * toFiniteNumber(i.quantidade),
+      (acc: number, i: any) => acc + toFiniteNumber(i.precoUnitario) * toFiniteNumber(i.quantidade),
       0,
     );
 
@@ -1339,7 +1334,9 @@ function SessionRow({
       const goatOperationalCost = toFiniteNumber(
         i.custoUnitario !== undefined && i.custoUnitario !== null
           ? i.custoUnitario
-          : (fallbackDrink?.modalityConfig?.goatbotequim?.cost ?? fallbackDrink?.custoUnitario ?? 0),
+          : (fallbackDrink?.modalityConfig?.goatbotequim?.cost ??
+              fallbackDrink?.custoUnitario ??
+              0),
       );
 
       const operationalCost = isSteak ? steakOperationalCost : goatOperationalCost;
@@ -1353,7 +1350,9 @@ function SessionRow({
         drinks.find((d) => d.nome === i.nome || d.nome === i.drink_name);
 
       const fallbackCost = isSteak
-        ? toFiniteNumber(fallbackDrink?.modalityConfig?.evento?.cost ?? fallbackDrink?.custoUnitario ?? 0)
+        ? toFiniteNumber(
+            fallbackDrink?.modalityConfig?.evento?.cost ?? fallbackDrink?.custoUnitario ?? 0,
+          )
         : toFiniteNumber(i.custoUnitario ?? fallbackDrink?.modalityConfig?.goatbotequim?.cost ?? 0);
 
       const itemCost = isSteak
@@ -1511,16 +1510,20 @@ function SessionRow({
 
               <div className="space-y-3">
                 {items.map((it: any, i: number) => {
-                  const drinkObj = drinks.find((d) => d.id === it.drinkId) ||
-                                   drinks.find((d) => d.nome === it.nome || d.nome === it.drink_name);
+                  const drinkObj =
+                    drinks.find((d) => d.id === it.drinkId) ||
+                    drinks.find((d) => d.nome === it.nome || d.nome === it.drink_name);
                   const resolvedCustoUnitario = isSteak
-                    ? (it.custoUnitario !== undefined && it.custoUnitario !== null
-                        ? it.custoUnitario
-                        : (drinkObj?.modalityConfig?.steakhouse?.cost ?? 0))
+                    ? it.custoUnitario !== undefined && it.custoUnitario !== null
+                      ? it.custoUnitario
+                      : (drinkObj?.modalityConfig?.steakhouse?.cost ?? 0)
                     : it.custoUnitario;
 
                   return (
-                    <div key={i} className="flex justify-between items-start text-xs group/item py-0.5">
+                    <div
+                      key={i}
+                      className="flex justify-between items-start text-xs group/item py-0.5"
+                    >
                       <div className="flex items-center gap-2">
                         <span className="font-black text-primary w-6">{it.quantidade}x</span>
                         <span className="font-medium text-foreground/80">{it.nome}</span>
@@ -1530,17 +1533,28 @@ function SessionRow({
                         {isSteak ? (
                           <>
                             <div className="font-bold text-muted-foreground group-hover/item:text-foreground transition-colors">
-                              {fmtBRL(toFiniteNumber(it.precoUnitario) * toFiniteNumber(it.quantidade))}
-                              <span className="text-[10px] font-normal ml-1 text-muted-foreground/60">(Venda)</span>
+                              {fmtBRL(
+                                toFiniteNumber(it.precoUnitario) * toFiniteNumber(it.quantidade),
+                              )}
+                              <span className="text-[10px] font-normal ml-1 text-muted-foreground/60">
+                                (Venda)
+                              </span>
                             </div>
                             <div className="text-[10px] text-primary font-bold">
-                              {fmtBRL(toFiniteNumber(resolvedCustoUnitario) * toFiniteNumber(it.quantidade))}
-                              <span className="text-[9px] font-normal ml-1 text-muted-foreground/60">(Custo Op.)</span>
+                              {fmtBRL(
+                                toFiniteNumber(resolvedCustoUnitario) *
+                                  toFiniteNumber(it.quantidade),
+                              )}
+                              <span className="text-[9px] font-normal ml-1 text-muted-foreground/60">
+                                (Custo Op.)
+                              </span>
                             </div>
                           </>
                         ) : (
                           <div className="font-bold text-muted-foreground group-hover/item:text-foreground transition-colors">
-                            {fmtBRL(toFiniteNumber(it.precoUnitario) * toFiniteNumber(it.quantidade))}
+                            {fmtBRL(
+                              toFiniteNumber(it.precoUnitario) * toFiniteNumber(it.quantidade),
+                            )}
                           </div>
                         )}
                       </div>
@@ -1560,7 +1574,9 @@ function SessionRow({
                     <span className="text-[10px] font-bold text-muted-foreground uppercase">
                       Receita Goat Bar
                     </span>
-                    <span className="font-black text-sm text-primary">{fmtBRL(calc.receitaGoat)}</span>
+                    <span className="font-black text-sm text-primary">
+                      {fmtBRL(calc.receitaGoat)}
+                    </span>
                   </div>
                 )}
 
@@ -1582,7 +1598,10 @@ function SessionRow({
 
                     <div className="space-y-3">
                       {session.custosRestauranteDetalhes.map((it: any, idx: number) => (
-                        <div key={idx} className="flex justify-between items-center text-xs group/item">
+                        <div
+                          key={idx}
+                          className="flex justify-between items-center text-xs group/item"
+                        >
                           <span className="font-medium text-foreground/80">{it.descricao}</span>
                           <span className="font-bold text-muted-foreground">
                             {fmtBRL(toFiniteNumber(it.valor))}

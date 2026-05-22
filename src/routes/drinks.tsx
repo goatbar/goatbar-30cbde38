@@ -169,13 +169,9 @@ function DrinkCard({
   onDelete: () => void;
 }) {
   const price7S = d.modalityConfig?.steakhouse?.price;
-  const margem7S = price7S
-    ? ((price7S - d.custoUnitario) / price7S) * 100
-    : 0;
+  const margem7S = price7S ? ((price7S - d.custoUnitario) / price7S) * 100 : 0;
   const priceGB = d.modalityConfig?.goatbotequim?.price;
-  const margemGB = priceGB
-    ? ((priceGB - d.custoUnitario) / priceGB) * 100
-    : 0;
+  const margemGB = priceGB ? ((priceGB - d.custoUnitario) / priceGB) * 100 : 0;
 
   // Load image from IndexedDB if the stored value is an idb: reference
   const [resolvedImage, setResolvedImage] = useState<string | null>(

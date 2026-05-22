@@ -317,7 +317,7 @@ export const financialService = {
       const d =
         drinks.find((x: any) => x.id === item.drinkId) ||
         drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
-      
+
       if (modalidade === "7Steakhouse") {
         return toFiniteNumber(d?.modalityConfig?.steakhouse?.cost ?? 0);
       }
@@ -366,7 +366,8 @@ export const financialService = {
         acc +
         (s.items || []).reduce(
           (sum: number, item: any) =>
-            sum + resolvePersistedCustoUnitario(item, "7Steakhouse") * toFiniteNumber(item.quantidade),
+            sum +
+            resolvePersistedCustoUnitario(item, "7Steakhouse") * toFiniteNumber(item.quantidade),
           0,
         ),
       0,
