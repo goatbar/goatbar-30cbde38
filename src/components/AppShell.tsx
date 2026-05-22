@@ -63,9 +63,9 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const initials = (user?.email ?? "GB").slice(0, 2).toUpperCase();
   const displayName = user?.email?.split("@")[0] ?? "Gestor";
   return (
-    <div className="flex min-h-screen w-full bg-background text-foreground">
+    <div className="flex min-h-screen w-full min-w-0 max-w-[100vw] flex-col overflow-x-hidden bg-background text-foreground md:flex-row">
       {/* MOBILE TOPBAR */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b border-border bg-surface sticky top-0 z-40">
+      <div className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-surface p-4 md:hidden">
         <Link to="/" className="flex items-center gap-3">
           <img src={logo} alt="GOAT BAR" className="h-8 w-auto" />
           <div className="font-display text-[11px] font-semibold tracking-[0.18em] leading-none">
@@ -209,7 +209,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
       </aside>
 
       {/* MAIN */}
-      <main className="flex-1 min-w-0 w-full flex flex-col pb-[calc(5.25rem+env(safe-area-inset-bottom))] md:pb-0">
+      <main className="flex w-full min-w-0 max-w-[100vw] flex-1 flex-col overflow-x-hidden pb-[calc(5.25rem+env(safe-area-inset-bottom))] md:pb-0">
         {children ?? <Outlet />}
       </main>
 
