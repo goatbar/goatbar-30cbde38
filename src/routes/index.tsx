@@ -12,8 +12,8 @@ import {
 } from "lucide-react";
 import { eventBudgetService } from "@/services/event-budget-service";
 import { financialService } from "@/services/financial-service";
-import { goatbarService } from "@/services/goatbar-service";
 import { useState, useMemo, useEffect } from "react";
+import { useAppStore } from "@/lib/app-store";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -26,8 +26,8 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
+  const { drinks: allDrinks } = useAppStore();
   const [financialSessions, setFinancialSessions] = useState<any[]>([]);
-  const [allDrinks, setAllDrinks] = useState<any[]>([]);
   const [eventosSupabase, setEventosSupabase] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodoDias, setPeriodoDias] = useState<number>(30);
@@ -35,14 +35,12 @@ function Dashboard() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [evs, sessions, drinksData] = await Promise.all([
+      const [evs, sessions] = await Promise.all([
         eventBudgetService.listEvents(),
         financialService.listSessions(),
-        goatbarService.listDrinks(),
       ]);
       setEventosSupabase(evs || []);
       setFinancialSessions(sessions || []);
-      setAllDrinks(drinksData || []);
     } catch (e) {
       console.error("Erro ao carregar dados do Dashboard:", e);
     } finally {

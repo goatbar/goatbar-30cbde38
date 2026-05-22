@@ -110,12 +110,12 @@ export async function migrateLegacyStoreToSupabase() {
   const rawMockDb = localStorage.getItem("goatbar_mock_db_v1");
   const migratedFlag = localStorage.getItem(LEGACY_MIGRATED_KEY) === "1";
 
-  if (!rawFunctional && !rawMockDb) {
-    return { success: true, migrated: false, message: "Sem dados legados." };
+  if (migratedFlag) {
+    return { success: true, migrated: false, message: "Migração já executada." };
   }
 
-  if (migratedFlag && !rawFunctional && !rawMockDb) {
-    return { success: true, migrated: false, message: "Migração já executada." };
+  if (!rawFunctional && !rawMockDb) {
+    return { success: true, migrated: false, message: "Sem dados legados." };
   }
 
   let functionalStore: LegacyStore = {};
@@ -292,7 +292,7 @@ export async function migrateLegacyStoreToSupabase() {
     }
 
     localStorage.setItem(LEGACY_MIGRATED_KEY, "1");
-    localStorage.removeItem(STORAGE_KEY);
+    // Preservamos o STORAGE_KEY ativo pois ele contém drinks, contratos e glasswares que não são salvos no Supabase.
     localStorage.removeItem("goatbar_mock_db_v1");
 
     return {
