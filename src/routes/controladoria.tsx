@@ -210,7 +210,7 @@ function ControladoriaPage() {
         }
       />
 
-      <div className="px-8 py-7 space-y-7 max-w-[1600px] mx-auto w-full">
+      <div className="page-container space-y-7 max-w-[1600px] mx-auto w-full">
         {/* RESUMO */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           <StatCard

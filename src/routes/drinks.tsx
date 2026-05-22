@@ -83,7 +83,7 @@ function DrinksPage() {
         }
       />
 
-      <div className="px-8 py-7 space-y-7">
+      <div className="page-container space-y-7">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
           <StatCard
             label="Total no catálogo"
