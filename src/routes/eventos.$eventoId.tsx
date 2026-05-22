@@ -993,7 +993,7 @@ function EventoInterna() {
                                 </span>
                               </div>
                               <div className="text-[9px] font-bold text-primary/80">
-                                Sugerido: {fmtBRL(d.modalityConfig.steakhouse.price || 0)}
+                                Sugerido: {fmtBRL(d.modalityConfig?.steakhouse?.price || 0)}
                               </div>
                             </div>
                           </div>

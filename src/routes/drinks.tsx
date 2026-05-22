@@ -168,14 +168,13 @@ function DrinkCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const margem7S = d.modalityConfig?.steakhouse?.price
-    ? ((d.modalityConfig.steakhouse.price - d.custoUnitario) / d.modalityConfig.steakhouse.price) *
-      100
+  const price7S = d.modalityConfig?.steakhouse?.price;
+  const margem7S = price7S
+    ? ((price7S - d.custoUnitario) / price7S) * 100
     : 0;
-  const margemGB = d.modalityConfig?.goatbotequim?.price
-    ? ((d.modalityConfig.goatbotequim.price - d.custoUnitario) /
-        d.modalityConfig.goatbotequim.price) *
-      100
+  const priceGB = d.modalityConfig?.goatbotequim?.price;
+  const margemGB = priceGB
+    ? ((priceGB - d.custoUnitario) / priceGB) * 100
     : 0;
 
   // Load image from IndexedDB if the stored value is an idb: reference
@@ -264,7 +263,7 @@ function DrinkCard({
             <div className="font-medium mt-0.5 flex flex-col gap-0.5">
               <span>
                 {d.modalityConfig?.steakhouse?.active
-                  ? fmtBRL(d.modalityConfig.steakhouse.price || 0)
+                  ? fmtBRL(d.modalityConfig?.steakhouse?.price || 0)
                   : "---"}
               </span>
               {d.modalityConfig?.steakhouse?.active && (
@@ -279,12 +278,12 @@ function DrinkCard({
             <div className="font-medium mt-0.5 flex flex-col gap-0.5">
               <span>
                 {d.modalityConfig?.goatbotequim?.active
-                  ? d.modalityConfig.goatbotequim.price
-                    ? fmtBRL(d.modalityConfig.goatbotequim.price)
+                  ? d.modalityConfig?.goatbotequim?.price
+                    ? fmtBRL(d.modalityConfig?.goatbotequim?.price)
                     : "S/ Preço"
                   : "---"}
               </span>
-              {d.modalityConfig?.goatbotequim?.active && d.modalityConfig.goatbotequim.price && (
+              {d.modalityConfig?.goatbotequim?.active && d.modalityConfig?.goatbotequim?.price && (
                 <span className={`text-[9px] ${margemGB >= 50 ? "text-success" : "text-warning"}`}>
                   MG: {margemGB.toFixed(0)}%
                 </span>
@@ -327,7 +326,14 @@ function EditModal({
   const [categoria, setCategoria] = useState(drink.categoria);
   const [descricao, setDescricao] = useState(drink.descricao || "");
   const [imagem, setImagem] = useState(drink.imagem || "");
-  const [config, setConfig] = useState(drink.modalityConfig);
+  const [config, setConfig] = useState(() => {
+    const base = drink.modalityConfig || {};
+    return {
+      evento: { active: true, cost: 0, ...base.evento },
+      steakhouse: { active: false, cost: 0, price: 0, ...base.steakhouse },
+      goatbotequim: { active: false, cost: 0, price: 0, ...base.goatbotequim },
+    };
+  });
   const [insumos, setInsumos] = useState<{ nome: string; custo: number }[]>(drink.insumos || []);
   const insumosTotal = insumos.reduce((a, b) => a + b.custo, 0);
 
