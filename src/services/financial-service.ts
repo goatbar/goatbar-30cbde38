@@ -284,44 +284,64 @@ export const financialService = {
   },
 
   calculateMetrics(sessions: any[], events: any[], drinks: any[]) {
-    // Resolve cost in a safe, prioritized way:
-    // 1. Use the cost PERSISTED in the session item at launch time (source of truth).
-    // 2. Fall back to the live drink cost only if the persisted value is absent.
-    // Uses toFiniteNumber for safe NaN/Infinity protection.
-    const resolvePersistedCost = (item: any, modalidade: string): number => {
-      if (modalidade === "Goat Botequim") {
-        if (item.custoUnitario !== undefined && item.custoUnitario !== null) {
-          return toFiniteNumber(item.custoUnitario);
-        }
-        const d =
-          drinks.find((x: any) => x.id === item.drinkId) ||
-          drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
-        return toFiniteNumber(d?.modalityConfig?.goatbotequim?.cost ?? d?.custoUnitario ?? 0);
-      }
-      if (modalidade === "7Steakhouse") {
-        if (item.custoInsumo !== undefined && item.custoInsumo !== null) {
-          return toFiniteNumber(item.custoInsumo);
-        }
-        const d =
-          drinks.find((x: any) => x.id === item.drinkId) ||
-          drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
-        return toFiniteNumber(d?.modalityConfig?.evento?.cost ?? d?.custoUnitario ?? 0);
-      }
-      return toFiniteNumber(item.custoUnitario ?? 0);
-    };
-
-    const resolvePersistedCustoUnitario = (item: any, modalidade: string): number => {
-      if (item.custoUnitario !== undefined && item.custoUnitario !== null) {
-        return toFiniteNumber(item.custoUnitario);
-      }
+    // Resolve price, operational cost and insumo cost dynamically prioritizing live drink configuration:
+    // If the drink is found in the current live database catalog, use its latest values.
+    // Otherwise, fallback to the values persisted in the session item.
+    const resolveLivePrice = (item: any, modalidade: string): number => {
       const d =
         drinks.find((x: any) => x.id === item.drinkId) ||
         drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
 
-      if (modalidade === "7Steakhouse") {
-        return toFiniteNumber(d?.modalityConfig?.steakhouse?.cost ?? 0);
+      if (d) {
+        const livePrice =
+          modalidade === "7Steakhouse"
+            ? d.modalityConfig?.steakhouse?.price
+            : d.modalityConfig?.goatbotequim?.price;
+        if (livePrice !== undefined && livePrice !== null) {
+          return toFiniteNumber(livePrice);
+        }
       }
-      return toFiniteNumber(d?.modalityConfig?.goatbotequim?.cost ?? 0);
+      return toFiniteNumber(item.precoUnitario ?? 0);
+    };
+
+    const resolvePersistedCost = (item: any, modalidade: string): number => {
+      const d =
+        drinks.find((x: any) => x.id === item.drinkId) ||
+        drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
+
+      if (d) {
+        const liveCost =
+          modalidade === "7Steakhouse"
+            ? d.modalityConfig?.evento?.cost
+            : d.modalityConfig?.goatbotequim?.cost;
+        if (liveCost !== undefined && liveCost !== null) {
+          return toFiniteNumber(liveCost);
+        }
+        return toFiniteNumber(d.custoUnitario ?? 0);
+      }
+
+      if (modalidade === "7Steakhouse") {
+        return toFiniteNumber(item.custoInsumo ?? item.custoUnitario ?? 0);
+      }
+      return toFiniteNumber(item.custoUnitario ?? item.custoInsumo ?? 0);
+    };
+
+    const resolvePersistedCustoUnitario = (item: any, modalidade: string): number => {
+      const d =
+        drinks.find((x: any) => x.id === item.drinkId) ||
+        drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
+
+      if (d) {
+        const liveCost =
+          modalidade === "7Steakhouse"
+            ? d.modalityConfig?.steakhouse?.cost
+            : d.modalityConfig?.goatbotequim?.cost;
+        if (liveCost !== undefined && liveCost !== null) {
+          return toFiniteNumber(liveCost);
+        }
+        return toFiniteNumber(d.custoUnitario ?? 0);
+      }
+      return toFiniteNumber(item.custoUnitario ?? 0);
     };
 
     // BUG 5 fix: normalize modalidade before filtering to catch LocalStorage sessions
@@ -332,7 +352,7 @@ export const financialService = {
         acc +
         (s.items || []).reduce(
           (sum: number, item: any) =>
-            sum + toFiniteNumber(item.precoUnitario) * toFiniteNumber(item.quantidade),
+            sum + resolveLivePrice(item, "Goat Botequim") * toFiniteNumber(item.quantidade),
           0,
         ),
       0,

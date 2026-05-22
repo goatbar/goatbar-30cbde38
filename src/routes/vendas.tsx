@@ -14,6 +14,8 @@ import {
   CheckCircle2,
   AlertCircle,
   RefreshCcw,
+  Check,
+  Search,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useAppStore } from "@/lib/app-store";
@@ -105,6 +107,20 @@ function VendasPage() {
 
   const [showModal, setShowModal] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+
+  const [showLegacyEventModal, setShowLegacyEventModal] = useState(false);
+  const [legacyForm, setLegacyForm] = useState({
+    clientName: "",
+    eventType: "Casamento",
+    date: "",
+    city: "São Paulo",
+    guests: 100,
+    drinks: [] as string[],
+    finalBudgetValue: "",
+    paidValue: "",
+  });
+  const [savingLegacyEvent, setSavingLegacyEvent] = useState(false);
+  const [buscaDrinkLegacy, setBuscaDrinkLegacy] = useState("");
 
   const [modalDate, setModalDate] = useState(new Date().toISOString().split("T")[0]);
   const [modalItems, setModalItems] = useState<SalesSessionItem[]>([]);
@@ -378,6 +394,52 @@ function VendasPage() {
       setFinancialSessions((prev) => prev.filter((s) => s.id !== sessionId));
     } finally {
       loadAllData();
+    }
+  };
+
+  const handleSaveLegacyEvent = async () => {
+    if (!legacyForm.clientName || !legacyForm.date) {
+      alert("Por favor, preencha os campos obrigatórios (Nome do Cliente e Data).");
+      return;
+    }
+    setSavingLegacyEvent(true);
+    try {
+      const selectedDrinksList = allDrinks.filter((d) => legacyForm.drinks.includes(d.id));
+      const totalCost = selectedDrinksList.reduce((acc, d) => {
+        return acc + Number(d.modalityConfig?.evento?.cost ?? d.custoUnitario ?? 0);
+      }, 0);
+      const avgCost = legacyForm.drinks.length > 0 ? totalCost / legacyForm.drinks.length : 0;
+
+      await eventBudgetService.createLegacyEvent({
+        client_name: legacyForm.clientName,
+        event_type: legacyForm.eventType,
+        date: legacyForm.date,
+        city: legacyForm.city,
+        guests: Number(legacyForm.guests) || 0,
+        drinks: legacyForm.drinks,
+        final_budget_value: Number(legacyForm.finalBudgetValue) || 0,
+        paid_value: Number(legacyForm.paidValue) || 0,
+        average_drink_cost: avgCost,
+      });
+
+      alert("Evento antigo lançado com sucesso!");
+      setShowLegacyEventModal(false);
+      setLegacyForm({
+        clientName: "",
+        eventType: "Casamento",
+        date: "",
+        city: "São Paulo",
+        guests: 100,
+        drinks: [],
+        finalBudgetValue: "",
+        paidValue: "",
+      });
+      await loadAllData();
+    } catch (e: any) {
+      console.error("Erro ao salvar evento antigo:", e);
+      alert(`Erro ao salvar evento antigo: ${e.message || "Erro desconhecido"}`);
+    } finally {
+      setSavingLegacyEvent(false);
     }
   };
 
@@ -781,6 +843,25 @@ function VendasPage() {
             <SectionCard
               title="Eventos Integrados"
               subtitle="Eventos confirmados e finalizados aparecem aqui automaticamente"
+              action={
+                <PrimaryButton
+                  onClick={() => {
+                    setLegacyForm({
+                      clientName: "",
+                      eventType: "Casamento",
+                      date: new Date().toISOString().split("T")[0],
+                      city: "São Paulo",
+                      guests: 100,
+                      drinks: [],
+                      finalBudgetValue: "",
+                      paidValue: "",
+                    });
+                    setShowLegacyEventModal(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" /> Lançar Evento Antigo
+                </PrimaryButton>
+              }
             >
               <div className="overflow-x-auto -mx-6">
                 <table className="w-full text-sm">
@@ -1271,6 +1352,220 @@ function VendasPage() {
           </div>
         </div>
       )}
+
+      {showLegacyEventModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-3xl bg-surface border border-border rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+              <div>
+                <h2 className="font-display text-lg font-semibold">
+                  Lançar Evento Antigo (Legado)
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Insira as informações básicas do evento realizado antes do sistema
+                </p>
+              </div>
+              <button
+                onClick={() => setShowLegacyEventModal(false)}
+                className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6 overflow-y-auto flex-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="label-eyebrow block mb-1.5">Nome do Cliente *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Casamento João & Maria"
+                    value={legacyForm.clientName}
+                    onChange={(e) => setLegacyForm((p) => ({ ...p, clientName: e.target.value }))}
+                    className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="label-eyebrow block mb-1.5">Tipo de Evento *</label>
+                  <select
+                    value={legacyForm.eventType}
+                    onChange={(e) => setLegacyForm((p) => ({ ...p, eventType: e.target.value }))}
+                    className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
+                  >
+                    {["Casamento", "Corporativo", "Aniversário", "Confraternização", "Outros"].map(
+                      (t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="label-eyebrow block mb-1.5">Data do Evento *</label>
+                  <input
+                    type="date"
+                    required
+                    value={legacyForm.date}
+                    onChange={(e) => setLegacyForm((p) => ({ ...p, date: e.target.value }))}
+                    className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="label-eyebrow block mb-1.5">Cidade do Evento</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: São Paulo"
+                    value={legacyForm.city}
+                    onChange={(e) => setLegacyForm((p) => ({ ...p, city: e.target.value }))}
+                    className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="label-eyebrow block mb-1.5">Número de Convidados</label>
+                  <input
+                    type="number"
+                    value={legacyForm.guests || ""}
+                    onChange={(e) =>
+                      setLegacyForm((p) => ({
+                        ...p,
+                        guests: e.target.value === "" ? 0 : Number(e.target.value),
+                      }))
+                    }
+                    className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="label-eyebrow block mb-1.5">Valor do Orçamento (R$) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={legacyForm.finalBudgetValue}
+                    onChange={(e) =>
+                      setLegacyForm((p) => ({ ...p, finalBudgetValue: e.target.value }))
+                    }
+                    className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="label-eyebrow block mb-1.5">Valor já Pago (R$) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={legacyForm.paidValue}
+                    onChange={(e) => setLegacyForm((p) => ({ ...p, paidValue: e.target.value }))}
+                    className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Drinks Section */}
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <label className="label-eyebrow block">Drinks do Cardápio *</label>
+                  <div className="relative w-full sm:w-64">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <input
+                      type="text"
+                      placeholder="Buscar drink..."
+                      value={buscaDrinkLegacy}
+                      onChange={(e) => setBuscaDrinkLegacy(e.target.value)}
+                      className="w-full h-9 pl-9 pr-3 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-xs transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-[220px] overflow-y-auto p-1.5 border border-border rounded-lg bg-background/50">
+                  {allDrinks
+                    .filter((d) => d.nome.toLowerCase().includes(buscaDrinkLegacy.toLowerCase()))
+                    .sort((a, b) => a.nome.localeCompare(b.nome))
+                    .map((d) => {
+                      const isSelected = legacyForm.drinks.includes(d.id);
+                      return (
+                        <div
+                          key={d.id}
+                          onClick={() => {
+                            setLegacyForm((p) => {
+                              const alreadySelected = p.drinks.includes(d.id);
+                              const nextDrinks = alreadySelected
+                                ? p.drinks.filter((x) => x !== d.id)
+                                : [...p.drinks, d.id];
+                              return { ...p, drinks: nextDrinks };
+                            });
+                          }}
+                          className={`relative overflow-hidden rounded-xl border-2 transition-all cursor-pointer group flex flex-col h-24 select-none ${
+                            isSelected
+                              ? "border-primary bg-primary/5 shadow-sm scale-[0.98]"
+                              : "border-border bg-surface hover:border-primary/40 hover:scale-[1.02]"
+                          }`}
+                        >
+                          {d.imagem ? (
+                            <div className="h-16 overflow-hidden relative">
+                              <img
+                                src={d.imagem}
+                                alt={d.nome}
+                                className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60" />
+                              {isSelected && (
+                                <div className="absolute top-1 right-1 bg-primary text-primary-foreground rounded-full p-0.5">
+                                  <Check className="h-3 w-3" />
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="h-16 bg-muted flex items-center justify-center relative">
+                              <span className="text-[10px] text-muted-foreground uppercase font-bold">
+                                Sem imagem
+                              </span>
+                              {isSelected && (
+                                <div className="absolute top-1 right-1 bg-primary text-primary-foreground rounded-full p-0.5">
+                                  <Check className="h-3 w-3" />
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          <div className="p-1.5 text-[11px] font-bold text-center truncate bg-surface/90 border-t border-border/40">
+                            {d.nome}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+                <div className="text-[11px] text-muted-foreground text-right">
+                  {legacyForm.drinks.length} drink(s) selecionado(s)
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-border flex justify-end gap-3 shrink-0">
+              <GhostButton onClick={() => setShowLegacyEventModal(false)}>Cancelar</GhostButton>
+              <PrimaryButton
+                onClick={handleSaveLegacyEvent}
+                disabled={
+                  savingLegacyEvent ||
+                  !legacyForm.clientName ||
+                  !legacyForm.date ||
+                  !legacyForm.finalBudgetValue ||
+                  !legacyForm.paidValue ||
+                  legacyForm.drinks.length === 0
+                }
+              >
+                {savingLegacyEvent ? "Salvando..." : "Salvar Evento Antigo"}
+              </PrimaryButton>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1315,28 +1610,44 @@ function SessionRow({
   const sessionEndDate = new Date(sessionDate.getTime() + 3 * 24 * 60 * 60 * 1000);
 
   const calc = useMemo(() => {
-    const rb = items.reduce(
-      (acc: number, i: any) => acc + toFiniteNumber(i.precoUnitario) * toFiniteNumber(i.quantidade),
-      0,
-    );
+    const rb = items.reduce((acc: number, i: any) => {
+      const fallbackDrink =
+        drinks.find((d) => d.id === i.drinkId) ||
+        drinks.find((d) => d.nome === i.nome || d.nome === i.drink_name);
+
+      const livePrice = fallbackDrink
+        ? (isSteak ? fallbackDrink.modalityConfig?.steakhouse?.price : fallbackDrink.modalityConfig?.goatbotequim?.price)
+        : undefined;
+
+      const price = toFiniteNumber(
+        livePrice !== undefined && livePrice !== null ? livePrice : i.precoUnitario
+      );
+
+      return acc + price * toFiniteNumber(i.quantidade);
+    }, 0);
 
     const rg = items.reduce((acc: number, i: any) => {
       const fallbackDrink =
         drinks.find((d) => d.id === i.drinkId) ||
         drinks.find((d) => d.nome === i.nome || d.nome === i.drink_name);
 
+      const liveSteakCost = fallbackDrink?.modalityConfig?.steakhouse?.cost;
+      const liveGoatCost = fallbackDrink?.modalityConfig?.goatbotequim?.cost;
+
       const steakOperationalCost = toFiniteNumber(
-        i.custoUnitario !== undefined && i.custoUnitario !== null
-          ? i.custoUnitario
-          : (fallbackDrink?.modalityConfig?.steakhouse?.cost ?? fallbackDrink?.custoUnitario ?? 0),
+        liveSteakCost !== undefined && liveSteakCost !== null
+          ? liveSteakCost
+          : (i.custoUnitario !== undefined && i.custoUnitario !== null
+            ? i.custoUnitario
+            : (fallbackDrink?.custoUnitario ?? 0))
       );
 
       const goatOperationalCost = toFiniteNumber(
-        i.custoUnitario !== undefined && i.custoUnitario !== null
-          ? i.custoUnitario
-          : (fallbackDrink?.modalityConfig?.goatbotequim?.cost ??
-              fallbackDrink?.custoUnitario ??
-              0),
+        liveGoatCost !== undefined && liveGoatCost !== null
+          ? liveGoatCost
+          : (i.custoUnitario !== undefined && i.custoUnitario !== null
+            ? i.custoUnitario
+            : (fallbackDrink?.custoUnitario ?? 0))
       );
 
       const operationalCost = isSteak ? steakOperationalCost : goatOperationalCost;
@@ -1349,15 +1660,18 @@ function SessionRow({
         drinks.find((d) => d.id === i.drinkId) ||
         drinks.find((d) => d.nome === i.nome || d.nome === i.drink_name);
 
-      const fallbackCost = isSteak
-        ? toFiniteNumber(
-            fallbackDrink?.modalityConfig?.evento?.cost ?? fallbackDrink?.custoUnitario ?? 0,
-          )
-        : toFiniteNumber(i.custoUnitario ?? fallbackDrink?.modalityConfig?.goatbotequim?.cost ?? 0);
+      let liveCost: number | undefined;
+      if (fallbackDrink) {
+        liveCost = isSteak
+          ? (fallbackDrink.modalityConfig?.evento?.cost ?? fallbackDrink.custoUnitario)
+          : (fallbackDrink.modalityConfig?.goatbotequim?.cost ?? fallbackDrink.custoUnitario);
+      }
 
-      const itemCost = isSteak
-        ? toFiniteNumber(i.custoInsumo ?? fallbackCost)
-        : toFiniteNumber(fallbackCost);
+      const itemCost = toFiniteNumber(
+        liveCost !== undefined && liveCost !== null
+          ? liveCost
+          : (isSteak ? (i.custoInsumo ?? i.custoUnitario ?? 0) : (i.custoUnitario ?? i.custoInsumo ?? 0))
+      );
 
       return acc + itemCost * toFiniteNumber(i.quantidade);
     }, 0);
@@ -1513,11 +1827,26 @@ function SessionRow({
                   const drinkObj =
                     drinks.find((d) => d.id === it.drinkId) ||
                     drinks.find((d) => d.nome === it.nome || d.nome === it.drink_name);
-                  const resolvedCustoUnitario = isSteak
-                    ? it.custoUnitario !== undefined && it.custoUnitario !== null
-                      ? it.custoUnitario
-                      : (drinkObj?.modalityConfig?.steakhouse?.cost ?? 0)
-                    : it.custoUnitario;
+
+                  const livePrice = drinkObj
+                    ? (isSteak ? drinkObj.modalityConfig?.steakhouse?.price : drinkObj.modalityConfig?.goatbotequim?.price)
+                    : undefined;
+
+                  const resolvedPrecoUnitario = toFiniteNumber(
+                    livePrice !== undefined && livePrice !== null ? livePrice : it.precoUnitario
+                  );
+
+                  const liveCost = drinkObj
+                    ? (isSteak ? drinkObj.modalityConfig?.steakhouse?.cost : drinkObj.modalityConfig?.goatbotequim?.cost)
+                    : undefined;
+
+                  const resolvedCustoUnitario = toFiniteNumber(
+                    liveCost !== undefined && liveCost !== null
+                      ? liveCost
+                      : (it.custoUnitario !== undefined && it.custoUnitario !== null
+                        ? it.custoUnitario
+                        : (drinkObj?.custoUnitario ?? 0))
+                  );
 
                   return (
                     <div
@@ -1534,7 +1863,7 @@ function SessionRow({
                           <>
                             <div className="font-bold text-muted-foreground group-hover/item:text-foreground transition-colors">
                               {fmtBRL(
-                                toFiniteNumber(it.precoUnitario) * toFiniteNumber(it.quantidade),
+                                resolvedPrecoUnitario * toFiniteNumber(it.quantidade),
                               )}
                               <span className="text-[10px] font-normal ml-1 text-muted-foreground/60">
                                 (Venda)
@@ -1542,8 +1871,7 @@ function SessionRow({
                             </div>
                             <div className="text-[10px] text-primary font-bold">
                               {fmtBRL(
-                                toFiniteNumber(resolvedCustoUnitario) *
-                                  toFiniteNumber(it.quantidade),
+                                resolvedCustoUnitario * toFiniteNumber(it.quantidade),
                               )}
                               <span className="text-[9px] font-normal ml-1 text-muted-foreground/60">
                                 (Custo Op.)
@@ -1553,7 +1881,7 @@ function SessionRow({
                         ) : (
                           <div className="font-bold text-muted-foreground group-hover/item:text-foreground transition-colors">
                             {fmtBRL(
-                              toFiniteNumber(it.precoUnitario) * toFiniteNumber(it.quantidade),
+                              resolvedPrecoUnitario * toFiniteNumber(it.quantidade),
                             )}
                           </div>
                         )}

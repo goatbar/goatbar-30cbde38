@@ -366,4 +366,93 @@ export const eventBudgetService = {
     const { error } = await supabase.from("event_negotiation_history").delete().eq("id", noteId);
     if (error) throw error;
   },
+
+  async createLegacyEvent(payload: {
+    client_name: string;
+    event_type: string;
+    date: string;
+    city: string;
+    guests: number;
+    drinks: string[];
+    final_budget_value: number;
+    paid_value: number;
+    average_drink_cost: number;
+  }) {
+    const drinksBaseCost = payload.average_drink_cost * payload.guests * 4;
+    const profitValue = Math.max(0, payload.final_budget_value - drinksBaseCost);
+    const paidPercentage =
+      payload.final_budget_value > 0
+        ? Math.min(100, Math.round((payload.paid_value / payload.final_budget_value) * 100))
+        : 0;
+
+    const eventPayload = {
+      client_name: payload.client_name,
+      event_type: payload.event_type,
+      date: payload.date,
+      city: payload.city,
+      guests: payload.guests,
+      drinks: payload.drinks,
+      status: "finalizado",
+      current_budget_value: payload.final_budget_value,
+      current_profit_value: profitValue,
+      payment_percent_received: paidPercentage,
+      is_paid_full: payload.paid_value >= payload.final_budget_value,
+    };
+
+    const { data: event, error: eventError } = await supabase
+      .from("events")
+      .insert(eventPayload)
+      .select()
+      .single();
+
+    if (eventError) throw eventError;
+
+    const budgetPayload = {
+      event_id: event.id,
+      version_number: 1,
+      is_current: true,
+      status: "approved",
+      selected_drinks: { ids: payload.drinks, copos: {} },
+      drinks_per_person: 4,
+      drinks_markup_percentage: 0,
+      drinks_cost_sum: payload.average_drink_cost * payload.drinks.length,
+      average_drink_cost: payload.average_drink_cost,
+      drinks_base_cost: drinksBaseCost,
+      drinks_final_value: drinksBaseCost,
+      bartender_quantity: 0,
+      bartender_unit_value: 200,
+      keeper_quantity: 0,
+      keeper_unit_value: 200,
+      copeira_quantity: 0,
+      copeira_unit_value: 200,
+      team_total_value: 0,
+      ice_packages_quantity: 0,
+      ice_package_unit_value: 6,
+      ice_total_value: 0,
+      has_travel: false,
+      fuel_value: 0,
+      miscellaneous_items: [],
+      miscellaneous_total_value: 0,
+      discount_value: 0,
+      profit_value: profitValue,
+      final_budget_value: payload.final_budget_value,
+      average_value_per_person:
+        payload.guests > 0 ? payload.final_budget_value / payload.guests : 0,
+      paid_percentage: paidPercentage,
+      paid_value: payload.paid_value,
+      pending_percentage: 100 - paidPercentage,
+      pending_value: Math.max(0, payload.final_budget_value - payload.paid_value),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data: budget, error: budgetError } = await supabase
+      .from("event_budget_versions")
+      .insert(budgetPayload)
+      .select()
+      .single();
+
+    if (budgetError) throw budgetError;
+
+    return { event, budget };
+  },
 };
