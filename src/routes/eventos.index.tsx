@@ -22,9 +22,7 @@ import {
 import { useState, useEffect } from "react";
 import { eventBudgetService, type Event as RealEvent } from "@/services/event-budget-service";
 import { PageHeader } from "@/components/AppShell";
-import {
-  migrateLegacyStoreToSupabase,
-} from "@/lib/migration";
+import { migrateLegacyStoreToSupabase } from "@/lib/migration";
 
 export const Route = createFileRoute("/eventos/")({
   component: EventosIndex,
@@ -133,7 +131,6 @@ function EventosIndex() {
       />
 
       <div className="page-container space-y-7">
-
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-5">
           <StatCard label="Total em pipeline" value={String(eventosAtivos.length)} />
           <StatCard
@@ -210,8 +207,23 @@ function EventosIndex() {
                       </span>
                     </div>
                   </div>
-                  <div className="hidden sm:flex items-center gap-4 shrink-0">
-                    <div className="text-right">
+                  <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                    <button
+                      className="h-8 w-8 rounded-full flex items-center justify-center bg-background border border-border text-destructive hover:bg-destructive/10 transition-all sm:hidden"
+                      aria-label="Excluir evento"
+                      onClick={async (ev) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        if (confirm("Excluir este orçamento definitivamente?")) {
+                          await eventBudgetService.deleteEvent(e.id);
+                          loadEvents();
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+
+                    <div className="hidden sm:block text-right">
                       <div className="text-sm font-bold text-foreground">
                         {e.current_budget_value ? fmtBRL(e.current_budget_value) : "--"}
                       </div>
@@ -222,7 +234,10 @@ function EventosIndex() {
                       </div>
                     </div>
 
-                    <div className="relative group/status" onClick={(ev) => ev.preventDefault()}>
+                    <div
+                      className="hidden sm:block relative group/status"
+                      onClick={(ev) => ev.preventDefault()}
+                    >
                       <StatusBadge status={e.status as any} />
                       <select
                         className="absolute inset-0 opacity-0 cursor-pointer"
@@ -246,7 +261,7 @@ function EventosIndex() {
                     </div>
 
                     <button
-                      className="h-8 w-8 rounded-full flex items-center justify-center bg-background border border-border text-destructive hover:bg-destructive/10 transition-all"
+                      className="hidden sm:flex h-8 w-8 rounded-full items-center justify-center bg-background border border-border text-destructive hover:bg-destructive/10 transition-all"
                       onClick={async (ev) => {
                         ev.preventDefault();
                         ev.stopPropagation();
