@@ -25,6 +25,8 @@ import {
   Trash2,
   X,
   Eye,
+  Camera,
+  Sparkles,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import {
@@ -63,6 +65,10 @@ function ControladoriaPage() {
   const [expenses, setExpenses] = useState<FinancialExpense[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [receiptPreview, setReceiptPreview] = useState("");
   const [filters, setFilters] = useState({
     start_date: format(startOfMonth(new Date()), "yyyy-MM-dd"),
     end_date: format(endOfMonth(new Date()), "yyyy-MM-dd"),
@@ -83,7 +89,7 @@ function ControladoriaPage() {
     classification: "Direto",
   });
 
-  const [uploading, setUploading] = useState<{ invoice?: boolean; receipt?: boolean }>({});
+  const [uploading, setUploading] = useState<{ invoice?: boolean; receipt?: boolean; note?: boolean }>({});
 
   useEffect(() => {
     fetchExpenses();
@@ -151,6 +157,36 @@ function ControladoriaPage() {
     }
   };
 
+
+  const handleReceiptExtraction = async (file: File) => {
+    setOcrLoading(true);
+    try {
+      const uploadedUrl = await financialService.uploadAttachment(file, "invoice");
+      const extracted = await financialService.extractExpenseFromReceipt(file);
+      const parsedDate = extracted.date?.includes("/")
+        ? extracted.date.split("/").reverse().join("-")
+        : extracted.date || format(new Date(), "yyyy-MM-dd");
+
+      setForm((prev) => ({
+        ...prev,
+        date: parsedDate,
+        description: extracted.description || prev.description || `Despesa via notinha - ${file.name}`,
+        amount: extracted.amount ?? prev.amount ?? 0,
+        supplier_name: extracted.supplier_name || prev.supplier_name || "",
+        supplier_cnpj: extracted.supplier_cnpj || "",
+        category: extracted.category || prev.category || "Outros",
+        payment_method: extracted.payment_method || prev.payment_method || "Outros",
+        review_status: extracted.review_status,
+        ocr_raw_text: extracted.raw_text,
+        ocr_metadata: { confidence: extracted.confidence || 0, source: "ocr-receipt" },
+        auto_filled_fields: extracted.auto_filled_fields,
+        invoice_url: uploadedUrl,
+      }));
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!form.description || !form.amount || !form.responsible) {
       alert("Preencha os campos obrigatórios.");
@@ -158,7 +194,21 @@ function ControladoriaPage() {
     }
 
     try {
-      await financialService.createExpense(form);
+      const manuallyEdited = ((form as any).auto_filled_fields || []).filter((field: string) => {
+        const value = (form as any)[field];
+        return value !== undefined && value !== null && String(value).trim() !== "";
+      });
+      const saved = await financialService.createExpense({ ...form, manually_edited_fields: manuallyEdited });
+      if ((form as any).invoice_url) {
+        await financialService.createReceiptLog({
+          expense_id: saved.id,
+          is_ocr_generated: true,
+          auto_filled_fields: (form as any).auto_filled_fields || [],
+          manually_edited_fields: manuallyEdited,
+          reading_error: (form as any).review_status === "Erro na leitura" ? "OCR não retornou texto válido" : null,
+          metadata: (form as any).ocr_metadata || {},
+        });
+      }
       setShowModal(false);
       fetchExpenses();
       setForm({
@@ -204,9 +254,14 @@ function ControladoriaPage() {
         title="Controladoria"
         subtitle="Gestão financeira completa e fluxo de custos."
         action={
-          <PrimaryButton onClick={() => setShowModal(true)}>
-            <Plus className="h-4 w-4" /> Novo Gasto
-          </PrimaryButton>
+          <div className="flex gap-2">
+            <GhostButton onClick={() => setShowReceiptModal(true)}>
+              <Camera className="h-4 w-4" /> Lançar por foto da notinha
+            </GhostButton>
+            <PrimaryButton onClick={() => setShowModal(true)}>
+              <Plus className="h-4 w-4" /> Novo Gasto
+            </PrimaryButton>
+          </div>
         }
       />
 
@@ -454,6 +509,25 @@ function ControladoriaPage() {
       </div>
 
       {/* MODAL NOVO GASTO */}
+
+      {showReceiptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-background/80" onClick={() => setShowReceiptModal(false)} />
+          <div className="relative w-full max-w-xl bg-surface border border-border rounded-2xl p-6 space-y-4">
+            <h3 className="font-display text-lg font-bold">Lançar por foto da notinha</h3>
+            <p className="text-sm text-muted-foreground">Envie imagem ou PDF. Vamos pré-preencher e você revisa antes de salvar.</p>
+            <input type="file" accept="image/*,.pdf" capture="environment" onChange={(e)=>{const f=e.target.files?.[0]; if(!f)return; setReceiptFile(f); setReceiptPreview(URL.createObjectURL(f));}} />
+            <div className="flex gap-2">
+              <PrimaryButton disabled={!receiptFile||ocrLoading} onClick={async ()=>{ if(!receiptFile) return; await handleReceiptExtraction(receiptFile); setShowReceiptModal(false); setShowModal(true);}}>
+                <Sparkles className="h-4 w-4" /> {ocrLoading ? "Lendo..." : "Ler automaticamente"}
+              </PrimaryButton>
+              <GhostButton onClick={()=>{setShowReceiptModal(false); setShowModal(true);}}>Preencher manualmente</GhostButton>
+            </div>
+            {receiptPreview && <a className="text-xs text-primary underline" href={receiptPreview} target="_blank">Visualizar anexo selecionado</a>}
+          </div>
+        </div>
+      )}
+
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
@@ -555,6 +629,17 @@ function ControladoriaPage() {
                     />
                   </div>
                 )}
+
+                <div>
+                  <label className="label-eyebrow">CNPJ</label>
+                  <input
+                    type="text"
+                    value={(form as any).supplier_cnpj || ""}
+                    onChange={(e) => setForm((p) => ({ ...p, supplier_cnpj: e.target.value }))}
+                    className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
+                    placeholder="00.000.000/0000-00"
+                    />
+                  </div>
 
                 {form.category === "Equipe" && (
                   <>
