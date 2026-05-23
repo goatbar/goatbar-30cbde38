@@ -608,18 +608,26 @@ function EventoInterna() {
         title={draft.nome}
         subtitle={`${draft.tipo} · Versão ${currentBudget?.version_number || 1}`}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap sm:justify-end">
             <button
               onClick={handleDelete}
-              className="h-10 w-10 flex items-center justify-center rounded-lg border border-destructive/20 text-destructive hover:bg-destructive/10 transition-colors"
+              className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg border border-destructive/20 text-destructive hover:bg-destructive/10 transition-colors"
               title="Excluir Evento"
             >
               <Trash2 className="h-4 w-4" />
             </button>
-            <GhostButton onClick={() => handleSave(true)} disabled={saving}>
+            <GhostButton
+              onClick={() => handleSave(true)}
+              disabled={saving}
+              className="flex-1 min-w-0 justify-center sm:flex-none"
+            >
               <Copy className="h-4 w-4" /> Salvar Nova Versão
             </GhostButton>
-            <PrimaryButton onClick={() => handleSave(false)} disabled={saving}>
+            <PrimaryButton
+              onClick={() => handleSave(false)}
+              disabled={saving}
+              className="flex-1 min-w-0 justify-center sm:flex-none"
+            >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {saving ? "Salvando..." : "Atualizar Atual"}
             </PrimaryButton>
