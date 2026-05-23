@@ -627,7 +627,7 @@ function EventoInterna() {
         }
       />
 
-      <div className="px-8 py-7 space-y-7 max-w-[1400px] mx-auto">
+      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-7 space-y-7 overflow-x-hidden">
         {/* ALERTAS DE CONFLITO */}
         {sameDateEvents.length > 0 && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 flex gap-4 items-center animate-in fade-in slide-in-from-top-4 duration-500">
@@ -1124,7 +1124,7 @@ function EventoInterna() {
                     {Object.entries(draft.equipe).map(([key, prof]) => (
                       <div
                         key={key}
-                        className="flex gap-3 items-end p-3 rounded-lg bg-surface border border-border/50"
+                        className="flex flex-col sm:flex-row gap-3 sm:items-end p-3 rounded-lg bg-surface border border-border/50"
                       >
                         <div className="flex-1">
                           <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
@@ -1196,7 +1196,7 @@ function EventoInterna() {
                       <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-3">
                         Gelo (Pacotes 5kg)
                       </label>
-                      <div className="flex gap-3 items-center">
+                      <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
                         <div className="flex-1">
                           <input
                             type="number"
