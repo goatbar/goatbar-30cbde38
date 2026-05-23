@@ -708,18 +708,18 @@ function EventoInterna() {
               </div>
             </div>
 
-            <div className="flex items-center gap-8 self-end md:self-auto">
-              <div className="text-right">
+            <div className="flex w-full md:w-auto flex-col sm:flex-row sm:items-center gap-4 sm:gap-8 self-stretch md:self-auto">
+              <div className="text-left sm:text-right min-w-0">
                 <div className="label-eyebrow mb-1">Valor do Orçamento</div>
-                <div className="font-display text-3xl font-black text-primary">
+                <div className="font-display text-2xl sm:text-3xl font-black text-primary leading-tight break-words">
                   {fmtBRL(calc.valorTotalOrcamento)}
                 </div>
-                <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
+                <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest break-words">
                   {fmtBRL(calc.mediaPorPessoa)} / PESSOA
                 </div>
               </div>
-              <div className="h-12 w-px bg-border/60 hidden lg:block" />
-              <div className="text-right">
+              <div className="h-px sm:h-12 sm:w-px bg-border/60 hidden lg:block" />
+              <div className="text-left sm:text-right min-w-0">
                 <div className="label-eyebrow mb-2">Status da Negociação</div>
                 <select
                   value={draft.status}
