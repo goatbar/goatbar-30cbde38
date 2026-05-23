@@ -23,9 +23,57 @@ export interface FinancialExpense {
   staff_role?: string;
   invoice_url?: string;
   receipt_url?: string;
+  expense_type?: "despesa";
+  supplier_cnpj?: string;
+  cost_center?: string;
+  payment_source?: string;
+  review_status?: "Lido automaticamente" | "Precisa revisar" | "Erro na leitura";
+  ocr_raw_text?: string;
+  ocr_metadata?: Record<string, unknown>;
+  auto_filled_fields?: string[];
+  manually_edited_fields?: string[];
   created_at: string;
   updated_at: string;
 }
+
+export interface ReceiptExtractionResult {
+  supplier_name?: string;
+  supplier_cnpj?: string;
+  date?: string;
+  amount?: number;
+  payment_method?: PaymentMethod;
+  description?: string;
+  category?: FinancialCategory;
+  cost_center?: string;
+  payment_source?: string;
+  items?: string[];
+  raw_text: string;
+  review_status: "Lido automaticamente" | "Precisa revisar" | "Erro na leitura";
+  confidence?: number;
+  auto_filled_fields: string[];
+}
+
+const CATEGORY_HINTS: Array<{ keywords: string[]; category: FinancialCategory }> = [
+  { keywords: ["vodka", "gin", "cerveja", "energetico", "bebida"], category: "Insumos" },
+  { keywords: ["copo", "guardanapo", "canudo", "descart"], category: "Operacional" },
+  { keywords: ["gelo"], category: "Operacional" },
+  { keywords: ["transporte", "gasolina", "uber", "estacionamento"], category: "Operacional" },
+  { keywords: ["freelancer", "bartender", "equipe"], category: "Equipe" },
+  { keywords: ["decoracao", "flores", "visual"], category: "Operacional" },
+  { keywords: ["supermercado", "atacadao", "assai", "epa", "bh"], category: "Insumos" },
+];
+
+const normalize = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+const inferCategoryFromText = (text: string): FinancialCategory => {
+  const normalized = normalize(text);
+  const match = CATEGORY_HINTS.find((rule) => rule.keywords.some((k) => normalized.includes(k)));
+  return match?.category || "Outros";
+};
 
 const normalizeModality = (value: string | null | undefined): string => {
   const normalized = String(value || "")
@@ -140,6 +188,69 @@ export const financialService = {
     } = supabase.storage.from("financial_attachments").getPublicUrl(filePath);
 
     return publicUrl;
+  },
+
+  async extractExpenseFromReceipt(file: File): Promise<ReceiptExtractionResult> {
+    const { data, error } = await supabase.functions.invoke("ocr-receipt", {
+      body: { fileName: file.name, mimeType: file.type },
+    });
+
+    if (error || !data?.text) {
+      return {
+        raw_text: "",
+        review_status: "Erro na leitura",
+        auto_filled_fields: [],
+      };
+    }
+
+    const rawText = String(data.text || "");
+    const normalizedText = normalize(rawText);
+    const cnpjMatch = rawText.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{14}/);
+    const dateMatch = rawText.match(/(\d{2}[\/\-]\d{2}[\/\-]\d{2,4})/);
+    const amountMatches = [...rawText.matchAll(/(?:total|valor)[^\d]{0,10}(\d+[\.,]\d{2})/gi)];
+    const amountValue = amountMatches.length
+      ? toFiniteNumber(amountMatches[amountMatches.length - 1][1])
+      : undefined;
+    const paymentMethod: PaymentMethod | undefined = normalizedText.includes("pix")
+      ? "PIX"
+      : normalizedText.includes("dinheiro")
+        ? "Dinheiro"
+        : normalizedText.includes("cartao")
+          ? "Cartão"
+          : normalizedText.includes("transfer")
+            ? "Transferência"
+            : undefined;
+
+    const auto_filled_fields: string[] = [];
+    if (cnpjMatch) auto_filled_fields.push("supplier_cnpj");
+    if (dateMatch) auto_filled_fields.push("date");
+    if (amountValue) auto_filled_fields.push("amount");
+    if (paymentMethod) auto_filled_fields.push("payment_method");
+
+    return {
+      raw_text: rawText,
+      supplier_cnpj: cnpjMatch?.[0],
+      date: dateMatch?.[1],
+      amount: amountValue,
+      payment_method: paymentMethod,
+      category: inferCategoryFromText(rawText),
+      review_status: auto_filled_fields.length >= 3 ? "Lido automaticamente" : "Precisa revisar",
+      auto_filled_fields,
+    };
+  },
+
+
+
+  async createReceiptLog(payload: {
+    expense_id: string;
+    is_ocr_generated: boolean;
+    auto_filled_fields: string[];
+    manually_edited_fields: string[];
+    reading_error: string | null;
+    metadata: Record<string, unknown>;
+  }) {
+    const { error } = await supabase.from("financial_expense_receipt_logs" as never).insert(payload as never);
+    if (error) throw error;
   },
 
   // --- Sessions (Goat Botequim / 7Steakhouse) ---
