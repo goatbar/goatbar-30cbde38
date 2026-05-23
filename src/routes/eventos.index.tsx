@@ -184,30 +184,30 @@ function EventosIndex() {
                   key={e.id}
                   to="/eventos/$eventoId"
                   params={{ eventoId: e.id }}
-                  className="flex items-center gap-4 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-surface transition-all group"
+                  className="flex items-start sm:items-center gap-3 sm:gap-4 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-surface transition-all group"
                 >
                   <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
                     <Calendar className="h-5 w-5 text-primary" />
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 pr-2 sm:pr-0">
                     <div className="font-bold text-sm truncate group-hover:text-primary transition-colors">
                       {e.client_name}
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground uppercase tracking-wider font-bold">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[10px] text-muted-foreground uppercase tracking-wider font-bold">
                       <span className="flex items-center gap-1">
                         <Users className="h-3 w-3" /> {e.guests} pax
                       </span>
                       <span className="flex items-center gap-1">
                         <MapPin className="h-3 w-3" /> {e.event_location || "A definir"}
                       </span>
-                      <span>
+                      <span className="basis-full sm:basis-auto">
                         {e.date
                           ? new Date(e.date).toLocaleDateString("pt-BR", { timeZone: "UTC" })
                           : "Data a definir"}
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                  <div className="flex items-center gap-2 sm:gap-4 shrink-0 self-center">
                     <button
                       className="h-8 w-8 rounded-full flex items-center justify-center bg-background border border-border text-destructive hover:bg-destructive/10 transition-all sm:hidden"
                       aria-label="Excluir evento"
