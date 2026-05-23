@@ -627,7 +627,7 @@ function EventoInterna() {
         }
       />
 
-      <div className="px-8 py-7 space-y-7 max-w-[1400px] mx-auto">
+      <div className="w-full max-w-[1400px] mx-auto px-3 py-5 space-y-6 sm:px-5 sm:py-6 md:px-8 md:py-7 md:space-y-7">
         {/* ALERTAS DE CONFLITO */}
         {sameDateEvents.length > 0 && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 flex gap-4 items-center animate-in fade-in slide-in-from-top-4 duration-500">
@@ -663,7 +663,7 @@ function EventoInterna() {
         )}
 
         {/* CABEÇALHO DO EVENTO — INFORMAÇÕES DO CLIENTE */}
-        <div className="card-premium p-6 relative overflow-hidden bg-surface">
+        <div className="card-premium relative overflow-hidden bg-surface p-4 sm:p-5 md:p-6">
           <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-8 pb-6 border-b border-border/50">
             <div className="flex gap-4 items-center">
               <div
