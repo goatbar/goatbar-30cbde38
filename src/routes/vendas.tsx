@@ -1755,31 +1755,33 @@ function SessionRow({
           </div>
         </div>
 
-        <div className="flex items-center gap-8 w-full md:w-auto">
-          <div className="text-right">
-            <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-0.5">
-              {isSteak ? "Venda Final" : "Receita"}
-            </div>
-            <div className="font-black text-sm">{fmtBRL(calc.receitaBruta)}</div>
-          </div>
-
-          {isSteak && (
-            <div className="text-right">
+        <div className="w-full md:w-auto space-y-3">
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-4 sm:gap-8">
+            <div className="text-left sm:text-right">
               <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-0.5">
-                Receita Goat Bar
+                {isSteak ? "Venda Final" : "Receita"}
               </div>
-              <div className="font-black text-sm text-primary">{fmtBRL(calc.receitaGoat)}</div>
+              <div className="font-black text-sm">{fmtBRL(calc.receitaBruta)}</div>
             </div>
-          )}
 
-          <div className="text-right">
-            <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-0.5">
-              Lucro Final
+            {isSteak && (
+              <div className="text-left sm:text-right">
+                <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-0.5">
+                  Receita Goat Bar
+                </div>
+                <div className="font-black text-sm text-primary">{fmtBRL(calc.receitaGoat)}</div>
+              </div>
+            )}
+
+            <div className="text-left sm:text-right">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-0.5">
+                Lucro Final
+              </div>
+              <div className="font-black text-sm text-success">{fmtBRL(calc.lucroFinal)}</div>
             </div>
-            <div className="font-black text-sm text-success">{fmtBRL(calc.lucroFinal)}</div>
           </div>
 
-          <div className="flex gap-2 ml-4">
+          <div className="flex gap-2 justify-end md:ml-4">
             <button
               onClick={(e) => {
                 e.stopPropagation();
