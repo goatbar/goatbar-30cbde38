@@ -192,7 +192,7 @@ function DrinkCard({
     <div
       className={`rounded-xl border transition-all ${d.status === "inativo" ? "border-border opacity-60" : "border-border hover:border-border-strong"} bg-surface/50 group relative`}
     >
-      <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+      <div className="absolute top-2 right-2 z-10 hidden sm:flex opacity-0 group-hover:opacity-100 transition-opacity items-center gap-1">
         <button
           onClick={onEdit}
           className="h-8 w-8 rounded-lg bg-background/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary"
@@ -286,6 +286,17 @@ function DrinkCard({
               )}
             </div>
           </div>
+        </div>
+        <div className="mt-4 flex items-center gap-2 sm:hidden">
+          <GhostButton onClick={onEdit} className="flex-1 h-9 text-xs">
+            <Edit3 className="h-3.5 w-3.5 mr-1" /> Editar
+          </GhostButton>
+          <GhostButton
+            onClick={onDelete}
+            className="flex-1 h-9 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir
+          </GhostButton>
         </div>
         <div className="mt-4 flex flex-wrap gap-1">
           {d.modalityConfig?.evento?.active && (
