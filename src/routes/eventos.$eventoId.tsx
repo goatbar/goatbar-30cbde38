@@ -608,18 +608,26 @@ function EventoInterna() {
         title={draft.nome}
         subtitle={`${draft.tipo} · Versão ${currentBudget?.version_number || 1}`}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap sm:justify-end">
             <button
               onClick={handleDelete}
-              className="h-10 w-10 flex items-center justify-center rounded-lg border border-destructive/20 text-destructive hover:bg-destructive/10 transition-colors"
+              className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg border border-destructive/20 text-destructive hover:bg-destructive/10 transition-colors"
               title="Excluir Evento"
             >
               <Trash2 className="h-4 w-4" />
             </button>
-            <GhostButton onClick={() => handleSave(true)} disabled={saving}>
+            <GhostButton
+              onClick={() => handleSave(true)}
+              disabled={saving}
+              className="flex-1 min-w-0 justify-center sm:flex-none"
+            >
               <Copy className="h-4 w-4" /> Salvar Nova Versão
             </GhostButton>
-            <PrimaryButton onClick={() => handleSave(false)} disabled={saving}>
+            <PrimaryButton
+              onClick={() => handleSave(false)}
+              disabled={saving}
+              className="flex-1 min-w-0 justify-center sm:flex-none"
+            >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {saving ? "Salvando..." : "Atualizar Atual"}
             </PrimaryButton>
@@ -627,7 +635,7 @@ function EventoInterna() {
         }
       />
 
-      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-7 space-y-7 overflow-x-hidden">
+      <div className="w-full max-w-[1400px] mx-auto px-3 py-5 space-y-6 sm:px-5 sm:py-6 md:px-8 md:py-7 md:space-y-7">
         {/* ALERTAS DE CONFLITO */}
         {sameDateEvents.length > 0 && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 flex gap-4 items-center animate-in fade-in slide-in-from-top-4 duration-500">
@@ -663,7 +671,7 @@ function EventoInterna() {
         )}
 
         {/* CABEÇALHO DO EVENTO — INFORMAÇÕES DO CLIENTE */}
-        <div className="card-premium p-6 relative overflow-hidden bg-surface">
+        <div className="card-premium relative overflow-hidden bg-surface p-4 sm:p-5 md:p-6">
           <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-8 pb-6 border-b border-border/50">
             <div className="flex gap-4 items-center">
               <div
@@ -700,18 +708,18 @@ function EventoInterna() {
               </div>
             </div>
 
-            <div className="flex items-center gap-8 self-end md:self-auto">
-              <div className="text-right">
+            <div className="flex w-full md:w-auto flex-col sm:flex-row sm:items-center gap-4 sm:gap-8 self-stretch md:self-auto">
+              <div className="text-left sm:text-right min-w-0">
                 <div className="label-eyebrow mb-1">Valor do Orçamento</div>
-                <div className="font-display text-3xl font-black text-primary">
+                <div className="font-display text-2xl sm:text-3xl font-black text-primary leading-tight break-words">
                   {fmtBRL(calc.valorTotalOrcamento)}
                 </div>
-                <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
+                <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest break-words">
                   {fmtBRL(calc.mediaPorPessoa)} / PESSOA
                 </div>
               </div>
-              <div className="h-12 w-px bg-border/60 hidden lg:block" />
-              <div className="text-right">
+              <div className="h-px sm:h-12 sm:w-px bg-border/60 hidden lg:block" />
+              <div className="text-left sm:text-right min-w-0">
                 <div className="label-eyebrow mb-2">Status da Negociação</div>
                 <select
                   value={draft.status}
