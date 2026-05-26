@@ -147,6 +147,7 @@ export interface Evento {
   desconto?: number;
   descontoMotivo?: string;
   descontos?: { valor: number; motivo: string; deduzirCustoDrinks?: boolean }[];
+  descricaoBebidas?: string;
 }
 
 export interface Contrato {

@@ -223,6 +223,57 @@ export const eventContractsService = {
     return data;
   },
 
+  async uploadSignedContractFile(eventId: string, file: File): Promise<string> {
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${eventId}_signed_${Date.now()}.${fileExt}`;
+    const filePath = `signed/${fileName}`;
+
+    const { error } = await supabase.storage
+      .from("contract-templates")
+      .upload(filePath, file);
+
+    if (error) throw error;
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("contract-templates").getPublicUrl(filePath);
+
+    return publicUrl;
+  },
+
+  async saveSignedContract(eventId: string, signedFileUrl: string, contractId?: string): Promise<any> {
+    if (contractId) {
+      const { data, error } = await supabase
+        .from("event_contracts")
+        .update({
+          signed_file_url: signedFileUrl,
+          status: "signed",
+          updated_at: new Date().toISOString(),
+          fully_signed_at: new Date().toISOString(),
+        })
+        .eq("id", contractId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    } else {
+      const { data, error } = await supabase
+        .from("event_contracts")
+        .insert({
+          event_id: eventId,
+          signed_file_url: signedFileUrl,
+          status: "signed",
+          version: 1,
+          generated_at: new Date().toISOString(),
+          fully_signed_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
+  },
+
   async compileContractVariables(eventId: string) {
     // 1. Busca dados do evento no Supabase (Fonte real de verdade)
     const { data: evento, error: evError } = await supabase
@@ -243,7 +294,18 @@ export const eventContractsService = {
     // 3. Busca lista de copos para a tabela de reposição
     const { data: glasses } = await supabase.from("glassware").select("*").eq("is_active", true);
 
-    // 4. Monta o dicionário de variáveis
+    // 4. Busca o orçamento atual para obter a descrição das bebidas
+    const { data: currentBudget } = await supabase
+      .from("event_budget_versions")
+      .select("*")
+      .eq("event_id", eventId)
+      .eq("is_current", true)
+      .maybeSingle();
+
+    const selectedDrinksObj = currentBudget?.selected_drinks as any;
+    const descricaoBebidas = selectedDrinksObj?.descricaoBebidas || "";
+
+    // 5. Monta o dicionário de variáveis
     const variables = {
       cliente_nome: clientData?.client_name || evento.nome,
       cliente_documento: clientData?.cpf_cnpj || "",
@@ -255,6 +317,7 @@ export const eventContractsService = {
       evento_convidados: evento.convidados,
       evento_valor_total: evento.orcamento?.valorTotal || 0,
       drinks_lista: (evento.drinks || []).join(", "),
+      bebidas_descricao: descricaoBebidas,
       tabela_reposicao: (evento.drinks || [])
         .map((dId: string) => {
           const glassId = evento.coposVinculados?.[dId];

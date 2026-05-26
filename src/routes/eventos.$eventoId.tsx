@@ -47,7 +47,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Check, Search } from "lucide-react";
+import { Check, Search, Upload } from "lucide-react";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
   component: EventoInterna,
@@ -138,6 +138,8 @@ function EventoInterna() {
   const [buscaDrink, setBuscaDrink] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [selectedSigner, setSelectedSigner] = useState("");
+  const [contractMode, setContractMode] = useState<"system" | "upload">("system");
+  const [uploadingContract, setUploadingContract] = useState(false);
 
   useEffect(() => {
     loadAllData();
@@ -152,6 +154,9 @@ function EventoInterna() {
     setRealTemplates(tps);
     setRealSigners(sigs);
     setRealContract(contract);
+    if (contract?.signed_file_url && !contract?.template_id) {
+      setContractMode("upload");
+    }
   };
 
   const loadAllData = async () => {
@@ -176,6 +181,9 @@ function EventoInterna() {
       setRealTemplates(tps);
       setRealSigners(sigs);
       setRealContract(contract);
+      if (contract?.signed_file_url && !contract?.template_id) {
+        setContractMode("upload");
+      }
       // Busca específica para dados do cliente (Opcional)
       try {
         const { data: cData } = await supabase
@@ -259,6 +267,7 @@ function EventoInterna() {
     desconto: 0,
     descontoMotivo: "",
     descontos: [],
+    descricaoBebidas: "",
   });
 
   const mapBudgetToDraft = (ev: RealEvent, b: BudgetVersion): Evento => ({
@@ -308,6 +317,7 @@ function EventoInterna() {
     desconto: b.discount_value,
     descontoMotivo: b.discount_description || "",
     descontos: parseDiscountsFromDescription(b.discount_value, b.discount_description),
+    descricaoBebidas: (b.selected_drinks as any)?.descricaoBebidas || "",
   });
 
   const [draft, setDraft] = useState<Evento | null>(null);
@@ -350,7 +360,11 @@ function EventoInterna() {
         pending_percentage: calc.percPendente,
         pending_value: calc.valorPendente,
         pending_payment_date: draft.pagamento.dataPagamento,
-        selected_drinks: { ids: draft.drinks, copos: draft.coposVinculados },
+        selected_drinks: {
+          ids: draft.drinks,
+          copos: draft.coposVinculados,
+          descricaoBebidas: draft.descricaoBebidas,
+        },
         discount_value: totalDescontos,
         discount_description: JSON.stringify({ descontos: descontosValidos }),
       };
@@ -559,6 +573,23 @@ function EventoInterna() {
       loadContractModule();
     } catch (e) {
       alert("Erro ao gerar link de solicitação.");
+    }
+  };
+
+  const handleManualContractUpload = async (file: File) => {
+    try {
+      setUploadingContract(true);
+      const publicUrl = await eventContractsService.uploadSignedContractFile(eventoId, file);
+      await eventContractsService.saveSignedContract(eventoId, publicUrl, realContract?.id);
+      await handleStatusChange("CONFIRMADO", "Contrato assinado anexado manualmente.");
+      alert("Contrato assinado enviado com sucesso!");
+      loadContractModule();
+      loadAllData();
+    } catch (e: any) {
+      console.error("Erro no upload do contrato:", e);
+      alert(`Erro ao fazer upload do contrato: ${e.message || "Erro desconhecido"}`);
+    } finally {
+      setUploadingContract(false);
     }
   };
 
@@ -787,6 +818,13 @@ function EventoInterna() {
                 icon={<Calendar className="h-3 w-3 text-primary/60" />}
               />
               <HeaderField
+                label="Horário do Evento"
+                value={draft.horario}
+                isEditing={isEditingHeader}
+                onChange={(v) => setDraft((p) => (p ? { ...p, horario: v } : null))}
+                icon={<Clock className="h-3 w-3 text-primary/60" />}
+              />
+              <HeaderField
                 label="Local do Evento"
                 value={draft.local}
                 isEditing={isEditingHeader}
@@ -1010,7 +1048,19 @@ function EventoInterna() {
                     </div>
                   </div>
 
-
+                  <div className="space-y-2 mt-6 border-t border-border/40 pt-6">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+                      <div className="h-1.5 w-1.5 bg-primary rounded-full" /> Descrição das Bebidas Negociadas (Opcional)
+                    </label>
+                    <textarea
+                      placeholder="Descreva detalhes das marcas e bebidas negociadas para este orçamento (ex: Vodka Absolut, Gin Tanqueray, Tônica Antarctica, etc...)"
+                      value={draft.descricaoBebidas || ""}
+                      onChange={(e) =>
+                        setDraft((p) => (p ? { ...p, descricaoBebidas: e.target.value } : null))
+                      }
+                      className="w-full h-24 p-3 rounded-xl bg-input border border-border text-xs font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none resize-none placeholder:text-muted-foreground/60"
+                    />
+                  </div>
 
                   <div className="p-5 rounded-xl bg-primary/5 border border-primary/10 flex flex-col sm:flex-row justify-between items-start sm:items-center mt-4 shadow-inner gap-4">
                     <div className="space-y-1">
@@ -1511,6 +1561,14 @@ function EventoInterna() {
                             );
                           })}
                       </div>
+                      {draft.descricaoBebidas && (
+                        <div className="mt-3 p-3 bg-primary/5 rounded-xl border border-primary/10 text-xs normal-case text-foreground whitespace-pre-wrap font-medium">
+                          <div className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">
+                            Bebidas Negociadas:
+                          </div>
+                          {draft.descricaoBebidas}
+                        </div>
+                      )}
                       <div className="pt-2 flex justify-between font-bold border-t border-border/40">
                         <span>VALOR TOTAL SERVIÇO DE DRINKS</span>
                         <span className="text-foreground">{fmtBRL(calc.valorDrinksEvento)}</span>
@@ -1716,274 +1774,454 @@ function EventoInterna() {
 
         {/* TAB CONTRATO */}
         {activeTab === "Contrato" && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 animate-in fade-in duration-500">
-            <div className="lg:col-span-8 space-y-6">
-              {!realClientData ? (
-                <SectionCard
-                  title="Coleta de Dados Jurídicos"
-                  subtitle="Solicite as informações necessárias para emissão do contrato"
-                >
-                  <div className="flex flex-col items-center justify-center p-12 bg-surface border-2 border-dashed border-border rounded-2xl text-center space-y-6">
-                    <div className="h-20 w-20 bg-primary/10 rounded-full flex items-center justify-center text-primary shadow-inner">
-                      <LinkIcon className="h-10 w-10" />
-                    </div>
-                    <div className="max-w-md">
-                      <h3 className="font-display font-bold text-xl mb-2">
-                        Link Seguro para o Cliente
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        O cliente receberá um formulário web premium para preencher CPF/CNPJ,
-                        endereço e dados do representante legal. Isso evita erros de digitação e
-                        agiliza o processo.
-                      </p>
-                    </div>
-                    <PrimaryButton
-                      onClick={handleRequestClientData}
-                      className="h-12 px-8 text-sm font-bold shadow-lg shadow-primary/20"
+          <div className="space-y-6 animate-in fade-in duration-500">
+            {/* Seletor de Modo de Contrato */}
+            <div className="flex gap-2 p-1 bg-surface border border-border/40 rounded-xl max-w-md">
+              <button
+                type="button"
+                onClick={() => setContractMode("system")}
+                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                  contractMode === "system"
+                    ? "bg-primary text-white shadow-md shadow-primary/20"
+                    : "text-muted-foreground hover:text-foreground hover:bg-primary/5"
+                }`}
+              >
+                <FileSignature className="h-3.5 w-3.5" />
+                GERAR PELO SISTEMA
+              </button>
+              <button
+                type="button"
+                onClick={() => setContractMode("upload")}
+                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                  contractMode === "upload"
+                    ? "bg-primary text-white shadow-md shadow-primary/20"
+                    : "text-muted-foreground hover:text-foreground hover:bg-primary/5"
+                }`}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                UPLOAD MANUAL
+              </button>
+            </div>
+
+            {contractMode === "system" ? (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-7">
+                <div className="lg:col-span-8 space-y-6">
+                  {!realClientData ? (
+                    <SectionCard
+                      title="Coleta de Dados Jurídicos"
+                      subtitle="Solicite as informações necessárias para emissão do contrato"
                     >
-                      GERAR E COPIAR LINK DE COLETA
-                    </PrimaryButton>
-                  </div>
-                </SectionCard>
-              ) : (
-                <SectionCard
-                  title="Dados do Contratante"
-                  subtitle={`Validado em ${realClientData.submitted_at || realClientData.created_at ? format(parseISO(realClientData.submitted_at || realClientData.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : "---"}`}
-                  action={
-                    <GhostButton
-                      onClick={handleRequestClientData}
-                      className="h-8 text-[10px] font-bold"
-                    >
-                      <LinkIcon className="h-3 w-3" /> GERAR NOVO LINK
-                    </GhostButton>
-                  }
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-4 bg-primary/5 rounded-2xl border border-primary/10">
-                    <DataField label="Razão Social / Nome" value={realClientData.client_name} />
-                    <DataField label="Documento (CPF/CNPJ)" value={realClientData.cpf_cnpj} />
-                    <DataField label="E-mail de Contato" value={realClientData.email} />
-                    <DataField label="Local / Endereço do Evento" value={realClientData.address} />
-
-                    {realClientData.notes && (
-                      <div className="md:col-span-2 mt-2 pt-4 border-t border-primary/10">
-                        <div className="text-[10px] font-bold text-primary uppercase tracking-widest mb-3">
-                          Detalhes e Pagamento Informados pelo Cliente
+                      <div className="flex flex-col items-center justify-center p-12 bg-surface border-2 border-dashed border-border rounded-2xl text-center space-y-6">
+                        <div className="h-20 w-20 bg-primary/10 rounded-full flex items-center justify-center text-primary shadow-inner">
+                          <LinkIcon className="h-10 w-10" />
                         </div>
-                        <div className="whitespace-pre-wrap text-sm text-foreground/80 font-medium leading-relaxed bg-background p-4 rounded-xl border border-primary/10">
-                          {realClientData.notes.replace(/(\d{4})-(\d{2})-(\d{2})/g, "$3/$2/$1")}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </SectionCard>
-              )}
-
-              {realClientData && !realContract && (
-                <SectionCard
-                  title="Configuração da Emissão"
-                  className="animate-in slide-in-from-bottom-4 duration-500"
-                >
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                          Modelo de Contrato
-                        </label>
-                        <select
-                          value={selectedTemplate}
-                          onChange={(e) => setSelectedTemplate(e.target.value)}
-                          className="w-full h-12 px-4 rounded-xl bg-input border border-border text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none"
-                        >
-                          <option value="">-- Selecione o template --</option>
-                          {realTemplates.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                          Sócio Assinante (Representante Goat)
-                        </label>
-                        <select
-                          value={selectedSigner}
-                          onChange={(e) => setSelectedSigner(e.target.value)}
-                          className="w-full h-12 px-4 rounded-xl bg-input border border-border text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none"
-                        >
-                          <option value="">-- Selecione o responsável --</option>
-                          {realSigners
-                            .filter((s) => s.is_active)
-                            .map((s) => (
-                              <option key={s.id} value={s.id}>
-                                {s.name} ({s.role})
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="bg-surface p-4 rounded-xl border border-border flex gap-4 items-center">
-                      <div className="h-10 w-10 bg-success/10 rounded-full flex items-center justify-center text-success shrink-0">
-                        <CheckCircle2 className="h-5 w-5" />
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        <span className="font-bold text-foreground">DICA:</span> O contrato incluirá
-                        automaticamente a lista de drinks (<b>{draft.drinks.length} itens</b>), os
-                        valores negociados (<b>{fmtBRL(calc.valorTotalOrcamento)}</b>) e a tabela de
-                        reposição de copos.
-                      </div>
-                    </div>
-
-                    <PrimaryButton
-                      onClick={handleGenerateContract}
-                      className="w-full h-14 text-base font-bold shadow-xl shadow-primary/20"
-                    >
-                      <FileSignature className="h-5 w-5" /> GERAR DOCUMENTO E ENVIAR P/ REVISÃO
-                    </PrimaryButton>
-                  </div>
-                </SectionCard>
-              )}
-
-              {realContract && (
-                <SectionCard
-                  title="Contrato Gerado"
-                  subtitle={`Status: ${realContract.status.toUpperCase()}`}
-                >
-                  <div className="p-6 rounded-2xl bg-surface border-2 border-primary/20 flex flex-col md:flex-row items-center justify-between gap-6">
-                    <div className="flex items-center gap-5">
-                      <div className="h-16 w-16 bg-primary text-white rounded-2xl flex items-center justify-center shadow-xl shadow-primary/30">
-                        <FileSignature className="h-8 w-8" />
-                      </div>
-                      <div>
-                        <div className="font-display font-bold text-lg">
-                          Contrato Prestação de Serviços - v{realContract.version}
-                        </div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-2 mt-1">
-                          <Clock className="h-3 w-3" /> Gerado em{" "}
-                          {new Date(
-                            realContract.generated_at || realContract.created_at,
-                          ).toLocaleString()}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-3 shrink-0">
-                      <GhostButton className="h-11 px-6 font-bold border-2">VISUALIZAR</GhostButton>
-                      <PrimaryButton className="h-11 px-6 font-bold">BAIXAR PDF</PrimaryButton>
-                    </div>
-                  </div>
-
-                  <div className="mt-10 pt-10 border-t border-border space-y-6">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-display font-bold text-xl">Assinatura Eletrônica</h4>
-                      <div
-                        className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-widest ${realContract.status === "signed" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}
-                      >
-                        {realContract.status === "signed" ? "CONCLUÍDO" : "PENDENTE"}
-                      </div>
-                    </div>
-
-                    {realContract.status === "draft" && (
-                      <div className="bg-primary/5 border border-primary/10 p-8 rounded-2xl text-center space-y-4">
-                        <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                          O contrato está pronto. Ao enviar, os signatários receberão um e-mail para
-                          assinar digitalmente através do <b>ZapSign / Docusign</b>.
-                        </p>
-                        <PrimaryButton
-                          onClick={async () => {
-                            await eventContractsService.updateContractStatus(
-                              realContract.id,
-                              "sent",
-                            );
-                            handleStatusChange(
-                              "em_assinatura",
-                              "Contrato disparado para assinatura.",
-                            );
-                            loadAllData();
-                          }}
-                          className="h-12 px-10 font-bold"
-                        >
-                          DISPARAR ASSINATURAS
-                        </PrimaryButton>
-                      </div>
-                    )}
-
-                    {(realContract.status === "sent" ||
-                      realContract.status === "partially_signed") && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-4 rounded-xl border border-warning/30 bg-warning/5 flex items-center gap-4">
-                          <div className="h-10 w-10 bg-warning/20 rounded-full flex items-center justify-center text-warning animate-pulse">
-                            <Clock className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-warning uppercase">
-                              AGUARDANDO CLIENTE
-                            </div>
-                            <div className="text-[10px] text-muted-foreground italic">
-                              E-mail enviado há 2 horas
-                            </div>
-                          </div>
-                        </div>
-                        <div className="p-4 rounded-xl border border-success/30 bg-success/5 flex items-center gap-4">
-                          <div className="h-10 w-10 bg-success/20 rounded-full flex items-center justify-center text-success">
-                            <CheckCircle2 className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-success uppercase">
-                              ASSINADO PELA GOAT
-                            </div>
-                            <div className="text-[10px] text-muted-foreground italic">
-                              Assinado por Sócio Diretor
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {realContract.status === "signed" && (
-                      <div className="bg-success/10 border-2 border-success/20 p-8 rounded-2xl flex flex-col items-center text-center space-y-4">
-                        <div className="h-20 w-20 bg-success text-white rounded-full flex items-center justify-center shadow-xl shadow-success/30">
-                          <CheckCircle2 className="h-10 w-10" />
-                        </div>
-                        <div>
-                          <h4 className="font-display font-bold text-2xl text-success">
-                            Contrato Formalizado
-                          </h4>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Todas as partes assinaram o documento. O evento está juridicamente
-                            confirmado.
+                        <div className="max-w-md">
+                          <h3 className="font-display font-bold text-xl mb-2">
+                            Link Seguro para o Cliente
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            O cliente receberá um formulário web premium para preencher CPF/CNPJ,
+                            endereço e dados do representante legal. Isso evita erros de digitação e
+                            agiliza o processo.
                           </p>
                         </div>
-                        <GhostButton className="font-bold text-success border-success/30 hover:bg-success/10">
-                          VER CERTIFICADO DE ASSINATURAS
-                        </GhostButton>
+                        <PrimaryButton
+                          onClick={handleRequestClientData}
+                          className="h-12 px-8 text-sm font-bold shadow-lg shadow-primary/20"
+                        >
+                          GERAR E COPIAR LINK DE COLETA
+                        </PrimaryButton>
                       </div>
-                    )}
-                  </div>
-                </SectionCard>
-              )}
-            </div>
+                    </SectionCard>
+                  ) : (
+                    <SectionCard
+                      title="Dados do Contratante"
+                      subtitle={`Validado em ${realClientData.submitted_at || realClientData.created_at ? format(parseISO(realClientData.submitted_at || realClientData.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : "---"}`}
+                      action={
+                        <GhostButton
+                          onClick={handleRequestClientData}
+                          className="h-8 text-[10px] font-bold"
+                        >
+                          <LinkIcon className="h-3 w-3" /> GERAR NOVO LINK
+                        </GhostButton>
+                      }
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-4 bg-primary/5 rounded-2xl border border-primary/10">
+                        <DataField label="Razão Social / Nome" value={realClientData.client_name} />
+                        <DataField label="Documento (CPF/CNPJ)" value={realClientData.cpf_cnpj} />
+                        <DataField label="E-mail de Contato" value={realClientData.email} />
+                        <DataField label="Local / Endereço do Evento" value={realClientData.address} />
 
-            <div className="lg:col-span-4">
-              <SectionCard title="Workflow Jurídico" className="sticky top-6">
-                <div className="space-y-6 py-4">
-                  <StatusStep done={!!realClientData} title="Coleta de dados concluída" />
-                  <StatusStep done={!!realContract} title="Documento base gerado" />
-                  <StatusStep
-                    done={
-                      realContract?.status === "sent" ||
-                      realContract?.status === "partially_signed" ||
-                      realContract?.status === "signed"
-                    }
-                    title="Disparo de e-mails realizado"
-                  />
-                  <StatusStep
-                    done={realContract?.status === "signed"}
-                    title="Assinatura das partes colhida"
-                  />
+                        {realClientData.notes && (
+                          <div className="md:col-span-2 mt-2 pt-4 border-t border-primary/10">
+                            <div className="text-[10px] font-bold text-primary uppercase tracking-widest mb-3">
+                              Detalhes e Pagamento Informados pelo Cliente
+                            </div>
+                            <div className="whitespace-pre-wrap text-sm text-foreground/80 font-medium leading-relaxed bg-background p-4 rounded-xl border border-primary/10">
+                              {realClientData.notes.replace(/(\d{4})-(\d{2})-(\d{2})/g, "$3/$2/$1")}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </SectionCard>
+                  )}
+
+                  {realClientData && !realContract && (
+                    <SectionCard
+                      title="Configuração da Emissão"
+                      className="animate-in slide-in-from-bottom-4 duration-500"
+                    >
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                              Modelo de Contrato
+                            </label>
+                            <select
+                              value={selectedTemplate}
+                              onChange={(e) => setSelectedTemplate(e.target.value)}
+                              className="w-full h-12 px-4 rounded-xl bg-input border border-border text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none"
+                            >
+                              <option value="">-- Selecione o template --</option>
+                              {realTemplates.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                              Sócio Assinante (Representante Goat)
+                            </label>
+                            <select
+                              value={selectedSigner}
+                              onChange={(e) => setSelectedSigner(e.target.value)}
+                              className="w-full h-12 px-4 rounded-xl bg-input border border-border text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none"
+                            >
+                              <option value="">-- Selecione o responsável --</option>
+                              {realSigners
+                                .filter((s) => s.is_active)
+                                .map((s) => (
+                                  <option key={s.id} value={s.id}>
+                                    {s.name} ({s.role})
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="bg-surface p-4 rounded-xl border border-border flex gap-4 items-center">
+                          <div className="h-10 w-10 bg-success/10 rounded-full flex items-center justify-center text-success shrink-0">
+                            <CheckCircle2 className="h-5 w-5" />
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            <span className="font-bold text-foreground">DICA:</span> O contrato incluirá
+                            automaticamente a lista de drinks (<b>{draft.drinks.length} itens</b>), os
+                            valores negociados (<b>{fmtBRL(calc.valorTotalOrcamento)}</b>) e a tabela de
+                            reposição de copos.
+                          </div>
+                        </div>
+
+                        <PrimaryButton
+                          onClick={handleGenerateContract}
+                          className="w-full h-14 text-base font-bold shadow-xl shadow-primary/20"
+                        >
+                          <FileSignature className="h-5 w-5" /> GERAR DOCUMENTO E ENVIAR P/ REVISÃO
+                        </PrimaryButton>
+                      </div>
+                    </SectionCard>
+                  )}
+
+                  {realContract && (
+                    <SectionCard
+                      title="Contrato Gerado"
+                      subtitle={`Status: ${realContract.status.toUpperCase()}`}
+                    >
+                      <div className="p-6 rounded-2xl bg-surface border-2 border-primary/20 flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div className="flex items-center gap-5">
+                          <div className="h-16 w-16 bg-primary text-white rounded-2xl flex items-center justify-center shadow-xl shadow-primary/30">
+                            <FileSignature className="h-8 w-8" />
+                          </div>
+                          <div>
+                            <div className="font-display font-bold text-lg">
+                              Contrato Prestação de Serviços - v{realContract.version}
+                            </div>
+                            <div className="text-xs text-muted-foreground flex items-center gap-2 mt-1">
+                              <Clock className="h-3 w-3" /> Gerado em{" "}
+                              {new Date(
+                                realContract.generated_at || realContract.created_at,
+                              ).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-3 shrink-0">
+                          {realContract.signed_file_url ? (
+                            <PrimaryButton
+                              onClick={() => window.open(realContract.signed_file_url, "_blank")}
+                              className="h-11 px-6 font-bold"
+                            >
+                              ABRIR CONTRATO ASSINADO
+                            </PrimaryButton>
+                          ) : (
+                            <>
+                              <GhostButton className="h-11 px-6 font-bold border-2">VISUALIZAR</GhostButton>
+                              <PrimaryButton className="h-11 px-6 font-bold">BAIXAR PDF</PrimaryButton>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-10 pt-10 border-t border-border space-y-6">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-display font-bold text-xl">Assinatura Eletrônica</h4>
+                          <div
+                            className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-widest ${realContract.status === "signed" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}
+                          >
+                            {realContract.status === "signed" ? "CONCLUÍDO" : "PENDENTE"}
+                          </div>
+                        </div>
+
+                        {realContract.status === "draft" && (
+                          <div className="bg-primary/5 border border-primary/10 p-8 rounded-2xl text-center space-y-4">
+                            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                              O contrato está pronto. Ao enviar, os signatários receberão um e-mail para
+                              assinar digitalmente através do <b>ZapSign / Docusign</b>.
+                            </p>
+                            <PrimaryButton
+                              onClick={async () => {
+                                await eventContractsService.updateContractStatus(
+                                  realContract.id,
+                                  "sent",
+                                );
+                                handleStatusChange(
+                                  "em_assinatura",
+                                  "Contrato disparado para assinatura.",
+                                );
+                                loadAllData();
+                              }}
+                              className="h-12 px-10 font-bold"
+                            >
+                              DISPARAR ASSINATURAS
+                            </PrimaryButton>
+                          </div>
+                        )}
+
+                        {(realContract.status === "sent" ||
+                          realContract.status === "partially_signed") && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="p-4 rounded-xl border border-warning/30 bg-warning/5 flex items-center gap-4">
+                              <div className="h-10 w-10 bg-warning/20 rounded-full flex items-center justify-center text-warning animate-pulse">
+                                <Clock className="h-5 w-5" />
+                              </div>
+                              <div>
+                                <div className="text-xs font-bold text-warning uppercase">
+                                  AGUARDANDO CLIENTE
+                                </div>
+                                <div className="text-[10px] text-muted-foreground italic">
+                                  E-mail enviado há 2 horas
+                                </div>
+                              </div>
+                            </div>
+                            <div className="p-4 rounded-xl border border-success/30 bg-success/5 flex items-center gap-4">
+                              <div className="h-10 w-10 bg-success/20 rounded-full flex items-center justify-center text-success">
+                                <CheckCircle2 className="h-5 w-5" />
+                              </div>
+                              <div>
+                                <div className="text-xs font-bold text-success uppercase">
+                                  ASSINADO PELA GOAT
+                                </div>
+                                <div className="text-[10px] text-muted-foreground italic">
+                                  Assinado por Sócio Diretor
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {realContract.status === "signed" && (
+                          <div className="bg-success/10 border-2 border-success/20 p-8 rounded-2xl flex flex-col items-center text-center space-y-4">
+                            <div className="h-20 w-20 bg-success text-white rounded-full flex items-center justify-center shadow-xl shadow-success/30">
+                              <CheckCircle2 className="h-10 w-10" />
+                            </div>
+                            <div>
+                              <h4 className="font-display font-bold text-2xl text-success">
+                                Contrato Formalizado
+                              </h4>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                Todas as partes assinaram o documento. O evento está juridicamente
+                                confirmado.
+                              </p>
+                            </div>
+                            {realContract.signed_file_url && (
+                              <PrimaryButton
+                                onClick={() => window.open(realContract.signed_file_url, "_blank")}
+                                className="font-bold shadow-lg"
+                              >
+                                ABRIR CONTRATO ASSINADO
+                              </PrimaryButton>
+                            )}
+                            <GhostButton className="font-bold text-success border-success/30 hover:bg-success/10">
+                              VER CERTIFICADO DE ASSINATURAS
+                            </GhostButton>
+                          </div>
+                        )}
+
+                        {realContract.status !== "signed" && (
+                          <div className="mt-6 pt-6 border-t border-border/40 space-y-3">
+                            <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                              Prefere assinar fora do sistema?
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              Se você já tem este contrato impresso e assinado manualmente pelo cliente, faça o upload do arquivo assinado (PDF ou imagem) para concluir a formalização diretamente.
+                            </p>
+                            <label className="h-10 px-4 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl flex items-center justify-center gap-2 text-xs font-bold cursor-pointer transition-all w-fit">
+                              <Upload className="h-4 w-4" />
+                              {uploadingContract ? "ENVIANDO..." : "FAZER UPLOAD DO CONTRATO ASSINADO"}
+                              <input
+                                type="file"
+                                accept="application/pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                className="hidden"
+                                disabled={uploadingContract}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleManualContractUpload(file);
+                                }}
+                              />
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    </SectionCard>
+                  )}
                 </div>
-              </SectionCard>
-            </div>
+
+                <div className="lg:col-span-4">
+                  <SectionCard title="Workflow Jurídico" className="sticky top-6">
+                    <div className="space-y-6 py-4">
+                      <StatusStep done={!!realClientData} title="Coleta de dados concluída" />
+                      <StatusStep done={!!realContract} title="Documento base gerado" />
+                      <StatusStep
+                        done={
+                          realContract?.status === "sent" ||
+                          realContract?.status === "partially_signed" ||
+                          realContract?.status === "signed"
+                        }
+                        title="Disparo de e-mails realizado"
+                      />
+                      <StatusStep
+                        done={realContract?.status === "signed"}
+                        title="Assinatura das partes colhida"
+                      />
+                    </div>
+                  </SectionCard>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-7">
+                <div className="lg:col-span-8 space-y-6">
+                  {realContract?.signed_file_url ? (
+                    <SectionCard
+                      title="Contrato Assinado (Upload Manual)"
+                      subtitle="O arquivo do contrato assinado está anexado a este evento."
+                    >
+                      <div className="p-6 rounded-2xl bg-success/5 border-2 border-success/20 flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div className="flex items-center gap-5">
+                          <div className="h-16 w-16 bg-success text-white rounded-2xl flex items-center justify-center shadow-xl shadow-success/20">
+                            <CheckCircle2 className="h-8 w-8" />
+                          </div>
+                          <div>
+                            <div className="font-display font-bold text-lg">
+                              Contrato Assinado
+                            </div>
+                            <div className="text-xs text-muted-foreground flex items-center gap-2 mt-1">
+                              <Clock className="h-3 w-3" /> Atualizado em{" "}
+                              {new Date(
+                                realContract.fully_signed_at || realContract.updated_at || realContract.created_at
+                              ).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-3 shrink-0">
+                          <PrimaryButton
+                            onClick={() => window.open(realContract.signed_file_url, "_blank")}
+                            className="h-11 px-6 font-bold"
+                          >
+                            ABRIR CONTRATO ASSINADO
+                          </PrimaryButton>
+                        </div>
+                      </div>
+
+                      <div className="mt-8 pt-8 border-t border-border/40">
+                        <h4 className="text-sm font-bold mb-4">Substituir Contrato Assinado</h4>
+                        <div className="flex items-center gap-4">
+                          <label className="h-11 px-6 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl flex items-center justify-center gap-2 text-xs font-bold cursor-pointer transition-all">
+                            <Upload className="h-4 w-4" />
+                            {uploadingContract ? "ENVIANDO..." : "FAZER UPLOAD DE NOVO ARQUIVO"}
+                            <input
+                              type="file"
+                              accept="application/pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                              className="hidden"
+                              disabled={uploadingContract}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleManualContractUpload(file);
+                              }}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    </SectionCard>
+                  ) : (
+                    <SectionCard
+                      title="Upload do Contrato Assinado"
+                      subtitle="Faça o upload do contrato assinado pelo cliente (PDF ou Imagem) para formalizar o evento."
+                    >
+                      <div className="flex flex-col items-center justify-center p-12 bg-surface border-2 border-dashed border-border rounded-2xl text-center space-y-6">
+                        <div className="h-20 w-20 bg-primary/10 rounded-full flex items-center justify-center text-primary shadow-inner">
+                          <Upload className="h-10 w-10 animate-bounce" />
+                        </div>
+                        <div className="max-w-md">
+                          <h3 className="font-display font-bold text-xl mb-2">
+                            Selecione o Contrato Assinado
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            Formatos suportados: PDF, JPG, PNG, DOCX. O arquivo será armazenado com segurança no storage do Supabase e o status do evento mudará para "CONFIRMADO".
+                          </p>
+                        </div>
+                        
+                        <label className="h-12 px-8 bg-primary text-white hover:bg-primary/90 rounded-xl flex items-center justify-center gap-2 text-sm font-bold cursor-pointer transition-all shadow-lg shadow-primary/20">
+                          <Upload className="h-4 w-4" />
+                          {uploadingContract ? "ENVIANDO..." : "SELECIONAR ARQUIVO"}
+                          <input
+                            type="file"
+                            accept="application/pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            className="hidden"
+                            disabled={uploadingContract}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleManualContractUpload(file);
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </SectionCard>
+                  )}
+                </div>
+
+                <div className="lg:col-span-4">
+                  <SectionCard title="Workflow Jurídico (Manual)" className="sticky top-6">
+                    <div className="space-y-6 py-4">
+                      <StatusStep done={true} title="Upload de contrato assinado pendente" />
+                      <StatusStep done={!!realContract?.signed_file_url} title="Contrato formalizado" />
+                      <div className="pt-4 border-t border-border/40 text-[10px] text-muted-foreground leading-relaxed">
+                        Ao realizar o upload manual do contrato assinado, o status do evento é automaticamente alterado para <b>Confirmado</b> e a proposta de orçamento é travada para alterações futuras.
+                      </div>
+                    </div>
+                  </SectionCard>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
