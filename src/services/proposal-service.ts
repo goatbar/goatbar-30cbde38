@@ -261,14 +261,13 @@ function wrapText(text: string, maxWidth: number, fontSize: number, font: any): 
 }
 
 // Convert Hex color to RGB
-function hexToRgb(hex: string): { r: number; g: number; b: number } {
+function hexToRgb(hex: string) {
   const cleanHex = hex.replace("#", "");
   const num = parseInt(cleanHex, 16);
-  return {
-    r: ((num >> 16) & 255) / 255,
-    g: ((num >> 8) & 255) / 255,
-    b: (num & 255) / 255,
-  };
+  const r = ((num >> 16) & 255) / 255;
+  const g = ((num >> 8) & 255) / 255;
+  const b = (num & 255) / 255;
+  return rgb(r, g, b);
 }
 
 
