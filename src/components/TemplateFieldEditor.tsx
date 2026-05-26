@@ -165,8 +165,8 @@ function ArcPreviewSVG({
   const isBottom = cfg.arcPosition === "bottom";
   const sampleText = (
     cfg.uppercase
-      ? (MOCK_DATA[field.field_key] ?? field.field_label).toUpperCase()
-      : (MOCK_DATA[field.field_key] ?? field.field_label)
+      ? (field.field_label).toUpperCase()
+      : (field.field_label)
   ).slice(0, 30);
 
   const startRad = (startDeg * Math.PI) / 180;
@@ -371,8 +371,8 @@ function FieldBox({
     field.field_type === "texto_arco"
       ? null
       : field.config?.uppercase
-        ? (MOCK_DATA[field.field_key] ?? field.field_label).toUpperCase()
-        : MOCK_DATA[field.field_key] ?? field.field_label;
+        ? (field.field_label).toUpperCase()
+        : field.field_label;
 
   return (
     <div
@@ -609,8 +609,7 @@ function FieldPropertiesPanel({
   return (
     <div
       style={{
-        background: panelBg, width: 280, flexShrink: 0, overflowY: "auto",
-        borderLeft: "1px solid rgba(247,244,239,0.1)", padding: "14px 14px 24px",
+        flex: 1, overflowY: "auto", padding: "14px 14px 24px",
         display: "flex", flexDirection: "column", gap: 6,
       }}
     >
@@ -1188,7 +1187,10 @@ export function TemplateFieldEditor({
         </div>
 
         {/* Properties panel */}
-        <div onClick={(e) => e.stopPropagation()}>
+        <div 
+          onClick={(e) => e.stopPropagation()}
+          style={{ width: 280, flexShrink: 0, height: "100%", display: "flex", flexDirection: "column", borderLeft: "1px solid rgba(247,244,239,0.1)", background: "rgba(15,20,20,0.95)" }}
+        >
           {selectedField ? (
             <FieldPropertiesPanel
               field={selectedField}
@@ -1197,7 +1199,7 @@ export function TemplateFieldEditor({
             />
           ) : (
             <div style={{
-              width: 280, borderLeft: "1px solid rgba(247,244,239,0.1)", background: "rgba(15,20,20,0.95)",
+              flex: 1,
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
               color: "#a0a0a0", padding: 24, textAlign: "center", gap: 8,
             }}>
