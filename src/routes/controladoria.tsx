@@ -170,7 +170,7 @@ function ControladoriaPage() {
       setForm((prev) => ({
         ...prev,
         date: parsedDate,
-        description: extracted.description || prev.description || `Despesa via notinha - ${file.name}`,
+        description: `Despesa via notinha - ${extracted.supplier_name || "revisar dados"} - ${parsedDate.split("-").reverse().join("/")}`,
         amount: extracted.amount ?? prev.amount ?? 0,
         supplier_name: extracted.supplier_name || prev.supplier_name || "",
         supplier_cnpj: extracted.supplier_cnpj || "",
@@ -546,6 +546,45 @@ function ControladoriaPage() {
             </div>
 
             <div className="p-6 max-h-[80vh] overflow-y-auto scrollbar-thin">
+              {form.ocr_raw_text && (
+                <div className="mb-6 bg-primary/5 border border-primary/20 rounded-xl p-4 animate-in fade-in slide-in-from-top-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    <h3 className="font-bold text-sm">Dados extraídos da notinha</h3>
+                    {(form as any).ocr_metadata?.confidence > 0 && (
+                      <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                        Confiança: {Math.round((form as any).ocr_metadata.confidence)}%
+                      </span>
+                    )}
+                  </div>
+                  
+                  {(form as any).review_status === "Erro na leitura" ? (
+                    <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
+                      Não conseguimos ler todos os dados da notinha. Preencha ou revise manualmente.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="text-xs text-muted-foreground flex flex-wrap gap-2">
+                        <strong>Campos identificados:</strong>
+                        {((form as any).auto_filled_fields || []).map((f: string) => (
+                          <span key={f} className="px-1.5 py-0.5 bg-background rounded border border-border text-[10px] uppercase font-bold">
+                            {f.replace("supplier_", "").replace("_", " ")}
+                          </span>
+                        ))}
+                        {((form as any).auto_filled_fields || []).length === 0 && "Nenhum campo estruturado encontrado"}
+                      </div>
+                      
+                      <details className="text-xs">
+                        <summary className="cursor-pointer text-primary font-medium hover:underline">Ver texto bruto extraído</summary>
+                        <div className="mt-2 p-3 bg-background border border-border rounded-lg max-h-32 overflow-y-auto whitespace-pre-wrap font-mono text-[10px] text-muted-foreground">
+                          {form.ocr_raw_text}
+                        </div>
+                      </details>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-4 md:col-span-2">
                   <label className="label-eyebrow">Descrição do Gasto</label>

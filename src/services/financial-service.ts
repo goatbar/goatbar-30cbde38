@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import Tesseract from "tesseract.js";
 
 export type FinancialModality = "Evento" | "Steakhouse" | "Goatbotequim" | "Geral";
 export type FinancialCategory = "Fornecedor" | "Equipe" | "Insumos" | "Operacional" | "Outros";
@@ -191,52 +192,87 @@ export const financialService = {
   },
 
   async extractExpenseFromReceipt(file: File): Promise<ReceiptExtractionResult> {
-    const { data, error } = await supabase.functions.invoke("ocr-receipt", {
-      body: { fileName: file.name, mimeType: file.type },
-    });
+    try {
+      const result = await Tesseract.recognize(file, 'por', {
+        logger: m => console.log(m),
+      });
 
-    if (error || !data?.text) {
+      const rawText = result.data.text || "";
+      const confidence = result.data.confidence || 0;
+      const normalizedText = normalize(rawText);
+
+      // Extract CNPJ
+      const cnpjMatch = rawText.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{14}/);
+      
+      // Extract Date (tries standard formats)
+      const dateMatch = rawText.match(/(\d{2}[\/\-]\d{2}[\/\-]\d{2,4})/);
+      
+      // Extract Amount (looks for largest value after words like total, valor or R$)
+      const amountMatches = [...rawText.matchAll(/(?:total|valor|pago|r\$)[^\d]{0,10}(\d+[\.,]\d{2})/gi)];
+      const fallbackAmountMatches = [...rawText.matchAll(/(\d+[\.,]\d{2})/g)];
+      
+      let amountValue: number | undefined = undefined;
+      if (amountMatches.length) {
+        amountValue = toFiniteNumber(amountMatches[amountMatches.length - 1][1]);
+      } else if (fallbackAmountMatches.length) {
+        const vals = fallbackAmountMatches.map(m => toFiniteNumber(m[1])).filter(v => v > 0);
+        if (vals.length) amountValue = Math.max(...vals);
+      }
+
+      // Extract Supplier Name (heuristic: first non-empty line before CNPJ usually)
+      const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 3);
+      let supplierName = "";
+      if (lines.length > 0) {
+        // Find line with CNPJ to take previous lines, or just take first line
+        const cnpjLineIdx = lines.findIndex(l => /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{14}/.test(l));
+        if (cnpjLineIdx > 0) {
+          supplierName = lines[0]; // first line is usually the name
+        } else {
+          supplierName = lines[0];
+        }
+        // Clean up common receipt headers
+        supplierName = supplierName.replace(/cnpj.*|extrato.*|cupom.*/i, "").trim();
+      }
+
+      // Extract Payment Method
+      const paymentMethod: PaymentMethod | undefined = normalizedText.includes("pix")
+        ? "PIX"
+        : normalizedText.includes("dinheiro")
+          ? "Dinheiro"
+          : (normalizedText.includes("cartao") || normalizedText.includes("debito") || normalizedText.includes("credito"))
+            ? "Cartão"
+            : normalizedText.includes("transfer")
+              ? "Transferência"
+              : undefined;
+
+      const auto_filled_fields: string[] = [];
+      if (cnpjMatch) auto_filled_fields.push("supplier_cnpj");
+      if (dateMatch) auto_filled_fields.push("date");
+      if (amountValue) auto_filled_fields.push("amount");
+      if (paymentMethod) auto_filled_fields.push("payment_method");
+      if (supplierName) auto_filled_fields.push("supplier_name");
+
+      return {
+        raw_text: rawText,
+        supplier_name: supplierName || undefined,
+        supplier_cnpj: cnpjMatch?.[0],
+        date: dateMatch?.[1],
+        amount: amountValue,
+        payment_method: paymentMethod,
+        category: inferCategoryFromText(rawText),
+        review_status: auto_filled_fields.length >= 3 ? "Lido automaticamente" : "Precisa revisar",
+        auto_filled_fields,
+        confidence,
+      };
+    } catch (error) {
+      console.error("OCR Error:", error);
       return {
         raw_text: "",
         review_status: "Erro na leitura",
         auto_filled_fields: [],
+        confidence: 0,
       };
     }
-
-    const rawText = String(data.text || "");
-    const normalizedText = normalize(rawText);
-    const cnpjMatch = rawText.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{14}/);
-    const dateMatch = rawText.match(/(\d{2}[\/\-]\d{2}[\/\-]\d{2,4})/);
-    const amountMatches = [...rawText.matchAll(/(?:total|valor)[^\d]{0,10}(\d+[\.,]\d{2})/gi)];
-    const amountValue = amountMatches.length
-      ? toFiniteNumber(amountMatches[amountMatches.length - 1][1])
-      : undefined;
-    const paymentMethod: PaymentMethod | undefined = normalizedText.includes("pix")
-      ? "PIX"
-      : normalizedText.includes("dinheiro")
-        ? "Dinheiro"
-        : normalizedText.includes("cartao")
-          ? "Cartão"
-          : normalizedText.includes("transfer")
-            ? "Transferência"
-            : undefined;
-
-    const auto_filled_fields: string[] = [];
-    if (cnpjMatch) auto_filled_fields.push("supplier_cnpj");
-    if (dateMatch) auto_filled_fields.push("date");
-    if (amountValue) auto_filled_fields.push("amount");
-    if (paymentMethod) auto_filled_fields.push("payment_method");
-
-    return {
-      raw_text: rawText,
-      supplier_cnpj: cnpjMatch?.[0],
-      date: dateMatch?.[1],
-      amount: amountValue,
-      payment_method: paymentMethod,
-      category: inferCategoryFromText(rawText),
-      review_status: auto_filled_fields.length >= 3 ? "Lido automaticamente" : "Precisa revisar",
-      auto_filled_fields,
-    };
   },
 
 

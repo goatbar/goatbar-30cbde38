@@ -394,7 +394,7 @@ function EventoInterna() {
       };
 
       // Atualiza evento base com totais financeiros para integração com dashboard/financeiro
-      await eventBudgetService.updateEventInfo(evento.id, {
+      await eventBudgetService.updateEvent(evento.id, {
         client_name: draft.cliente,
         event_name: draft.evento_nome,
         phone: draft.telefone,
