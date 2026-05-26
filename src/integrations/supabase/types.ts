@@ -1138,6 +1138,92 @@ export type Database = {
         }
         Relationships: []
       }
+      proposal_template_fields: {
+        Row: {
+          alignment: string
+          arc_angle: number | null
+          arc_radius: number | null
+          auto_resize: boolean
+          color_hex: string
+          created_at: string
+          field_type: string
+          font_family: string
+          font_size: number
+          font_weight: string
+          height: number
+          id: string
+          image_fit: string | null
+          label: string
+          line_height: number
+          overflow_control: string
+          page: number
+          position_x: number
+          position_y: number
+          technical_name: string
+          template_id: string
+          updated_at: string
+          width: number
+        }
+        Insert: {
+          alignment?: string
+          arc_angle?: number | null
+          arc_radius?: number | null
+          auto_resize?: boolean
+          color_hex?: string
+          created_at?: string
+          field_type: string
+          font_family?: string
+          font_size?: number
+          font_weight?: string
+          height: number
+          id?: string
+          image_fit?: string | null
+          label: string
+          line_height?: number
+          overflow_control?: string
+          page?: number
+          position_x: number
+          position_y: number
+          technical_name: string
+          template_id: string
+          updated_at?: string
+          width: number
+        }
+        Update: {
+          alignment?: string
+          arc_angle?: number | null
+          arc_radius?: number | null
+          auto_resize?: boolean
+          color_hex?: string
+          created_at?: string
+          field_type?: string
+          font_family?: string
+          font_size?: number
+          font_weight?: string
+          height?: number
+          id?: string
+          image_fit?: string | null
+          label?: string
+          line_height?: number
+          overflow_control?: string
+          page?: number
+          position_x?: number
+          position_y?: number
+          technical_name?: string
+          template_id?: string
+          updated_at?: string
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_template_fields_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales: {
         Row: {
           created_at: string | null

@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { PDFDocument, degrees, rgb, StandardFonts } from "pdf-lib";
 import { proposalTemplateConfigs, type EventTemplateType, type FieldConfig } from "@/lib/proposal-template-configs";
+import type { ProposalTemplateField } from "@/lib/proposal-template-mapper";
 
 export interface ProposalTemplate {
   id: string;
@@ -139,6 +140,26 @@ export const proposalTemplatesService = {
     } = supabase.storage.from("proposal-templates").getPublicUrl(filePath);
 
     return { publicUrl, filePath };
+  },
+
+  async listTemplateFields(templateId: string) {
+    const { data, error } = await supabase
+      .from("proposal_template_fields")
+      .select("*")
+      .eq("template_id", templateId)
+      .order("page", { ascending: true })
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return (data ?? []) as ProposalTemplateField[];
+  },
+
+  async replaceTemplateFields(templateId: string, fields: ProposalTemplateField[]) {
+    await supabase.from("proposal_template_fields").delete().eq("template_id", templateId);
+    if (!fields.length) return [];
+    const payload = fields.map(({ id: _id, ...rest }) => ({ ...rest, template_id: templateId }));
+    const { data, error } = await supabase.from("proposal_template_fields").insert(payload).select("*");
+    if (error) throw error;
+    return (data ?? []) as ProposalTemplateField[];
   },
 };
 
