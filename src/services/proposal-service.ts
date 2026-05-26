@@ -210,9 +210,39 @@ export const generatedProposalsService = {
   },
 };
 
+// Sanitize text for pdf-lib StandardFonts (no Unicode support)
+function sanitizeText(text: string): string {
+  if (!text) return "";
+  return text
+    .normalize("NFD")
+    .replace(/\u0300/g, "") // grave
+    .replace(/\u0301/g, "") // acute
+    .replace(/\u0302/g, "") // circumflex
+    .replace(/\u0303/g, "") // tilde
+    .replace(/\u0308/g, "") // umlaut
+    .replace(/\u0327/g, "") // cedilla
+    .replace(/[\u0300-\u036f]/g, "") // any remaining combining marks
+    .replace(/\u00e3/g, "a").replace(/\u00c3/g, "A") // ã Ã
+    .replace(/\u00e7/g, "c").replace(/\u00c7/g, "C") // ç Ç
+    .replace(/\u00e9/g, "e").replace(/\u00c9/g, "E") // é É
+    .replace(/\u00ea/g, "e").replace(/\u00ca/g, "E") // ê Ê
+    .replace(/\u00e8/g, "e").replace(/\u00c8/g, "E") // è È
+    .replace(/\u00e0/g, "a").replace(/\u00c0/g, "A") // à À
+    .replace(/\u00e2/g, "a").replace(/\u00c2/g, "A") // â Â
+    .replace(/\u00f5/g, "o").replace(/\u00d5/g, "O") // õ Õ
+    .replace(/\u00f3/g, "o").replace(/\u00d3/g, "O") // ó Ó
+    .replace(/\u00f4/g, "o").replace(/\u00d4/g, "O") // ô Ô
+    .replace(/\u00fa/g, "u").replace(/\u00da/g, "U") // ú Ú
+    .replace(/\u00fc/g, "u").replace(/\u00dc/g, "U") // ü Ü
+    .replace(/\u00ed/g, "i").replace(/\u00cd/g, "I") // í Í
+    .replace(/\u00f1/g, "n").replace(/\u00d1/g, "N") // ñ Ñ
+    .replace(/[^\x00-\xFF]/g, ""); // remove anything still non-latin
+}
+
 // Helper function to wrap text
 function wrapText(text: string, maxWidth: number, fontSize: number, font: any): string[] {
-  const words = text.split(" ");
+  const safe = sanitizeText(text);
+  const words = safe.split(" ");
   const lines: string[] = [];
   let currentLine = words[0] || "";
 
@@ -240,6 +270,7 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
     b: (num & 255) / 255,
   };
 }
+
 
 export const pdfGenerationService = {
   async generateProposalPDF(

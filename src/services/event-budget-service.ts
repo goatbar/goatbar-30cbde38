@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 export interface Event {
   id: string;
   client_name: string;
+  event_name?: string;
   phone?: string;
   email?: string;
   date: string;
@@ -402,6 +403,7 @@ export const eventBudgetService = {
 
     const eventPayload = {
       client_name: payload.client_name,
+      event_name: payload.client_name,
       event_type: payload.event_type,
       date: payload.date,
       city: payload.city,

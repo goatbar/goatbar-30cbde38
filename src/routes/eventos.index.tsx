@@ -41,6 +41,7 @@ function EventosIndex() {
   const [statusFilter, setStatusFilter] = useState<string>("ativos");
   const [form, setForm] = useState({
     nome: "",
+    evento_nome: "",
     telefone: "",
     email: "",
     tipo: "Casamento",
@@ -140,6 +141,7 @@ function EventosIndex() {
     try {
       const newEvent = await eventBudgetService.createEvent({
         client_name: form.nome,
+        event_name: form.evento_nome,
         phone: form.telefone,
         email: form.email,
         event_type: form.tipo,
@@ -267,7 +269,7 @@ function EventosIndex() {
                   </div>
                   <div className="flex-1 min-w-0 pr-2 sm:pr-0">
                     <div className="font-bold text-sm truncate group-hover:text-primary transition-colors">
-                      {e.client_name}
+                      {e.event_name || e.client_name}
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[10px] text-muted-foreground uppercase tracking-wider font-bold">
                       <span className="flex items-center gap-1">
@@ -386,7 +388,7 @@ function EventosIndex() {
                     <ul className="mt-2 list-disc list-inside space-y-1 opacity-80">
                       {mesmoDiaEventos.map((ev) => (
                         <li key={ev.id}>
-                          {ev.client_name} ({ev.event_location}) - {ev.status.replace("_", " ")}
+                          {ev.event_name || ev.client_name} ({ev.event_location}) - {ev.status.replace("_", " ")}
                         </li>
                       ))}
                     </ul>
@@ -399,7 +401,13 @@ function EventosIndex() {
                   label: "Nome do solicitante",
                   key: "nome",
                   type: "text",
-                  placeholder: "Ex: João & Maria",
+                  placeholder: "Ex: João Silva",
+                },
+                {
+                  label: "Nome do Evento / Casal (opcional)",
+                  key: "evento_nome",
+                  type: "text",
+                  placeholder: "Ex: Casamento João & Maria",
                 },
                 {
                   label: "Contato (Telefone/WhatsApp)",
@@ -573,7 +581,7 @@ function CalendarView({ eventosAtivos }: { eventosAtivos: RealEvent[] }) {
                       className="block p-2 rounded-xl border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-all hover:scale-[1.02] cursor-pointer space-y-1"
                     >
                       <div className="font-bold text-primary text-[11px] truncate leading-tight">
-                        {e.client_name}
+                        {e.event_name || e.client_name}
                       </div>
                       <div className="text-[9.5px] text-foreground font-semibold truncate">
                         {e.event_type}

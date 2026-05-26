@@ -250,7 +250,8 @@ function EventoInterna() {
 
   const mapEventToDraft = (ev: RealEvent): Evento => ({
     id: ev.id,
-    nome: ev.client_name,
+    nome: ev.event_name || ev.client_name,
+    evento_nome: ev.event_name || "",
     cliente: ev.client_name,
     telefone: ev.phone || "",
     email: ev.email || "",
@@ -393,8 +394,9 @@ function EventoInterna() {
       };
 
       // Atualiza evento base com totais financeiros para integração com dashboard/financeiro
-      await eventBudgetService.updateEvent(eventoId, {
+      await eventBudgetService.updateEventInfo(evento.id, {
         client_name: draft.cliente,
+        event_name: draft.evento_nome,
         phone: draft.telefone,
         email: draft.email,
         date: draft.data,
@@ -712,7 +714,7 @@ function EventoInterna() {
                   : "esta data"}
                 :
                 <span className="font-semibold ml-1">
-                  {sameDateEvents.map((e) => e.client_name).join(", ")}
+                  {sameDateEvents.map((e) => e.event_name || e.client_name).join(", ")}
                 </span>
               </p>
             </div>
@@ -737,7 +739,7 @@ function EventoInterna() {
               <div>
                 <div className="flex items-center gap-3">
                   <h2 className="text-2xl font-display font-bold tracking-tight">
-                    {isEditingHeader ? "Editando Cabeçalho" : draft.cliente || draft.nome}
+                    {isEditingHeader ? "Editando Cabeçalho" : draft.evento_nome || draft.cliente || draft.nome}
                   </h2>
                   <button
                     onClick={() => {
@@ -809,6 +811,13 @@ function EventoInterna() {
                 isEditing={isEditingHeader}
                 onChange={(v) => setDraft((p) => (p ? { ...p, tipo: v } : null))}
                 icon={<Save className="h-3 w-3 text-primary/60" />}
+              />
+              <HeaderField
+                label="Nome do Evento / Casal"
+                value={draft.evento_nome}
+                isEditing={isEditingHeader}
+                onChange={(v) => setDraft((p) => (p ? { ...p, evento_nome: v } : null))}
+                icon={<Users className="h-3 w-3 text-primary/60" />}
               />
             </div>
 
@@ -2766,7 +2775,7 @@ function ProposalModal({
           ? (() => { const [y, m, d] = (draft.data || "").split("-"); return `${d}/${m}/${y}`; })()
           : "---",
         eventTime: draft?.horario || "",
-        clientName: draft?.cliente || evento?.client_name || "",
+        clientName: draft?.evento_nome || evento?.event_name || draft?.cliente || evento?.client_name || "",
         eventTypeLabel:
           mappedEventType === "casamento" ? "Casamento" :
           mappedEventType === "aniversario" ? "Aniversário" : "Comemoração",
