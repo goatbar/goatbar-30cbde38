@@ -46,6 +46,7 @@ function writeStore(store: AppStore) {
       return d;
     }),
   };
+  delete (sanitized as any).loadingDrinks;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
   window.dispatchEvent(new CustomEvent(STORE_SYNC_EVENT));
 }
@@ -220,6 +221,33 @@ function readStore(): AppStore {
   return recoverFromMockDb(merged);
 }
 
+// Global store and pub-sub state logic
+let globalStore: AppStore = readStore();
+let hasFetchedDrinks = false;
+let isFetchingDrinks = false;
+const subscribers = new Set<(store: AppStore) => void>();
+
+function setGlobalStore(updater: AppStore | ((prev: AppStore) => AppStore)) {
+  const nextStore = typeof updater === "function" ? updater(globalStore) : updater;
+  globalStore = nextStore;
+  subscribers.forEach((callback) => callback(globalStore));
+  try {
+    writeStore(globalStore);
+  } catch (e) {
+    console.error("Failed to write to localStorage:", e);
+  }
+}
+
+// Sync across tabs
+if (typeof window !== "undefined") {
+  const syncFromLocalStorage = () => {
+    const fresh = readStore();
+    setGlobalStore({ ...fresh, loadingDrinks: globalStore.loadingDrinks });
+  };
+  window.addEventListener("storage", syncFromLocalStorage);
+  window.addEventListener(STORE_SYNC_EVENT, syncFromLocalStorage);
+}
+
 // Helper to convert base64 data URL to Blob
 export function base64ToBlob(base64: string): { blob: Blob; mime: string } {
   const arr = base64.split(",");
@@ -336,7 +364,11 @@ async function syncDrinkToSupabase(id: string, payload: Partial<Drink>) {
     }
 
     if (imageUrl && imageUrl !== payload.imagem) {
-      window.dispatchEvent(new CustomEvent("drink-image-synced", { detail: { id, imageUrl } }));
+      // Dispatch update to global store
+      setGlobalStore((prev) => ({
+        ...prev,
+        drinks: prev.drinks.map((d) => (d.id === id ? { ...d, imagem: imageUrl } : d)),
+      }));
     }
   } catch (e) {
     console.error("Error syncing drink to Supabase:", e);
@@ -362,125 +394,110 @@ async function deleteDrinkFromSupabase(id: string) {
 }
 
 export function useAppStore() {
-  const [store, setStore] = useState<AppStore>(() => {
-    const base = readStore();
-    return { ...base, loadingDrinks: true };
-  });
+  const [store, setStore] = useState<AppStore>(globalStore);
 
-  // Load drinks from Supabase on mount
+  // Load drinks from Supabase on mount (ONCE globally)
   useEffect(() => {
-    let active = true;
+    setStore(globalStore);
+    subscribers.add(setStore);
 
-    async function loadDrinks() {
-      try {
-        const { data, error } = await supabase
-          .from("drinks")
-          .select("*")
-          .order("nome", { ascending: true });
+    if (!hasFetchedDrinks && !isFetchingDrinks) {
+      isFetchingDrinks = true;
+      setGlobalStore((prev) => ({ ...prev, loadingDrinks: true }));
 
-        if (error) throw error;
+      supabase
+        .from("drinks")
+        .select("*")
+        .order("nome", { ascending: true })
+        .then(({ data, error }) => {
+          isFetchingDrinks = false;
+          if (error) {
+            console.error("Failed to load drinks from Supabase:", error);
+            setGlobalStore((prev) => ({ ...prev, loadingDrinks: false }));
+            return;
+          }
 
-        if (!active) return;
+          hasFetchedDrinks = true;
 
-        if (data && data.length > 0) {
-          const parsedDrinks = data.map((d: any) => {
-            let parsedInsumos = [];
-            try {
-              parsedInsumos = typeof d.insumos === "string" ? JSON.parse(d.insumos) : (d.insumos || []);
-            } catch (err) {
-              parsedInsumos = d.insumos || [];
-            }
+          if (data && data.length > 0) {
+            const parsedDrinks = data.map((d: any) => {
+              let parsedInsumos = [];
+              try {
+                parsedInsumos = typeof d.insumos === "string" ? JSON.parse(d.insumos) : (d.insumos || []);
+              } catch (err) {
+                parsedInsumos = d.insumos || [];
+              }
 
-            let parsedConfig = {};
-            try {
-              parsedConfig = typeof d.modality_config === "string" ? JSON.parse(d.modality_config) : (d.modality_config || {});
-            } catch (err) {
-              parsedConfig = d.modality_config || {};
-            }
+              let parsedConfig = {};
+              try {
+                parsedConfig = typeof d.modality_config === "string" ? JSON.parse(d.modality_config) : (d.modality_config || {});
+              } catch (err) {
+                parsedConfig = d.modality_config || {};
+              }
 
-            return {
-              id: d.id,
-              nome: d.nome,
-              categoria: d.categoria || "Geral",
-              descricao: d.descricao || "",
-              custoUnitario: Number(d.custo_unitario || 0),
-              insumos: parsedInsumos,
-              modalityConfig: parsedConfig,
-              imagem: d.imagem,
-            } as Drink;
-          });
+              return {
+                id: d.id,
+                nome: d.nome,
+                categoria: d.categoria || "Geral",
+                descricao: d.descricao || "",
+                custoUnitario: Number(d.custo_unitario || 0),
+                insumos: parsedInsumos,
+                modalityConfig: parsedConfig,
+                imagem: d.imagem,
+              } as Drink;
+            });
 
-          // Check if any drinks have local IndexedDB images to migrate to Supabase Storage
-          for (const d of parsedDrinks) {
-            if (d.imagem && d.imagem.startsWith("idb:")) {
-              const key = d.imagem.slice(4);
-              loadImage(key).then(async (base64) => {
-                if (base64) {
-                  try {
-                    const publicUrl = await uploadDrinkImage(d.id, base64);
-                    await supabase.from("drinks").update({ imagem: publicUrl }).eq("id", d.id);
-                    setStore((prev) => ({
-                      ...prev,
-                      drinks: prev.drinks.map((x) => (x.id === d.id ? { ...x, imagem: publicUrl } : x)),
-                    }));
-                    await deleteImage(key);
-                  } catch (err) {
-                    console.error("Migration of local image failed for drink:", d.id, err);
+            // Check if any drinks have local IndexedDB images to migrate to Supabase Storage
+            parsedDrinks.forEach((d) => {
+              if (d.imagem && d.imagem.startsWith("idb:")) {
+                const key = d.imagem.slice(4);
+                loadImage(key).then(async (base64) => {
+                  if (base64) {
+                    try {
+                      const publicUrl = await uploadDrinkImage(d.id, base64);
+                      await supabase.from("drinks").update({ imagem: publicUrl }).eq("id", d.id);
+                      setGlobalStore((prev) => ({
+                        ...prev,
+                        drinks: prev.drinks.map((x) => (x.id === d.id ? { ...x, imagem: publicUrl } : x)),
+                      }));
+                      await deleteImage(key);
+                    } catch (err) {
+                      console.error("Migration of local image failed for drink:", d.id, err);
+                    }
                   }
-                }
-              });
+                });
+              }
+            });
+
+            setGlobalStore((prev) => ({
+              ...prev,
+              drinks: parsedDrinks,
+              loadingDrinks: false,
+            }));
+          } else {
+            console.log("Supabase drinks table is empty. Seeding default drinks...");
+            const initialDrinks = readStore().drinks;
+            
+            setGlobalStore((prev) => ({
+              ...prev,
+              drinks: initialDrinks,
+              loadingDrinks: false,
+            }));
+
+            for (const d of initialDrinks) {
+              syncDrinkToSupabase(d.id, d);
             }
           }
-
-          setStore((prev) => ({
-            ...prev,
-            drinks: parsedDrinks,
-            loadingDrinks: false,
-          }));
-        } else {
-          console.log("Supabase drinks table is empty. Seeding default drinks...");
-          const initialDrinks = readStore().drinks;
-          
-          setStore((prev) => ({
-            ...prev,
-            drinks: initialDrinks,
-            loadingDrinks: false,
-          }));
-
-          for (const d of initialDrinks) {
-            syncDrinkToSupabase(d.id, d);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load drinks from Supabase:", err);
-        if (active) {
-          setStore((prev) => ({
-            ...prev,
-            loadingDrinks: false,
-          }));
-        }
-      }
+        })
+        .catch((err) => {
+          isFetchingDrinks = false;
+          console.error("Failed to load drinks from Supabase:", err);
+          setGlobalStore((prev) => ({ ...prev, loadingDrinks: false }));
+        });
     }
 
-    loadDrinks();
-
     return () => {
-      active = false;
-    };
-  }, []);
-
-  // Listen to background image uploads to update local state once uploaded
-  useEffect(() => {
-    const handleImageSynced = (e: Event) => {
-      const { id, imageUrl } = (e as CustomEvent).detail;
-      setStore((prev) => ({
-        ...prev,
-        drinks: prev.drinks.map((d) => (d.id === id ? { ...d, imagem: imageUrl } : d)),
-      }));
-    };
-    window.addEventListener("drink-image-synced", handleImageSynced);
-    return () => {
-      window.removeEventListener("drink-image-synced", handleImageSynced);
+      subscribers.delete(setStore);
     };
   }, []);
 
@@ -502,7 +519,7 @@ export function useAppStore() {
         }),
       );
 
-      setStore((prev) => {
+      setGlobalStore((prev) => {
         const prevMap = new Map(prev.drinks.map((d) => [d.id, d]));
         const nextDrinks = migratedDrinks.map((d) => prevMap.get(d.id) ?? d);
         return { ...prev, drinks: nextDrinks };
@@ -512,48 +529,22 @@ export function useAppStore() {
     migrate().catch(console.error);
   }, []);
 
-  useEffect(() => {
-    try {
-      writeStore(store);
-    } catch (e) {
-      if (e instanceof Error && e.name === "QuotaExceededError") {
-        console.error("LocalStorage quota exceeded!");
-        alert(
-          "Erro de armazenamento: o espaço local está cheio.\n" +
-            "Tente remover registros antigos ou usar imagens menores.",
-        );
-      } else {
-        console.error("Falha ao salvar store:", e);
-      }
-    }
-  }, [store]);
-
-  useEffect(() => {
-    const syncStore = () => setStore(readStore());
-    window.addEventListener("storage", syncStore);
-    window.addEventListener(STORE_SYNC_EVENT, syncStore);
-    return () => {
-      window.removeEventListener("storage", syncStore);
-      window.removeEventListener(STORE_SYNC_EVENT, syncStore);
-    };
-  }, []);
-
   const actions = useMemo(
     () => ({
       addVenda(input: Omit<Venda, "id">) {
-        setStore((prev) => ({
+        setGlobalStore((prev) => ({
           ...prev,
           vendas: [{ ...input, id: `v${Date.now()}` }, ...prev.vendas],
         }));
       },
       addEvento(input: Omit<Evento, "id">) {
-        setStore((prev) => ({
+        setGlobalStore((prev) => ({
           ...prev,
           eventos: [{ ...input, id: `e${Date.now()}` }, ...prev.eventos],
         }));
       },
       addContrato(input: Omit<Contrato, "id" | "criadoEm">) {
-        setStore((prev) => ({
+        setGlobalStore((prev) => ({
           ...prev,
           contratos: [
             { ...input, id: `c${Date.now()}`, criadoEm: new Date().toISOString() },
@@ -562,17 +553,17 @@ export function useAppStore() {
         }));
       },
       updateEvento(id: string, payload: Partial<Evento>) {
-        setStore((prev) => ({
+        setGlobalStore((prev) => ({
           ...prev,
           eventos: prev.eventos.map((e) => (e.id === id ? { ...e, ...payload } : e)),
         }));
       },
       updateParametros(updated: ParametroCalculo[]) {
-        setStore((prev) => ({ ...prev, parametros: updated }));
+        setGlobalStore((prev) => ({ ...prev, parametros: updated }));
       },
       updateDrink(id: string, payload: Partial<Drink>) {
         let updatedDrink: Drink | null = null;
-        setStore((prev) => {
+        setGlobalStore((prev) => {
           const nextDrinks = prev.drinks.map((d) => {
             if (d.id !== id) return d;
             const updated = { ...d, ...payload };
@@ -606,7 +597,7 @@ export function useAppStore() {
       },
       addDrink(input: Omit<Drink, "id"> & { _presetId?: string }) {
         let newDrink: Drink | null = null;
-        setStore((prev) => {
+        setGlobalStore((prev) => {
           const { _presetId, ...rest } = input as any;
           const insumoSource = (rest.insumos ?? rest.ingredientes ?? []) as { custo: number }[];
           const drink: Drink = {
@@ -628,20 +619,20 @@ export function useAppStore() {
         }
       },
       deleteDrink(id: string) {
-        setStore((prev) => ({
+        setGlobalStore((prev) => ({
           ...prev,
           drinks: prev.drinks.filter((d) => d.id !== id),
         }));
         deleteDrinkFromSupabase(id);
       },
       addEventContract(input: Omit<EventContract, "id">) {
-        setStore((prev) => ({
+        setGlobalStore((prev) => ({
           ...prev,
           eventContracts: [{ ...input, id: `ec${Date.now()}` }, ...prev.eventContracts],
         }));
       },
       updateEventContract(id: string, payload: Partial<EventContract>) {
-        setStore((prev) => ({
+        setGlobalStore((prev) => ({
           ...prev,
           eventContracts: prev.eventContracts.map((ec) =>
             ec.id === id ? { ...ec, ...payload } : ec,
@@ -649,7 +640,7 @@ export function useAppStore() {
         }));
       },
       addEventContractClientData(input: Omit<EventContractClientData, "id">) {
-        setStore((prev) => ({
+        setGlobalStore((prev) => ({
           ...prev,
           eventContractClientDatas: [
             { ...input, id: `ecd${Date.now()}` },
@@ -658,13 +649,13 @@ export function useAppStore() {
         }));
       },
       addContractHistory(input: Omit<ContractHistory, "id">) {
-        setStore((prev) => ({
+        setGlobalStore((prev) => ({
           ...prev,
           contractHistories: [{ ...input, id: `ch${Date.now()}` }, ...prev.contractHistories],
         }));
       },
       addContractSignatureHistory(input: Omit<ContractSignatureHistory, "id">) {
-        setStore((prev) => ({
+        setGlobalStore((prev) => ({
           ...prev,
           contractSignatureHistories: [
             { ...input, id: `csh${Date.now()}` },
@@ -673,13 +664,13 @@ export function useAppStore() {
         }));
       },
       addFinancialSession(input: Omit<FinancialSession, "id">) {
-        setStore((prev) => ({
+        setGlobalStore((prev) => ({
           ...prev,
           financialSessions: [{ ...input, id: `fs${Date.now()}` }, ...prev.financialSessions],
         }));
       },
       updateFinancialSession(id: string, payload: Partial<FinancialSession>) {
-        setStore((prev) => ({
+        setGlobalStore((prev) => ({
           ...prev,
           financialSessions: prev.financialSessions.map((fs) =>
             fs.id === id ? { ...fs, ...payload } : fs,
@@ -687,19 +678,19 @@ export function useAppStore() {
         }));
       },
       deleteFinancialSession(id: string) {
-        setStore((prev) => ({
+        setGlobalStore((prev) => ({
           ...prev,
           financialSessions: prev.financialSessions.filter((fs) => fs.id !== id),
         }));
       },
       addInventoryItem(input: Omit<InventoryItem, "id">) {
-        setStore((prev) => ({
+        setGlobalStore((prev) => ({
           ...prev,
           inventoryItems: [{ ...input, id: `inv${Date.now()}` }, ...prev.inventoryItems],
         }));
       },
       updateInventoryItem(id: string, payload: Partial<InventoryItem>) {
-        setStore((prev) => ({
+        setGlobalStore((prev) => ({
           ...prev,
           inventoryItems: prev.inventoryItems.map((inv) =>
             inv.id === id ? { ...inv, ...payload } : inv,
@@ -707,7 +698,7 @@ export function useAppStore() {
         }));
       },
       deleteInventoryItem(id: string) {
-        setStore((prev) => ({
+        setGlobalStore((prev) => ({
           ...prev,
           inventoryItems: prev.inventoryItems.filter((inv) => inv.id !== id),
         }));
