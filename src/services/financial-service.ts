@@ -9,6 +9,7 @@ export type PaymentMethod = "PIX" | "Dinheiro" | "Cartão" | "Transferência" | 
 
 export interface FinancialExpense {
   id: string;
+  event_id?: string;
   date: string;
   due_date?: string;
   modality: FinancialModality;
@@ -37,12 +38,25 @@ export interface FinancialExpense {
   updated_at: string;
 }
 
+export interface FinancialExpenseItem {
+  id?: string;
+  expense_id?: string;
+  product_name: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  total_price: number;
+  suggested_category?: string;
+  reviewed?: boolean;
+}
+
 export interface ReceiptExtractionResult {
   supplier_name?: string;
   supplier_cnpj?: string;
   date?: string;
   amount?: number;
   payment_method?: PaymentMethod;
+  items?: FinancialExpenseItem[];
   description?: string;
   category?: FinancialCategory;
   cost_center?: string;
@@ -147,13 +161,33 @@ export const financialService = {
     return data as FinancialExpense;
   },
 
-  async createExpense(payload: Partial<FinancialExpense>) {
+  async createExpense(payload: Partial<FinancialExpense> & { items?: FinancialExpenseItem[] }) {
+    const { items, ...expensePayload } = payload;
+    
     const { data, error } = await supabase
       .from("financial_expenses")
-      .insert(payload)
+      .insert(expensePayload)
       .select()
       .single();
     if (error) throw error;
+    
+    if (items && items.length > 0 && data.id) {
+      const itemsToInsert = items.map(item => ({
+        expense_id: data.id,
+        product_name: item.product_name,
+        quantity: item.quantity,
+        unit: item.unit,
+        unit_price: item.unit_price,
+        total_price: item.total_price,
+        suggested_category: item.suggested_category,
+        reviewed: item.reviewed || false
+      }));
+      const { error: itemsError } = await supabase
+        .from("financial_expense_items")
+        .insert(itemsToInsert);
+      if (itemsError) console.error("Error inserting expense items:", itemsError);
+    }
+    
     return data as FinancialExpense;
   },
 
@@ -252,6 +286,48 @@ export const financialService = {
       if (paymentMethod) auto_filled_fields.push("payment_method");
       if (supplierName) auto_filled_fields.push("supplier_name");
 
+      // Extract items (Heuristic)
+      const extractedItems: FinancialExpenseItem[] = [];
+      // Look for patterns like: "1 UN VODKA 45,00 45,00" or "02 VODKA ABSOLUT 50.00 100.00"
+      // [qty] [unit?] [name] [unit_price?] [total_price]
+      const itemRegex = /^(\d+[\.,]?\d*)\s*(un|kg|l|cx|pct)?\s+(.+?)\s+(\d+[\.,]\d{2})(?:\s+(\d+[\.,]\d{2}))?$/i;
+      
+      lines.forEach(line => {
+        const match = line.match(itemRegex);
+        if (match) {
+          const qty = toFiniteNumber(match[1]) || 1;
+          const unit = match[2]?.toLowerCase() || 'un';
+          const name = match[3].trim();
+          let price1 = toFiniteNumber(match[4]);
+          let price2 = match[5] ? toFiniteNumber(match[5]) : undefined;
+          
+          let unit_price = price1;
+          let total_price = price2 !== undefined ? price2 : price1;
+
+          // If they are equal, or unit_price * qty approx total_price
+          if (price2 && Math.abs((price1 * qty) - price2) < 0.1) {
+            unit_price = price1;
+            total_price = price2;
+          } else if (price2 && Math.abs((price2 * qty) - price1) < 0.1) {
+             // reversed order in receipt
+             unit_price = price2;
+             total_price = price1;
+          }
+
+          if (name.length > 2 && !name.toLowerCase().includes("total") && !name.toLowerCase().includes("troco")) {
+            extractedItems.push({
+              product_name: name,
+              quantity: qty,
+              unit,
+              unit_price,
+              total_price,
+              suggested_category: inferCategoryFromText(name),
+              reviewed: false
+            });
+          }
+        }
+      });
+
       return {
         raw_text: rawText,
         supplier_name: supplierName || undefined,
@@ -263,6 +339,7 @@ export const financialService = {
         review_status: auto_filled_fields.length >= 3 ? "Lido automaticamente" : "Precisa revisar",
         auto_filled_fields,
         confidence,
+        items: extractedItems,
       };
     } catch (error) {
       console.error("OCR Error:", error);

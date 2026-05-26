@@ -63,6 +63,7 @@ export const Route = createFileRoute("/controladoria")({
 
 function ControladoriaPage() {
   const [expenses, setExpenses] = useState<FinancialExpense[]>([]);
+  const [eventsList, setEventsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -77,9 +78,10 @@ function ControladoriaPage() {
     category: "",
   });
 
-  const [form, setForm] = useState<Partial<FinancialExpense>>({
+  const [form, setForm] = useState<Partial<FinancialExpense> & { items?: any[] }>({
     date: format(new Date(), "yyyy-MM-dd"),
     modality: "Geral",
+    event_id: "",
     category: "Operacional",
     description: "",
     amount: 0,
@@ -100,6 +102,9 @@ function ControladoriaPage() {
     try {
       const data = await financialService.listExpenses(filters);
       setExpenses(data);
+      
+      const { data: eventsData } = await supabase.from("events").select("id, client_name, event_name, date").order("date", { ascending: false });
+      if (eventsData) setEventsList(eventsData);
     } catch (e) {
       console.error("Erro ao carregar gastos:", e);
     } finally {
@@ -181,6 +186,7 @@ function ControladoriaPage() {
         ocr_metadata: { confidence: extracted.confidence || 0, source: "ocr-receipt" },
         auto_filled_fields: extracted.auto_filled_fields,
         invoice_url: uploadedUrl,
+        items: extracted.items || [],
       }));
     } finally {
       setOcrLoading(false);
@@ -628,7 +634,7 @@ function ControladoriaPage() {
                   <select
                     value={form.modality}
                     onChange={(e) =>
-                      setForm((p) => ({ ...p, modality: e.target.value as FinancialModality }))
+                      setForm((p) => ({ ...p, modality: e.target.value as FinancialModality, event_id: e.target.value === "Evento" ? p.event_id : "" }))
                     }
                     className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
                   >
@@ -638,6 +644,22 @@ function ControladoriaPage() {
                     <option value="Geral">Geral</option>
                   </select>
                 </div>
+                
+                {form.modality === "Evento" && (
+                  <div>
+                    <label className="label-eyebrow">Evento Relacionado</label>
+                    <select
+                      value={form.event_id || ""}
+                      onChange={(e) => setForm((p) => ({ ...p, event_id: e.target.value }))}
+                      className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none border-primary/50"
+                    >
+                      <option value="">Selecione um evento...</option>
+                      {eventsList.map(ev => (
+                        <option key={ev.id} value={ev.id}>{ev.event_name || ev.client_name} - {ev.date}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div>
                   <label className="label-eyebrow">Tipo de Gasto</label>
@@ -832,8 +854,115 @@ function ControladoriaPage() {
                   </div>
                 </div>
               </div>
-            </div>
 
+              {/* Items Table */}
+              <div className="mt-6 border-t border-border pt-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-bold">Itens da Compra</h3>
+                  <button 
+                    onClick={() => {
+                      const newItems = [...(form.items || [])];
+                      newItems.push({ product_name: "", quantity: 1, unit: "un", unit_price: 0, total_price: 0 });
+                      setForm(p => ({ ...p, items: newItems }));
+                    }}
+                    className="text-xs font-bold px-3 py-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition"
+                  >
+                    + Adicionar Item
+                  </button>
+                </div>
+                
+                {form.items && form.items.length > 0 ? (
+                  <div className="overflow-x-auto rounded-xl border border-border">
+                    <table className="w-full text-xs">
+                      <thead className="bg-primary/5 text-left border-b border-border">
+                        <tr>
+                          <th className="p-2 font-bold min-w-[150px]">Produto</th>
+                          <th className="p-2 font-bold w-[70px]">Qtd</th>
+                          <th className="p-2 font-bold w-[60px]">Unid.</th>
+                          <th className="p-2 font-bold w-[90px]">Vlr Unit.</th>
+                          <th className="p-2 font-bold w-[90px]">Vlr Total</th>
+                          <th className="p-2 font-bold w-[40px]"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {form.items.map((it, idx) => (
+                          <tr key={idx} className="border-b border-border/50">
+                            <td className="p-1">
+                              <input type="text" className="w-full h-8 px-2 bg-transparent outline-none border border-transparent focus:border-primary/30 rounded" value={it.product_name} onChange={e => {
+                                const newItems = [...form.items!];
+                                newItems[idx].product_name = e.target.value;
+                                setForm(p => ({ ...p, items: newItems }));
+                              }} />
+                            </td>
+                            <td className="p-1">
+                              <input type="number" className="w-full h-8 px-2 bg-transparent outline-none border border-transparent focus:border-primary/30 rounded" value={it.quantity} onChange={e => {
+                                const newItems = [...form.items!];
+                                newItems[idx].quantity = Number(e.target.value);
+                                newItems[idx].total_price = newItems[idx].quantity * newItems[idx].unit_price;
+                                setForm(p => ({ ...p, items: newItems }));
+                              }} />
+                            </td>
+                            <td className="p-1">
+                              <input type="text" className="w-full h-8 px-2 bg-transparent outline-none border border-transparent focus:border-primary/30 rounded" value={it.unit} onChange={e => {
+                                const newItems = [...form.items!];
+                                newItems[idx].unit = e.target.value;
+                                setForm(p => ({ ...p, items: newItems }));
+                              }} />
+                            </td>
+                            <td className="p-1">
+                              <input type="number" className="w-full h-8 px-2 bg-transparent outline-none border border-transparent focus:border-primary/30 rounded" value={it.unit_price} onChange={e => {
+                                const newItems = [...form.items!];
+                                newItems[idx].unit_price = Number(e.target.value);
+                                newItems[idx].total_price = newItems[idx].quantity * newItems[idx].unit_price;
+                                setForm(p => ({ ...p, items: newItems }));
+                              }} />
+                            </td>
+                            <td className="p-1">
+                              <input type="number" className="w-full h-8 px-2 bg-transparent outline-none border border-transparent focus:border-primary/30 rounded font-medium text-primary" value={it.total_price} onChange={e => {
+                                const newItems = [...form.items!];
+                                newItems[idx].total_price = Number(e.target.value);
+                                setForm(p => ({ ...p, items: newItems }));
+                              }} />
+                            </td>
+                            <td className="p-1 text-center">
+                              <button onClick={() => {
+                                const newItems = form.items!.filter((_, i) => i !== idx);
+                                setForm(p => ({ ...p, items: newItems }));
+                              }} className="text-red-500 hover:bg-red-50 p-1.5 rounded">
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center p-6 border border-dashed border-border rounded-xl text-muted-foreground text-sm">
+                    Nenhum item extraído ou adicionado.
+                  </div>
+                )}
+                
+                {form.items && form.items.length > 0 && form.amount !== undefined && (
+                  (() => {
+                    const sum = form.items.reduce((acc, it) => acc + (Number(it.total_price) || 0), 0);
+                    if (Math.abs(sum - Number(form.amount)) > 0.5) {
+                      return (
+                        <div className="mt-3 p-3 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg text-xs flex items-start gap-2">
+                          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                          <div>
+                            <strong>Atenção:</strong> A soma dos itens (R$ {sum.toFixed(2)}) não bate com o valor total da nota (R$ {Number(form.amount).toFixed(2)}). Revise os valores antes de confirmar.
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()
+                )}
+              </div>
+
+            </div>
+            
             <div className="p-6 border-t border-border flex justify-end gap-3 bg-primary/5">
               <GhostButton onClick={() => setShowModal(false)}>Cancelar</GhostButton>
               <PrimaryButton

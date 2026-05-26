@@ -104,6 +104,55 @@ export interface NegotiationHistory {
   created_at: string;
 }
 
+export interface EventPlanningItem {
+  id?: string;
+  event_id: string;
+  source_expense_item_id?: string;
+  item_name: string;
+  category: string;
+  planned_quantity: number;
+  unit?: string;
+  estimated_unit_cost: number;
+  estimated_total_cost: number;
+  origin?: string;
+  notes?: string;
+}
+
+export interface EventClosingItem {
+  id?: string;
+  event_id: string;
+  planning_item_id?: string;
+  item_name: string;
+  category: string;
+  quantity_taken: number;
+  quantity_used: number;
+  quantity_returned: number;
+  quantity_lost_or_broken: number;
+  unit?: string;
+  unit_cost: number;
+  consumed_cost: number;
+  lost_cost: number;
+  notes?: string;
+}
+
+export interface EventClosing {
+  id?: string;
+  event_id: string;
+  closing_date?: string;
+  revenue_amount: number;
+  total_purchase_cost: number;
+  total_team_cost: number;
+  total_logistics_cost: number;
+  total_consumed_cost: number;
+  total_lost_cost: number;
+  total_event_cost: number;
+  event_profit: number;
+  event_margin: number;
+  general_notes?: string;
+  improvement_points?: string;
+  status: string;
+}
+
 export const eventBudgetService = {
   // --- Events ---
   async listEvents() {
@@ -167,6 +216,71 @@ export const eventBudgetService = {
         payment_due_date: budget.pending_payment_date || event.payment_due_date,
       };
     });
+  },
+
+  async getBudgetVersionById(id: string) {
+    const { data, error } = await supabase.from("budget_versions").select("*").eq("id", id).single();
+    if (error) throw error;
+    return data;
+  },
+
+  // --- Event Planning Items ---
+  async getPlanningItems(eventId: string) {
+    const { data, error } = await supabase.from("event_planning_items").select("*").eq("event_id", eventId);
+    if (error) throw error;
+    return data as EventPlanningItem[];
+  },
+
+  async addPlanningItems(items: EventPlanningItem[]) {
+    const { data, error } = await supabase.from("event_planning_items").insert(items).select();
+    if (error) throw error;
+    return data as EventPlanningItem[];
+  },
+
+  async updatePlanningItem(id: string, payload: Partial<EventPlanningItem>) {
+    const { data, error } = await supabase.from("event_planning_items").update(payload).eq("id", id).select().single();
+    if (error) throw error;
+    return data as EventPlanningItem;
+  },
+
+  async deletePlanningItem(id: string) {
+    const { error } = await supabase.from("event_planning_items").delete().eq("id", id);
+    if (error) throw error;
+  },
+
+  // --- Event Closing ---
+  async getEventClosing(eventId: string) {
+    const { data, error } = await supabase.from("event_closings").select("*").eq("event_id", eventId).maybeSingle();
+    if (error) throw error;
+    return data as EventClosing | null;
+  },
+
+  async upsertEventClosing(payload: Partial<EventClosing>) {
+    // Check if exists
+    if (!payload.event_id) throw new Error("Missing event_id");
+    const existing = await this.getEventClosing(payload.event_id);
+    
+    if (existing && existing.id) {
+      const { data, error } = await supabase.from("event_closings").update(payload).eq("id", existing.id).select().single();
+      if (error) throw error;
+      return data as EventClosing;
+    } else {
+      const { data, error } = await supabase.from("event_closings").insert(payload).select().single();
+      if (error) throw error;
+      return data as EventClosing;
+    }
+  },
+
+  async getClosingItems(eventId: string) {
+    const { data, error } = await supabase.from("event_closing_items").select("*").eq("event_id", eventId);
+    if (error) throw error;
+    return data as EventClosingItem[];
+  },
+
+  async upsertClosingItems(items: EventClosingItem[]) {
+    const { data, error } = await supabase.from("event_closing_items").upsert(items).select();
+    if (error) throw error;
+    return data as EventClosingItem[];
   },
 
   async getEventById(id: string) {
