@@ -53,7 +53,7 @@ import { TEMPLATE_FIELD_KEYS } from "@/lib/proposal-template-mapper";
 
 // ─── PDF.js worker ──────────────────────────────────────────────
 pdfjs.GlobalWorkerOptions.workerSrc =
-  "https://unpkg.com/pdfjs-dist@5.3.31/build/pdf.worker.min.mjs";
+  "https://unpkg.com/pdfjs-dist@5.7.284/build/pdf.worker.min.mjs";
 
 // ─── Constants ──────────────────────────────────────────────────
 const BRAND_COLORS = [
