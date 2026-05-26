@@ -34,6 +34,7 @@ function EventosIndex() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [viewMode, setViewMode] = useState<"lista" | "calendario">("lista");
+  const [statusFilter, setStatusFilter] = useState<string>("ativos");
   const [form, setForm] = useState({
     nome: "",
     telefone: "",
@@ -71,6 +72,26 @@ function EventosIndex() {
   const eventosAtivos = eventos.filter((e) => {
     const s = e.status?.toUpperCase();
     return !["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
+  });
+
+  const filteredEventos = eventos.filter((e) => {
+    const s = e.status?.toUpperCase() || "";
+    if (statusFilter === "ativos") {
+      return !["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
+    }
+    if (statusFilter === "negociacao") {
+      return ["NOVO_ORCAMENTO", "NOVO", "ORCAMENTO_ENVIADO", "AGUARDANDO_RETORNO", "AGUARDANDO_RESPOSTA", "DADOS_SOLICITADOS", "EM_ASSINATURA"].includes(s);
+    }
+    if (statusFilter === "confirmados") {
+      return s === "CONFIRMADO";
+    }
+    if (statusFilter === "finalizados") {
+      return ["FINALIZADO", "REALIZADO"].includes(s);
+    }
+    if (statusFilter === "cancelados") {
+      return ["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
+    }
+    return true; // "todos"
   });
 
   const receitaEnviados = eventosAtivos
@@ -151,19 +172,35 @@ function EventosIndex() {
           title="Pipeline de negociações"
           subtitle={loading ? "Carregando..." : `${eventos.length} registros`}
           action={
-            <div className="flex bg-background border border-border rounded-lg p-0.5">
-              <button
-                onClick={() => setViewMode("lista")}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${viewMode === "lista" ? "bg-surface shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                <List className="h-3.5 w-3.5" /> Lista
-              </button>
-              <button
-                onClick={() => setViewMode("calendario")}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${viewMode === "calendario" ? "bg-surface shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                <LayoutGrid className="h-3.5 w-3.5" /> Calendário
-              </button>
+            <div className="flex flex-wrap items-center gap-3">
+              {viewMode === "lista" && (
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="h-9 px-3 rounded-lg bg-input border border-border text-xs font-medium focus:ring-1 focus:ring-primary outline-none cursor-pointer text-foreground"
+                >
+                  <option value="ativos">Eventos Ativos</option>
+                  <option value="todos">Todos os Orçamentos</option>
+                  <option value="negociacao">Em Negociação</option>
+                  <option value="confirmados">Confirmados</option>
+                  <option value="finalizados">Finalizados</option>
+                  <option value="cancelados">Cancelados</option>
+                </select>
+              )}
+              <div className="flex bg-background border border-border rounded-lg p-0.5">
+                <button
+                  onClick={() => setViewMode("lista")}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${viewMode === "lista" ? "bg-surface shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <List className="h-3.5 w-3.5" /> Lista
+                </button>
+                <button
+                  onClick={() => setViewMode("calendario")}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${viewMode === "calendario" ? "bg-surface shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" /> Calendário
+                </button>
+              </div>
             </div>
           }
         >
@@ -174,12 +211,12 @@ function EventosIndex() {
             </div>
           ) : viewMode === "lista" ? (
             <div className="space-y-2">
-              {eventos.length === 0 && (
+              {filteredEventos.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-8">
-                  Nenhum evento cadastrado. Crie o primeiro!
+                  Nenhum evento cadastrado para o filtro selecionado.
                 </p>
               )}
-              {eventos.map((e) => (
+              {filteredEventos.map((e) => (
                 <Link
                   key={e.id}
                   to="/eventos/$eventoId"
@@ -453,7 +490,7 @@ function CalendarView({ eventosAtivos }: { eventosAtivos: RealEvent[] }) {
     if (dayNum > 0 && dayNum <= daysInMonth) {
       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
       const dayEvents = eventosAtivos.filter(
-        (e) => e.date === dateStr && e.status === "confirmado",
+        (e) => e.date === dateStr && e.status?.toUpperCase() === "CONFIRMADO",
       );
       return { dayNum, dateStr, events: dayEvents };
     }
@@ -494,13 +531,17 @@ function CalendarView({ eventosAtivos }: { eventosAtivos: RealEvent[] }) {
                       key={e.id}
                       to="/eventos/$eventoId"
                       params={{ eventoId: e.id }}
-                      className="block p-1.5 rounded border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer"
+                      className="block p-2 rounded-xl border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-all hover:scale-[1.02] cursor-pointer space-y-1"
                     >
-                      <div className="font-medium text-primary text-[11px] truncate leading-tight">
+                      <div className="font-bold text-primary text-[11px] truncate leading-tight">
                         {e.client_name}
                       </div>
-                      <div className="text-[9px] text-muted-foreground mt-0.5 truncate flex justify-between">
-                        <span>{e.status.replace(/_/g, " ")}</span>
+                      <div className="text-[9.5px] text-foreground font-semibold truncate">
+                        {e.event_type}
+                      </div>
+                      <div className="text-[9px] text-muted-foreground flex justify-between items-center gap-1">
+                        <span>{e.guests} conv.</span>
+                        <span className="truncate max-w-[55px] text-right">{e.city || "A definir"}</span>
                       </div>
                     </Link>
                   ))}

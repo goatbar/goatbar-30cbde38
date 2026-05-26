@@ -9,6 +9,8 @@ import {
   Wine,
   ChevronRight,
   Calculator,
+  CheckCircle2,
+  Clock,
 } from "lucide-react";
 import { eventBudgetService } from "@/services/event-budget-service";
 import { financialService } from "@/services/financial-service";
@@ -103,6 +105,24 @@ function Dashboard() {
 
   // Total de gastos (Controladoria/Geral)
   const totalGastos = financialSessions.reduce((a: number, b: any) => a + Number(b.amount || 0), 0);
+
+  // Totais financeiros dos eventos (pago e a receber) no período filtrado
+  const { totalPagoEventos, totalReceberEventos } = useMemo(() => {
+    let pago = 0;
+    let receber = 0;
+    filteredEventos.forEach((e) => {
+      const s = e.status?.toUpperCase() || "";
+      if (["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(s)) {
+        const total = Number(e.current_budget_value || e.budget_value || 0);
+        const percentPago = Number(e.payment_percent_received ?? e.paid_percentage ?? 0);
+        const valorPago = total * (percentPago / 100);
+        const valorReceber = Math.max(0, total - valorPago);
+        pago += valorPago;
+        receber += valorReceber;
+      }
+    });
+    return { totalPagoEventos: pago, totalReceberEventos: receber };
+  }, [filteredEventos]);
 
   // --- UI Helpers ---
   const topDrinks = useMemo(() => {
@@ -200,7 +220,7 @@ function Dashboard() {
       />
 
       <div className="page-container space-y-6 lg:space-y-7">
-        <div className="responsive-grid-kpi">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 sm:gap-5">
           <StatCard
             label="Receita Consolidada"
             value={fmtBRL(metrics.consolidated.receita)}
@@ -221,6 +241,16 @@ function Dashboard() {
             label="Custos Controladoria"
             value={fmtBRL(totalGastos)}
             icon={<Calculator className="h-4 w-4 text-amber-500" />}
+          />
+          <StatCard
+            label="Eventos - Pago"
+            value={fmtBRL(totalPagoEventos)}
+            icon={<CheckCircle2 className="h-4 w-4 text-success" />}
+          />
+          <StatCard
+            label="Eventos - A Receber"
+            value={fmtBRL(totalReceberEventos)}
+            icon={<Clock className="h-4 w-4 text-amber-500" />}
           />
         </div>
 
