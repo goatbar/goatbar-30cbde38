@@ -1140,79 +1140,73 @@ export type Database = {
       }
       proposal_template_fields: {
         Row: {
-          alignment: string
-          arc_angle: number | null
-          arc_radius: number | null
-          auto_resize: boolean
-          color_hex: string
+          config: Json
           created_at: string
+          field_key: string | null
+          field_label: string | null
           field_type: string
+          font_color: string | null
           font_family: string
           font_size: number
           font_weight: string
           height: number
           id: string
-          image_fit: string | null
-          label: string
+          letter_spacing: number
           line_height: number
-          overflow_control: string
-          page: number
-          position_x: number
-          position_y: number
-          technical_name: string
+          page_number: number | null
           template_id: string
+          text_align: string | null
           updated_at: string
           width: number
+          x: number | null
+          y: number | null
+          z_index: number
         }
         Insert: {
-          alignment?: string
-          arc_angle?: number | null
-          arc_radius?: number | null
-          auto_resize?: boolean
-          color_hex?: string
+          config?: Json
           created_at?: string
+          field_key?: string | null
+          field_label?: string | null
           field_type: string
+          font_color?: string | null
           font_family?: string
           font_size?: number
           font_weight?: string
           height: number
           id?: string
-          image_fit?: string | null
-          label: string
+          letter_spacing?: number
           line_height?: number
-          overflow_control?: string
-          page?: number
-          position_x: number
-          position_y: number
-          technical_name: string
+          page_number?: number | null
           template_id: string
+          text_align?: string | null
           updated_at?: string
           width: number
+          x?: number | null
+          y?: number | null
+          z_index?: number
         }
         Update: {
-          alignment?: string
-          arc_angle?: number | null
-          arc_radius?: number | null
-          auto_resize?: boolean
-          color_hex?: string
+          config?: Json
           created_at?: string
+          field_key?: string | null
+          field_label?: string | null
           field_type?: string
+          font_color?: string | null
           font_family?: string
           font_size?: number
           font_weight?: string
           height?: number
           id?: string
-          image_fit?: string | null
-          label?: string
+          letter_spacing?: number
           line_height?: number
-          overflow_control?: string
-          page?: number
-          position_x?: number
-          position_y?: number
-          technical_name?: string
+          page_number?: number | null
           template_id?: string
+          text_align?: string | null
           updated_at?: string
           width?: number
+          x?: number | null
+          y?: number | null
+          z_index?: number
         }
         Relationships: [
           {

@@ -10,43 +10,61 @@ export type TemplateFieldType =
 
 export type FieldAlign = "left" | "center" | "right";
 export type FieldWeight = "normal" | "bold";
-export type OverflowControl = "clip" | "ellipsis" | "wrap";
+
+export interface CircularFieldConfig {
+  radius?: number;
+  centerX?: number;
+  centerY?: number;
+  startAngle?: number;
+  endAngle?: number;
+  direction?: "clockwise" | "counterclockwise";
+  uppercase?: boolean;
+}
 
 export interface ProposalTemplateField {
   id?: string;
   template_id: string;
-  technical_name: string;
-  label: string;
+  page_number: number;
+  field_key: string;
+  field_label: string;
   field_type: TemplateFieldType;
-  page: number;
-  position_x: number;
-  position_y: number;
+  x: number;
+  y: number;
   width: number;
   height: number;
   font_family: string;
   font_size: number;
-  color_hex: string;
-  alignment: FieldAlign;
+  font_color: string;
   font_weight: FieldWeight;
+  text_align: FieldAlign;
   line_height: number;
-  auto_resize: boolean;
-  overflow_control: OverflowControl;
-  arc_angle?: number | null;
-  arc_radius?: number | null;
-  image_fit?: "contain" | "cover" | "stretch" | null;
+  letter_spacing: number;
+  z_index: number;
+  config: Record<string, unknown> & CircularFieldConfig;
+  created_at?: string;
+  updated_at?: string;
 }
 
-export const DEFAULT_TEMPLATE_FIELDS: Array<Pick<ProposalTemplateField, "technical_name" | "label" | "field_type">> = [
-  { technical_name: "data_orcamento", label: "Data Orçamento", field_type: "data" },
-  { technical_name: "nome_evento", label: "Nome Evento", field_type: "texto_simples" },
-  { technical_name: "data_evento", label: "Data Evento", field_type: "data" },
-  { technical_name: "lista_drinks", label: "Lista Drinks", field_type: "lista_dinamica" },
-  { technical_name: "lista_bebidas", label: "Lista Bebidas", field_type: "lista_dinamica" },
-  { technical_name: "numero_convidados", label: "Nº Convidados", field_type: "numero" },
-  { technical_name: "qtde_bartenders", label: "Qtd Bartenders", field_type: "numero" },
-  { technical_name: "qtde_bar_keeper", label: "Qtd Bar Keeper", field_type: "numero" },
-  { technical_name: "qtde_copeira", label: "Qtd Copeira", field_type: "numero" },
-  { technical_name: "valor_total", label: "Valor Total", field_type: "moeda" },
-  { technical_name: "qtde_variedades", label: "Qtd Variedades", field_type: "numero" },
-  { technical_name: "forma_pagamento", label: "Forma Pagamento", field_type: "texto_multiline" },
-];
+export const TEMPLATE_FIELD_KEYS = [
+  "data_orcamento",
+  "tipo_evento",
+  "nome_evento",
+  "nome_cliente",
+  "nome_casal",
+  "data_evento",
+  "lista_drinks",
+  "lista_bebidas",
+  "numero_convidados",
+  "quantidade_bartenders",
+  "quantidade_bar_keeper",
+  "quantidade_copeira",
+  "quantidade_drinks",
+  "investimento_total",
+  "forma_pagamento",
+] as const;
+
+export const DEFAULT_TEMPLATE_FIELDS: Array<Pick<ProposalTemplateField, "field_key" | "field_label" | "field_type">> = TEMPLATE_FIELD_KEYS.map((key) => ({
+  field_key: key,
+  field_label: key.replaceAll("_", " "),
+  field_type: key.includes("data") ? "data" : key.includes("lista") ? "lista_dinamica" : key.includes("investimento") ? "moeda" : "texto_simples",
+}));
