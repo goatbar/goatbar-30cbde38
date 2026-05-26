@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { PDFDocument, degrees, rgb, StandardFonts } from "pdf-lib";
+import { proposalTemplateConfigs, type EventTemplateType, type FieldConfig } from "@/lib/proposal-template-configs";
 
 export interface ProposalTemplate {
   id: string;
@@ -277,364 +278,76 @@ export const pdfGenerationService = {
     data: ProposalData,
     eventType: "casamento" | "aniversario" | "comemoracao"
   ): Promise<Uint8Array> {
-    let pdfDoc: PDFDocument;
+    if (!templateUrl) {
+      const fallback = await this.generatePremiumPDFFromScratch(data, eventType);
+      return fallback.save();
+    }
 
-    // Try loading standard template if URL is provided
-    if (templateUrl) {
-      try {
-        const response = await fetch(templateUrl);
-        if (!response.ok) throw new Error("Falha ao baixar modelo de PDF");
-        const templateBytes = await response.arrayBuffer();
-        pdfDoc = await PDFDocument.load(templateBytes);
-      } catch (err) {
-        console.error("Erro ao carregar template PDF, gerando do zero:", err);
-        pdfDoc = await this.generatePremiumPDFFromScratch(data, eventType);
-        return pdfDoc.save();
+    const response = await fetch(templateUrl);
+    if (!response.ok) throw new Error("Falha ao baixar modelo de PDF");
+    const templateBytes = await response.arrayBuffer();
+    const templateDoc = await PDFDocument.load(templateBytes);
+
+    const outputDoc = await PDFDocument.create();
+    const pages = templateDoc.getPages();
+    const standardFont = await outputDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await outputDoc.embedFont(StandardFonts.HelveticaBold);
+
+    const targetWidth = 1600;
+    const targetHeight = 900;
+    const config = proposalTemplateConfigs[eventType as EventTemplateType] || [];
+
+    const drawLines = (page: any, field: FieldConfig, lines: string[]) => {
+      if (!lines.length) return;
+      const totalHeight = lines.length * field.lineHeight;
+      const fit = totalHeight > field.maxHeight ? field.maxHeight / totalHeight : 1;
+      const fontSize = Math.max(12, field.fontSize * fit);
+      const lh = Math.max(16, field.lineHeight * fit);
+      let y = field.y;
+      for (const line of lines) {
+        const text = sanitizeText(line);
+        const font = field.type === "currency" ? boldFont : standardFont;
+        const width = font.widthOfTextAtSize(text, fontSize);
+        const x = field.align === "center" ? field.x + (field.maxWidth - width) / 2 : field.align === "right" ? field.x + field.maxWidth - width : field.x;
+        page.drawText(text, { x, y, size: fontSize, font, color: field.color });
+        y -= lh;
+        if (y < field.y - field.maxHeight) break;
       }
-    } else {
-      // If no template is uploaded, design a premium one from scratch
-      pdfDoc = await this.generatePremiumPDFFromScratch(data, eventType);
-      return pdfDoc.save();
-    }
+    };
 
-    // PDF modification with overlay coordinates
-    const pages = pdfDoc.getPages();
-    const standardFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    pages.forEach((sourcePage, pageIndex) => {
+      const outPage = outputDoc.addPage([targetWidth, targetHeight]);
+      const embedded = outputDoc.embedPage(sourcePage);
+      outPage.drawPage(embedded, { x: 0, y: 0, width: targetWidth, height: targetHeight });
 
-    // Dynamic color choice (Goat Bar standard dark theme colors)
-    // Dark theme values: background #121214, gold text #D4AF37, white text #FFFFFF
-    const bgRgb = hexToRgb("#121214"); // dark background to cover placeholders
-    const goldColor = rgb(0.83, 0.68, 0.21); // #D4AF37
-    const whiteColor = rgb(1, 1, 1);
-    const darkGrayColor = rgb(0.1, 0.1, 0.1);
-    
-    // Page 1: CAPA
-    if (pages.length > 0) {
-      const capa = pages[0];
-      const { width, height } = capa.getSize();
-
-      // Cover existing "XXXXX" placeholders
-      // Capa placeholder usually in the middle. We cover middle area.
-      // Draw rectangular cover (usually dark background or white depending on the template style)
-      // We will allow covering areas by drawing shapes. Let's cover with transparent or theme color.
-      // Capa design covers:
-      // Client name block: y=380 to 460
-      // Date block: y=300 to 350
-      // Data do orçamento block: y=200 to 250
-      
-      const coverColor = data.coverColor === "light" ? whiteColor : bgRgb;
-      const textMainColor = data.coverColor === "light" ? darkGrayColor : whiteColor;
-      
-      // Cover name/date/proposal date placeholders
-      capa.drawRectangle({
-        x: 50,
-        y: 350,
-        width: width - 100,
-        height: 140,
-        color: coverColor,
-      });
-
-      capa.drawRectangle({
-        x: 50,
-        y: 200,
-        width: width - 100,
-        height: 100,
-        color: coverColor,
-      });
-
-      // Write Client name (Casal / Aniversariante / Empresa)
-      const eventTitle = data.eventTypeLabel.toUpperCase();
-      capa.drawText(sanitizeText(String(eventTitle)), {
-        x: 60,
-        y: 450,
-        size: 14,
-        font: standardFont,
-        color: goldColor,
-      });
-
-      capa.drawText(sanitizeText(String(data.clientName)), {
-        x: 60,
-        y: 400,
-        size: 32,
-        font: boldFont,
-        color: textMainColor,
-      });
-
-      // Write Event Date
-      capa.drawText(sanitizeText(String(`Data do Evento: ${data.eventDate}`)), {
-        x: 60,
-        y: 360,
-        size: 14,
-        font: standardFont,
-        color: textMainColor,
-      });
-
-      // Write Proposal/Budget Date
-      capa.drawText(sanitizeText(String(`Proposta gerada em: ${data.proposalDate}`)), {
-        x: 60,
-        y: 260,
-        size: 11,
-        font: standardFont,
-        color: rgb(0.6, 0.6, 0.6),
-      });
-    }
-
-    // Page 2: DRINKS & EXPERIÊNCIAS
-    if (pages.length > 1) {
-      const page2 = pages[1];
-      const { width, height } = page2.getSize();
-
-      // Background cover for lists (from y=100 to y=680)
-      const coverColor = data.coverColor === "light" ? whiteColor : bgRgb;
-      const textMainColor = data.coverColor === "light" ? darkGrayColor : whiteColor;
-
-      page2.drawRectangle({
-        x: 50,
-        y: 100,
-        width: width - 100,
-        height: 600,
-        color: coverColor,
-      });
-
-      // Draw Section Header
-      page2.drawText(sanitizeText(String("DRINKS & EXPERIÊNCIAS")), {
-        x: 60,
-        y: 720,
-        size: 20,
-        font: boldFont,
-        color: goldColor,
-      });
-
-      // Column 1: Drinks Selecionados
-      page2.drawText(sanitizeText(String("Drinks Selecionados:")), {
-        x: 60,
-        y: 680,
-        size: 14,
-        font: boldFont,
-        color: goldColor,
-      });
-
-      let currentY = 650;
-      const fontSize = data.selectedDrinks.length > 10 ? 10 : 12;
-      const spacing = data.selectedDrinks.length > 10 ? 18 : 22;
-
-      data.selectedDrinks.forEach((drink) => {
-        if (currentY > 120) {
-          page2.drawText(sanitizeText(String(`• ${drink}`)), {
-            x: 60,
-            y: currentY,
-            size: fontSize,
-            font: standardFont,
-            color: textMainColor,
-          });
-          currentY -= spacing;
+      const pageFields = config.filter((f) => f.page === pageIndex);
+      for (const field of pageFields) {
+        if (field.field === "proposalDateTop" || field.field === "proposalDateBottom") {
+          drawLines(outPage, field, [data.proposalDate]);
+        } else if (field.field === "coverArcText") {
+          const upper = sanitizeText(data.clientName || "").toUpperCase();
+          const bottom = sanitizeText((data.eventDate || "").replace(/\//g, "."));
+          outPage.drawText(upper, { x: field.x - 60, y: field.y + 30, size: field.fontSize, font: boldFont, color: field.color, rotate: degrees(12) });
+          outPage.drawText(bottom, { x: field.x + 36, y: field.y - 34, size: field.fontSize - 4, font: boldFont, color: field.color, rotate: degrees(-8) });
+        } else if (field.field === "selectedDrinks") {
+          drawLines(outPage, field, data.selectedDrinks.map((d) => `- ${d}`));
+        } else if (field.field === "includedBeverages") {
+          drawLines(outPage, field, data.includedBeverages.map((b) => `- ${b}`));
+        } else if (field.field === "guests") {
+          drawLines(outPage, field, [`${data.guests} pessoas`]);
+        } else if (field.field === "team") {
+          drawLines(outPage, field, [`${data.bartenders} Bartenders`, `${data.keepers} Bar Keeper`, `${data.copeiras} Coopeira`]);
+        } else if (field.field === "investment") {
+          drawLines(outPage, field, [new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(data.finalInvestment)]);
+        } else if (field.field === "totalDrinkVarieties") {
+          drawLines(outPage, field, [`Carta composta por ${data.totalDrinkVarieties} variedades de drinks`]);
+        } else if (field.field === "paymentTerms") {
+          drawLines(outPage, field, data.paymentTerms.split("\n").filter(Boolean).map((p) => `- ${p}`));
         }
-      });
-
-      // Column 2: Bebidas Incluídas (drawn on the right side)
-      const rightColX = width / 2 + 20;
-      page2.drawText(sanitizeText(String("Bebidas Negociadas / Incluídas:")), {
-        x: rightColX,
-        y: 680,
-        size: 14,
-        font: boldFont,
-        color: goldColor,
-      });
-
-      let rightY = 650;
-      data.includedBeverages.forEach((bev) => {
-        if (rightY > 120) {
-          const bevLines = wrapText(bev, (width / 2) - 60, fontSize, standardFont);
-          bevLines.forEach((line) => {
-            if (rightY > 120) {
-              page2.drawText(sanitizeText(String(`• ${line}`)), {
-                x: rightColX,
-                y: rightY,
-                size: fontSize,
-                font: standardFont,
-                color: textMainColor,
-              });
-              rightY -= (fontSize + 6);
-            }
-          });
-          rightY -= 6; // item spacing
-        }
-      });
-    }
-
-    // Page 3: VALORES E CONDIÇÕES
-    if (pages.length > 2) {
-      const page3 = pages[2];
-      const { width, height } = page3.getSize();
-
-      const coverColor = data.coverColor === "light" ? whiteColor : bgRgb;
-      const textMainColor = data.coverColor === "light" ? darkGrayColor : whiteColor;
-
-      // Cover page 3 content
-      page3.drawRectangle({
-        x: 50,
-        y: 100,
-        width: width - 100,
-        height: 600,
-        color: coverColor,
-      });
-
-      page3.drawText(sanitizeText(String("VALORES & CONDIÇÕES")), {
-        x: 60,
-        y: 720,
-        size: 20,
-        font: boldFont,
-        color: goldColor,
-      });
-
-      // Metric Info Grid
-      page3.drawText(sanitizeText(String(`Número de Convidados: ${data.guests} pessoas`)), {
-        x: 60,
-        y: 670,
-        size: 13,
-        font: boldFont,
-        color: textMainColor,
-      });
-
-      page3.drawText(sanitizeText(String(`Variedades de Drinks no Bar: ${data.totalDrinkVarieties} tipos`)), {
-        x: 60,
-        y: 640,
-        size: 13,
-        font: standardFont,
-        color: textMainColor,
-      });
-
-      // Staff
-      page3.drawText(sanitizeText(String("Equipe Operacional Goat Bar:")), {
-        x: 60,
-        y: 600,
-        size: 13,
-        font: boldFont,
-        color: goldColor,
-      });
-
-      page3.drawText(sanitizeText(String(`- Bartenders: ${data.bartenders} profissionais`)), {
-        x: 70,
-        y: 575,
-        size: 12,
-        font: standardFont,
-        color: textMainColor,
-      });
-
-      page3.drawText(sanitizeText(String(`- Bar Keepers: ${data.keepers} profissionais`)), {
-        x: 70,
-        y: 555,
-        size: 12,
-        font: standardFont,
-        color: textMainColor,
-      });
-
-      page3.drawText(sanitizeText(String(`- Copeiras: ${data.copeiras} profissionais`)), {
-        x: 70,
-        y: 535,
-        size: 12,
-        font: standardFont,
-        color: textMainColor,
-      });
-
-      // Services Included
-      page3.drawText(sanitizeText(String("Serviços & Insumos Inclusos:")), {
-        x: width / 2 + 20,
-        y: 670,
-        size: 13,
-        font: boldFont,
-        color: goldColor,
-      });
-
-      let serviceY = 645;
-      data.includedServices.forEach((service) => {
-        if (serviceY > 400) {
-          const lines = wrapText(service, (width / 2) - 60, 10, standardFont);
-          lines.forEach((line) => {
-            page3.drawText(sanitizeText(String(`• ${line}`)), {
-              x: width / 2 + 20,
-              y: serviceY,
-              size: 10,
-              font: standardFont,
-              color: textMainColor,
-            });
-            serviceY -= 14;
-          });
-        }
-      });
-
-      // Investment & Payment Terms
-      const formattedInvestment = new Intl.NumberFormat("pt-BR", {
-        style: "currency",
-        currency: "BRL",
-      }).format(data.finalInvestment);
-
-      page3.drawText(sanitizeText(String("INVESTIMENTO COMERCIAL")), {
-        x: 60,
-        y: 470,
-        size: 14,
-        font: boldFont,
-        color: goldColor,
-      });
-
-      page3.drawText(sanitizeText(String(formattedInvestment)), {
-        x: 60,
-        y: 440,
-        size: 24,
-        font: boldFont,
-        color: textMainColor,
-      });
-
-      page3.drawText(sanitizeText(String("Forma e Condições de Pagamento:")), {
-        x: 60,
-        y: 390,
-        size: 12,
-        font: boldFont,
-        color: goldColor,
-      });
-
-      let payY = 370;
-      const paymentLines = wrapText(data.paymentTerms, width - 120, 11, standardFont);
-      paymentLines.forEach((line) => {
-        page3.drawText(sanitizeText(String(line)), {
-          x: 60,
-          y: payY,
-          size: 11,
-          font: standardFont,
-          color: textMainColor,
-        });
-        payY -= 16;
-      });
-
-      // Observations
-      if (data.observations) {
-        page3.drawText(sanitizeText(String("Observações:")), {
-          x: 60,
-          y: payY - 15,
-          size: 12,
-          font: boldFont,
-          color: goldColor,
-        });
-
-        let obsY = payY - 35;
-        const obsLines = wrapText(data.observations, width - 120, 10, standardFont);
-        obsLines.forEach((line) => {
-          if (obsY > 100) {
-            page3.drawText(sanitizeText(String(line)), {
-              x: 60,
-              y: obsY,
-              size: 10,
-              font: standardFont,
-              color: textMainColor,
-            });
-            obsY -= 14;
-          }
-        });
       }
-    }
+    });
 
-    return pdfDoc.save();
+    return outputDoc.save();
   },
 
   async generatePremiumPDFFromScratch(

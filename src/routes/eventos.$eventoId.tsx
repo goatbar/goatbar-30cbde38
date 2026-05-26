@@ -2877,7 +2877,29 @@ function ProposalModal({
     });
   };
 
+
+  const validateProposalData = () => {
+    const missing: string[] = [];
+    if (!formData.proposalDate?.trim()) missing.push("Data do orçamento");
+    if (!mappedEventType?.trim()) missing.push("Tipo de evento");
+    if (!formData.clientName?.trim()) missing.push("Nome exibido na capa");
+    if (!formData.eventDate?.trim()) missing.push("Data do evento");
+    if (!formData.selectedDrinks?.filter((d) => d.trim()).length) missing.push("Lista de drinks");
+    if (!formData.includedBeverages?.filter((b) => b.trim()).length) missing.push("Lista de bebidas");
+    if (!formData.guests) missing.push("Número de convidados");
+    if (!formData.bartenders && !formData.keepers && !formData.copeiras) missing.push("Equipe");
+    if (!formData.finalInvestment) missing.push("Investimento");
+    if (!formData.paymentTerms?.trim()) missing.push("Forma de pagamento");
+    return missing;
+  };
+
   const generatePreview = React.useCallback(async () => {
+    const missing = validateProposalData();
+    if (missing.length) {
+      alert(`Preencha os campos obrigatórios antes de gerar a prévia:
+- ${missing.join("\n- ")}`);
+      return;
+    }
     setGeneratingPreview(true);
     try {
       const pdfBytes = await pdfGenerationService.generateProposalPDF(
@@ -2906,6 +2928,12 @@ function ProposalModal({
   }, []);
 
   const handleSaveAndDownload = async () => {
+    const missing = validateProposalData();
+    if (missing.length) {
+      alert(`Preencha os campos obrigatórios antes de baixar o PDF:
+- ${missing.join("\n- ")}`);
+      return;
+    }
     setSavingPdf(true);
     try {
       const pdfBytes = await pdfGenerationService.generateProposalPDF(
