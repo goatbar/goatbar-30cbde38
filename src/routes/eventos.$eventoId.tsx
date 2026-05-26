@@ -299,7 +299,8 @@ function EventoInterna() {
 
   const mapBudgetToDraft = (ev: RealEvent, b: BudgetVersion): Evento => ({
     id: ev.id,
-    nome: ev.client_name,
+    nome: ev.event_name || ev.client_name,
+    evento_nome: ev.event_name || "",
     cliente: ev.client_name,
     telefone: ev.phone || "",
     email: ev.email || "",
@@ -665,7 +666,7 @@ function EventoInterna() {
             <ArrowLeft className="h-3 w-3" /> Voltar
           </Link>
         }
-        title={draft.nome}
+        title={draft.evento_nome || draft.cliente || draft.nome}
         subtitle={`${draft.tipo} · Versão ${currentBudget?.version_number || 1}`}
         action={
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap sm:justify-end">
