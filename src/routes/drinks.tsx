@@ -17,7 +17,7 @@ export const Route = createFileRoute("/drinks")({
 });
 
 function DrinksPage() {
-  const { drinks: allDrinks, updateDrink, addDrink, deleteDrink } = useAppStore();
+  const { drinks: allDrinks, updateDrink, addDrink, deleteDrink, loadingDrinks } = useAppStore();
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState("Todas");
   const [editingDrink, setEditingDrink] = useState<Drink | null>(null);
@@ -74,7 +74,22 @@ function DrinksPage() {
   return (
     <>
       <PageHeader
-        title="Drinks"
+        title={
+          <div className="flex items-center gap-2">
+            <span>Drinks</span>
+            {loadingDrinks ? (
+              <span className="text-[10px] tracking-normal font-normal text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full animate-pulse flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                Sincronizando...
+              </span>
+            ) : (
+              <span className="text-[10px] tracking-normal font-normal text-success bg-success/10 border border-success/20 px-2 py-0.5 rounded-full flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                Sincronizado
+              </span>
+            )}
+          </div>
+        }
         subtitle="Catálogo completo com fichas técnicas e precificação."
         action={
           <PrimaryButton onClick={() => setEditingDrink(blankDrink)}>

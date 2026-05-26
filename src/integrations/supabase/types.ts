@@ -35,6 +35,48 @@ export type Database = {
         };
         Relationships: [];
       };
+      drinks: {
+        Row: {
+          id: string;
+          nome: string;
+          categoria: string | null;
+          descricao: string | null;
+          custo_unitario: number;
+          insumos: Json | null;
+          modality_config: Json | null;
+          imagem: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          nome: string;
+          categoria?: string | null;
+          descricao?: string | null;
+          custo_unitario?: number;
+          insumos?: Json | null;
+          modality_config?: Json | null;
+          imagem?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          nome?: string;
+          categoria?: string | null;
+          descricao?: string | null;
+          custo_unitario?: number;
+          insumos?: Json | null;
+          modality_config?: Json | null;
+          imagem?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      [key: string]: {
+        Row: any;
+        Insert: any;
+        Update: any;
+        Relationships: any[];
+      };
     };
     Views: {
       [_ in never]: never;

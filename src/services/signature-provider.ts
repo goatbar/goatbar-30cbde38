@@ -1,3 +1,5 @@
+import { supabase } from "@/integrations/supabase/client";
+
 /**
  * Interface genérica para provedores de assinatura digital.
  * Permite que o sistema seja agnóstico ao fornecedor (Clicksign, ZapSign, DocuSign, etc).

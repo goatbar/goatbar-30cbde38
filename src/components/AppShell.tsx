@@ -240,7 +240,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
 }
 
 interface PageHeaderProps {
-  title: string;
+  title: ReactNode;
   subtitle?: string;
   breadcrumb?: ReactNode;
   action?: ReactNode;

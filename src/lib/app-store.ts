@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { saveImage } from "@/lib/image-store";
+import { saveImage, loadImage, deleteImage } from "@/lib/image-store";
+import { supabase } from "@/integrations/supabase/client";
 import {
   contratos as seedContratos,
   eventos as seedEventos,
@@ -55,6 +56,7 @@ type AppStore = {
   contratos: Contrato[];
   parametros: ParametroCalculo[];
   drinks: Drink[];
+  loadingDrinks?: boolean;
   contractTemplates: ContractTemplate[];
   contractSigners: ContractSigner[];
   glasswares: Glassware[];
@@ -218,8 +220,269 @@ function readStore(): AppStore {
   return recoverFromMockDb(merged);
 }
 
+// Helper to convert base64 data URL to Blob
+export function base64ToBlob(base64: string): { blob: Blob; mime: string } {
+  const arr = base64.split(",");
+  const mime = arr[0].match(/:(.*?);/)?.[1] || "image/png";
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return { blob: new Blob([u8arr], { type: mime }), mime };
+}
+
+// Upload image to Supabase Storage and return public URL
+export async function uploadDrinkImage(drinkId: string, base64OrUrl: string): Promise<string> {
+  if (!base64OrUrl.startsWith("data:")) {
+    return base64OrUrl;
+  }
+
+  const { blob, mime } = base64ToBlob(base64OrUrl);
+  const ext = mime.split("/")[1] || "png";
+  const fileName = `${drinkId}_${Date.now()}.${ext}`;
+
+  const { data, error } = await supabase.storage
+    .from("drink_images")
+    .upload(fileName, blob, {
+      contentType: mime,
+      upsert: true,
+    });
+
+  if (error) {
+    console.error("Error uploading image to Supabase:", error);
+    throw error;
+  }
+
+  const { data: { publicUrl } } = supabase.storage
+    .from("drink_images")
+    .getPublicUrl(fileName);
+
+  return publicUrl;
+}
+
+export async function deleteDrinkImage(imageUrl: string) {
+  try {
+    if (!imageUrl || !imageUrl.includes("/storage/v1/object/public/drink_images/")) {
+      return;
+    }
+    const parts = imageUrl.split("/drink_images/");
+    if (parts.length > 1) {
+      const fileName = decodeURIComponent(parts[1]);
+      await supabase.storage.from("drink_images").remove([fileName]);
+    }
+  } catch (e) {
+    console.error("Failed to delete image from Supabase Storage:", e);
+  }
+}
+
+// Background Supabase Sync Functions
+async function syncDrinkToSupabase(id: string, payload: Partial<Drink>) {
+  try {
+    let imageUrl = payload.imagem;
+    if (imageUrl) {
+      if (imageUrl.startsWith("idb:")) {
+        const key = imageUrl.slice(4);
+        const base64 = await loadImage(key);
+        if (base64) {
+          imageUrl = await uploadDrinkImage(id, base64);
+          await deleteImage(key);
+        }
+      } else if (imageUrl.startsWith("data:")) {
+        imageUrl = await uploadDrinkImage(id, imageUrl);
+      }
+    }
+
+    const { data: existing } = await supabase
+      .from("drinks")
+      .select("id")
+      .eq("id", id)
+      .maybeSingle();
+
+    const dbPayload = {
+      id,
+      nome: payload.nome,
+      categoria: payload.categoria,
+      descricao: payload.descricao,
+      custo_unitario: payload.custoUnitario,
+      insumos: payload.insumos ? payload.insumos : undefined,
+      modality_config: payload.modalityConfig ? payload.modalityConfig : undefined,
+      imagem: imageUrl,
+    };
+
+    const cleanPayload = Object.fromEntries(
+      Object.entries(dbPayload).filter(([_, v]) => v !== undefined)
+    );
+
+    if (existing) {
+      await supabase
+        .from("drinks")
+        .update(cleanPayload)
+        .eq("id", id);
+    } else {
+      const insertPayload = {
+        id,
+        nome: payload.nome ?? "Sem nome",
+        categoria: payload.categoria ?? "Geral",
+        descricao: payload.descricao ?? "",
+        custo_unitario: payload.custoUnitario ?? 0,
+        insumos: payload.insumos ?? [],
+        modality_config: payload.modalityConfig ?? {},
+        imagem: imageUrl ?? null,
+        ...cleanPayload
+      };
+      await supabase.from("drinks").insert(insertPayload);
+    }
+
+    if (imageUrl && imageUrl !== payload.imagem) {
+      window.dispatchEvent(new CustomEvent("drink-image-synced", { detail: { id, imageUrl } }));
+    }
+  } catch (e) {
+    console.error("Error syncing drink to Supabase:", e);
+  }
+}
+
+async function deleteDrinkFromSupabase(id: string) {
+  try {
+    const { data: drink } = await supabase
+      .from("drinks")
+      .select("imagem")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (drink?.imagem) {
+      await deleteDrinkImage(drink.imagem);
+    }
+
+    await supabase.from("drinks").delete().eq("id", id);
+  } catch (e) {
+    console.error("Error deleting drink from Supabase:", e);
+  }
+}
+
 export function useAppStore() {
-  const [store, setStore] = useState<AppStore>(() => readStore());
+  const [store, setStore] = useState<AppStore>(() => {
+    const base = readStore();
+    return { ...base, loadingDrinks: true };
+  });
+
+  // Load drinks from Supabase on mount
+  useEffect(() => {
+    let active = true;
+
+    async function loadDrinks() {
+      try {
+        const { data, error } = await supabase
+          .from("drinks")
+          .select("*")
+          .order("nome", { ascending: true });
+
+        if (error) throw error;
+
+        if (!active) return;
+
+        if (data && data.length > 0) {
+          const parsedDrinks = data.map((d: any) => {
+            let parsedInsumos = [];
+            try {
+              parsedInsumos = typeof d.insumos === "string" ? JSON.parse(d.insumos) : (d.insumos || []);
+            } catch (err) {
+              parsedInsumos = d.insumos || [];
+            }
+
+            let parsedConfig = {};
+            try {
+              parsedConfig = typeof d.modality_config === "string" ? JSON.parse(d.modality_config) : (d.modality_config || {});
+            } catch (err) {
+              parsedConfig = d.modality_config || {};
+            }
+
+            return {
+              id: d.id,
+              nome: d.nome,
+              categoria: d.categoria || "Geral",
+              descricao: d.descricao || "",
+              custoUnitario: Number(d.custo_unitario || 0),
+              insumos: parsedInsumos,
+              modalityConfig: parsedConfig,
+              imagem: d.imagem,
+            } as Drink;
+          });
+
+          // Check if any drinks have local IndexedDB images to migrate to Supabase Storage
+          for (const d of parsedDrinks) {
+            if (d.imagem && d.imagem.startsWith("idb:")) {
+              const key = d.imagem.slice(4);
+              loadImage(key).then(async (base64) => {
+                if (base64) {
+                  try {
+                    const publicUrl = await uploadDrinkImage(d.id, base64);
+                    await supabase.from("drinks").update({ imagem: publicUrl }).eq("id", d.id);
+                    setStore((prev) => ({
+                      ...prev,
+                      drinks: prev.drinks.map((x) => (x.id === d.id ? { ...x, imagem: publicUrl } : x)),
+                    }));
+                    await deleteImage(key);
+                  } catch (err) {
+                    console.error("Migration of local image failed for drink:", d.id, err);
+                  }
+                }
+              });
+            }
+          }
+
+          setStore((prev) => ({
+            ...prev,
+            drinks: parsedDrinks,
+            loadingDrinks: false,
+          }));
+        } else {
+          console.log("Supabase drinks table is empty. Seeding default drinks...");
+          const initialDrinks = readStore().drinks;
+          
+          setStore((prev) => ({
+            ...prev,
+            drinks: initialDrinks,
+            loadingDrinks: false,
+          }));
+
+          for (const d of initialDrinks) {
+            syncDrinkToSupabase(d.id, d);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load drinks from Supabase:", err);
+        if (active) {
+          setStore((prev) => ({
+            ...prev,
+            loadingDrinks: false,
+          }));
+        }
+      }
+    }
+
+    loadDrinks();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Listen to background image uploads to update local state once uploaded
+  useEffect(() => {
+    const handleImageSynced = (e: Event) => {
+      const { id, imageUrl } = (e as CustomEvent).detail;
+      setStore((prev) => ({
+        ...prev,
+        drinks: prev.drinks.map((d) => (d.id === id ? { ...d, imagem: imageUrl } : d)),
+      }));
+    };
+    window.addEventListener("drink-image-synced", handleImageSynced);
+    return () => {
+      window.removeEventListener("drink-image-synced", handleImageSynced);
+    };
+  }, []);
 
   // One-time migration: move any Base64 images already stored in localStorage
   // to IndexedDB, then update the store with the idb: reference.
@@ -308,9 +571,9 @@ export function useAppStore() {
         setStore((prev) => ({ ...prev, parametros: updated }));
       },
       updateDrink(id: string, payload: Partial<Drink>) {
-        setStore((prev) => ({
-          ...prev,
-          drinks: prev.drinks.map((d) => {
+        let updatedDrink: Drink | null = null;
+        setStore((prev) => {
+          const nextDrinks = prev.drinks.map((d) => {
             if (d.id !== id) return d;
             const updated = { ...d, ...payload };
             // BUG 2 fix: priority for custoUnitario:
@@ -331,32 +594,45 @@ export function useAppStore() {
             } else if (payload.custoUnitario !== undefined && payload.custoUnitario > 0) {
               updated.custoUnitario = payload.custoUnitario;
             }
+            updatedDrink = updated;
             return updated;
-          }),
-        }));
+          });
+          return { ...prev, drinks: nextDrinks };
+        });
+
+        if (updatedDrink) {
+          syncDrinkToSupabase(id, updatedDrink);
+        }
       },
       addDrink(input: Omit<Drink, "id"> & { _presetId?: string }) {
+        let newDrink: Drink | null = null;
         setStore((prev) => {
           const { _presetId, ...rest } = input as any;
           const insumoSource = (rest.insumos ?? rest.ingredientes ?? []) as { custo: number }[];
-          const newDrink: Drink = {
+          const drink: Drink = {
             ...rest,
             id: _presetId ?? `d${Date.now()}`,
             custoUnitario: Number(
               insumoSource.reduce((a: number, i: { custo: number }) => a + i.custo, 0).toFixed(2),
             ),
           };
+          newDrink = drink;
           return {
             ...prev,
-            drinks: [newDrink, ...prev.drinks],
+            drinks: [drink, ...prev.drinks],
           };
         });
+
+        if (newDrink) {
+          syncDrinkToSupabase((newDrink as Drink).id, newDrink);
+        }
       },
       deleteDrink(id: string) {
         setStore((prev) => ({
           ...prev,
           drinks: prev.drinks.filter((d) => d.id !== id),
         }));
+        deleteDrinkFromSupabase(id);
       },
       addEventContract(input: Omit<EventContract, "id">) {
         setStore((prev) => ({

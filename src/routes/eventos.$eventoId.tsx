@@ -1009,55 +1009,7 @@ function EventoInterna() {
                     </div>
                   </div>
 
-                  {draft.drinks.length > 0 && (
-                    <div className="mt-4 border-t border-border pt-4">
-                      <label className="label-eyebrow block mb-3 text-primary">
-                        Definição de Copos (Para contrato)
-                      </label>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {draft.drinks.map((dId) => {
-                          const drink = allDrinks.find((x) => x.id === dId);
-                          if (!drink) return null;
-                          return (
-                            <div
-                              key={dId}
-                              className="flex flex-col gap-1.5 bg-surface p-3 rounded-lg border border-border hover:border-primary/30 transition-colors"
-                            >
-                              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                                {drink.nome}
-                              </span>
-                              <select
-                                value={draft.coposVinculados[dId] || ""}
-                                onChange={(e) =>
-                                  setDraft((p) =>
-                                    p
-                                      ? {
-                                          ...p,
-                                          coposVinculados: {
-                                            ...p.coposVinculados,
-                                            [dId]: e.target.value,
-                                          },
-                                        }
-                                      : null,
-                                  )
-                                }
-                                className="h-9 px-3 rounded-md bg-input border border-border text-sm text-foreground focus:ring-1 focus:ring-primary outline-none"
-                              >
-                                <option value="">Copo Padrão (R$ 15)</option>
-                                {glasswares
-                                  .filter((g) => g.isActive)
-                                  .map((g) => (
-                                    <option key={g.id} value={g.id}>
-                                      {g.name} (R$ {g.replacementValue})
-                                    </option>
-                                  ))}
-                              </select>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+
 
                   <div className="p-5 rounded-xl bg-primary/5 border border-primary/10 flex flex-col sm:flex-row justify-between items-start sm:items-center mt-4 shadow-inner gap-4">
                     <div className="space-y-1">
