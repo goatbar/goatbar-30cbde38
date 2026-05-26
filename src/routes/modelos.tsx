@@ -15,6 +15,7 @@ import {
   AlertTriangle 
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { TemplateMapperEditor } from "@/components/TemplateMapperEditor";
 import { 
   proposalTemplatesService, 
   type ProposalTemplate 
@@ -42,6 +43,7 @@ function ModelosPage() {
   const [showReplaceModal, setShowReplaceModal] = useState<ProposalTemplate | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [mapperTemplate, setMapperTemplate] = useState<ProposalTemplate | null>(null);
   
   // New template form
   const [newName, setNewName] = useState("");
@@ -252,13 +254,22 @@ function ModelosPage() {
                     )}
 
                     {isAdmin && (
-                      <button
-                        onClick={() => setShowReplaceModal(template)}
-                        className="flex items-center justify-center gap-1.5 px-3 h-9 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-all"
-                        title="Substituir PDF"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                      </button>
+                      <>
+                        <button
+                          onClick={() => setMapperTemplate(template)}
+                          className="flex items-center justify-center gap-1.5 px-3 h-9 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-all"
+                          title="Mapear campos"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setShowReplaceModal(template)}
+                          className="flex items-center justify-center gap-1.5 px-3 h-9 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-all"
+                          title="Substituir PDF"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        </button>
+                      </>
                     )}
                   </div>
 
@@ -485,6 +496,7 @@ function ModelosPage() {
           </div>
         </div>
       )}
+      {mapperTemplate && <TemplateMapperEditor template={mapperTemplate} onClose={() => setMapperTemplate(null)} />}
     </>
   );
 }
