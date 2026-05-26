@@ -143,17 +143,14 @@ function makeDefaultField(
 // ─── ArcPreviewSVG ───────────────────────────────────────────────
 function ArcPreviewSVG({
   field,
-  canvasW,
-  canvasH,
+  boxW,
+  boxH,
 }: {
   field: ProposalTemplateField;
-  canvasW: number;
-  canvasH: number;
+  boxW: number;
+  boxH: number;
 }) {
   const cfg = field.config as {
-    radius?: number;
-    centerX?: number;
-    centerY?: number;
     startAngle?: number;
     endAngle?: number;
     direction?: string;
@@ -161,9 +158,9 @@ function ArcPreviewSVG({
     arcPosition?: string;
   };
 
-  const radius = (cfg.radius ?? 0.15) * Math.min(canvasW, canvasH);
-  const cx = (field.x + field.width / 2) * canvasW;
-  const cy = (field.y + field.height / 2) * canvasH;
+  const radius = Math.max(10, Math.min(boxW, boxH) / 2 - 16);
+  const cx = boxW / 2;
+  const cy = boxH / 2;
   const startDeg = cfg.startAngle ?? 200;
   const endDeg = cfg.endAngle ?? 340;
   const isBottom = cfg.arcPosition === "bottom";
@@ -190,8 +187,8 @@ function ArcPreviewSVG({
       style={{
         position: "absolute",
         inset: 0,
-        width: canvasW,
-        height: canvasH,
+        width: boxW,
+        height: boxH,
         pointerEvents: "none",
         overflow: "visible",
       }}
@@ -421,6 +418,11 @@ function FieldBox({
         </span>
       )}
 
+      {/* Arc text preview */}
+      {field.field_type === "texto_arco" && (
+        <ArcPreviewSVG field={field} boxW={pw} boxH={ph} />
+      )}
+
       {/* Field type badge */}
       <span
         style={{
@@ -551,7 +553,6 @@ function ArcConfig({
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
         {([
-          ["Raio (relativo)", "radius", 0.01, 0.5, 0.001],
           ["Âng. Início (°)", "startAngle", 0, 360, 1],
           ["Âng. Fim (°)", "endAngle", 0, 360, 1],
           ["Espaç. letras", "letterSpacing", -10, 50, 0.5],
@@ -1118,47 +1119,16 @@ export function TemplateFieldEditor({
                   const fid = (f as any).id as string;
                   return (
                     <div key={fid} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-                      {/* Arc SVG preview */}
-                      {f.field_type === "texto_arco" && (
-                        <ArcPreviewSVG field={f} canvasW={canvasSize.w * 1.2} canvasH={canvasSize.h * 1.2} />
-                      )}
-                      {/* Regular field box */}
-                      {f.field_type !== "texto_arco" && (
-                        <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
-                          <FieldBox
-                            field={f}
-                            canvasW={canvasSize.w * 1.2}
-                            canvasH={canvasSize.h * 1.2}
-                            isSelected={selectedId === fid}
-                            onSelect={() => setSelectedId(fid)}
-                            onChange={(patch) => updateField(fid, patch)}
-                          />
-                        </div>
-                      )}
-                      {/* Arc click target */}
-                      {f.field_type === "texto_arco" && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: f.x * canvasSize.w * 1.2,
-                            top: f.y * canvasSize.h * 1.2,
-                            width: f.width * canvasSize.w * 1.2,
-                            height: f.height * canvasSize.h * 1.2,
-                            cursor: "pointer",
-                            pointerEvents: "auto",
-                            border: selectedId === fid ? "1.5px dashed #701117" : "1px dashed rgba(247,244,239,0.3)",
-                            borderRadius: 4,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                          onClick={(e) => { e.stopPropagation(); setSelectedId(fid); }}
-                        >
-                          <span style={{ fontSize: 9, color: "rgba(247,244,239,0.6)", fontFamily: "sans-serif", background: "rgba(15,20,20,0.7)", padding: "1px 4px", borderRadius: 3 }}>
-                            arco · {f.field_key}
-                          </span>
-                        </div>
-                      )}
+                      <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
+                        <FieldBox
+                          field={f}
+                          canvasW={canvasSize.w * 1.2}
+                          canvasH={canvasSize.h * 1.2}
+                          isSelected={selectedId === fid}
+                          onSelect={() => setSelectedId(fid)}
+                          onChange={(patch) => updateField(fid, patch)}
+                        />
+                      </div>
                     </div>
                   );
                 })}
