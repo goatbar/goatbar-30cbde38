@@ -61,7 +61,6 @@ export interface ReceiptExtractionResult {
   category?: FinancialCategory;
   cost_center?: string;
   payment_source?: string;
-  items?: string[];
   raw_text: string;
   review_status: "Lido automaticamente" | "Precisa revisar" | "Erro na leitura";
   confidence?: number;
