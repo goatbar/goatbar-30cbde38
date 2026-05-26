@@ -319,6 +319,14 @@ function resolveFieldValue(fieldKey: string, data: ProposalData): string | strin
     case "quantidade_drinks":     return `${data.totalDrinkVarieties} variedades de drinks`;
     case "investimento_total":    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(data.finalInvestment);
     case "forma_pagamento":       return data.paymentTerms;
+    case "inicial_1": {
+      const names = (data.clientName || "").split(/\s+(?:&|e|and|\+)\s+/i);
+      return names[0] ? names[0].trim().charAt(0).toUpperCase() : "";
+    }
+    case "inicial_2": {
+      const names = (data.clientName || "").split(/\s+(?:&|e|and|\+)\s+/i);
+      return names.length > 1 ? names[1].trim().charAt(0).toUpperCase() : "";
+    }
     default: return "";
   }
 }

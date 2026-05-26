@@ -61,6 +61,8 @@ export const TEMPLATE_FIELD_KEYS = [
   "quantidade_drinks",
   "investimento_total",
   "forma_pagamento",
+  "inicial_1",
+  "inicial_2",
 ] as const;
 
 export const DEFAULT_TEMPLATE_FIELDS: Array<Pick<ProposalTemplateField, "field_key" | "field_label" | "field_type">> = TEMPLATE_FIELD_KEYS.map((key) => ({

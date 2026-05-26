@@ -89,6 +89,8 @@ const FIELD_KEY_LABELS: Record<string, string> = {
   quantidade_drinks: "Qtd. Drinks",
   investimento_total: "Investimento Total",
   forma_pagamento: "Forma de Pagamento",
+  inicial_1: "Inicial do Noivo(a) 1",
+  inicial_2: "Inicial do Noivo(a) 2",
 };
 
 // Mock data for "Testar Preenchimento"
@@ -108,6 +110,8 @@ const MOCK_DATA: Record<string, string> = {
   quantidade_drinks: "12",
   investimento_total: "R$ 18.500,00",
   forma_pagamento: "50% na assinatura\n50% no evento",
+  inicial_1: "A",
+  inicial_2: "P",
 };
 
 function makeDefaultField(
@@ -157,7 +161,7 @@ function ArcPreviewSVG({
     arcPosition?: string;
   };
 
-  const radius = (cfg.radius ?? 120) * Math.min(canvasW, canvasH);
+  const radius = (cfg.radius ?? 0.15) * Math.min(canvasW, canvasH);
   const cx = (cfg.centerX ?? 0.5) * canvasW;
   const cy = (cfg.centerY ?? 0.5) * canvasH;
   const startDeg = cfg.startAngle ?? 200;
