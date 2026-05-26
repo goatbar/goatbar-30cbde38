@@ -23,12 +23,14 @@ CREATE TABLE IF NOT EXISTS public.financial_expense_receipt_logs (
 
 ALTER TABLE public.financial_expense_receipt_logs ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "financial_expense_receipt_logs_select_authenticated"
+DROP POLICY IF EXISTS "financial_expense_receipt_logs_select_authenticated" ON public.financial_expense_receipt_logs;
+CREATE POLICY "financial_expense_receipt_logs_select_authenticated"
   ON public.financial_expense_receipt_logs
   FOR SELECT TO authenticated
   USING (true);
 
-CREATE POLICY IF NOT EXISTS "financial_expense_receipt_logs_insert_authenticated"
+DROP POLICY IF EXISTS "financial_expense_receipt_logs_insert_authenticated" ON public.financial_expense_receipt_logs;
+CREATE POLICY "financial_expense_receipt_logs_insert_authenticated"
   ON public.financial_expense_receipt_logs
   FOR INSERT TO authenticated
   WITH CHECK (true);

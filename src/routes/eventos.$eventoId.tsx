@@ -25,7 +25,7 @@ import {
   Clock,
   Pencil,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useAppStore } from "@/lib/app-store";
 import { DrinkImage } from "@/components/DrinkImage";
 import {
@@ -47,7 +47,15 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Check, Search, Upload } from "lucide-react";
+import { Check, Search, Upload, FileText as FileTextIcon } from "lucide-react";
+import {
+  proposalTemplatesService,
+  generatedProposalsService,
+  pdfGenerationService,
+  type ProposalData,
+  type GeneratedProposal,
+  type ProposalTemplate,
+} from "@/services/proposal-service";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
   component: EventoInterna,
@@ -141,9 +149,23 @@ function EventoInterna() {
   const [contractMode, setContractMode] = useState<"system" | "upload">("system");
   const [uploadingContract, setUploadingContract] = useState(false);
 
+  // --- Proposal Modal States ---
+  const [showProposalModal, setShowProposalModal] = useState(false);
+  const [existingProposal, setExistingProposal] = useState<GeneratedProposal | null>(null);
+  const [proposalTemplate, setProposalTemplate] = useState<ProposalTemplate | null>(null);
+
   useEffect(() => {
     loadAllData();
   }, [eventoId]);
+
+  const loadProposal = async () => {
+    try {
+      const prop = await generatedProposalsService.getProposalByEventId(eventoId);
+      setExistingProposal(prop);
+    } catch (err) {
+      console.warn("Erro ao carregar proposta existente:", err);
+    }
+  };
 
   const loadContractModule = async () => {
     const [tps, sigs, contract] = await Promise.all([
@@ -223,6 +245,7 @@ function EventoInterna() {
     } finally {
       setLoading(false);
     }
+    loadProposal();
   };
 
   const mapEventToDraft = (ev: RealEvent): Evento => ({
@@ -1712,6 +1735,51 @@ function EventoInterna() {
                   </div>
                 </SectionCard>
 
+                {/* GERAR PROPOSTA COMERCIAL BUTTON */}
+                <div className="p-5 bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/25 rounded-2xl flex flex-col gap-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <FileTextIcon className="h-5 w-5 text-primary" />
+                    <span className="font-display font-semibold text-sm">Proposta Comercial em PDF</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {existingProposal
+                      ? "Proposta já gerada. Clique para ver, editar ou baixar novamente."
+                      : "Gere e personalize uma proposta comercial em PDF baseada no orçamento atual."}
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    <PrimaryButton
+                      className="h-10 text-[11px] font-bold flex-1"
+                      onClick={async () => {
+                        // Try to find default template for this event type
+                        const evType = evento?.event_type?.toLowerCase() || "";
+                        const mappedType: "casamento" | "aniversario" | "comemoracao" =
+                          evType.includes("casamento") ? "casamento" :
+                          evType.includes("aniversario") || evType.includes("aniversário") ? "aniversario" : "comemoracao";
+                        try {
+                          const tmpl = await proposalTemplatesService.getDefaultTemplate(mappedType);
+                          setProposalTemplate(tmpl);
+                        } catch {
+                          setProposalTemplate(null);
+                        }
+                        setShowProposalModal(true);
+                      }}
+                    >
+                      <FileTextIcon className="h-4 w-4" />
+                      {existingProposal ? "VER / EDITAR PROPOSTA" : "GERAR PROPOSTA COMERCIAL"}
+                    </PrimaryButton>
+                    {existingProposal?.final_pdf_url && (
+                      <a
+                        href={existingProposal.final_pdf_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl border border-border bg-background hover:bg-muted text-xs font-bold transition-all text-foreground"
+                      >
+                        <Download className="h-4 w-4" /> Baixar PDF
+                      </a>
+                    )}
+                  </div>
+                </div>
+
                 {/* VERSÕES RÁPIDAS */}
                 <SectionCard title="Versões Recentes" className="bg-surface/50 border-dashed">
                   <div className="space-y-3">
@@ -2638,7 +2706,480 @@ function EventoInterna() {
           </div>
         )}
       </div>
+
+      {/* PROPOSAL MODAL */}
+      {showProposalModal && evento && (
+        <ProposalModal
+          evento={evento}
+          draft={draft}
+          allDrinks={allDrinks}
+          calc={calc}
+          template={proposalTemplate}
+          existingProposal={existingProposal}
+          eventoId={eventoId}
+          onClose={() => setShowProposalModal(false)}
+          onSaved={(proposal) => {
+            setExistingProposal(proposal);
+            setShowProposalModal(false);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+// ============================================================
+// PROPOSAL MODAL COMPONENT
+// ============================================================
+function ProposalModal({
+  evento,
+  draft,
+  allDrinks,
+  calc,
+  template,
+  existingProposal,
+  eventoId,
+  onClose,
+  onSaved,
+}: {
+  evento: any;
+  draft: any;
+  allDrinks: any[];
+  calc: any;
+  template: import("@/services/proposal-service").ProposalTemplate | null;
+  existingProposal: import("@/services/proposal-service").GeneratedProposal | null;
+  eventoId: string;
+  onClose: () => void;
+  onSaved: (proposal: import("@/services/proposal-service").GeneratedProposal) => void;
+}) {
+  // Pre-fill with existing data or from current budget
+  const evType = evento?.event_type?.toLowerCase() || "";
+  const mappedEventType: "casamento" | "aniversario" | "comemoracao" =
+    evType.includes("casamento") ? "casamento" :
+    evType.includes("aniversario") || evType.includes("aniversário") ? "aniversario" : "comemoracao";
+
+  const defaultData: import("@/services/proposal-service").ProposalData = existingProposal?.proposal_data
+    ? (existingProposal.proposal_data as any)
+    : {
+        proposalDate: new Date().toLocaleDateString("pt-BR"),
+        eventDate: draft?.data
+          ? (() => { const [y, m, d] = (draft.data || "").split("-"); return `${d}/${m}/${y}`; })()
+          : "---",
+        eventTime: draft?.horario || "",
+        clientName: draft?.cliente || evento?.client_name || "",
+        eventTypeLabel:
+          mappedEventType === "casamento" ? "Casamento" :
+          mappedEventType === "aniversario" ? "Aniversário" : "Comemoração",
+        selectedDrinks: (draft?.drinks || [])
+          .map((id: string) => allDrinks.find((d: any) => d.id === id)?.nome)
+          .filter(Boolean),
+        includedBeverages: draft?.descricaoBebidas
+          ? draft.descricaoBebidas.split("\n").filter((l: string) => l.trim())
+          : [],
+        guests: draft?.convidados || 0,
+        bartenders: draft?.equipe?.bartender?.qtd || 0,
+        keepers: draft?.equipe?.keeper?.qtd || 0,
+        copeiras: draft?.equipe?.copeira?.qtd || 0,
+        totalDrinkVarieties: (draft?.drinks || []).length,
+        finalInvestment: calc?.valorTotalOrcamento || 0,
+        paymentTerms: draft?.pagamento?.formaPagamento || "A combinar",
+        includedServices: [
+          "Sistema de montagem e desmontagem da estrutura de bar",
+          "Cristalaria premium (taças e copos especiais)",
+          "Gelo e insumos de bar",
+          "Uniforme profissional da equipe Goat Bar",
+          "Harmonização entre drinks e gastronomia do evento",
+          "Direção criativa dos drinks e personalização do cardápio",
+        ],
+        observations: draft?.observacoes || "",
+      };
+
+  const [formData, setFormData] = React.useState<import("@/services/proposal-service").ProposalData>(defaultData);
+  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+  const [generatingPreview, setGeneratingPreview] = React.useState(false);
+  const [savingPdf, setSavingPdf] = React.useState(false);
+
+  const updateForm = (field: string, value: any) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const updateArrayField = (field: string, index: number, value: string) => {
+    setFormData((prev) => {
+      const arr = [...(prev as any)[field]];
+      arr[index] = value;
+      return { ...prev, [field]: arr };
+    });
+  };
+
+  const addArrayItem = (field: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: [...(prev as any)[field], ""],
+    }));
+  };
+
+  const removeArrayItem = (field: string, index: number) => {
+    setFormData((prev) => {
+      const arr = [...(prev as any)[field]];
+      arr.splice(index, 1);
+      return { ...prev, [field]: arr };
+    });
+  };
+
+  const generatePreview = React.useCallback(async () => {
+    setGeneratingPreview(true);
+    try {
+      const pdfBytes = await pdfGenerationService.generateProposalPDF(
+        template?.file_url || null,
+        formData,
+        mappedEventType
+      );
+      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(url);
+    } catch (err) {
+      console.error("Erro ao gerar prévia:", err);
+      alert("Erro ao gerar prévia do PDF.");
+    } finally {
+      setGeneratingPreview(false);
+    }
+  }, [formData, template, mappedEventType]);
+
+  // Auto-generate preview on open
+  React.useEffect(() => {
+    generatePreview();
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, []);
+
+  const handleSaveAndDownload = async () => {
+    setSavingPdf(true);
+    try {
+      const pdfBytes = await pdfGenerationService.generateProposalPDF(
+        template?.file_url || null,
+        formData,
+        mappedEventType
+      );
+      const pdfUrl = await generatedProposalsService.uploadGeneratedPDF(eventoId, pdfBytes);
+      const saved = await generatedProposalsService.saveProposal({
+        id: existingProposal?.id,
+        event_id: eventoId,
+        budget_id: null,
+        template_id: template?.id || null,
+        proposal_data: formData as any,
+        final_pdf_url: pdfUrl,
+        status: "downloaded",
+      });
+      // Download
+      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `proposta-${formData.clientName.replace(/\s+/g, "-").toLowerCase()}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      onSaved(saved);
+    } catch (err: any) {
+      console.error("Erro ao salvar proposta:", err);
+      alert(`Erro ao salvar proposta: ${err?.message || "Tente novamente"}`);
+    } finally {
+      setSavingPdf(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-stretch bg-background/95 backdrop-blur-xl animate-in fade-in duration-300">
+      {/* Left Panel: Form */}
+      <div className="w-full md:w-[420px] xl:w-[480px] shrink-0 flex flex-col border-r border-border overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-surface">
+          <div>
+            <h2 className="font-display text-base font-semibold">Proposta Comercial</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {template ? `Usando modelo: ${template.name}` : "Gerando PDF padrão Goat Bar"}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="h-9 w-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/60 transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {/* CAPA */}
+          <div className="space-y-3">
+            <div className="text-[11px] font-bold text-primary uppercase tracking-widest">1. Capa da Proposta</div>
+            <div>
+              <label className="label-eyebrow block mb-1.5">Nome do Cliente / Casal / Evento</label>
+              <input
+                type="text"
+                value={formData.clientName}
+                onChange={(e) => updateForm("clientName", e.target.value)}
+                className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none transition-colors"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label-eyebrow block mb-1.5">Data do Evento</label>
+                <input
+                  type="text"
+                  value={formData.eventDate}
+                  onChange={(e) => updateForm("eventDate", e.target.value)}
+                  placeholder="DD/MM/AAAA"
+                  className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label className="label-eyebrow block mb-1.5">Horário</label>
+                <input
+                  type="text"
+                  value={formData.eventTime || ""}
+                  onChange={(e) => updateForm("eventTime", e.target.value)}
+                  placeholder="Ex: 20h"
+                  className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none transition-colors"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="label-eyebrow block mb-1.5">Descrição do Evento (Capa)</label>
+              <input
+                type="text"
+                value={formData.eventTypeLabel}
+                onChange={(e) => updateForm("eventTypeLabel", e.target.value)}
+                placeholder="Ex: Casamento de João e Maria"
+                className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* DRINKS */}
+          <div className="space-y-3">
+            <div className="text-[11px] font-bold text-primary uppercase tracking-widest">2. Drinks & Experiências</div>
+            <div>
+              <label className="label-eyebrow block mb-1.5">Drinks no Cardápio</label>
+              <div className="space-y-2">
+                {formData.selectedDrinks.map((drink, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={drink}
+                      onChange={(e) => updateArrayField("selectedDrinks", idx, e.target.value)}
+                      className="flex-1 h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                    />
+                    <button
+                      onClick={() => removeArrayItem("selectedDrinks", idx)}
+                      className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors border border-border"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => addArrayItem("selectedDrinks")}
+                  className="text-xs text-primary hover:underline font-medium flex items-center gap-1"
+                >
+                  + Adicionar drink
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="label-eyebrow block mb-1.5">Bebidas Negociadas / Incluídas</label>
+              <div className="space-y-2">
+                {formData.includedBeverages.map((bev, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={bev}
+                      onChange={(e) => updateArrayField("includedBeverages", idx, e.target.value)}
+                      className="flex-1 h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                      placeholder="Ex: 2 caixas de vodka Absolut"
+                    />
+                    <button
+                      onClick={() => removeArrayItem("includedBeverages", idx)}
+                      className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors border border-border"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => addArrayItem("includedBeverages")}
+                  className="text-xs text-primary hover:underline font-medium"
+                >
+                  + Adicionar bebida
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* EQUIPE & VALORES */}
+          <div className="space-y-3">
+            <div className="text-[11px] font-bold text-primary uppercase tracking-widest">3. Equipe & Valores</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label-eyebrow block mb-1.5">Convidados</label>
+                <input
+                  type="number"
+                  value={formData.guests}
+                  onChange={(e) => updateForm("guests", Number(e.target.value))}
+                  className="w-full h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="label-eyebrow block mb-1.5">Tipos de Drinks</label>
+                <input
+                  type="number"
+                  value={formData.totalDrinkVarieties}
+                  onChange={(e) => updateForm("totalDrinkVarieties", Number(e.target.value))}
+                  className="w-full h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="label-eyebrow block mb-1.5">Bartenders</label>
+                <input
+                  type="number"
+                  value={formData.bartenders}
+                  onChange={(e) => updateForm("bartenders", Number(e.target.value))}
+                  className="w-full h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="label-eyebrow block mb-1.5">Bar Keepers</label>
+                <input
+                  type="number"
+                  value={formData.keepers}
+                  onChange={(e) => updateForm("keepers", Number(e.target.value))}
+                  className="w-full h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="label-eyebrow block mb-1.5">Copeiras</label>
+                <input
+                  type="number"
+                  value={formData.copeiras}
+                  onChange={(e) => updateForm("copeiras", Number(e.target.value))}
+                  className="w-full h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="label-eyebrow block mb-1.5">Investimento (R$)</label>
+                <input
+                  type="number"
+                  value={formData.finalInvestment}
+                  onChange={(e) => updateForm("finalInvestment", Number(e.target.value))}
+                  className="w-full h-9 px-3 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="label-eyebrow block mb-1.5">Condições de Pagamento</label>
+              <textarea
+                value={formData.paymentTerms}
+                onChange={(e) => updateForm("paymentTerms", e.target.value)}
+                rows={2}
+                className="w-full px-3 py-2 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none resize-none"
+                placeholder="Ex: 50% na assinatura + 50% até 7 dias antes do evento"
+              />
+            </div>
+          </div>
+
+          {/* SERVIÇOS & OBSERVAÇÕES */}
+          <div className="space-y-3">
+            <div className="text-[11px] font-bold text-primary uppercase tracking-widest">4. Serviços & Observações</div>
+            <div>
+              <label className="label-eyebrow block mb-1.5">Serviços Incluídos</label>
+              <div className="space-y-2">
+                {formData.includedServices.map((srv, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={srv}
+                      onChange={(e) => updateArrayField("includedServices", idx, e.target.value)}
+                      className="flex-1 h-9 px-3 rounded-lg bg-input border border-border text-xs focus:border-primary focus:outline-none"
+                    />
+                    <button
+                      onClick={() => removeArrayItem("includedServices", idx)}
+                      className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors border border-border"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => addArrayItem("includedServices")}
+                  className="text-xs text-primary hover:underline font-medium"
+                >
+                  + Adicionar serviço
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="label-eyebrow block mb-1.5">Observações Gerais</label>
+              <textarea
+                value={formData.observations || ""}
+                onChange={(e) => updateForm("observations", e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none resize-none"
+                placeholder="Observações adicionais, condições especiais, etc."
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex gap-2 p-4 border-t border-border bg-surface/80 flex-wrap">
+          <button
+            onClick={generatePreview}
+            disabled={generatingPreview}
+            className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl border border-border bg-background hover:bg-muted text-xs font-bold text-foreground transition-all disabled:opacity-50"
+          >
+            {generatingPreview ? (
+              <span className="animate-spin">⟳</span>
+            ) : (
+              "⟳"
+            )} Atualizar Prévia
+          </button>
+          <button
+            onClick={handleSaveAndDownload}
+            disabled={savingPdf}
+            className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all disabled:opacity-50"
+          >
+            {savingPdf ? "Salvando..." : "💾 Salvar & Baixar PDF"}
+          </button>
+        </div>
+      </div>
+
+      {/* Right Panel: PDF Preview */}
+      <div className="flex-1 flex flex-col hidden md:flex">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-surface/80">
+          <span className="text-sm font-semibold">Pré-visualização da Proposta</span>
+          {generatingPreview && (
+            <span className="text-xs text-muted-foreground animate-pulse">Gerando...</span>
+          )}
+        </div>
+        <div className="flex-1 bg-muted/30 p-4 overflow-hidden">
+          {previewUrl ? (
+            <iframe
+              key={previewUrl}
+              src={previewUrl}
+              title="Prévia da Proposta Comercial"
+              className="w-full h-full rounded-xl border border-border shadow-xl"
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground text-sm">
+              <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 text-3xl">📄</div>
+              <span className="font-medium">
+                {generatingPreview ? "Gerando prévia do PDF..." : "Clique em 'Atualizar Prévia' para ver"}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

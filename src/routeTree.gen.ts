@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VendasRouteImport } from './routes/vendas'
+import { Route as ModelosRouteImport } from './routes/modelos'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InventarioRouteImport } from './routes/inventario'
 import { Route as EventosRouteImport } from './routes/eventos'
@@ -27,6 +28,11 @@ import { Route as ContratoDadosTokenRouteImport } from './routes/contrato.dados.
 const VendasRoute = VendasRouteImport.update({
   id: '/vendas',
   path: '/vendas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ModelosRoute = ModelosRouteImport.update({
+  id: '/modelos',
+  path: '/modelos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -104,6 +110,7 @@ export interface FileRoutesByFullPath {
   '/eventos': typeof EventosRouteWithChildren
   '/inventario': typeof InventarioRoute
   '/login': typeof LoginRoute
+  '/modelos': typeof ModelosRoute
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
@@ -119,6 +126,7 @@ export interface FileRoutesByTo {
   '/drinks': typeof DrinksRoute
   '/inventario': typeof InventarioRoute
   '/login': typeof LoginRoute
+  '/modelos': typeof ModelosRoute
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
@@ -136,6 +144,7 @@ export interface FileRoutesById {
   '/eventos': typeof EventosRouteWithChildren
   '/inventario': typeof InventarioRoute
   '/login': typeof LoginRoute
+  '/modelos': typeof ModelosRoute
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
@@ -154,6 +163,7 @@ export interface FileRouteTypes {
     | '/eventos'
     | '/inventario'
     | '/login'
+    | '/modelos'
     | '/vendas'
     | '/eventos/$eventoId'
     | '/pos-evento/$eventoId'
@@ -169,6 +179,7 @@ export interface FileRouteTypes {
     | '/drinks'
     | '/inventario'
     | '/login'
+    | '/modelos'
     | '/vendas'
     | '/eventos/$eventoId'
     | '/pos-evento/$eventoId'
@@ -185,6 +196,7 @@ export interface FileRouteTypes {
     | '/eventos'
     | '/inventario'
     | '/login'
+    | '/modelos'
     | '/vendas'
     | '/eventos/$eventoId'
     | '/pos-evento/$eventoId'
@@ -202,6 +214,7 @@ export interface RootRouteChildren {
   EventosRoute: typeof EventosRouteWithChildren
   InventarioRoute: typeof InventarioRoute
   LoginRoute: typeof LoginRoute
+  ModelosRoute: typeof ModelosRoute
   VendasRoute: typeof VendasRoute
   PosEventoEventoIdRoute: typeof PosEventoEventoIdRoute
   ContratoDadosTokenRoute: typeof ContratoDadosTokenRoute
@@ -215,6 +228,13 @@ declare module '@tanstack/react-router' {
       path: '/vendas'
       fullPath: '/vendas'
       preLoaderRoute: typeof VendasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/modelos': {
+      id: '/modelos'
+      path: '/modelos'
+      fullPath: '/modelos'
+      preLoaderRoute: typeof ModelosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -333,6 +353,7 @@ const rootRouteChildren: RootRouteChildren = {
   EventosRoute: EventosRouteWithChildren,
   InventarioRoute: InventarioRoute,
   LoginRoute: LoginRoute,
+  ModelosRoute: ModelosRoute,
   VendasRoute: VendasRoute,
   PosEventoEventoIdRoute: PosEventoEventoIdRoute,
   ContratoDadosTokenRoute: ContratoDadosTokenRoute,

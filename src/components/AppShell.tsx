@@ -16,6 +16,7 @@ import {
   Wallet,
   Menu,
   X,
+  LayoutTemplate,
 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -35,6 +36,7 @@ const nav: {
   { to: "/eventos", label: "Eventos", icon: CalendarRange },
   { to: "/controladoria", label: "Controladoria", icon: BarChart3, roles: ["admin", "financeiro"] },
   { to: "/contratos", label: "Contratos", icon: FileText, roles: ["admin", "comercial"] },
+  { to: "/modelos", label: "Modelos de Proposta", icon: LayoutTemplate, roles: ["admin"] },
   { to: "/configuracoes", label: "Configurações", icon: Settings, roles: ["admin"] },
 ];
 
