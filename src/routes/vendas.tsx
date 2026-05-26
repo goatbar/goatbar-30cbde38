@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useAppStore } from "@/lib/app-store";
+import { DrinkImage } from "@/components/DrinkImage";
 import { type SalesSessionItem } from "@/lib/mock-data";
 import { eventBudgetService } from "@/services/event-budget-service";
 import { financialService } from "@/services/financial-service";
@@ -1508,32 +1509,19 @@ function VendasPage() {
                               : "border-border bg-surface hover:border-primary/40 hover:scale-[1.02]"
                           }`}
                         >
-                          {d.imagem ? (
-                            <div className="h-16 overflow-hidden relative">
-                              <img
-                                src={d.imagem}
-                                alt={d.nome}
-                                className="w-full h-full object-cover transition-transform group-hover:scale-110"
-                              />
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60" />
-                              {isSelected && (
-                                <div className="absolute top-1 right-1 bg-primary text-primary-foreground rounded-full p-0.5">
-                                  <Check className="h-3 w-3" />
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="h-16 bg-muted flex items-center justify-center relative">
-                              <span className="text-[10px] text-muted-foreground uppercase font-bold">
-                                Sem imagem
-                              </span>
-                              {isSelected && (
-                                <div className="absolute top-1 right-1 bg-primary text-primary-foreground rounded-full p-0.5">
-                                  <Check className="h-3 w-3" />
-                                </div>
-                              )}
-                            </div>
-                          )}
+                          <div className="h-16 overflow-hidden relative">
+                            <DrinkImage
+                              src={d.imagem}
+                              alt={d.nome}
+                              className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60" />
+                            {isSelected && (
+                              <div className="absolute top-1 right-1 bg-primary text-primary-foreground rounded-full p-0.5">
+                                <Check className="h-3 w-3" />
+                              </div>
+                            )}
+                          </div>
                           <div className="p-1.5 text-[11px] font-bold text-center truncate bg-surface/90 border-t border-border/40">
                             {d.nome}
                           </div>

@@ -146,7 +146,7 @@ export interface Evento {
   custoPrevisto: number;
   desconto?: number;
   descontoMotivo?: string;
-  descontos?: { valor: number; motivo: string }[];
+  descontos?: { valor: number; motivo: string; deduzirCustoDrinks?: boolean }[];
 }
 
 export interface Contrato {
@@ -1223,17 +1223,24 @@ export function calcularOrcamentoEvento(evento: Evento, drinksList: Drink[] = dr
   );
 
   // --- TOTAIS ---
-  const custoTotalOrcamento =
+  const custoTotalOrcamentoOriginal =
     valorDrinksEvento + valorEquipe + valorGelo + valorGasolina + valorGastosDiversos;
   const lucroDesejado = Number(evento.lucroDesejado) || 0;
-  const valorTotalSemDesconto = custoTotalOrcamento + lucroDesejado;
-  const valorDescontoLista = (evento.descontos || []).reduce(
-    (acc, d) => acc + (Number(d.valor) || 0),
-    0,
-  );
+  const valorTotalSemDesconto = custoTotalOrcamentoOriginal + lucroDesejado;
+
+  const descontosLista = evento.descontos || [];
+  const drinkDiscount = descontosLista
+    .filter((d) => !!d.deduzirCustoDrinks)
+    .reduce((acc, d) => acc + (Number(d.valor) || 0), 0);
+  const regularDiscount = descontosLista
+    .filter((d) => !d.deduzirCustoDrinks)
+    .reduce((acc, d) => acc + (Number(d.valor) || 0), 0);
+
+  const valorDescontoLista = drinkDiscount + regularDiscount;
   const valorDesconto = valorDescontoLista > 0 ? valorDescontoLista : Number(evento.desconto) || 0;
   const valorTotalOrcamento = valorTotalSemDesconto - valorDesconto;
 
+  const custoTotalOrcamento = Math.max(0, custoTotalOrcamentoOriginal - drinkDiscount);
   const lucro = valorTotalOrcamento - custoTotalOrcamento;
   const mediaPorPessoa = convidados > 0 ? valorTotalOrcamento / convidados : 0;
 

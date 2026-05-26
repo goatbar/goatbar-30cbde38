@@ -118,7 +118,7 @@ export const eventBudgetService = {
     const { data: currentBudgets, error: budgetError } = await supabase
       .from("event_budget_versions")
       .select(
-        "event_id, profit_value, paid_percentage, pending_payment_date, final_budget_value, discount_value",
+        "event_id, profit_value, paid_percentage, pending_payment_date, final_budget_value, discount_value, discount_description",
       )
       .eq("is_current", true);
 
@@ -137,9 +137,24 @@ export const eventBudgetService = {
       if (!budget) return event;
 
       const discount = Number(budget.discount_value || 0);
+      const discountDescription = budget.discount_description;
+
+      // Parse detailed discounts to separate drink discounts from regular discounts
+      let drinkDiscount = 0;
+      if (discountDescription) {
+        try {
+          const parsed = JSON.parse(discountDescription);
+          if (Array.isArray(parsed?.descontos)) {
+            drinkDiscount = parsed.descontos
+              .filter((d: any) => !!d.deduzirCustoDrinks)
+              .reduce((acc: number, d: any) => acc + (Number(d.valor) || 0), 0);
+          }
+        } catch {}
+      }
+
+      const regularDiscount = Math.max(0, discount - drinkDiscount);
       const budgetProfit = Number(budget.profit_value || 0);
-      const reconciledProfit =
-        budgetProfit > 0 ? budgetProfit : Number(event.current_profit_value || 0) + discount;
+      const reconciledProfit = budgetProfit - regularDiscount;
 
       return {
         ...event,

@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAppStore } from "@/lib/app-store";
+import { DrinkImage } from "@/components/DrinkImage";
 import {
   contractTemplatesService,
   contractSignersService,
@@ -371,7 +372,7 @@ function EventoInterna() {
         lead_source: draft.lead_source,
         referral_name: draft.referral_name,
         current_budget_value: calc.valorTotalOrcamento,
-        current_profit_value: draft.lucroDesejado,
+        current_profit_value: calc.lucro,
         payment_due_date: draft.pagamento.dataPagamento,
         payment_percent_received: draft.pagamento.percentualPago,
       });
@@ -498,7 +499,7 @@ function EventoInterna() {
       const updatePayload: any = { status: newStatus };
       if (calc) {
         updatePayload.current_budget_value = calc.valorTotalOrcamento;
-        updatePayload.current_profit_value = draft?.lucroDesejado || 0;
+        updatePayload.current_profit_value = calc.lucro;
       }
 
       await eventBudgetService.updateNegotiationStatus(eventoId, newStatus, note);
@@ -974,7 +975,7 @@ function EventoInterna() {
                             className={`relative overflow-hidden rounded-xl border-2 transition-all cursor-pointer group flex flex-col ${draft.drinks.includes(d.id) ? "border-primary bg-primary/5 shadow-md scale-[0.98]" : "border-border bg-surface hover:border-primary/40 hover:scale-[1.02]"}`}
                           >
                             <div className="h-24 overflow-hidden relative">
-                              <img
+                              <DrinkImage
                                 src={d.imagem}
                                 alt={d.nome}
                                 className="w-full h-full object-cover transition-transform group-hover:scale-110"
@@ -1345,64 +1346,86 @@ function EventoInterna() {
                       {(draft.descontos || []).map((d, i) => (
                         <div
                           key={`desconto-${i}`}
-                          className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3"
+                          className="p-4 rounded-xl border border-border bg-surface/30 space-y-3 relative group"
                         >
-                          <div className="p-4 rounded-xl border border-border bg-surface">
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">
-                              Valor do Desconto (R$)
-                            </label>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                                Valor do Desconto (R$)
+                              </label>
+                              <input
+                                type="number"
+                                value={d.valor || ""}
+                                onChange={(e) =>
+                                  setDraft((p) => {
+                                    if (!p) return null;
+                                    const descontos = [...(p.descontos || [])];
+                                    descontos[i] = {
+                                      ...descontos[i],
+                                      valor: e.target.value === "" ? 0 : Number(e.target.value),
+                                    };
+                                    return { ...p, descontos };
+                                  })
+                                }
+                                className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm font-bold text-destructive"
+                                placeholder="0,00"
+                              />
+                            </div>
+                            <div className="relative pr-10">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                                Motivo do Desconto
+                              </label>
+                              <input
+                                type="text"
+                                value={d.motivo || ""}
+                                onChange={(e) =>
+                                  setDraft((p) => {
+                                    if (!p) return null;
+                                    const descontos = [...(p.descontos || [])];
+                                    descontos[i] = { ...descontos[i], motivo: e.target.value };
+                                    return { ...p, descontos };
+                                  })
+                                }
+                                className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm"
+                                placeholder="Ex: Parceria / Cortesia"
+                              />
+                              <button
+                                onClick={() =>
+                                  setDraft((p) =>
+                                    p
+                                      ? {
+                                          ...p,
+                                          descontos: (p.descontos || []).filter((_, idx) => idx !== i),
+                                        }
+                                      : null,
+                                  )
+                                }
+                                className="absolute right-0 bottom-0 h-10 w-10 flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none font-medium hover:text-foreground transition-colors pt-1">
                             <input
-                              type="number"
-                              value={d.valor || ""}
+                              type="checkbox"
+                              checked={!!d.deduzirCustoDrinks}
                               onChange={(e) =>
                                 setDraft((p) => {
                                   if (!p) return null;
                                   const descontos = [...(p.descontos || [])];
                                   descontos[i] = {
                                     ...descontos[i],
-                                    valor: e.target.value === "" ? 0 : Number(e.target.value),
+                                    deduzirCustoDrinks: e.target.checked,
                                   };
                                   return { ...p, descontos };
                                 })
                               }
-                              className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm font-bold text-destructive"
-                              placeholder="0,00"
+                              className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
                             />
-                          </div>
-                          <div className="p-4 rounded-xl border border-border bg-surface">
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">
-                              Motivo do Desconto
-                            </label>
-                            <input
-                              type="text"
-                              value={d.motivo || ""}
-                              onChange={(e) =>
-                                setDraft((p) => {
-                                  if (!p) return null;
-                                  const descontos = [...(p.descontos || [])];
-                                  descontos[i] = { ...descontos[i], motivo: e.target.value };
-                                  return { ...p, descontos };
-                                })
-                              }
-                              className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm"
-                              placeholder="Ex: Parceria / Cortesia"
-                            />
-                          </div>
-                          <button
-                            onClick={() =>
-                              setDraft((p) =>
-                                p
-                                  ? {
-                                      ...p,
-                                      descontos: (p.descontos || []).filter((_, idx) => idx !== i),
-                                    }
-                                  : null,
-                              )
-                            }
-                            className="h-10 w-10 self-center flex items-center justify-center text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                            <span>Deduzir do custo de drinks (Cliente fornece as bebidas)</span>
+                          </label>
                         </div>
                       ))}
                       <GhostButton
@@ -1411,7 +1434,10 @@ function EventoInterna() {
                             p
                               ? {
                                   ...p,
-                                  descontos: [...(p.descontos || []), { valor: 0, motivo: "" }],
+                                  descontos: [
+                                    ...(p.descontos || []),
+                                    { valor: 0, motivo: "", deduzirCustoDrinks: false },
+                                  ],
                                 }
                               : null,
                           )
@@ -1583,6 +1609,10 @@ function EventoInterna() {
                           </div>
                         </div>
                       )}
+                      <div className="flex justify-between text-success font-bold pt-1 border-t border-primary/20">
+                        <span>LUCRO LÍQUIDO FINAL</span>
+                        <span>{fmtBRL(calc.lucro)}</span>
+                      </div>
 
                       <div className="bg-primary p-5 rounded-xl text-primary-foreground shadow-lg shadow-primary/20">
                         <div className="text-[9px] font-bold uppercase tracking-[0.2em] opacity-80 mb-1">
@@ -2287,7 +2317,7 @@ function EventoInterna() {
                             Lucro
                           </div>
                           <div className="text-sm font-bold text-success">
-                            {fmtBRL(v.profit_value)}
+                            {fmtBRL(v.profit_value - v.discount_value)}
                           </div>
                         </div>
                       </div>

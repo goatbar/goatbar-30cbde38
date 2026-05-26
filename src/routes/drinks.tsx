@@ -6,7 +6,8 @@ import { Wine, TrendingUp, Search, Edit3, X, Plus, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { type Drink, type ModalityConfig } from "@/lib/mock-data";
 import { useAppStore } from "@/lib/app-store";
-import { saveImage, loadImage } from "@/lib/image-store";
+import { saveImage } from "@/lib/image-store";
+import { DrinkImage } from "@/components/DrinkImage";
 
 export const Route = createFileRoute("/drinks")({
   component: () => (
@@ -188,21 +189,6 @@ function DrinkCard({
   const priceGB = d.modalityConfig?.goatbotequim?.price;
   const margemGB = priceGB ? ((priceGB - d.custoUnitario) / priceGB) * 100 : 0;
 
-  // Load image from IndexedDB if the stored value is an idb: reference
-  const [resolvedImage, setResolvedImage] = useState<string | null>(
-    d.imagem && !d.imagem.startsWith("idb:") ? d.imagem : null,
-  );
-  useEffect(() => {
-    if (d.imagem && d.imagem.startsWith("idb:")) {
-      const key = d.imagem.slice(4); // strip "idb:"
-      loadImage(key)
-        .then((url) => setResolvedImage(url))
-        .catch(() => setResolvedImage(null));
-    } else {
-      setResolvedImage(d.imagem ?? null);
-    }
-  }, [d.imagem]);
-
   return (
     <div
       className={`rounded-xl border transition-all ${d.status === "inativo" ? "border-border opacity-60" : "border-border hover:border-border-strong"} bg-surface/50 group relative`}
@@ -222,20 +208,11 @@ function DrinkCard({
         </button>
       </div>
 
-      {resolvedImage ? (
-        <img
-          src={resolvedImage}
-          alt={d.nome}
-          className="w-full h-40 object-cover rounded-t-xl"
-          onError={(e) => {
-            e.currentTarget.style.display = "none";
-          }}
-        />
-      ) : (
-        <div className="w-full h-40 rounded-t-xl bg-primary/10 flex items-center justify-center">
-          <Wine className="h-10 w-10 text-primary/40" />
-        </div>
-      )}
+      <DrinkImage
+        src={d.imagem}
+        alt={d.nome}
+        className="w-full h-40 object-cover rounded-t-xl"
+      />
       <div className="p-4">
         <div className="flex items-start justify-between gap-2">
           <div>
