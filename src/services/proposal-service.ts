@@ -346,7 +346,7 @@ export const pdfGenerationService = {
 
       // Write Client name (Casal / Aniversariante / Empresa)
       const eventTitle = data.eventTypeLabel.toUpperCase();
-      capa.drawText(eventTitle, {
+      capa.drawText(sanitizeText(String(eventTitle)), {
         x: 60,
         y: 450,
         size: 14,
@@ -354,7 +354,7 @@ export const pdfGenerationService = {
         color: goldColor,
       });
 
-      capa.drawText(data.clientName, {
+      capa.drawText(sanitizeText(String(data.clientName)), {
         x: 60,
         y: 400,
         size: 32,
@@ -363,7 +363,7 @@ export const pdfGenerationService = {
       });
 
       // Write Event Date
-      capa.drawText(`Data do Evento: ${data.eventDate}`, {
+      capa.drawText(sanitizeText(String(`Data do Evento: ${data.eventDate}`)), {
         x: 60,
         y: 360,
         size: 14,
@@ -372,7 +372,7 @@ export const pdfGenerationService = {
       });
 
       // Write Proposal/Budget Date
-      capa.drawText(`Proposta gerada em: ${data.proposalDate}`, {
+      capa.drawText(sanitizeText(String(`Proposta gerada em: ${data.proposalDate}`)), {
         x: 60,
         y: 260,
         size: 11,
@@ -399,7 +399,7 @@ export const pdfGenerationService = {
       });
 
       // Draw Section Header
-      page2.drawText("DRINKS & EXPERIÊNCIAS", {
+      page2.drawText(sanitizeText(String("DRINKS & EXPERIÊNCIAS")), {
         x: 60,
         y: 720,
         size: 20,
@@ -408,7 +408,7 @@ export const pdfGenerationService = {
       });
 
       // Column 1: Drinks Selecionados
-      page2.drawText("Drinks Selecionados:", {
+      page2.drawText(sanitizeText(String("Drinks Selecionados:")), {
         x: 60,
         y: 680,
         size: 14,
@@ -422,7 +422,7 @@ export const pdfGenerationService = {
 
       data.selectedDrinks.forEach((drink) => {
         if (currentY > 120) {
-          page2.drawText(`• ${drink}`, {
+          page2.drawText(sanitizeText(String(`• ${drink}`)), {
             x: 60,
             y: currentY,
             size: fontSize,
@@ -435,7 +435,7 @@ export const pdfGenerationService = {
 
       // Column 2: Bebidas Incluídas (drawn on the right side)
       const rightColX = width / 2 + 20;
-      page2.drawText("Bebidas Negociadas / Incluídas:", {
+      page2.drawText(sanitizeText(String("Bebidas Negociadas / Incluídas:")), {
         x: rightColX,
         y: 680,
         size: 14,
@@ -449,7 +449,7 @@ export const pdfGenerationService = {
           const bevLines = wrapText(bev, (width / 2) - 60, fontSize, standardFont);
           bevLines.forEach((line) => {
             if (rightY > 120) {
-              page2.drawText(`• ${line}`, {
+              page2.drawText(sanitizeText(String(`• ${line}`)), {
                 x: rightColX,
                 y: rightY,
                 size: fontSize,
@@ -481,7 +481,7 @@ export const pdfGenerationService = {
         color: coverColor,
       });
 
-      page3.drawText("VALORES & CONDIÇÕES", {
+      page3.drawText(sanitizeText(String("VALORES & CONDIÇÕES")), {
         x: 60,
         y: 720,
         size: 20,
@@ -490,7 +490,7 @@ export const pdfGenerationService = {
       });
 
       // Metric Info Grid
-      page3.drawText(`Número de Convidados: ${data.guests} pessoas`, {
+      page3.drawText(sanitizeText(String(`Número de Convidados: ${data.guests} pessoas`)), {
         x: 60,
         y: 670,
         size: 13,
@@ -498,7 +498,7 @@ export const pdfGenerationService = {
         color: textMainColor,
       });
 
-      page3.drawText(`Variedades de Drinks no Bar: ${data.totalDrinkVarieties} tipos`, {
+      page3.drawText(sanitizeText(String(`Variedades de Drinks no Bar: ${data.totalDrinkVarieties} tipos`)), {
         x: 60,
         y: 640,
         size: 13,
@@ -507,7 +507,7 @@ export const pdfGenerationService = {
       });
 
       // Staff
-      page3.drawText("Equipe Operacional Goat Bar:", {
+      page3.drawText(sanitizeText(String("Equipe Operacional Goat Bar:")), {
         x: 60,
         y: 600,
         size: 13,
@@ -515,7 +515,7 @@ export const pdfGenerationService = {
         color: goldColor,
       });
 
-      page3.drawText(`- Bartenders: ${data.bartenders} profissionais`, {
+      page3.drawText(sanitizeText(String(`- Bartenders: ${data.bartenders} profissionais`)), {
         x: 70,
         y: 575,
         size: 12,
@@ -523,7 +523,7 @@ export const pdfGenerationService = {
         color: textMainColor,
       });
 
-      page3.drawText(`- Bar Keepers: ${data.keepers} profissionais`, {
+      page3.drawText(sanitizeText(String(`- Bar Keepers: ${data.keepers} profissionais`)), {
         x: 70,
         y: 555,
         size: 12,
@@ -531,7 +531,7 @@ export const pdfGenerationService = {
         color: textMainColor,
       });
 
-      page3.drawText(`- Copeiras: ${data.copeiras} profissionais`, {
+      page3.drawText(sanitizeText(String(`- Copeiras: ${data.copeiras} profissionais`)), {
         x: 70,
         y: 535,
         size: 12,
@@ -540,7 +540,7 @@ export const pdfGenerationService = {
       });
 
       // Services Included
-      page3.drawText("Serviços & Insumos Inclusos:", {
+      page3.drawText(sanitizeText(String("Serviços & Insumos Inclusos:")), {
         x: width / 2 + 20,
         y: 670,
         size: 13,
@@ -553,7 +553,7 @@ export const pdfGenerationService = {
         if (serviceY > 400) {
           const lines = wrapText(service, (width / 2) - 60, 10, standardFont);
           lines.forEach((line) => {
-            page3.drawText(`• ${line}`, {
+            page3.drawText(sanitizeText(String(`• ${line}`)), {
               x: width / 2 + 20,
               y: serviceY,
               size: 10,
@@ -571,7 +571,7 @@ export const pdfGenerationService = {
         currency: "BRL",
       }).format(data.finalInvestment);
 
-      page3.drawText("INVESTIMENTO COMERCIAL", {
+      page3.drawText(sanitizeText(String("INVESTIMENTO COMERCIAL")), {
         x: 60,
         y: 470,
         size: 14,
@@ -579,7 +579,7 @@ export const pdfGenerationService = {
         color: goldColor,
       });
 
-      page3.drawText(formattedInvestment, {
+      page3.drawText(sanitizeText(String(formattedInvestment)), {
         x: 60,
         y: 440,
         size: 24,
@@ -587,7 +587,7 @@ export const pdfGenerationService = {
         color: textMainColor,
       });
 
-      page3.drawText("Forma e Condições de Pagamento:", {
+      page3.drawText(sanitizeText(String("Forma e Condições de Pagamento:")), {
         x: 60,
         y: 390,
         size: 12,
@@ -598,7 +598,7 @@ export const pdfGenerationService = {
       let payY = 370;
       const paymentLines = wrapText(data.paymentTerms, width - 120, 11, standardFont);
       paymentLines.forEach((line) => {
-        page3.drawText(line, {
+        page3.drawText(sanitizeText(String(line)), {
           x: 60,
           y: payY,
           size: 11,
@@ -610,7 +610,7 @@ export const pdfGenerationService = {
 
       // Observations
       if (data.observations) {
-        page3.drawText("Observações:", {
+        page3.drawText(sanitizeText(String("Observações:")), {
           x: 60,
           y: payY - 15,
           size: 12,
@@ -622,7 +622,7 @@ export const pdfGenerationService = {
         const obsLines = wrapText(data.observations, width - 120, 10, standardFont);
         obsLines.forEach((line) => {
           if (obsY > 100) {
-            page3.drawText(line, {
+            page3.drawText(sanitizeText(String(line)), {
               x: 60,
               y: obsY,
               size: 10,
@@ -678,7 +678,7 @@ export const pdfGenerationService = {
     });
 
     // Brand Label
-    page1.drawText("G O A T   B A R", {
+    page1.drawText(sanitizeText(String("G O A T   B A R")), {
       x: width / 2 - 60,
       y: height - 100,
       size: 16,
@@ -686,7 +686,7 @@ export const pdfGenerationService = {
       color: goldColor,
     });
     
-    page1.drawText("EXPERIÊNCIAS PREMIUM", {
+    page1.drawText(sanitizeText(String("EXPERIÊNCIAS PREMIUM")), {
       x: width / 2 - 80,
       y: height - 125,
       size: 10,
@@ -695,7 +695,7 @@ export const pdfGenerationService = {
     });
 
     // Title
-    page1.drawText("PROPOSTA COMERCIAL", {
+    page1.drawText(sanitizeText(String("PROPOSTA COMERCIAL")), {
       x: 50,
       y: height / 2 + 60,
       size: 14,
@@ -704,7 +704,7 @@ export const pdfGenerationService = {
     });
 
     const eventTitle = data.eventTypeLabel.toUpperCase();
-    page1.drawText(eventTitle, {
+    page1.drawText(sanitizeText(String(eventTitle)), {
       x: 50,
       y: height / 2 + 35,
       size: 12,
@@ -712,7 +712,7 @@ export const pdfGenerationService = {
       color: grayColor,
     });
 
-    page1.drawText(data.clientName, {
+    page1.drawText(sanitizeText(String(data.clientName)), {
       x: 50,
       y: height / 2 - 25,
       size: 36,
@@ -729,7 +729,7 @@ export const pdfGenerationService = {
     });
 
     // Details at bottom
-    page1.drawText(`Data do Evento: ${data.eventDate}`, {
+    page1.drawText(sanitizeText(String(`Data do Evento: ${data.eventDate}`)), {
       x: 50,
       y: height / 2 - 100,
       size: 14,
@@ -738,7 +738,7 @@ export const pdfGenerationService = {
     });
 
     if (data.eventTime) {
-      page1.drawText(`Horário do Evento: ${data.eventTime}`, {
+      page1.drawText(sanitizeText(String(`Horário do Evento: ${data.eventTime}`)), {
         x: 50,
         y: height / 2 - 120,
         size: 12,
@@ -747,7 +747,7 @@ export const pdfGenerationService = {
       });
     }
 
-    page1.drawText(`Proposta emitida em: ${data.proposalDate}`, {
+    page1.drawText(sanitizeText(String(`Proposta emitida em: ${data.proposalDate}`)), {
       x: 50,
       y: 60,
       size: 10,
@@ -775,7 +775,7 @@ export const pdfGenerationService = {
       borderWidth: 0.5,
     });
 
-    page2.drawText("DRINKS & EXPERIÊNCIAS", {
+    page2.drawText(sanitizeText(String("DRINKS & EXPERIÊNCIAS")), {
       x: 50,
       y: height - 60,
       size: 20,
@@ -784,7 +784,7 @@ export const pdfGenerationService = {
     });
 
     // Drinks
-    page2.drawText("Drinks Selecionados no Cardápio", {
+    page2.drawText(sanitizeText(String("Drinks Selecionados no Cardápio")), {
       x: 50,
       y: height - 100,
       size: 14,
@@ -798,7 +798,7 @@ export const pdfGenerationService = {
 
     data.selectedDrinks.forEach((drink) => {
       if (currentY > 60) {
-        page2.drawText(`• ${drink}`, {
+        page2.drawText(sanitizeText(String(`• ${drink}`)), {
           x: 50,
           y: currentY,
           size: fontSize,
@@ -811,7 +811,7 @@ export const pdfGenerationService = {
 
     // Included Beverages (column on the right)
     const rightColX = width / 2 + 10;
-    page2.drawText("Bebidas Negociadas / Incluídas", {
+    page2.drawText(sanitizeText(String("Bebidas Negociadas / Incluídas")), {
       x: rightColX,
       y: height - 100,
       size: 14,
@@ -825,7 +825,7 @@ export const pdfGenerationService = {
         const lines = wrapText(bev, (width / 2) - 50, fontSize, standardFont);
         lines.forEach((line) => {
           if (rightY > 60) {
-            page2.drawText(`• ${line}`, {
+            page2.drawText(sanitizeText(String(`• ${line}`)), {
               x: rightColX,
               y: rightY,
               size: fontSize,
@@ -858,7 +858,7 @@ export const pdfGenerationService = {
       borderWidth: 0.5,
     });
 
-    page3.drawText("VALORES & CONDIÇÕES", {
+    page3.drawText(sanitizeText(String("VALORES & CONDIÇÕES")), {
       x: 50,
       y: height - 60,
       size: 20,
@@ -867,7 +867,7 @@ export const pdfGenerationService = {
     });
 
     // Metric Columns
-    page3.drawText(`Número de Convidados: ${data.guests} pessoas`, {
+    page3.drawText(sanitizeText(String(`Número de Convidados: ${data.guests} pessoas`)), {
       x: 50,
       y: height - 110,
       size: 13,
@@ -875,7 +875,7 @@ export const pdfGenerationService = {
       color: whiteColor,
     });
 
-    page3.drawText(`Variedades de Drinks no Bar: ${data.totalDrinkVarieties} tipos`, {
+    page3.drawText(sanitizeText(String(`Variedades de Drinks no Bar: ${data.totalDrinkVarieties} tipos`)), {
       x: 50,
       y: height - 135,
       size: 13,
@@ -884,7 +884,7 @@ export const pdfGenerationService = {
     });
 
     // Staff
-    page3.drawText("Equipe Operacional:", {
+    page3.drawText(sanitizeText(String("Equipe Operacional:")), {
       x: 50,
       y: height - 180,
       size: 13,
@@ -892,7 +892,7 @@ export const pdfGenerationService = {
       color: goldColor,
     });
 
-    page3.drawText(`- Bartenders: ${data.bartenders} profissionais`, {
+    page3.drawText(sanitizeText(String(`- Bartenders: ${data.bartenders} profissionais`)), {
       x: 60,
       y: height - 205,
       size: 11,
@@ -900,7 +900,7 @@ export const pdfGenerationService = {
       color: whiteColor,
     });
 
-    page3.drawText(`- Bar Keepers: ${data.keepers} profissionais`, {
+    page3.drawText(sanitizeText(String(`- Bar Keepers: ${data.keepers} profissionais`)), {
       x: 60,
       y: height - 225,
       size: 11,
@@ -908,7 +908,7 @@ export const pdfGenerationService = {
       color: whiteColor,
     });
 
-    page3.drawText(`- Copeiras: ${data.copeiras} profissionais`, {
+    page3.drawText(sanitizeText(String(`- Copeiras: ${data.copeiras} profissionais`)), {
       x: 60,
       y: height - 245,
       size: 11,
@@ -918,7 +918,7 @@ export const pdfGenerationService = {
 
     // Services Included
     const sColX = width / 2 + 10;
-    page3.drawText("Serviços e Insumos Inclusos", {
+    page3.drawText(sanitizeText(String("Serviços e Insumos Inclusos")), {
       x: sColX,
       y: height - 110,
       size: 13,
@@ -931,7 +931,7 @@ export const pdfGenerationService = {
       if (sY > height - 300) {
         const lines = wrapText(service, (width / 2) - 50, 10, standardFont);
         lines.forEach((line) => {
-          page3.drawText(`• ${line}`, {
+          page3.drawText(sanitizeText(String(`• ${line}`)), {
             x: sColX,
             y: sY,
             size: 10,
@@ -957,7 +957,7 @@ export const pdfGenerationService = {
       currency: "BRL",
     }).format(data.finalInvestment);
 
-    page3.drawText("INVESTIMENTO COMERCIAL", {
+    page3.drawText(sanitizeText(String("INVESTIMENTO COMERCIAL")), {
       x: 50,
       y: height - 320,
       size: 14,
@@ -965,7 +965,7 @@ export const pdfGenerationService = {
       color: goldColor,
     });
 
-    page3.drawText(formattedInvestment, {
+    page3.drawText(sanitizeText(String(formattedInvestment)), {
       x: 50,
       y: height - 350,
       size: 28,
@@ -974,7 +974,7 @@ export const pdfGenerationService = {
     });
 
     // Payment method
-    page3.drawText("Formas & Condições de Pagamento", {
+    page3.drawText(sanitizeText(String("Formas & Condições de Pagamento")), {
       x: 50,
       y: height - 400,
       size: 12,
@@ -985,7 +985,7 @@ export const pdfGenerationService = {
     let payY = height - 425;
     const paymentLines = wrapText(data.paymentTerms, width - 100, 11, standardFont);
     paymentLines.forEach((line) => {
-      page3.drawText(line, {
+      page3.drawText(sanitizeText(String(line)), {
         x: 50,
         y: payY,
         size: 11,
@@ -997,7 +997,7 @@ export const pdfGenerationService = {
 
     // Observations
     if (data.observations) {
-      page3.drawText("Observações Gerais", {
+      page3.drawText(sanitizeText(String("Observações Gerais")), {
         x: 50,
         y: payY - 20,
         size: 12,
@@ -1009,7 +1009,7 @@ export const pdfGenerationService = {
       const obsLines = wrapText(data.observations, width - 100, 10, standardFont);
       obsLines.forEach((line) => {
         if (obsY > 50) {
-          page3.drawText(line, {
+          page3.drawText(sanitizeText(String(line)), {
             x: 50,
             y: obsY,
             size: 10,
