@@ -389,8 +389,8 @@ export const pdfGenerationService = {
             if (cfg.uppercase) text = text.toUpperCase();
 
             const radius   = (cfg.radius   ?? 0.15) * Math.min(pSize.width, pSize.height);
-            const cx       = (cfg.centerX  ?? 0.5)  * pSize.width;
-            const cyTop    = (cfg.centerY  ?? 0.5)  * pSize.height; // top-left origin
+            const cx       = (mf.x + mf.width / 2)  * pSize.width;
+            const cyTop    = (mf.y + mf.height / 2) * pSize.height; // top-left origin
             const cy       = pSize.height - cyTop;                   // PDF bottom-left
             const startDeg = cfg.startAngle ?? 200;
             const endDeg   = cfg.endAngle   ?? 340;

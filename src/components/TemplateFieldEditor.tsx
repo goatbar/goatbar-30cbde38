@@ -162,8 +162,8 @@ function ArcPreviewSVG({
   };
 
   const radius = (cfg.radius ?? 0.15) * Math.min(canvasW, canvasH);
-  const cx = (cfg.centerX ?? 0.5) * canvasW;
-  const cy = (cfg.centerY ?? 0.5) * canvasH;
+  const cx = (field.x + field.width / 2) * canvasW;
+  const cy = (field.y + field.height / 2) * canvasH;
   const startDeg = cfg.startAngle ?? 200;
   const endDeg = cfg.endAngle ?? 340;
   const isBottom = cfg.arcPosition === "bottom";
@@ -552,8 +552,6 @@ function ArcConfig({
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
         {([
           ["Raio (relativo)", "radius", 0.01, 0.5, 0.001],
-          ["Centro X (0–1)", "centerX", 0, 1, 0.01],
-          ["Centro Y (0–1)", "centerY", 0, 1, 0.01],
           ["Âng. Início (°)", "startAngle", 0, 360, 1],
           ["Âng. Fim (°)", "endAngle", 0, 360, 1],
           ["Espaç. letras", "letterSpacing", -10, 50, 0.5],
