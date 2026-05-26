@@ -409,7 +409,7 @@ function FieldBox({
             textAlign: field.text_align as any,
             lineHeight: field.line_height,
             letterSpacing: field.letter_spacing,
-            whiteSpace: "pre-wrap",
+            whiteSpace: ["texto_multiline", "lista_dinamica"].includes(field.field_type) ? "pre-wrap" : "nowrap",
             overflow: "hidden",
             width: "100%",
           }}
@@ -540,7 +540,7 @@ function ArcConfig({
           ⌢ Arco Superior
         </button>
         <button
-          onClick={() => { set("arcPosition", "bottom"); set("startAngle", 20); set("endAngle", 160); set("direction", "counterclockwise"); }}
+          onClick={() => { set("arcPosition", "bottom"); set("startAngle", 160); set("endAngle", 20); set("direction", "counterclockwise"); }}
           style={{
             flex: 1, padding: "6px 0", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600,
             background: cfg.arcPosition === "bottom" ? "#701117" : "rgba(247,244,239,0.08)",
@@ -575,15 +575,6 @@ function ArcConfig({
         ))}
       </div>
 
-      <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-        <input
-          type="checkbox"
-          checked={!!cfg.uppercase}
-          onChange={(e) => set("uppercase", e.target.checked)}
-          style={{ accentColor: "#701117" }}
-        />
-        <span style={{ fontSize: 12, color: "#f7f4ef" }}>Transformar em MAIÚSCULO</span>
-      </label>
     </div>
   );
 }
@@ -734,6 +725,16 @@ function FieldPropertiesPanel({
             onChange={(e) => onUpdate({ letter_spacing: parseFloat(e.target.value) })} style={inputStyle} />
         </label>
       </div>
+
+      <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", marginTop: 8 }}>
+        <input
+          type="checkbox"
+          checked={!!(field.config as any)?.uppercase}
+          onChange={(e) => onUpdate({ config: { ...(field.config as any), uppercase: e.target.checked } })}
+          style={{ accentColor: "#701117" }}
+        />
+        <span style={{ fontSize: 12, color: "#f7f4ef" }}>Transformar em MAIÚSCULO</span>
+      </label>
 
       {/* Arc-specific config */}
       {field.field_type === "texto_arco" && (
