@@ -56,6 +56,9 @@ import {
   type GeneratedProposal,
   type ProposalTemplate,
 } from "@/services/proposal-service";
+import { ComprasNotinhasTab } from "@/components/event-tabs/ComprasNotinhasTab";
+import { InsumosLevadosTab } from "@/components/event-tabs/InsumosLevadosTab";
+import { FechamentoTab } from "@/components/event-tabs/FechamentoTab";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
   component: EventoInterna,
@@ -141,7 +144,7 @@ function EventoInterna() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState("Orçamento");
+  const [activeTab, setActiveTab] = useState("Visão Geral");
   const [isEditingHeader, setIsEditingHeader] = useState(false);
   const [buscaDrink, setBuscaDrink] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState("");
@@ -954,9 +957,13 @@ function EventoInterna() {
         {/* TABS */}
         <div className="flex flex-wrap gap-2 border-b border-border">
           {[
+            { id: "Visão Geral", icon: <Calendar className="h-4 w-4" /> },
             { id: "Orçamento", icon: <Save className="h-4 w-4" /> },
             { id: "Contatos & Negociação", icon: <MessageCircle className="h-4 w-4" /> },
             { id: "Contrato", icon: <FileSignature className="h-4 w-4" /> },
+            { id: "Compras e Notinhas", icon: <FileTextIcon className="h-4 w-4" /> },
+            { id: "Insumos Levados", icon: <Download className="h-4 w-4" /> },
+            { id: "Fechamento do Evento", icon: <CheckCircle2 className="h-4 w-4" /> },
             { id: "Histórico & Versões", icon: <History className="h-4 w-4" /> },
           ].map((t) => (
             <button
@@ -973,6 +980,37 @@ function EventoInterna() {
             </button>
           ))}
         </div>
+
+        {activeTab === "Visão Geral" && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in duration-300">
+            <SectionCard title="Status do Evento">
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Status</span>
+                  <strong>{evento?.status || "—"}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Data</span>
+                  <strong>{draft?.data || "—"}</strong>
+                </div>
+              </div>
+            </SectionCard>
+            <SectionCard title="Indicador Financeiro">
+              <div className="text-sm">
+                {(evento as any)?.status === "Fechado" ? (
+                  <p>Margem Real disponível após fechamento do evento.</p>
+                ) : (
+                  <p>Margem Prevista baseada no orçamento atual.</p>
+                )}
+              </div>
+            </SectionCard>
+            <SectionCard title="Atalho">
+              <p className="text-sm text-muted-foreground">
+                Use as abas abaixo para compras, insumos e fechamento operacional.
+              </p>
+            </SectionCard>
+          </div>
+        )}
 
         {/* TAB ORÇAMENTO */}
         {activeTab === "Orçamento" && (
@@ -2714,6 +2752,10 @@ function EventoInterna() {
             </div>
           </div>
         )}
+
+        {activeTab === "Compras e Notinhas" && <ComprasNotinhasTab eventId={eventoId} />}
+        {activeTab === "Insumos Levados" && <InsumosLevadosTab eventId={eventoId} />}
+        {activeTab === "Fechamento do Evento" && <FechamentoTab eventId={eventoId} />}
       </div>
 
       {/* PROPOSAL MODAL */}
