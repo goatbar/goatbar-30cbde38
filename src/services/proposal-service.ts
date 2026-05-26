@@ -315,9 +315,9 @@ export const pdfGenerationService = {
       }
     };
 
-    pages.forEach((sourcePage, pageIndex) => {
+    for (const [pageIndex, sourcePage] of pages.entries()) {
       const outPage = outputDoc.addPage([targetWidth, targetHeight]);
-      const embedded = outputDoc.embedPage(sourcePage);
+      const embedded = await outputDoc.embedPage(sourcePage);
       outPage.drawPage(embedded, { x: 0, y: 0, width: targetWidth, height: targetHeight });
 
       const pageFields = config.filter((f) => f.page === pageIndex);
@@ -345,7 +345,7 @@ export const pdfGenerationService = {
           drawLines(outPage, field, data.paymentTerms.split("\n").filter(Boolean).map((p) => `- ${p}`));
         }
       }
-    });
+    }
 
     return outputDoc.save();
   },
