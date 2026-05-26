@@ -147,7 +147,8 @@ export const proposalTemplatesService = {
       .from("proposal_template_fields")
       .select("*")
       .eq("template_id", templateId)
-      .order("page", { ascending: true })
+      .order("page_number", { ascending: true })
+      .order("z_index", { ascending: true })
       .order("created_at", { ascending: true });
     if (error) throw error;
     return (data ?? []) as ProposalTemplateField[];
@@ -156,7 +157,14 @@ export const proposalTemplatesService = {
   async replaceTemplateFields(templateId: string, fields: ProposalTemplateField[]) {
     await supabase.from("proposal_template_fields").delete().eq("template_id", templateId);
     if (!fields.length) return [];
-    const payload = fields.map(({ id: _id, ...rest }) => ({ ...rest, template_id: templateId }));
+    // Strip client-only id (new-*) so Supabase auto-generates UUIDs
+    const payload = fields.map(({ id, ...rest }) => {
+      const stripped = { ...rest, template_id: templateId };
+      if (id && !id.toString().startsWith("new-")) {
+        return { ...stripped, id };
+      }
+      return stripped;
+    });
     const { data, error } = await supabase.from("proposal_template_fields").insert(payload).select("*");
     if (error) throw error;
     return (data ?? []) as ProposalTemplateField[];
@@ -293,11 +301,34 @@ function hexToRgb(hex: string) {
 }
 
 
+// ─── Field value resolver ─────────────────────────────────────────
+function resolveFieldValue(fieldKey: string, data: ProposalData): string | string[] {
+  switch (fieldKey) {
+    case "data_orcamento": return data.proposalDate;
+    case "tipo_evento":    return data.eventTypeLabel;
+    case "nome_evento":    return data.eventTypeLabel;
+    case "nome_cliente":   return data.clientName;
+    case "nome_casal":     return data.clientName;
+    case "data_evento":    return data.eventDate;
+    case "lista_drinks":   return data.selectedDrinks;
+    case "lista_bebidas":  return data.includedBeverages;
+    case "numero_convidados":    return `${data.guests} convidados`;
+    case "quantidade_bartenders": return `${data.bartenders} Bartender${data.bartenders !== 1 ? 's' : ''}`;
+    case "quantidade_bar_keeper": return `${data.keepers} Bar Keeper${data.keepers !== 1 ? 's' : ''}`;
+    case "quantidade_copeira":    return `${data.copeiras} Copeira${data.copeiras !== 1 ? 's' : ''}`;
+    case "quantidade_drinks":     return `${data.totalDrinkVarieties} variedades de drinks`;
+    case "investimento_total":    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(data.finalInvestment);
+    case "forma_pagamento":       return data.paymentTerms;
+    default: return "";
+  }
+}
+
 export const pdfGenerationService = {
   async generateProposalPDF(
     templateUrl: string | null,
     data: ProposalData,
-    eventType: "casamento" | "aniversario" | "comemoracao"
+    eventType: "casamento" | "aniversario" | "comemoracao",
+    mappedFields?: ProposalTemplateField[]
   ): Promise<Uint8Array> {
     if (!templateUrl) {
       const fallback = await this.generatePremiumPDFFromScratch(data, eventType);
@@ -312,9 +343,108 @@ export const pdfGenerationService = {
     const outputDoc = await PDFDocument.create();
     const pages = templateDoc.getPages();
     const standardFont = await outputDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await outputDoc.embedFont(StandardFonts.HelveticaBold);
+    const boldFont   = await outputDoc.embedFont(StandardFonts.HelveticaBold);
 
-    const targetWidth = 1600;
+    // ── Use DB-saved field mapping if available ──────────────────
+    if (mappedFields && mappedFields.length > 0) {
+      for (const [pageIndex, sourcePage] of pages.entries()) {
+        const pSize = sourcePage.getSize();
+        const outPage = outputDoc.addPage([pSize.width, pSize.height]);
+        const embedded = await outputDoc.embedPage(sourcePage);
+        outPage.drawPage(embedded, { x: 0, y: 0, width: pSize.width, height: pSize.height });
+
+        const pFields = mappedFields
+          .filter((f) => f.page_number === pageIndex)
+          .sort((a, b) => a.z_index - b.z_index);
+
+        for (const mf of pFields) {
+          const color = hexToRgb(mf.font_color || "#f7f4ef");
+          const font  = mf.font_weight === "bold" ? boldFont : standardFont;
+          const rawValue = resolveFieldValue(mf.field_key, data);
+          const cfg = (mf.config ?? {}) as {
+            radius?: number; centerX?: number; centerY?: number;
+            startAngle?: number; endAngle?: number;
+            direction?: string; uppercase?: boolean; arcPosition?: string;
+          };
+
+          // Relative → absolute coordinates
+          // PDF.js uses bottom-left origin; we store top-left relative (0–1)
+          const absX = mf.x * pSize.width;
+          const absY = pSize.height - mf.y * pSize.height - mf.height * pSize.height;
+          const absW = mf.width * pSize.width;
+          const absH = mf.height * pSize.height;
+
+          if (mf.field_type === "texto_arco") {
+            // ── Arc text rendering ────────────────────────────────
+            const raw = Array.isArray(rawValue) ? rawValue.join(" ") : rawValue;
+            let text = sanitizeText(raw);
+            if (cfg.uppercase) text = text.toUpperCase();
+
+            const radius   = (cfg.radius   ?? 0.15) * Math.min(pSize.width, pSize.height);
+            const cx       = (cfg.centerX  ?? 0.5)  * pSize.width;
+            const cyTop    = (cfg.centerY  ?? 0.5)  * pSize.height; // top-left origin
+            const cy       = pSize.height - cyTop;                   // PDF bottom-left
+            const startDeg = cfg.startAngle ?? 200;
+            const endDeg   = cfg.endAngle   ?? 340;
+            const isBottom = cfg.arcPosition === "bottom";
+
+            const totalAngle = endDeg - startDeg;
+            const chars = text.split("");
+            const angleStep = chars.length > 1 ? totalAngle / (chars.length - 1) : 0;
+            const fs = mf.font_size;
+
+            chars.forEach((char, i) => {
+              const angleDeg = startDeg + i * angleStep;
+              const angleRad = (angleDeg * Math.PI) / 180;
+              const lx = cx + radius * Math.cos(angleRad);
+              const ly = cy + radius * Math.sin(angleRad);
+              // Rotation: tangent to arc, flipped for bottom arc
+              const rotRad = isBottom ? angleRad + Math.PI / 2 : angleRad - Math.PI / 2;
+              outPage.drawText(sanitizeText(char), {
+                x: lx, y: ly, size: fs, font, color,
+                rotate: degrees((rotRad * 180) / Math.PI),
+              });
+            });
+
+          } else if (mf.field_type === "lista_dinamica") {
+            // ── List rendering ────────────────────────────────────
+            const lines = Array.isArray(rawValue)
+              ? rawValue.map((l) => `• ${l}`)
+              : rawValue.split("\n").filter(Boolean).map((l) => `• ${l}`);
+            const lineH = mf.font_size * mf.line_height;
+            let curY = absY + absH;
+            for (const line of lines) {
+              if (curY < absY) break;
+              outPage.drawText(sanitizeText(line), { x: absX, y: curY, size: mf.font_size, font, color });
+              curY -= lineH;
+            }
+
+          } else {
+            // ── Simple text / date / currency / number ────────────
+            const raw = Array.isArray(rawValue) ? rawValue.join(", ") : rawValue;
+            const text = sanitizeText(cfg.uppercase ? raw.toUpperCase() : raw);
+            const lines = wrapText(text, absW, mf.font_size, font);
+            const lineH = mf.font_size * mf.line_height;
+            let curY = absY + absH;
+            for (const line of lines) {
+              if (curY < absY) break;
+              const tw = font.widthOfTextAtSize(line, mf.font_size);
+              const lx = mf.text_align === "center"
+                ? absX + (absW - tw) / 2
+                : mf.text_align === "right"
+                  ? absX + absW - tw
+                  : absX;
+              outPage.drawText(line, { x: lx, y: curY, size: mf.font_size, font, color });
+              curY -= lineH;
+            }
+          }
+        }
+      }
+      return outputDoc.save();
+    }
+
+    // ── Fallback: hardcoded legacy config ──────────────────────────
+    const targetWidth  = 1600;
     const targetHeight = 900;
     const config = proposalTemplateConfigs[eventType as EventTemplateType] || [];
 

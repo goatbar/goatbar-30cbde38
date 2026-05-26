@@ -12,15 +12,16 @@ import {
   X, 
   Loader2, 
   FileText, 
-  AlertTriangle 
+  AlertTriangle,
+  Map 
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { TemplateMapperEditor } from "@/components/TemplateMapperEditor";
 import { 
   proposalTemplatesService, 
   type ProposalTemplate 
 } from "@/services/proposal-service";
 import { useAuth } from "@/lib/auth-context";
+import { TemplateFieldEditor } from "@/components/TemplateFieldEditor";
 
 export const Route = createFileRoute("/modelos")({
   component: () => (
@@ -37,13 +38,14 @@ function ModelosPage() {
 
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<ProposalTemplate[]>([]);
+  const [fieldCounts, setFieldCounts] = useState<Record<string, number>>({});
   
   // Modals / Actions states
   const [showAddModal, setShowAddModal] = useState(false);
   const [showReplaceModal, setShowReplaceModal] = useState<ProposalTemplate | null>(null);
+  const [editorTemplate, setEditorTemplate] = useState<ProposalTemplate | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [mapperTemplate, setMapperTemplate] = useState<ProposalTemplate | null>(null);
   
   // New template form
   const [newName, setNewName] = useState("");
@@ -59,6 +61,19 @@ function ModelosPage() {
     try {
       const data = await proposalTemplatesService.listTemplates();
       setTemplates(data);
+      // Load field counts for all templates
+      const counts: Record<string, number> = {};
+      await Promise.all(
+        data.map(async (t) => {
+          try {
+            const fields = await proposalTemplatesService.listTemplateFields(t.id);
+            counts[t.id] = fields.length;
+          } catch {
+            counts[t.id] = 0;
+          }
+        })
+      );
+      setFieldCounts(counts);
     } catch (error) {
       console.error("Erro ao buscar modelos:", error);
     } finally {
@@ -254,24 +269,31 @@ function ModelosPage() {
                     )}
 
                     {isAdmin && (
-                      <>
-                        <button
-                          onClick={() => setMapperTemplate(template)}
-                          className="flex items-center justify-center gap-1.5 px-3 h-9 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-all"
-                          title="Mapear campos"
-                        >
-                          <Check className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setShowReplaceModal(template)}
-                          className="flex items-center justify-center gap-1.5 px-3 h-9 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-all"
-                          title="Substituir PDF"
-                        >
-                          <RefreshCw className="h-3.5 w-3.5" />
-                        </button>
-                      </>
+                      <button
+                        onClick={() => setShowReplaceModal(template)}
+                        className="flex items-center justify-center gap-1.5 px-3 h-9 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-all"
+                        title="Substituir PDF"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </button>
                     )}
                   </div>
+
+                  {/* Mapear Campos button */}
+                  {isAdmin && (
+                    <button
+                      onClick={() => setEditorTemplate(template)}
+                      className="w-full flex items-center justify-center gap-2 h-9 rounded-lg border border-primary/40 bg-primary/10 hover:bg-primary/20 text-xs font-semibold text-primary transition-all"
+                    >
+                      <Map className="h-3.5 w-3.5" />
+                      Mapear Campos
+                      {(fieldCounts[template.id] ?? 0) > 0 && (
+                        <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-primary/20 text-primary border border-primary/30">
+                          {fieldCounts[template.id]} campo{fieldCounts[template.id] !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </button>
+                  )}
 
                   {isAdmin && (
                     <div className="flex items-center justify-between gap-2 mt-1">
@@ -496,7 +518,17 @@ function ModelosPage() {
           </div>
         </div>
       )}
-      {mapperTemplate && <TemplateMapperEditor template={mapperTemplate} onClose={() => setMapperTemplate(null)} />}
+
+      {/* --- FIELD EDITOR MODAL (fullscreen) --- */}
+      {editorTemplate && (
+        <TemplateFieldEditor
+          template={editorTemplate}
+          onClose={() => {
+            setEditorTemplate(null);
+            loadTemplates(); // Refresh counts after saving
+          }}
+        />
+      )}
     </>
   );
 }
