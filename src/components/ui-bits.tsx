@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import React, { type ReactNode } from "react";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 
 export function StatCard({
@@ -7,25 +7,27 @@ export function StatCard({
   delta,
   hint,
   icon,
+  highlight,
 }: {
   label: string;
   value: string;
   delta?: number;
   hint?: string;
   icon?: ReactNode;
+  highlight?: boolean;
 }) {
   const positive = (delta ?? 0) >= 0;
   return (
-    <div className="card-premium p-6 relative overflow-hidden">
+    <div className={`card-premium p-6 relative overflow-hidden ${highlight ? "border-primary/30 bg-primary/5" : ""}`}>
       <div className="flex items-start justify-between gap-4">
         <div className="label-eyebrow">{label}</div>
         {icon && (
-          <div className="h-9 w-9 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground">
+          <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${highlight ? "bg-primary/20 text-primary" : "bg-secondary text-muted-foreground"}`}>
             {icon}
           </div>
         )}
       </div>
-      <div className="mt-4 font-display text-3xl font-semibold tracking-tight">{value}</div>
+      <div className={`mt-4 font-display text-3xl font-semibold tracking-tight ${highlight ? "text-primary" : ""}`}>{value}</div>
       <div className="mt-3 flex items-center gap-2 text-xs">
         {delta !== undefined && (
           <span

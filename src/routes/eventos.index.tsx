@@ -18,6 +18,10 @@ import {
   List,
   Loader2,
   Trash2,
+  CheckCircle2,
+  Clock,
+  TrendingUp,
+  AlertTriangle,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { eventBudgetService, type Event as RealEvent } from "@/services/event-budget-service";
@@ -94,17 +98,34 @@ function EventosIndex() {
     return true; // "todos"
   });
 
+  const eventosConfirmados = eventosAtivos.filter((e) => {
+    const s = e.status?.toUpperCase();
+    return s === "CONFIRMADO";
+  });
+
+  const eventosFinalizados = eventos.filter((e) => {
+    const s = e.status?.toUpperCase();
+    return ["FINALIZADO", "REALIZADO"].includes(s);
+  });
+
+  // Valor pago e a receber — apenas eventos confirmados + finalizados
+  const { totalPago, totalAReceber } = (() => {
+    let pago = 0;
+    let aReceber = 0;
+    [...eventosConfirmados, ...eventosFinalizados].forEach((e) => {
+      const total = Number(e.current_budget_value || e.budget_value || 0);
+      const percentPago = Number(e.payment_percent_received ?? e.paid_percentage ?? 0);
+      const valorPago = total * (percentPago / 100);
+      pago += valorPago;
+      aReceber += Math.max(0, total - valorPago);
+    });
+    return { totalPago: pago, totalAReceber: aReceber };
+  })();
+
   const receitaEnviados = eventosAtivos
     .filter((e) => {
       const s = e.status?.toUpperCase();
       return ["ORCAMENTO_ENVIADO", "AGUARDANDO_RESPOSTA", "DADOS_SOLICITADOS"].includes(s);
-    })
-    .reduce((a, e) => a + (e.current_budget_value || 0), 0);
-
-  const receitaConfirmados = eventosAtivos
-    .filter((e) => {
-      const s = e.status?.toUpperCase();
-      return ["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(s);
     })
     .reduce((a, e) => a + (e.current_budget_value || 0), 0);
 
@@ -152,20 +173,38 @@ function EventosIndex() {
       />
 
       <div className="page-container space-y-7">
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-5">
-          <StatCard label="Total em pipeline" value={String(eventosAtivos.length)} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
           <StatCard
-            label="Aguardando resposta"
-            value={String(
-              eventosAtivos.filter((e) =>
-                ["ORCAMENTO_ENVIADO", "AGUARDANDO_RESPOSTA", "DADOS_SOLICITADOS"].includes(
-                  e.status?.toUpperCase(),
-                ),
-              ).length,
-            )}
+            label="Total em pipeline"
+            value={String(eventosAtivos.length)}
+            icon={<TrendingUp className="h-4 w-4" />}
           />
-          <StatCard label="Orçamentos enviados" value={fmtBRL(receitaEnviados)} />
-          <StatCard label="Eventos confirmados" value={fmtBRL(receitaConfirmados)} />
+          <StatCard
+            label="Confirmados"
+            value={String(eventosConfirmados.length)}
+            icon={<CheckCircle2 className="h-4 w-4 text-success" />}
+          />
+          <StatCard
+            label="Finalizados"
+            value={String(eventosFinalizados.length)}
+            icon={<Calendar className="h-4 w-4" />}
+          />
+          <StatCard
+            label="Em negociação (R$)"
+            value={fmtBRL(receitaEnviados)}
+            icon={<Clock className="h-4 w-4 text-amber-400" />}
+          />
+          <StatCard
+            label="Valor já pago"
+            value={fmtBRL(totalPago)}
+            icon={<CheckCircle2 className="h-4 w-4 text-success" />}
+            highlight
+          />
+          <StatCard
+            label="Valor a receber"
+            value={fmtBRL(totalAReceber)}
+            icon={<Clock className="h-4 w-4 text-amber-400" />}
+          />
         </div>
 
         <SectionCard
