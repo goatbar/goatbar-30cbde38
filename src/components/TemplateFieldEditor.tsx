@@ -161,9 +161,9 @@ function ArcPreviewSVG({
   const radius = Math.max(10, Math.min(boxW, boxH) / 2 - 16);
   const cx = boxW / 2;
   const cy = boxH / 2;
-  const startDeg = cfg.startAngle ?? 200;
-  const endDeg = cfg.endAngle ?? 340;
   const isBottom = cfg.arcPosition === "bottom";
+  const startDeg = Number.isFinite(cfg.startAngle) ? (cfg.startAngle as number) : (isBottom ? 20 : 200);
+  const endDeg = Number.isFinite(cfg.endAngle) ? (cfg.endAngle as number) : (isBottom ? 160 : 340);
   const sampleText = (
     cfg.uppercase
       ? (field.field_label).toUpperCase()
@@ -180,7 +180,8 @@ function ArcPreviewSVG({
   const x2 = cx + radius * Math.cos(endRad);
   const y2 = cy + radius * Math.sin(endRad);
   const largeArc = Math.abs(endDeg - startDeg) > 180 ? 1 : 0;
-  const sweep = isBottom ? 0 : 1;
+  // In SVG (y grows downward), sweep=1 follows the lower half for 20°→160°.
+  const sweep = isBottom ? 1 : 0;
 
   return (
     <svg
@@ -530,6 +531,7 @@ function ArcConfig({
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ display: "flex", gap: 6 }}>
         <button
+          type="button"
           onClick={() => { set("arcPosition", "top"); set("startAngle", 200); set("endAngle", 340); set("direction", "clockwise"); }}
           style={{
             flex: 1, padding: "6px 0", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600,
@@ -540,6 +542,7 @@ function ArcConfig({
           ⌢ Arco Superior
         </button>
         <button
+          type="button"
           onClick={() => { set("arcPosition", "bottom"); set("startAngle", 20); set("endAngle", 160); set("direction", "clockwise"); }}
           style={{
             flex: 1, padding: "6px 0", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600,
@@ -565,7 +568,10 @@ function ArcConfig({
               max={max}
               step={step}
               value={(cfg as any)[key] ?? ""}
-              onChange={(e) => set(key, parseFloat(e.target.value))}
+              onChange={(e) => {
+                const raw = e.target.value.trim();
+                set(key, raw === "" ? undefined : parseFloat(raw));
+              }}
               style={{
                 background: "rgba(247,244,239,0.08)", border: "1px solid rgba(247,244,239,0.15)",
                 borderRadius: 4, padding: "3px 6px", color: "#f7f4ef", fontSize: 12,
