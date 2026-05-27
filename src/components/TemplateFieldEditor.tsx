@@ -531,6 +531,7 @@ function ArcConfig({
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ display: "flex", gap: 6 }}>
         <button
+          type="button"
           onClick={() => { set("arcPosition", "top"); set("startAngle", 200); set("endAngle", 340); set("direction", "clockwise"); }}
           style={{
             flex: 1, padding: "6px 0", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600,
@@ -541,6 +542,7 @@ function ArcConfig({
           ⌢ Arco Superior
         </button>
         <button
+          type="button"
           onClick={() => { set("arcPosition", "bottom"); set("startAngle", 20); set("endAngle", 160); set("direction", "clockwise"); }}
           style={{
             flex: 1, padding: "6px 0", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600,
