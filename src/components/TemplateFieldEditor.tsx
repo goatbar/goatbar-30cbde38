@@ -540,7 +540,7 @@ function ArcConfig({
           ⌢ Arco Superior
         </button>
         <button
-          onClick={() => { set("arcPosition", "bottom"); set("startAngle", 160); set("endAngle", 20); set("direction", "counterclockwise"); }}
+          onClick={() => { set("arcPosition", "bottom"); set("startAngle", 20); set("endAngle", 160); set("direction", "clockwise"); }}
           style={{
             flex: 1, padding: "6px 0", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600,
             background: cfg.arcPosition === "bottom" ? "#701117" : "rgba(247,244,239,0.08)",
