@@ -392,7 +392,7 @@ function FieldBox({
         zIndex: field.z_index,
         userSelect: "none",
         boxSizing: "border-box",
-        overflow: "hidden",
+        overflow: "visible",
         display: "flex",
         alignItems: "flex-start",
         padding: "2px 4px",
@@ -410,7 +410,7 @@ function FieldBox({
             lineHeight: field.line_height,
             letterSpacing: field.letter_spacing,
             whiteSpace: ["texto_multiline", "lista_dinamica"].includes(field.field_type) ? "pre-wrap" : "nowrap",
-            overflow: "hidden",
+            overflow: "visible",
             width: "100%",
           }}
         >
