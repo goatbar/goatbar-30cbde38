@@ -392,9 +392,9 @@ export const pdfGenerationService = {
             const cx       = (mf.x + mf.width / 2)  * pSize.width;
             const cyTop    = (mf.y + mf.height / 2) * pSize.height; // top-left origin
             const cy       = pSize.height - cyTop;                   // PDF bottom-left
-            const startDeg = cfg.startAngle ?? 200;
-            const endDeg   = cfg.endAngle   ?? 340;
             const isBottom = cfg.arcPosition === "bottom";
+            const startDeg = Number.isFinite(cfg.startAngle) ? (cfg.startAngle as number) : (isBottom ? 20 : 200);
+            const endDeg   = Number.isFinite(cfg.endAngle) ? (cfg.endAngle as number) : (isBottom ? 160 : 340);
 
             const totalAngle = endDeg - startDeg;
             const chars = text.split("");
