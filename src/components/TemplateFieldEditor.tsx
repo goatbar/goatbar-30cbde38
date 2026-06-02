@@ -145,10 +145,14 @@ function ArcPreviewSVG({
   field,
   boxW,
   boxH,
+  canvasW,
+  canvasH,
 }: {
   field: ProposalTemplateField;
   boxW: number;
   boxH: number;
+  canvasW: number;
+  canvasH: number;
 }) {
   const cfg = field.config as {
     startAngle?: number;
@@ -156,9 +160,12 @@ function ArcPreviewSVG({
     direction?: string;
     uppercase?: boolean;
     arcPosition?: string;
+    radius?: number;
   };
 
-  const radius = Math.max(10, Math.min(boxW, boxH) / 2 - 16);
+  const radius = cfg.radius && cfg.radius > 0
+    ? cfg.radius * Math.min(canvasW, canvasH)
+    : Math.max(10, Math.min(boxW, boxH) / 2 - 16);
   const cx = boxW / 2;
   const cy = boxH / 2;
   const isBottom = cfg.arcPosition === "bottom";
@@ -421,7 +428,7 @@ function FieldBox({
 
       {/* Arc text preview */}
       {field.field_type === "texto_arco" && (
-        <ArcPreviewSVG field={field} boxW={pw} boxH={ph} />
+        <ArcPreviewSVG field={field} boxW={pw} boxH={ph} canvasW={canvasW} canvasH={canvasH} />
       )}
 
       {/* Field type badge */}
@@ -553,6 +560,24 @@ function ArcConfig({
           ⌣ Arco Inferior
         </button>
       </div>
+
+      <label style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <span style={{ fontSize: 10, color: "#a0a0a0" }}>Raio do Arco (%)</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <input
+            type="range"
+            min={5}
+            max={100}
+            step={1}
+            value={Math.round((cfg.radius ?? 0.15) * 100)}
+            onChange={(e) => set("radius", parseFloat(e.target.value) / 100)}
+            style={{ flex: 1, accentColor: "#701117" }}
+          />
+          <span style={{ color: "#f7f4ef", fontSize: 12, minWidth: 28, textAlign: "right" }}>
+            {Math.round((cfg.radius ?? 0.15) * 100)}%
+          </span>
+        </div>
+      </label>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
         {([
