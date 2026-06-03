@@ -169,8 +169,8 @@ function ArcPreviewSVG({
   const cx = boxW / 2;
   const cy = boxH / 2;
   const isBottom = cfg.arcPosition === "bottom";
-  const startDeg = Number.isFinite(cfg.startAngle) ? (cfg.startAngle as number) : (isBottom ? 20 : 200);
-  const endDeg = Number.isFinite(cfg.endAngle) ? (cfg.endAngle as number) : (isBottom ? 160 : 340);
+  const startDeg = Number.isFinite(cfg.startAngle) ? (cfg.startAngle as number) : (isBottom ? 10 : 200);
+  const endDeg = Number.isFinite(cfg.endAngle) ? (cfg.endAngle as number) : (isBottom ? 170 : 340);
   const sampleText = (
     cfg.uppercase
       ? (field.field_label).toUpperCase()
@@ -187,8 +187,11 @@ function ArcPreviewSVG({
   const x2 = cx + radius * Math.cos(endRad);
   const y2 = cy + radius * Math.sin(endRad);
   const largeArc = Math.abs(endDeg - startDeg) > 180 ? 1 : 0;
-  // In SVG (y grows downward), sweep=1 follows the lower half for 20°→160°.
-  const sweep = isBottom ? 1 : 0;
+  // In SVG (y-axis grows downward), Math.cos/sin produce angles where numerically
+  // increasing angle = clockwise on screen. Both top and bottom arcs travel in the
+  // increasing-angle direction (200°→340° for top, 10°→170° for bottom), so sweep=1
+  // for both. sweep=0 would trace the arc going the wrong way (through the opposite half).
+  const sweep = 1;
 
   return (
     <svg
@@ -536,28 +539,39 @@ function ArcConfig({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", gap: 6 }}>
+      {/* Arc position toggles — stacked vertically so labels are never clipped */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
         <button
           type="button"
-          onClick={() => { set("arcPosition", "top"); set("startAngle", 200); set("endAngle", 340); set("direction", "clockwise"); }}
+          onClick={() => { set("arcPosition", "top"); set("startAngle", 200); set("endAngle", 340); }}
           style={{
-            flex: 1, padding: "6px 0", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600,
-            background: cfg.arcPosition !== "bottom" ? "#701117" : "rgba(247,244,239,0.08)",
-            color: "#f7f4ef", border: "1px solid rgba(112,17,23,0.4)",
+            width: "100%", padding: "8px 12px", borderRadius: 6, cursor: "pointer",
+            fontSize: 12, fontWeight: 600, textAlign: "left", display: "flex", alignItems: "center", gap: 8,
+            background: cfg.arcPosition !== "bottom" ? "#701117" : "rgba(247,244,239,0.06)",
+            color: "#f7f4ef", border: `1px solid ${cfg.arcPosition !== "bottom" ? "#8b1a22" : "rgba(247,244,239,0.12)"}`,
+            transition: "background 0.15s",
           }}
         >
-          ⌢ Arco Superior
+          {/* ⌢ = arc open at bottom (text sits on TOP, curvature below) */}
+          <span style={{ fontSize: 18, lineHeight: 1 }}>⌢</span>
+          <span>Arco Superior</span>
+          <span style={{ marginLeft: "auto", fontSize: 10, opacity: 0.6 }}>200° → 340°</span>
         </button>
         <button
           type="button"
-          onClick={() => { set("arcPosition", "bottom"); set("startAngle", 20); set("endAngle", 160); set("direction", "clockwise"); }}
+          onClick={() => { set("arcPosition", "bottom"); set("startAngle", 10); set("endAngle", 170); }}
           style={{
-            flex: 1, padding: "6px 0", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600,
-            background: cfg.arcPosition === "bottom" ? "#701117" : "rgba(247,244,239,0.08)",
-            color: "#f7f4ef", border: "1px solid rgba(112,17,23,0.4)",
+            width: "100%", padding: "8px 12px", borderRadius: 6, cursor: "pointer",
+            fontSize: 12, fontWeight: 600, textAlign: "left", display: "flex", alignItems: "center", gap: 8,
+            background: cfg.arcPosition === "bottom" ? "#701117" : "rgba(247,244,239,0.06)",
+            color: "#f7f4ef", border: `1px solid ${cfg.arcPosition === "bottom" ? "#8b1a22" : "rgba(247,244,239,0.12)"}`,
+            transition: "background 0.15s",
           }}
         >
-          ⌣ Arco Inferior
+          {/* ⌣ = arc open at top (text sits on BOTTOM, curvature above) */}
+          <span style={{ fontSize: 18, lineHeight: 1 }}>⌣</span>
+          <span>Arco Inferior</span>
+          <span style={{ marginLeft: "auto", fontSize: 10, opacity: 0.6 }}>10° → 170°</span>
         </button>
       </div>
 

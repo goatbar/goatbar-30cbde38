@@ -17,18 +17,36 @@ export function StatCard({
   highlight?: boolean;
 }) {
   const positive = (delta ?? 0) >= 0;
+  // Determine responsive font size based on value length
+  // Monetary values like "R$ 12.345,67" are ~13 chars; needs smaller fonts in compact 6-col grid
+  const len = value.length;
+  const fontSizeClass =
+    len > 13
+      ? "text-sm xl:text-xs 2xl:text-sm"
+      : len > 10
+      ? "text-base xl:text-sm 2xl:text-base"
+      : len > 7
+      ? "text-lg xl:text-base 2xl:text-lg"
+      : "text-2xl xl:text-lg 2xl:text-xl";
+
   return (
-    <div className={`card-premium p-6 relative overflow-hidden ${highlight ? "border-primary/30 bg-primary/5" : ""}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="label-eyebrow">{label}</div>
+    <div className={`card-premium p-4 sm:p-5 xl:p-3 2xl:p-5 relative overflow-hidden ${highlight ? "border-primary/30 bg-primary/5" : ""}`}>
+      <div className="flex items-start justify-between gap-1">
+        <div className="label-eyebrow text-muted-foreground leading-tight" style={{ fontSize: "10px", wordBreak: "break-word" }} title={label}>{label}</div>
         {icon && (
-          <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${highlight ? "bg-primary/20 text-primary" : "bg-secondary text-muted-foreground"}`}>
+          <div className={`h-7 w-7 xl:h-6 xl:w-6 2xl:h-8 2xl:w-8 rounded-lg flex items-center justify-center shrink-0 ${highlight ? "bg-primary/20 text-primary" : "bg-secondary text-muted-foreground"}`}>
             {icon}
           </div>
         )}
       </div>
-      <div className={`mt-4 font-display text-3xl font-semibold tracking-tight ${highlight ? "text-primary" : ""}`}>{value}</div>
-      <div className="mt-3 flex items-center gap-2 text-xs">
+      <div
+        className={`mt-3 font-display font-bold tracking-tight leading-tight ${fontSizeClass} ${highlight ? "text-primary" : ""}`}
+        title={value}
+        style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
+      >
+        {value}
+      </div>
+      <div className="mt-2 flex items-center gap-2 text-xs">
         {delta !== undefined && (
           <span
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md ${
@@ -43,7 +61,7 @@ export function StatCard({
             {Math.abs(delta).toFixed(1)}%
           </span>
         )}
-        {hint && <span className="text-muted-foreground">{hint}</span>}
+        {hint && <span className="text-muted-foreground truncate">{hint}</span>}
       </div>
     </div>
   );
