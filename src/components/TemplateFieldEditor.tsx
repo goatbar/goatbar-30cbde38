@@ -169,29 +169,37 @@ function ArcPreviewSVG({
   const cx = boxW / 2;
   const cy = boxH / 2;
   const isBottom = cfg.arcPosition === "bottom";
-  const startDeg = Number.isFinite(cfg.startAngle) ? (cfg.startAngle as number) : (isBottom ? 10 : 200);
-  const endDeg = Number.isFinite(cfg.endAngle) ? (cfg.endAngle as number) : (isBottom ? 170 : 340);
+
+  // ── Angle convention (using standard Math.cos/sin, SVG has y-axis pointing DOWN) ──
+  // TOP arc  : path travels 200°→340° CLOCKWISE (sweep=1) through 270° = SVG top.
+  //            At the top, path direction = left→right  → text reads normally ✓
+  // BOTTOM arc: path travels 170°→10°  COUNTER-CLOCKWISE (sweep=0) through 90° = SVG bottom.
+  //            Going from higher angle to lower angle CCW keeps the path at the bottom
+  //            and at 90° the CCW direction points RIGHT → text reads left→right ✓
+  const startDeg = Number.isFinite(cfg.startAngle)
+    ? (cfg.startAngle as number)
+    : (isBottom ? 170 : 200);
+  const endDeg = Number.isFinite(cfg.endAngle)
+    ? (cfg.endAngle as number)
+    : (isBottom ? 10 : 340);
+
   const sampleText = (
-    cfg.uppercase
-      ? (field.field_label).toUpperCase()
-      : (field.field_label)
+    cfg.uppercase ? field.field_label.toUpperCase() : field.field_label
   ).slice(0, 30);
 
   const startRad = (startDeg * Math.PI) / 180;
-  const endRad = (endDeg * Math.PI) / 180;
+  const endRad   = (endDeg   * Math.PI) / 180;
   const arcId = `arc-${field.id ?? Math.random().toString(36).slice(2)}`;
 
-  // Build arc path
   const x1 = cx + radius * Math.cos(startRad);
   const y1 = cy + radius * Math.sin(startRad);
   const x2 = cx + radius * Math.cos(endRad);
   const y2 = cy + radius * Math.sin(endRad);
-  const largeArc = Math.abs(endDeg - startDeg) > 180 ? 1 : 0;
-  // In SVG (y-axis grows downward), Math.cos/sin produce angles where numerically
-  // increasing angle = clockwise on screen. Both top and bottom arcs travel in the
-  // increasing-angle direction (200°→340° for top, 10°→170° for bottom), so sweep=1
-  // for both. sweep=0 would trace the arc going the wrong way (through the opposite half).
-  const sweep = 1;
+  const spanDeg   = Math.abs(startDeg - endDeg);     // always positive
+  const largeArc  = spanDeg > 180 ? 1 : 0;
+  // Top  → sweep=1 (clockwise,  200°→340° through SVG top)
+  // Bot  → sweep=0 (counter-CW, 170°→10°  through SVG bottom)
+  const sweep = isBottom ? 0 : 1;
 
   return (
     <svg
@@ -552,14 +560,13 @@ function ArcConfig({
             transition: "background 0.15s",
           }}
         >
-          {/* ⌢ = arc open at bottom (text sits on TOP, curvature below) */}
           <span style={{ fontSize: 18, lineHeight: 1 }}>⌢</span>
           <span>Arco Superior</span>
           <span style={{ marginLeft: "auto", fontSize: 10, opacity: 0.6 }}>200° → 340°</span>
         </button>
         <button
           type="button"
-          onClick={() => { set("arcPosition", "bottom"); set("startAngle", 10); set("endAngle", 170); }}
+          onClick={() => { set("arcPosition", "bottom"); set("startAngle", 170); set("endAngle", 10); }}
           style={{
             width: "100%", padding: "8px 12px", borderRadius: 6, cursor: "pointer",
             fontSize: 12, fontWeight: 600, textAlign: "left", display: "flex", alignItems: "center", gap: 8,
@@ -568,10 +575,9 @@ function ArcConfig({
             transition: "background 0.15s",
           }}
         >
-          {/* ⌣ = arc open at top (text sits on BOTTOM, curvature above) */}
           <span style={{ fontSize: 18, lineHeight: 1 }}>⌣</span>
           <span>Arco Inferior</span>
-          <span style={{ marginLeft: "auto", fontSize: 10, opacity: 0.6 }}>10° → 170°</span>
+          <span style={{ marginLeft: "auto", fontSize: 10, opacity: 0.6 }}>170° → 10°</span>
         </button>
       </div>
 
