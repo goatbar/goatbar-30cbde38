@@ -169,7 +169,10 @@ function VendasPage() {
 
   const filteredSessions = useMemo(() => {
     return financialSessions.filter((s) => {
-      const d = new Date(s.data).getTime();
+      // Parse as local time to avoid UTC shift (PostgreSQL returns "YYYY-MM-DD"
+      // which Date() treats as UTC midnight, causing -3h offset in Brazil)
+      const [year, month, day] = String(s.data || "").split("-").map(Number);
+      const d = new Date(year, month - 1, day).getTime();
       return d >= limiteData.getTime() && d <= dataFim.getTime();
     });
   }, [financialSessions, limiteData, dataFim]);
@@ -177,7 +180,9 @@ function VendasPage() {
   const filteredEventos = useMemo(() => {
     return eventosSupabase.filter((e) => {
       const eventDate = e.date || e.data;
-      const d = new Date(eventDate || 0).getTime();
+      if (!eventDate) return false;
+      const [year, month, day] = String(eventDate).split("-").map(Number);
+      const d = new Date(year, month - 1, day).getTime();
       return d >= limiteData.getTime() && d <= dataFim.getTime();
     });
   }, [eventosSupabase, limiteData, dataFim]);
