@@ -22,6 +22,7 @@ import {
   Clock,
   TrendingUp,
   AlertTriangle,
+  ArrowUpDown,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { eventBudgetService, type Event as RealEvent } from "@/services/event-budget-service";
@@ -38,7 +39,8 @@ function EventosIndex() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [viewMode, setViewMode] = useState<"lista" | "calendario">("lista");
-  const [statusFilter, setStatusFilter] = useState<string>("ativos");
+  const [statusFilter, setStatusFilter] = useState<string>("pipeline");
+  const [sortOrder, setSortOrder] = useState<"data" | "status">("data");
   const [form, setForm] = useState({
     nome: "",
     evento_nome: "",
@@ -79,25 +81,73 @@ function EventosIndex() {
     return !["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
   });
 
-  const filteredEventos = eventos.filter((e) => {
-    const s = e.status?.toUpperCase() || "";
-    if (statusFilter === "ativos") {
-      return !["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
-    }
-    if (statusFilter === "negociacao") {
-      return ["NOVO_ORCAMENTO", "NOVO", "ORCAMENTO_ENVIADO", "AGUARDANDO_RETORNO", "AGUARDANDO_RESPOSTA", "DADOS_SOLICITADOS", "EM_ASSINATURA"].includes(s);
-    }
-    if (statusFilter === "confirmados") {
-      return s === "CONFIRMADO";
-    }
-    if (statusFilter === "finalizados") {
-      return ["FINALIZADO", "REALIZADO"].includes(s);
-    }
-    if (statusFilter === "cancelados") {
-      return ["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
-    }
-    return true; // "todos"
-  });
+  const STATUS_ORDER: Record<string, number> = {
+    NOVO_ORCAMENTO: 0,
+    NOVO: 0,
+    ORCAMENTO_ENVIADO: 1,
+    AGUARDANDO_RETORNO: 2,
+    AGUARDANDO_RESPOSTA: 2,
+    DADOS_SOLICITADOS: 3,
+    EM_ASSINATURA: 4,
+    CONFIRMADO: 5,
+    FINALIZADO: 6,
+    REALIZADO: 6,
+    CANCELADO: 7,
+    PROPOSTA_RECUSADA: 7,
+  };
+
+  const filteredEventos = (() => {
+    const filtered = eventos.filter((e) => {
+      const s = e.status?.toUpperCase() || "";
+      if (statusFilter === "pipeline") {
+        // Pipeline principal: exclui finalizados e cancelados
+        return ![
+          "FINALIZADO",
+          "REALIZADO",
+          "CANCELADO",
+          "PROPOSTA_RECUSADA",
+        ].includes(s);
+      }
+      if (statusFilter === "ativos") {
+        return !["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
+      }
+      if (statusFilter === "negociacao") {
+        return [
+          "NOVO_ORCAMENTO",
+          "NOVO",
+          "ORCAMENTO_ENVIADO",
+          "AGUARDANDO_RETORNO",
+          "AGUARDANDO_RESPOSTA",
+          "DADOS_SOLICITADOS",
+          "EM_ASSINATURA",
+        ].includes(s);
+      }
+      if (statusFilter === "confirmados") {
+        return s === "CONFIRMADO";
+      }
+      if (statusFilter === "finalizados") {
+        return ["FINALIZADO", "REALIZADO"].includes(s);
+      }
+      if (statusFilter === "cancelados") {
+        return ["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
+      }
+      return true; // "todos"
+    });
+
+    return [...filtered].sort((a, b) => {
+      if (sortOrder === "data") {
+        const da = a.date || "";
+        const db = b.date || "";
+        return da.localeCompare(db);
+      }
+      // sortOrder === "status"
+      const sa = STATUS_ORDER[a.status?.toUpperCase() || ""] ?? 99;
+      const sb = STATUS_ORDER[b.status?.toUpperCase() || ""] ?? 99;
+      if (sa !== sb) return sa - sb;
+      // Desempate por data
+      return (a.date || "").localeCompare(b.date || "");
+    });
+  })();
 
   const eventosConfirmados = eventosAtivos.filter((e) => {
     const s = e.status?.toUpperCase();
@@ -211,22 +261,42 @@ function EventosIndex() {
 
         <SectionCard
           title="Pipeline de negociações"
-          subtitle={loading ? "Carregando..." : `${eventos.length} registros`}
+          subtitle={
+            loading
+              ? "Carregando..."
+              : `${filteredEventos.length} de ${eventos.length} registros`
+          }
           action={
             <div className="flex flex-wrap items-center gap-3">
               {viewMode === "lista" && (
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="h-9 px-3 rounded-lg bg-input border border-border text-xs font-medium focus:ring-1 focus:ring-primary outline-none cursor-pointer text-foreground"
-                >
-                  <option value="ativos">Eventos Ativos</option>
-                  <option value="todos">Todos os Orçamentos</option>
-                  <option value="negociacao">Em Negociação</option>
-                  <option value="confirmados">Confirmados</option>
-                  <option value="finalizados">Finalizados</option>
-                  <option value="cancelados">Cancelados</option>
-                </select>
+                <>
+                  {/* Filtro de status */}
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="h-9 px-3 rounded-lg bg-input border border-border text-xs font-medium focus:ring-1 focus:ring-primary outline-none cursor-pointer text-foreground"
+                  >
+                    <option value="pipeline">Pipeline (ativos)</option>
+                    <option value="todos">Todos os registros</option>
+                    <option value="negociacao">Em Negociação</option>
+                    <option value="confirmados">Confirmados</option>
+                    <option value="finalizados">Finalizados</option>
+                    <option value="cancelados">Cancelados</option>
+                  </select>
+
+                  {/* Ordenação */}
+                  <div className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-input border border-border text-xs font-medium text-foreground">
+                    <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <select
+                      value={sortOrder}
+                      onChange={(e) => setSortOrder(e.target.value as "data" | "status")}
+                      className="bg-transparent outline-none cursor-pointer"
+                    >
+                      <option value="data">Por data do evento</option>
+                      <option value="status">Por status do orçamento</option>
+                    </select>
+                  </div>
+                </>
               )}
               <div className="flex bg-background border border-border rounded-lg p-0.5">
                 <button
