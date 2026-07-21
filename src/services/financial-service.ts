@@ -48,6 +48,9 @@ export interface FinancialExpenseItem {
   total_price: number;
   suggested_category?: string;
   reviewed?: boolean;
+  matched_product_id?: string;
+  matched_confidence?: number;
+  raw_product_name?: string;
 }
 
 export interface ReceiptExtractionResult {
@@ -185,6 +188,24 @@ export const financialService = {
         .from("financial_expense_items")
         .insert(itemsToInsert);
       if (itemsError) console.error("Error inserting expense items:", itemsError);
+
+      // --- Update Inventory ---
+      for (const item of items) {
+        if (item.matched_product_id) {
+          const { data: invData } = await supabase.from("inventory").select("quantity").eq("id", item.matched_product_id).single();
+          if (invData) {
+             const newQuantity = Number(invData.quantity || 0) + Number(item.quantity || 0);
+             await supabase.from("inventory").update({ quantity: newQuantity, updated_at: new Date().toISOString() }).eq("id", item.matched_product_id);
+             
+             await supabase.from("inventory_movements").insert({
+               inventory_id: item.matched_product_id,
+               quantity: item.quantity,
+               type: "ENTRADA",
+               source: expensePayload.event_id ? `Compra - Evento` : "Compra Controladoria"
+             });
+          }
+        }
+      }
     }
     
     return data as FinancialExpense;
@@ -224,23 +245,21 @@ export const financialService = {
     return publicUrl;
   },
 
-  async extractExpenseFromReceipt(file: File): Promise<ReceiptExtractionResult> {
+  async parseReceiptText(rawText: string, confidence: number = 100): Promise<ReceiptExtractionResult> {
     try {
-      const result = await Tesseract.recognize(file, 'por', {
-        logger: m => console.log(m),
-      });
-
-      const rawText = result.data.text || "";
-      const confidence = result.data.confidence || 0;
       const normalizedText = normalize(rawText);
+
+      // Fetch inventory to try fuzzy matching
+      const { data: inventory } = await supabase.from("inventory").select("*");
+      const products = inventory || [];
 
       // Extract CNPJ
       const cnpjMatch = rawText.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{14}/);
       
-      // Extract Date (tries standard formats)
+      // Extract Date
       const dateMatch = rawText.match(/(\d{2}[\/\-]\d{2}[\/\-]\d{2,4})/);
       
-      // Extract Amount (looks for largest value after words like total, valor or R$)
+      // Extract Amount
       const amountMatches = [...rawText.matchAll(/(?:total|valor|pago|r\$)[^\d]{0,10}(\d+[\.,]\d{2})/gi)];
       const fallbackAmountMatches = [...rawText.matchAll(/(\d+[\.,]\d{2})/g)];
       
@@ -252,18 +271,16 @@ export const financialService = {
         if (vals.length) amountValue = Math.max(...vals);
       }
 
-      // Extract Supplier Name (heuristic: first non-empty line before CNPJ usually)
+      // Extract Supplier Name
       const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 3);
       let supplierName = "";
       if (lines.length > 0) {
-        // Find line with CNPJ to take previous lines, or just take first line
         const cnpjLineIdx = lines.findIndex(l => /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{14}/.test(l));
         if (cnpjLineIdx > 0) {
-          supplierName = lines[0]; // first line is usually the name
+          supplierName = lines[0];
         } else {
           supplierName = lines[0];
         }
-        // Clean up common receipt headers
         supplierName = supplierName.replace(/cnpj.*|extrato.*|cupom.*/i, "").trim();
       }
 
@@ -285,10 +302,50 @@ export const financialService = {
       if (paymentMethod) auto_filled_fields.push("payment_method");
       if (supplierName) auto_filled_fields.push("supplier_name");
 
+      // Helper for fuzzy match
+      const normalizeForSearch = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+      
+      const fuzzyMatchProduct = (text: string) => {
+        const query = normalizeForSearch(text);
+        const exact = products.find(p => normalizeForSearch(p.name || "") === query);
+        if (exact) return { product: exact, confidence: 1 };
+        
+        let bestMatch = null;
+        let bestScore = 0;
+        
+        for (const p of products) {
+          const pName = normalizeForSearch(p.name || "");
+          if (!pName) continue;
+          
+          if (pName.includes(query) || query.includes(pName)) {
+            const score = Math.min(pName.length, query.length) / Math.max(pName.length, query.length);
+            if (score > bestScore) {
+              bestScore = score;
+              bestMatch = p;
+            }
+          } else {
+             const words1 = query.split(' ');
+             const words2 = pName.split(' ');
+             let overlap = 0;
+             for (const w1 of words1) {
+               if (w1.length > 2 && words2.some(w2 => w2 === w1 || w2.includes(w1) || w1.includes(w2))) {
+                 overlap++;
+               }
+             }
+             const score = overlap / Math.max(words1.length, words2.length);
+             if (score > bestScore) {
+               bestScore = score;
+               bestMatch = p;
+             }
+          }
+        }
+        
+        if (bestScore > 0.4) return { product: bestMatch, confidence: bestScore };
+        return { product: null, confidence: 0 };
+      };
+
       // Extract items (Heuristic)
       const extractedItems: FinancialExpenseItem[] = [];
-      // Look for patterns like: "1 UN VODKA 45,00 45,00" or "02 VODKA ABSOLUT 50.00 100.00"
-      // [qty] [unit?] [name] [unit_price?] [total_price]
       const itemRegex = /^(\d+[\.,]?\d*)\s*(un|kg|l|cx|pct)?\s+(.+?)\s+(\d+[\.,]\d{2})(?:\s+(\d+[\.,]\d{2}))?$/i;
       
       lines.forEach(line => {
@@ -303,25 +360,27 @@ export const financialService = {
           let unit_price = price1;
           let total_price = price2 !== undefined ? price2 : price1;
 
-          // If they are equal, or unit_price * qty approx total_price
           if (price2 && Math.abs((price1 * qty) - price2) < 0.1) {
             unit_price = price1;
             total_price = price2;
           } else if (price2 && Math.abs((price2 * qty) - price1) < 0.1) {
-             // reversed order in receipt
              unit_price = price2;
              total_price = price1;
           }
 
           if (name.length > 2 && !name.toLowerCase().includes("total") && !name.toLowerCase().includes("troco")) {
+            const matched = fuzzyMatchProduct(name);
             extractedItems.push({
-              product_name: name,
+              product_name: matched.product ? matched.product.name : name,
+              raw_product_name: name,
               quantity: qty,
-              unit,
+              unit: matched.product ? (matched.product.default_unit || unit) : unit,
               unit_price,
               total_price,
-              suggested_category: inferCategoryFromText(name),
-              reviewed: false
+              suggested_category: matched.product ? matched.product.category : inferCategoryFromText(name),
+              reviewed: false,
+              matched_product_id: matched.product ? matched.product.id : undefined,
+              matched_confidence: matched.confidence
             });
           }
         }
@@ -341,6 +400,26 @@ export const financialService = {
         items: extractedItems,
       };
     } catch (error) {
+      console.error("Text parse Error:", error);
+      return {
+        raw_text: rawText,
+        review_status: "Erro na leitura",
+        auto_filled_fields: [],
+        confidence: 100,
+      };
+    }
+  },
+
+  async extractExpenseFromReceipt(file: File): Promise<ReceiptExtractionResult> {
+    try {
+      const result = await Tesseract.recognize(file, 'por', {
+        logger: m => console.log(m),
+      });
+      const rawText = result.data.text || "";
+      const confidence = result.data.confidence || 0;
+      
+      return await this.parseReceiptText(rawText, confidence);
+    } catch (error) {
       console.error("OCR Error:", error);
       return {
         raw_text: "",
@@ -349,6 +428,10 @@ export const financialService = {
         confidence: 0,
       };
     }
+  },
+
+  async extractExpenseFromText(rawText: string): Promise<ReceiptExtractionResult> {
+    return await this.parseReceiptText(rawText, 100);
   },
 
 

@@ -70,6 +70,9 @@ function ControladoriaPage() {
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [receiptPreview, setReceiptPreview] = useState("");
+  const [showTextImportModal, setShowTextImportModal] = useState(false);
+  const [textImportValue, setTextImportValue] = useState("");
+  const [textImportEventId, setTextImportEventId] = useState("");
   const [filters, setFilters] = useState({
     start_date: format(startOfMonth(new Date()), "yyyy-MM-dd"),
     end_date: format(endOfMonth(new Date()), "yyyy-MM-dd"),
@@ -193,6 +196,39 @@ function ControladoriaPage() {
     }
   };
 
+  const handleTextExtraction = async () => {
+    if (!textImportValue.trim()) return;
+    setOcrLoading(true);
+    try {
+      const extracted = await financialService.extractExpenseFromText(textImportValue);
+      const parsedDate = extracted.date?.includes("/")
+        ? extracted.date.split("/").reverse().join("-")
+        : extracted.date || format(new Date(), "yyyy-MM-dd");
+
+      setForm((prev) => ({
+        ...prev,
+        modality: textImportEventId ? "Evento" : "Geral",
+        event_id: textImportEventId || "",
+        date: parsedDate,
+        description: `Despesa via Importação - ${extracted.supplier_name || "revisar dados"} - ${parsedDate.split("-").reverse().join("/")}`,
+        amount: extracted.amount ?? prev.amount ?? 0,
+        supplier_name: extracted.supplier_name || prev.supplier_name || "",
+        supplier_cnpj: extracted.supplier_cnpj || "",
+        category: extracted.category || prev.category || "Outros",
+        payment_method: extracted.payment_method || prev.payment_method || "Outros",
+        review_status: extracted.review_status,
+        ocr_raw_text: extracted.raw_text,
+        ocr_metadata: { confidence: extracted.confidence || 0, source: "text-import" },
+        auto_filled_fields: extracted.auto_filled_fields,
+        items: extracted.items || [],
+      }));
+      setShowTextImportModal(false);
+      setShowModal(true);
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!form.description || !form.amount || !form.responsible) {
       alert("Preencha os campos obrigatórios.");
@@ -261,6 +297,9 @@ function ControladoriaPage() {
         subtitle="Gestão financeira completa e fluxo de custos."
         action={
           <div className="flex gap-2">
+            <GhostButton onClick={() => setShowTextImportModal(true)}>
+              <FileText className="h-4 w-4" /> Importar de Texto
+            </GhostButton>
             <GhostButton onClick={() => setShowReceiptModal(true)}>
               <Camera className="h-4 w-4" /> Lançar por foto da notinha
             </GhostButton>
@@ -515,6 +554,53 @@ function ControladoriaPage() {
       </div>
 
       {/* MODAL NOVO GASTO */}
+
+      {showTextImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setShowTextImportModal(false)} />
+          <div className="relative w-full max-w-xl bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-border flex justify-between items-center bg-primary/5">
+              <h2 className="font-display text-lg font-bold">Importar Pedido / Nota Fiscal</h2>
+              <button
+                onClick={() => setShowTextImportModal(false)}
+                className="h-8 w-8 rounded-full hover:bg-border flex items-center justify-center transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="label-eyebrow mb-1.5 block">Evento Relacionado (Opcional)</label>
+                <select
+                  value={textImportEventId}
+                  onChange={(e) => setTextImportEventId(e.target.value)}
+                  className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none focus:border-primary"
+                >
+                  <option value="">Nenhum (Lançamento Geral)</option>
+                  {eventsList.map(ev => (
+                    <option key={ev.id} value={ev.id}>{ev.event_name || ev.client_name} - {format(parseISO(ev.date), "dd/MM")}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label-eyebrow mb-1.5 block">Cole o texto aqui (WhatsApp, Excel, NFe, PDF)</label>
+                <textarea
+                  value={textImportValue}
+                  onChange={(e) => setTextImportValue(e.target.value)}
+                  className="w-full h-40 p-4 rounded-xl bg-input border border-border outline-none focus:border-primary resize-none font-mono text-xs"
+                  placeholder={`Exemplo:\n10 Refrigerante Coca Cola 2L R$14,90\n5 Gelo 5kg R$12,00`}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <GhostButton onClick={() => setShowTextImportModal(false)}>Cancelar</GhostButton>
+                <PrimaryButton disabled={ocrLoading || !textImportValue.trim()} onClick={handleTextExtraction}>
+                  <Sparkles className="h-4 w-4" /> {ocrLoading ? "Analisando..." : "Analisar"}
+                </PrimaryButton>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showReceiptModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -888,11 +974,25 @@ function ControladoriaPage() {
                         {form.items.map((it, idx) => (
                           <tr key={idx} className="border-b border-border/50">
                             <td className="p-1">
-                              <input type="text" className="w-full h-8 px-2 bg-transparent outline-none border border-transparent focus:border-primary/30 rounded" value={it.product_name} onChange={e => {
-                                const newItems = [...form.items!];
-                                newItems[idx].product_name = e.target.value;
-                                setForm(p => ({ ...p, items: newItems }));
-                              }} />
+                              <div className="flex flex-col gap-1 py-1">
+                                <input type="text" className="w-full h-8 px-2 bg-transparent outline-none border border-transparent focus:border-primary/30 rounded font-medium" value={it.product_name} onChange={e => {
+                                  const newItems = [...form.items!];
+                                  newItems[idx].product_name = e.target.value;
+                                  setForm(p => ({ ...p, items: newItems }));
+                                }} />
+                                {it.raw_product_name && (
+                                  <div className="px-2">
+                                    {it.matched_product_id ? (
+                                      <span className="text-[9px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded flex items-center w-fit gap-1 border border-emerald-200" title={`Lido como: ${it.raw_product_name}`}><CheckCircle2 className="w-3 h-3"/> Vinculado ({Math.round((it.matched_confidence || 1)*100)}%)</span>
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[9px] text-destructive bg-destructive/10 px-1.5 py-0.5 rounded flex items-center w-fit gap-1 border border-destructive/20" title={`Lido como: ${it.raw_product_name}`}><AlertCircle className="w-3 h-3"/> Não encontrado</span>
+                                        <a href="/inventario" target="_blank" className="text-[9px] text-primary hover:underline font-bold bg-primary/10 px-1.5 py-0.5 rounded">Cadastrar novo</a>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </td>
                             <td className="p-1">
                               <input type="number" className="w-full h-8 px-2 bg-transparent outline-none border border-transparent focus:border-primary/30 rounded" value={it.quantity} onChange={e => {
