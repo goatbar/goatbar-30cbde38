@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { Upload, Trash2, Tag, Check, Layers, FileText } from "lucide-react";
 import { ALL_EDITOR_FIELDS, type EditorFieldDef } from "./contract-editor-store";
+import { CONTRACT_DOCUMENT_CSS } from "@/lib/contract-document-styles";
+
 
 interface DocumentCanvasProps {
   html: string;
@@ -216,64 +218,8 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
       </div>
 
       {/* Estilos para Badges/Chips e Regras Multi-página */}
-      <style>{`
-        .docx-field-chip {
-          background-color: rgba(99, 102, 241, 0.15) !important;
-          color: #4f46e5 !important;
-          border: 1px solid rgba(99, 102, 241, 0.4) !important;
-          border-radius: 6px !important;
-          padding: 2px 6px !important;
-          font-family: monospace !important;
-          font-weight: 700 !important;
-          font-size: 11px !important;
-          display: inline-flex !important;
-          align-items: center !important;
-          gap: 4px !important;
-          margin: 0 2px !important;
-          user-select: none !important;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
-        }
-        .docx-chip-del {
-          background: rgba(99, 102, 241, 0.2) !important;
-          color: #4f46e5 !important;
-          border: none !important;
-          border-radius: 50% !important;
-          width: 14px !important;
-          height: 14px !important;
-          display: inline-flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          font-size: 11px !important;
-          line-height: 1 !important;
-          cursor: pointer !important;
-          margin-left: 2px !important;
-          transition: background 0.15s !important;
-        }
-        .docx-chip-del:hover {
-          background: #ef4444 !important;
-          color: #ffffff !important;
-        }
-        .docx-canvas-paper p {
-          margin-bottom: 0.75rem;
-          line-height: 1.6;
-        }
-        .docx-canvas-paper table {
-          width: 100%;
-          border-collapse: collapse;
-          margin: 1rem 0;
-          break-inside: avoid;
-        }
-        .docx-canvas-paper th, .docx-canvas-paper td {
-          border: 1px solid #cbd5e1;
-          padding: 8px 12px;
-        }
-        .docx-canvas-paper h1, .docx-canvas-paper h2, .docx-canvas-paper h3 {
-          font-weight: 700;
-          margin-top: 1rem;
-          margin-bottom: 0.5rem;
-          break-after: avoid;
-        }
-      `}</style>
+      <style>{CONTRACT_DOCUMENT_CSS}</style>
     </main>
+
   );
 };

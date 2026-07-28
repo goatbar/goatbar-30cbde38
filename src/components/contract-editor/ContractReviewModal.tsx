@@ -18,6 +18,8 @@ import {
   type ContractSigner,
 } from "@/services/contract-service";
 import { WordFormattingToolbar } from "./WordFormattingToolbar";
+import { normalizeEditorHtml } from "@/utils/normalize-editor-html";
+import { CONTRACT_DOCUMENT_CSS, CONTRACT_PRINT_HTML_SHELL } from "@/lib/contract-document-styles";
 
 interface ContractReviewModalProps {
   isOpen: boolean;
@@ -63,37 +65,26 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
   );
 
   const handlePrintPdf = () => {
-    const htmlToPrint = editorRef.current ? editorRef.current.innerHTML : editableContent;
+    const rawHtmlToPrint = editorRef.current ? editorRef.current.innerHTML : editableContent;
+    const cleanHtml = normalizeEditorHtml(rawHtmlToPrint);
     const win = window.open("", "_blank");
     if (win) {
-      win.document.write(`
-        <html>
-          <head>
-            <title>Contrato GOAT Bar - ${eventName}</title>
-            <style>
-              body { font-family: system-ui, sans-serif; padding: 40px; line-height: 1.6; color: #111; font-size: 13px; }
-              table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-              th, td { border: 1px solid #cbd5e1; padding: 8px 12px; }
-              h1, h2, h3 { font-weight: 700; margin-top: 1rem; }
-              .docx-page-break { page-break-after: always; break-after: page; display: block; border-bottom: 2px dashed #94a3b8; margin: 2rem 0; }
-            </style>
-          </head>
-          <body>${htmlToPrint}</body>
-        </html>
-      `);
+      win.document.write(CONTRACT_PRINT_HTML_SHELL(`Contrato GOAT Bar - ${eventName}`, cleanHtml));
       win.document.close();
       win.print();
     }
   };
 
   const handleCopyText = () => {
-    const htmlToCopy = editorRef.current ? editorRef.current.innerHTML : editableContent;
+    const rawHtmlToCopy = editorRef.current ? editorRef.current.innerHTML : editableContent;
+    const cleanHtml = normalizeEditorHtml(rawHtmlToCopy);
     const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = htmlToCopy;
+    tempDiv.innerHTML = cleanHtml;
     const textContent = tempDiv.innerText || tempDiv.textContent || "";
     navigator.clipboard.writeText(textContent);
     alert("Texto do contrato copiado com sucesso!");
   };
+
 
   const handleInsertTable = () => {
     const tableHtml = `
@@ -266,6 +257,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
 
           {/* PAINEL DIREITO: EDITOR VISUAL CANVASA A4 FORMATÁVEL ESTILO WORD */}
           <main className="flex-1 bg-muted/40 p-4 md:p-8 overflow-y-auto flex flex-col items-center">
+            <style>{CONTRACT_DOCUMENT_CSS}</style>
             <div className="w-full max-w-[850px] min-h-[1100px] bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-200 p-8 md:p-14 relative docx-canvas-paper">
               <div
                 ref={editorRef}
@@ -280,6 +272,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
               />
             </div>
           </main>
+
         </div>
 
         {/* MODAL DE BUSCA E SUBSTITUIÇÃO */}

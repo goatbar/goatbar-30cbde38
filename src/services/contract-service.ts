@@ -10,6 +10,8 @@ import {
   validateBrazilianDocument,
   sanitizeTemplateResiduals,
 } from "@/lib/format-document";
+import { normalizeEditorHtml } from "@/utils/normalize-editor-html";
+import { validateExportHtml } from "@/utils/validate-export-html";
 
 
 // --- Tipos para os Serviços ---
@@ -228,7 +230,19 @@ export function validateContractPlaceholders(
   return { filled, unfilled };
 }
 
-export function renderContractTemplate(
+export class ContractRenderError extends Error {
+  errors: string[];
+  unresolvedFields: string[];
+
+  constructor(payload: { message: string; errors: string[]; unresolvedFields: string[] }) {
+    super(payload.message);
+    this.name = "ContractRenderError";
+    this.errors = payload.errors;
+    this.unresolvedFields = payload.unresolvedFields;
+  }
+}
+
+export function replaceContractVariables(
   templateBody: string,
   variables: Record<string, any>,
   customMapping?: Record<string, string>
@@ -236,36 +250,37 @@ export function renderContractTemplate(
   if (!templateBody) return "";
   let result = sanitizeTemplateResiduals(templateBody);
 
-  // 1. Limpa invólucros de chips HTML (<span class="docx-field-chip"...>...</span>) extraindo o token limpo
-  result = result.replace(/<span[^>]*class="docx-field-chip"[^>]*>([\s\S]*?)<\/span>/gi, (_match, inner) => {
-    return inner.replace(/<button[^>]*>.*?<\/button>/gi, "").trim();
-  });
+  const formatVal = (rawVal: any) => {
+    if (rawVal === undefined || rawVal === null) return "Não informado";
+    const str = String(rawVal).trim();
+    if (!str) return "Não informado";
+    if (/^\s*<(table|div|p|ul|ol|br|span|h[1-6])\b/i.test(str)) {
+      return str;
+    }
+    const escaped = str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    return escaped.replace(/\r?\n/g, "<br />");
+  };
 
-  // 2. Substituição via mapeamento customizado (De-Para do Usuário)
+
+  // 1. Substituição via mapeamento customizado (De-Para do Usuário)
   if (customMapping) {
     Object.keys(customMapping).forEach((sysKey) => {
       const matchToken = customMapping[sysKey];
       if (matchToken && matchToken.trim().length > 0) {
-        const rawVal = variables[sysKey];
-        const val = rawVal !== undefined && rawVal !== null && String(rawVal).trim().length > 0
-          ? String(rawVal)
-          : "Não informado";
-
+        const val = formatVal(variables[sysKey]);
         const escaped = matchToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        // Elimina o token completo e qualquer sufixo 'xx' ou 'x' colado
         const regex = new RegExp(`${escaped}(?:xx|x)?`, "gi");
         result = result.replace(regex, val);
       }
     });
   }
 
-  // 3. Substituição padrão para tags {{chave}} e [CHAVE] eliminando sufixos 'xx'
+  // 2. Substituição padrão para tags {{chave}} e [CHAVE] eliminando sufixos 'xx'
   Object.keys(variables).forEach((key) => {
-    const rawVal = variables[key];
-    const val = rawVal !== undefined && rawVal !== null && String(rawVal).trim().length > 0
-      ? String(rawVal)
-      : "Não informado";
-
+    const val = formatVal(variables[key]);
     const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const curlyRegex = new RegExp(`{{\\s*${escapedKey}\\s*}}(?:xx|x)?`, "gi");
     const bracketRegex = new RegExp(`\\[\\s*${escapedKey.toUpperCase()}\\s*\\](?:xx|x)?`, "gi");
@@ -273,12 +288,35 @@ export function renderContractTemplate(
     result = result.replace(curlyRegex, val).replace(bracketRegex, val);
   });
 
-  // 4. Limpeza final de qualquer placeholder genérico não substituído e sufixos 'xx' residuais
+  // 3. Limpeza final de qualquer placeholder genérico não substituído e sufixos 'xx' residuais
   result = result.replace(/\{\{\s*[\w.]+\s*\}\}(?:xx|x)?/gi, "Não informado");
   result = result.replace(/\[\s*[\w._]+\s*\](?:xx|x)?/gi, "Não informado");
 
   return result;
 }
+
+export function renderContractTemplate(
+  templateBody: string,
+  variables: Record<string, any>,
+  customMapping?: Record<string, string>
+): string {
+  if (!templateBody) return "";
+
+  // 1. Normalização do HTML do editor (converte chips em {{chave}} e remove controles/atributos de edição)
+  const normalizedHtml = normalizeEditorHtml(templateBody);
+
+  // 2. Substituição das variáveis
+  const renderedHtml = replaceContractVariables(normalizedHtml, variables, customMapping);
+
+  // 3. Validação do HTML final
+  const validation = validateExportHtml(renderedHtml);
+  if (!validation.valid) {
+    console.warn("⚠️ [Contract Validation Warning] O HTML do contrato final possui avisos de validação:", validation.errors);
+  }
+
+  return renderedHtml;
+}
+
 
 export const DEFAULT_CONTRACT_BODY = "";
 
