@@ -37,6 +37,7 @@ import {
   clientContractFormService,
   renderContractTemplate,
   getTemplateContent,
+  getTemplateMapping,
   DEFAULT_CONTRACT_BODY,
   type ContractTemplate,
   type ContractSigner,
@@ -582,8 +583,15 @@ function EventoInterna() {
       const vars = await eventContractsService.compileContractVariables(eventoId, sId);
       setCompiledVariables(vars);
       const templateToUse = realTemplates.find((t) => t.id === selectedTemplate) || realTemplates.find((t) => t.is_default) || realTemplates[0];
+
+      if (!templateToUse) {
+        alert("Nenhum modelo de contrato anexado. Por favor, acesse Documentos > Contratos e anexe seu modelo primeiro.");
+        return;
+      }
+
       const templateContent = getTemplateContent(templateToUse);
-      const text = renderContractTemplate(templateContent, vars);
+      const mapping = getTemplateMapping(templateToUse);
+      const text = renderContractTemplate(templateContent, vars, mapping);
       setCompiledContractText(text);
       setShowContractPreviewModal(true);
     } catch (e: any) {

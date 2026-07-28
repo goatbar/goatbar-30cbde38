@@ -130,9 +130,9 @@ export const contractTemplatesService = {
   },
 };
 
-// --- Helper de Renderização de Template com Variáveis ---
+// --- Helper de Renderização e Mapeamento de Template com Variáveis ---
 export function getTemplateContent(template?: ContractTemplate | null): string {
-  if (!template) return DEFAULT_CONTRACT_BODY;
+  if (!template) return "";
 
   if (
     template.variables_schema &&
@@ -140,60 +140,64 @@ export function getTemplateContent(template?: ContractTemplate | null): string {
     !Array.isArray(template.variables_schema)
   ) {
     const schemaObj = template.variables_schema as any;
-    if (schemaObj.content && typeof schemaObj.content === "string" && schemaObj.content.trim().length > 10) {
+    if (schemaObj.content && typeof schemaObj.content === "string" && schemaObj.content.trim().length > 0) {
       return schemaObj.content;
     }
   }
 
-  if (template.description && template.description.trim().length > 20) {
+  if (template.description && template.description.trim().length > 0) {
     return template.description;
   }
 
-  return DEFAULT_CONTRACT_BODY;
+  return "";
 }
 
-export function renderContractTemplate(templateBody: string, variables: Record<string, any>): string {
-  let result = templateBody || DEFAULT_CONTRACT_BODY;
+export function getTemplateMapping(template?: ContractTemplate | null): Record<string, string> {
+  if (
+    template?.variables_schema &&
+    typeof template.variables_schema === "object" &&
+    !Array.isArray(template.variables_schema)
+  ) {
+    const schemaObj = template.variables_schema as any;
+    if (schemaObj.mapping && typeof schemaObj.mapping === "object") {
+      return schemaObj.mapping as Record<string, string>;
+    }
+  }
+  return {};
+}
+
+export function renderContractTemplate(
+  templateBody: string,
+  variables: Record<string, any>,
+  customMapping?: Record<string, string>
+): string {
+  let result = templateBody || "";
+
+  // 1. Substituição via mapeamento customizado (De-Para do Usuário)
+  if (customMapping) {
+    Object.keys(customMapping).forEach((sysKey) => {
+      const matchToken = customMapping[sysKey];
+      if (matchToken && matchToken.trim().length > 0) {
+        const val = variables[sysKey] !== undefined && variables[sysKey] !== null ? String(variables[sysKey]) : "";
+        // Escapar caracteres de regex se necessário
+        const escaped = matchToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const regex = new RegExp(escaped, "gi");
+        result = result.replace(regex, val);
+      }
+    });
+  }
+
+  // 2. Substituição padrão para tags {{chave}}
   Object.keys(variables).forEach((key) => {
     const val = variables[key] !== undefined && variables[key] !== null ? String(variables[key]) : "";
     const regex = new RegExp(`{{\\s*${key}\\s*}}`, "gi");
     result = result.replace(regex, val);
   });
+
   return result;
 }
 
-export const DEFAULT_CONTRACT_BODY = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE BAR E COQUETELARIA
-
-Pelo presente instrumento particular de prestação de serviços:
-
-CONTRATANTE: {{cliente_nome}}, CPF/CNPJ: {{cliente_documento}}, Endereço: {{cliente_endereco}}, E-mail: {{cliente_email}}, Telefone: {{cliente_telefone}}.
-
-CONTRATADA: GOAT BAR EVENTOS LTDA, representada por {{socio_nome}}, CPF: {{socio_cpf}}, Cargo: {{socio_cargo}}.
-
-1. CLÁUSULA PRIMEIRA - DO OBJETO
-O presente contrato tem como objeto a prestação de serviços de bar e coquetelaria para o evento "{{evento_nome}}" ({{evento_tipo}}), a realizar-se no dia {{evento_data}} às {{evento_horario}}, no local {{evento_local}} - {{evento_cidade}}, para o público estimado de {{evento_convidados}} convidados.
-
-2. CLÁUSULA SEGUNDA - DO CARDÁPIO DE BEBIDAS
-Os drinks e bebidas inclusos no evento são:
-{{drinks_lista}}
-
-Descrição do Cardápio:
-{{bebidas_descricao}}
-
-3. CLÁUSULA TERCEIRA - DO VALOR E FORMA DE PAGAMENTO
-Pela prestação dos serviços acordados, o CONTRATANTE pagará à CONTRATADA o valor total de {{evento_valor_total}}, mediante a forma de pagamento: {{evento_forma_pagamento}}.
-
-4. CLÁUSULA QUARTA - REPOSIÇÃO DE COPUS E UTENSÍLIOS
-Em caso de quebra, dano ou extravio de copos e utensílios fornecidos pela CONTRATADA, o CONTRATANTE responsabiliza-se pelo ressarcimento dos valores de reposição conforme tabela:
-{{tabela_reposicao}}
-
-Data de Emissão: {{data_emissao}}
-
-_____________________________________________
-CONTRATANTE: {{cliente_nome}}
-
-_____________________________________________
-CONTRATADA: GOAT BAR EVENTOS LTDA ({{socio_nome}})`;
+export const DEFAULT_CONTRACT_BODY = "";
 
 // --- 2. Signers Service ---
 export const contractSignersService = {
@@ -222,6 +226,11 @@ export const contractSignersService = {
       .single();
     if (error) throw error;
     return data;
+  },
+
+  async deleteSigner(id: string) {
+    const { error } = await supabase.from("contract_signers").delete().eq("id", id);
+    if (error) throw error;
   },
 };
 
@@ -440,6 +449,7 @@ export const eventContractsService = {
       socio_nome: signer?.name || "Representante GOAT Bar",
       socio_cpf: signer?.cpf || "",
       socio_cargo: signer?.role || "Sócio Diretor",
+      socio_endereco: signer?.address || "",
       data_emissao: new Date().toLocaleDateString("pt-BR"),
     };
 

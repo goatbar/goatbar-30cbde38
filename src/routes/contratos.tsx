@@ -15,7 +15,6 @@ import {
   Copy,
   Sparkles,
   Check,
-  FileCheck,
   Eye,
   Edit,
   Trash2,
@@ -23,6 +22,8 @@ import {
   FileSignature,
   Paperclip,
   Save,
+  ArrowRightLeft,
+  Upload,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import {
@@ -32,7 +33,7 @@ import {
   eventContractsService,
   renderContractTemplate,
   getTemplateContent,
-  DEFAULT_CONTRACT_BODY,
+  getTemplateMapping,
   type ContractTemplate,
   type ContractSigner,
   type Glassware,
@@ -49,61 +50,43 @@ export const Route = createFileRoute("/contratos")({
 
 const tabs = [
   { id: "contratos", label: "Contratos Gerados", icon: FileText },
-  { id: "templates", label: "Templates & Mapeamento", icon: Code },
+  { id: "templates", label: "Modelos Anexados & Match", icon: Upload },
   { id: "socios", label: "Sócios Assinantes", icon: Users },
   { id: "copos", label: "Copos / Utensílios", icon: Wine },
 ];
 
-export const VARIABLE_CATEGORIES = [
-  {
-    category: "👤 Dados do Contratante (Cliente)",
-    variables: [
-      { key: "cliente_nome", label: "Nome do Cliente", desc: "Nome completo ou Razão Social" },
-      { key: "cliente_documento", label: "CPF / CNPJ", desc: "Documento de identificação" },
-      { key: "cliente_endereco", label: "Endereço do Cliente", desc: "Logradouro, número e bairro" },
-      { key: "cliente_email", label: "E-mail de Contato", desc: "Endereço de e-mail" },
-      { key: "cliente_telefone", label: "Telefone / WhatsApp", desc: "Número de telefone" },
-    ],
-  },
-  {
-    category: "🥂 Dados do Evento",
-    variables: [
-      { key: "evento_nome", label: "Nome do Evento", desc: "Ex: Casamento Ana & Pedro" },
-      { key: "evento_tipo", label: "Tipo de Evento", desc: "Casamento, Aniversário, Corporativo" },
-      { key: "evento_data", label: "Data do Evento", desc: "Data formatada (DD/MM/AAAA)" },
-      { key: "evento_horario", label: "Horário de Início", desc: "Horário programado" },
-      { key: "evento_local", label: "Local do Evento", desc: "Espaço ou salão de festas" },
-      { key: "evento_cidade", label: "Cidade", desc: "Cidade da realização" },
-      { key: "evento_convidados", label: "Qtd. Convidados", desc: "Número total de pessoas" },
-    ],
-  },
-  {
-    category: "🍹 Cardápio de Bebidas & Utensílios",
-    variables: [
-      { key: "drinks_lista", label: "Lista dos Drinks", desc: "Nomes dos coquetéis inclusos" },
-      { key: "bebidas_descricao", label: "Descrição do Cardápio", desc: "Detalhamento de insumos e marcas" },
-      { key: "tabela_reposicao", label: "Tabela de Reposição de Copos", desc: "Valores por unidade em caso de quebra" },
-    ],
-  },
-  {
-    category: "💰 Valores & Condições Financeiras",
-    variables: [
-      { key: "evento_valor_total", label: "Valor Total (R$)", desc: "Valor final do orçamento" },
-      { key: "evento_forma_pagamento", label: "Forma de Pagamento", desc: "Parcelas e condições" },
-    ],
-  },
-  {
-    category: "✒️ Representante GOAT Bar & Emissão",
-    variables: [
-      { key: "socio_nome", label: "Nome Sócio Goat", desc: "Representante legal da contratada" },
-      { key: "socio_cpf", label: "CPF Sócio Goat", desc: "Documento do sócio assinante" },
-      { key: "socio_cargo", label: "Cargo Sócio Goat", desc: "Ex: Sócio Diretor" },
-      { key: "data_emissao", label: "Data de Emissão", desc: "Data de assinatura/geração" },
-    ],
-  },
-];
+export interface SystemField {
+  key: string;
+  label: string;
+  category: string;
+  desc: string;
+  defaultTag: string;
+}
 
-export const ALL_VARIABLES = VARIABLE_CATEGORIES.flatMap((c) => c.variables);
+export const SystemFields: SystemField[] = [
+  { key: "cliente_nome", label: "Nome / Razão Social do Cliente", category: "Cliente", desc: "Nome completo do contratante", defaultTag: "[NOME_CLIENTE]" },
+  { key: "cliente_documento", label: "CPF / CNPJ do Cliente", category: "Cliente", desc: "Documento de identificação", defaultTag: "[CPF_CLIENTE]" },
+  { key: "cliente_endereco", label: "Endereço do Cliente", category: "Cliente", desc: "Endereço residencial/comercial", defaultTag: "[ENDERECO_CLIENTE]" },
+  { key: "cliente_email", label: "E-mail de Contato", category: "Cliente", desc: "E-mail para assinaturas e notificações", defaultTag: "[EMAIL_CLIENTE]" },
+  { key: "cliente_telefone", label: "Telefone / WhatsApp", category: "Cliente", desc: "Número para contato", defaultTag: "[TELEFONE_CLIENTE]" },
+  { key: "evento_nome", label: "Nome do Evento", category: "Evento", desc: "Nome da celebração (ex: Casamento Ana & Pedro)", defaultTag: "[NOME_EVENTO]" },
+  { key: "evento_tipo", label: "Tipo do Evento", category: "Evento", desc: "Casamento, Aniversário, Corporativo", defaultTag: "[TIPO_EVENTO]" },
+  { key: "evento_data", label: "Data do Evento", category: "Evento", desc: "Data de realização (DD/MM/AAAA)", defaultTag: "[DATA_EVENTO]" },
+  { key: "evento_horario", label: "Horário de Início", category: "Evento", desc: "Horário programado para início", defaultTag: "[HORARIO_EVENTO]" },
+  { key: "evento_local", label: "Local do Evento", category: "Evento", desc: "Nome do espaço / Salão", defaultTag: "[LOCAL_EVENTO]" },
+  { key: "evento_cidade", label: "Cidade do Evento", category: "Evento", desc: "Cidade da realização", defaultTag: "[CIDADE_EVENTO]" },
+  { key: "evento_convidados", label: "Qtd. de Convidados", category: "Evento", desc: "Número total de convidados", defaultTag: "[QTD_CONVIDADOS]" },
+  { key: "drinks_lista", label: "Lista de Drinks / Coquetéis", category: "Cardápio", desc: "Nomes das bebidas inclusas", defaultTag: "[LISTA_DRINKS]" },
+  { key: "bebidas_descricao", label: "Descrição do Cardápio", category: "Cardápio", desc: "Marcas, insumos e detalhes das bebidas", defaultTag: "[DESCRICAO_BEBIDAS]" },
+  { key: "tabela_reposicao", label: "Tabela de Reposição de Copos", category: "Cardápio", desc: "Valores por unidade em caso de quebra", defaultTag: "[TABELA_REPOSICAO]" },
+  { key: "evento_valor_total", label: "Valor Total do Orçamento", category: "Financeiro", desc: "Valor total do contrato (R$)", defaultTag: "[VALOR_TOTAL]" },
+  { key: "evento_forma_pagamento", label: "Forma de Pagamento", category: "Financeiro", desc: "Condições e forma de pagamento acertadas", defaultTag: "[FORMA_PAGAMENTO]" },
+  { key: "socio_nome", label: "Nome do Sócio GOAT Bar", category: "Representante", desc: "Sócio representante da contratada", defaultTag: "[SOCIO_GOAT]" },
+  { key: "socio_cpf", label: "CPF do Sócio GOAT Bar", category: "Representante", desc: "Documento do sócio assinante", defaultTag: "[CPF_SOCIO_GOAT]" },
+  { key: "socio_cargo", label: "Cargo do Sócio GOAT Bar", category: "Representante", desc: "Ex: Sócio Diretor", defaultTag: "[CARGO_SOCIO_GOAT]" },
+  { key: "socio_endereco", label: "Endereço do Sócio GOAT Bar", category: "Representante", desc: "Endereço completo do sócio assinante", defaultTag: "[ENDERECO_SOCIO_GOAT]" },
+  { key: "data_emissao", label: "Data de Emissão", category: "Geral", desc: "Data em que o contrato é gerado", defaultTag: "[DATA_EMISSAO]" },
+];
 
 const SAMPLE_VARIABLES: Record<string, string> = {
   cliente_nome: "Maria Fernanda Oliveira",
@@ -120,12 +103,13 @@ const SAMPLE_VARIABLES: Record<string, string> = {
   evento_convidados: "150",
   evento_valor_total: "R$ 6.800,00",
   evento_forma_pagamento: "50% no ato + 50% até 5 dias antes do evento",
-  drinks_lista: "Gin Tônica Tradicional, Mosco Mule, Penicillin, Aperol Spritz, Caipirinha de Frutas Vermelhas",
+  drinks_lista: "Gin Tônica Tradicional, Moscow Mule, Penicillin, Aperol Spritz, Caipirinha de Frutas Vermelhas",
   bebidas_descricao: "Bebidas premium, insumos frescos, xaropes artesanais e gelo translúcido fornecido pela GOAT Bar.",
   tabela_reposicao: "• Taça Gin Crystal 600ml: R$ 25,00 por unidade\n• Copo Baixo Old Fashioned: R$ 18,00 por unidade\n• Copo Long Drink: R$ 15,00 por unidade",
   socio_nome: "Gabriel Santos Silva",
   socio_cpf: "987.654.321-11",
   socio_cargo: "Sócio Diretor",
+  socio_endereco: "Rua Haddock Lobo, 500, Jardins - São Paulo/SP",
   data_emissao: new Date().toLocaleDateString("pt-BR"),
 };
 
@@ -133,7 +117,6 @@ function ContratosPage() {
   const [activeTab, setActiveTab] = useState("contratos");
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
-  const [copiedVar, setCopiedVar] = useState<string | null>(null);
 
   // Estados Reais
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
@@ -142,37 +125,46 @@ function ContratosPage() {
   const [contracts, setContracts] = useState<any[]>([]);
 
   // Estados dos Modais
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showUploadMatchModal, setShowUploadMatchModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ContractTemplate | null>(null);
   const [showSignerModal, setShowSignerModal] = useState(false);
+  const [editingSigner, setEditingSigner] = useState<ContractSigner | null>(null);
   const [showGlasswareModal, setShowGlasswareModal] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<ContractTemplate | null>(null);
 
-  // Estados do Formulário de Template
-  const [templateForm, setTemplateForm] = useState({
-    name: "",
-    description: "",
-    is_default: false,
-    content: DEFAULT_CONTRACT_BODY,
-  });
-
-  const [newSigner, setNewSigner] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    role: "Sócio Diretor",
-    cpf: "",
-    address: "",
-  });
-
-  const [newGlassware, setNewGlassware] = useState({
-    name: "",
-    type: "Copo",
-    replacement_value: 15,
-  });
-
-  const [uploading, setUploading] = useState(false);
+  // Estados de Formulário do Template & Match
+  const [templateName, setTemplateName] = useState("");
+  const [templateContent, setTemplateContent] = useState("");
+  const [isDefault, setIsDefault] = useState(false);
+  const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const openCreateSignerModal = () => {
+    setEditingSigner(null);
+    setNewSigner({
+      name: "",
+      email: "",
+      phone: "",
+      role: "Sócio Diretor",
+      cpf: "",
+      address: "",
+    });
+    setShowSignerModal(true);
+  };
+
+  const openEditSignerModal = (s: ContractSigner) => {
+    setEditingSigner(s);
+    setNewSigner({
+      name: s.name || "",
+      email: s.email || "",
+      phone: s.phone || "",
+      role: s.role || "Sócio Diretor",
+      cpf: s.cpf || "",
+      address: s.address || "",
+    });
+    setShowSignerModal(true);
+  };
 
   useEffect(() => {
     loadData();
@@ -188,7 +180,6 @@ function ContratosPage() {
         eventContractsService.listAllContracts(),
       ]);
 
-      // Enriquecer lista de contratos com informações do evento
       const enrichedContracts = await Promise.all(
         (rawContracts || []).map(async (c: any) => {
           if (!c.event_id) return c;
@@ -222,75 +213,112 @@ function ContratosPage() {
     }
   };
 
-  const openCreateTemplateModal = () => {
-    setEditingTemplate(null);
-    setTemplateForm({
-      name: "",
-      description: "",
-      is_default: templates.length === 0,
-      content: DEFAULT_CONTRACT_BODY,
-    });
+  const openUploadMatchModal = (tpl?: ContractTemplate) => {
+    if (tpl) {
+      setEditingTemplate(tpl);
+      setTemplateName(tpl.name);
+      setTemplateContent(getTemplateContent(tpl));
+      setIsDefault(!!tpl.is_default);
+      
+      const existingMapping = getTemplateMapping(tpl);
+      // Preenche com o mapeamento existente ou valores padrão
+      const initMap: Record<string, string> = {};
+      SystemFields.forEach((f) => {
+        initMap[f.key] = existingMapping[f.key] || f.defaultTag;
+      });
+      setFieldMapping(initMap);
+    } else {
+      setEditingTemplate(null);
+      setTemplateName("");
+      setTemplateContent("");
+      setIsDefault(templates.length === 0);
+      
+      const initMap: Record<string, string> = {};
+      SystemFields.forEach((f) => {
+        initMap[f.key] = f.defaultTag;
+      });
+      setFieldMapping(initMap);
+    }
     setSelectedFile(null);
-    setShowTemplateModal(true);
+    setShowUploadMatchModal(true);
   };
 
-  const openEditTemplateModal = (tpl: ContractTemplate) => {
-    setEditingTemplate(tpl);
-    const content = getTemplateContent(tpl);
-    setTemplateForm({
-      name: tpl.name,
-      description: tpl.description || "",
-      is_default: !!tpl.is_default,
-      content: content,
+  const handleFileSelect = async (file: File | null) => {
+    setSelectedFile(file);
+    if (!file) return;
+
+    if (!templateName) {
+      setTemplateName(file.name.replace(/\.[^/.]+$/, ""));
+    }
+
+    // Se for arquivo de texto (.txt, .html, .md), lê o conteúdo
+    if (file.name.endsWith(".txt") || file.name.endsWith(".html") || file.name.endsWith(".md") || file.type.startsWith("text/")) {
+      try {
+        const text = await file.text();
+        if (text) setTemplateContent(text);
+      } catch (err) {
+        console.warn("Erro ao ler texto do arquivo:", err);
+      }
+    }
+  };
+
+  const autoMatchTagsInText = () => {
+    if (!templateContent) return alert("Selecione um arquivo ou cole o texto do contrato primeiro.");
+
+    const newMap = { ...fieldMapping };
+    let matchesCount = 0;
+
+    SystemFields.forEach((f) => {
+      // Procura por variações no texto como [NOME_CLIENTE], {{cliente_nome}}, {CLIENTE_NOME}, etc.
+      const patterns = [
+        f.defaultTag,
+        `{{${f.key}}}`,
+        `{${f.key}}`,
+        `[${f.key.toUpperCase()}]`,
+        `[${f.label.toUpperCase()}]`,
+      ];
+
+      for (const p of patterns) {
+        if (templateContent.toLowerCase().includes(p.toLowerCase())) {
+          newMap[f.key] = p;
+          matchesCount++;
+          break;
+        }
+      }
     });
-    setSelectedFile(null);
-    setShowTemplateModal(true);
+
+    setFieldMapping(newMap);
+    alert(`${matchesCount} campo(s) foram auto-identificados no texto do seu contrato!`);
   };
 
   const handleDeleteTemplate = async (tplId: string) => {
-    if (!confirm("Tem certeza de que deseja excluir este modelo de contrato?")) return;
+    if (!confirm("Tem certeza de que deseja excluir este modelo anexado?")) return;
     try {
       await contractTemplatesService.deleteTemplate(tplId);
       loadData();
-      alert("Modelo de contrato excluído.");
+      alert("Modelo de contrato excluído com sucesso.");
     } catch (e: any) {
       alert(`Erro ao excluir template: ${e.message}`);
     }
   };
 
-  const copyVariableToClipboard = (varKey: string) => {
-    const token = `{{${varKey}}}`;
-    navigator.clipboard.writeText(token);
-    setCopiedVar(varKey);
-    setTimeout(() => setCopiedVar(null), 2000);
+  const handleDeleteSigner = async (signerId: string) => {
+    if (!confirm("Tem certeza de que deseja excluir este sócio assinante?")) return;
+    try {
+      await contractSignersService.deleteSigner(signerId);
+      loadData();
+      alert("Sócio assinante excluído com sucesso.");
+    } catch (e: any) {
+      alert(`Erro ao excluir sócio: ${e.message}`);
+    }
   };
 
-  const insertVariableIntoTemplateContent = (varKey: string) => {
-    const token = `{{${varKey}}}`;
-    setTemplateForm((prev) => ({
-      ...prev,
-      content: prev.content + " " + token,
-    }));
-    copyVariableToClipboard(varKey);
-  };
-
-  const handleFileChange = async (file: File | null) => {
-    setSelectedFile(file);
-    if (!file) return;
-
-    // Se for arquivo de texto (.txt, .html, .md), lê o conteúdo diretamente
-    if (file.name.endsWith(".txt") || file.name.endsWith(".html") || file.name.endsWith(".md") || file.type.startsWith("text/")) {
-      try {
-        const text = await file.text();
-        if (text && text.trim().length > 10) {
-          setTemplateForm((prev) => ({
-            ...prev,
-            content: text,
-          }));
-        }
-      } catch (err) {
-        console.warn("Não foi possível ler texto bruto do arquivo:", err);
-      }
+  const handleToggleSignerActive = async (signer: ContractSigner) => {
+    try {
+      await contractSignersService.updateSigner(signer.id, { is_active: !signer.is_active });
+      loadData();
+    } catch (e: any) {
+      alert(`Erro ao atualizar status do sócio: ${e.message}`);
     }
   };
 
@@ -304,8 +332,8 @@ function ContratosPage() {
     <>
       <PageHeader
         breadcrumb="Documentos"
-        title="Contratos & Templates"
-        subtitle="Gestão de modelos customizados, mapeamento de variáveis dinâmicas e sócios assinantes."
+        title="Contratos & Upload de Modelos"
+        subtitle="Anexe seu contrato original e faça o Match (De-Para) de campos para geração automática."
       />
 
       <div className="page-container grid grid-cols-1 xl:grid-cols-12 gap-5">
@@ -330,20 +358,20 @@ function ContratosPage() {
           })}
         </aside>
 
-        {/* Conteúdo Principais */}
+        {/* Conteúdo Principal */}
         <div className="xl:col-span-9 space-y-5">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 bg-surface border border-border rounded-2xl">
               <Loader2 className="h-8 w-8 text-primary animate-spin mb-4" />
-              <p className="text-sm text-muted-foreground">Carregando dados do módulo de contratos...</p>
+              <p className="text-sm text-muted-foreground">Carregando dados dos contratos...</p>
             </div>
           ) : (
             <>
               {/* TAB 1: CONTRATOS GERADOS */}
               {activeTab === "contratos" && (
                 <SectionCard
-                  title="Contratos Gerados nos Eventos"
-                  subtitle="Histórico de minutas e documentos formalizados vinculados aos eventos"
+                  title="Contratos Emitidos"
+                  subtitle="Histórico de contratos formalizados vinculados aos eventos da GOAT Bar"
                   action={
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -359,7 +387,7 @@ function ContratosPage() {
                 >
                   {filteredContracts.length === 0 ? (
                     <div className="p-12 text-center text-muted-foreground text-sm border-2 border-dashed border-border rounded-2xl">
-                      Nenhum contrato gerado ainda. Acesse a aba <b>Contrato</b> de qualquer evento para gerar documentos com preenchimento automático.
+                      Nenhum contrato gerado ainda. Acesse a aba <b>Contrato</b> de qualquer evento para emitir seu documento automaticamente.
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -395,7 +423,7 @@ function ContratosPage() {
                                 )}
                               </div>
                               <div className="text-[11px] text-muted-foreground/80 mt-1">
-                                Modelo Utilizado: <b>{template?.name || "Template Personalizado"}</b> (v{ec.version || 1})
+                                Modelo Utilizado: <b>{template?.name || "Modelo Anexado"}</b> (v{ec.version || 1})
                               </div>
                             </div>
                             <div className="flex flex-wrap gap-2 items-center">
@@ -425,75 +453,42 @@ function ContratosPage() {
                 </SectionCard>
               )}
 
-              {/* TAB 2: TEMPLATES & MAPEAMENTO */}
+              {/* TAB 2: MODELOS ANEXADOS & MATCH (DE-PARA) */}
               {activeTab === "templates" && (
                 <div className="space-y-6">
-                  {/* Banner Guia de Variáveis Dinâmicas */}
-                  <div className="p-6 rounded-2xl bg-primary/5 border border-primary/20 space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary shrink-0">
-                        <Sparkles className="h-5 w-5" />
+                  {/* Callout instrutivo */}
+                  <div className="p-6 rounded-2xl bg-primary/5 border border-primary/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                    <div className="flex items-center gap-4">
+                      <div className="h-12 w-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary shrink-0 shadow-inner">
+                        <ArrowRightLeft className="h-6 w-6" />
                       </div>
                       <div>
-                        <h3 className="font-display font-bold text-lg">Mapeador de Campos Automáticos</h3>
-                        <p className="text-xs text-muted-foreground">
-                          Escreva ou edite a estrutura do seu contrato usando as tags abaixo. Ao emitir o contrato no evento, o sistema substituirá cada tag exatamente pelos dados informados pelo cliente e pelo orçamento!
+                        <h3 className="font-display font-bold text-lg">Faça o Upload do Seu Modelo Original</h3>
+                        <p className="text-xs text-muted-foreground max-w-xl">
+                          Anexe o arquivo de contrato da GOAT Bar (Word, PDF ou Texto). Em seguida, faça o <b>Match de Campos</b> indicando quais tags do seu arquivo correspondem ao nome do cliente, valor do orçamento, lista de drinks, etc.
                         </p>
                       </div>
                     </div>
-
-                    <div className="space-y-3 pt-2">
-                      {VARIABLE_CATEGORIES.map((cat) => (
-                        <div key={cat.category} className="space-y-1.5">
-                          <div className="text-[11px] font-bold uppercase tracking-wider text-primary">
-                            {cat.category}
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-                            {cat.variables.map((v) => (
-                              <button
-                                key={v.key}
-                                type="button"
-                                onClick={() => copyVariableToClipboard(v.key)}
-                                className="p-2 rounded-xl border border-border bg-surface hover:border-primary/50 text-left transition-all group flex flex-col justify-between"
-                              >
-                                <div className="flex items-center justify-between gap-1 mb-0.5">
-                                  <span className="font-mono text-[10px] font-bold text-primary group-hover:underline">
-                                    {`{{${v.key}}}`}
-                                  </span>
-                                  {copiedVar === v.key ? (
-                                    <Check className="h-3 w-3 text-success shrink-0" />
-                                  ) : (
-                                    <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                                  )}
-                                </div>
-                                <span className="text-[10px] font-medium text-foreground truncate">{v.label}</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <PrimaryButton
+                      onClick={() => openUploadMatchModal()}
+                      className="h-11 px-6 font-bold shadow-lg shadow-primary/20 shrink-0"
+                    >
+                      <Upload className="h-4 w-4 mr-2" /> ANEXAR MEU CONTRATO
+                    </PrimaryButton>
                   </div>
 
                   <SectionCard
-                    title="Seus Modelos de Contrato"
-                    subtitle="Todos os modelos cadastrados no sistema. Você pode personalizar as cláusulas e quais campos deseja preencher."
-                    action={
-                      <PrimaryButton
-                        onClick={openCreateTemplateModal}
-                        className="h-9 px-4 text-sm font-bold shadow-md shadow-primary/20"
-                      >
-                        <Plus className="h-4 w-4 mr-1" /> Novo Modelo de Contrato
-                      </PrimaryButton>
-                    }
+                    title="Seus Contratos Anexados & Configurados"
+                    subtitle="Modelos enviados por você com mapeamento de campos ativo"
                   >
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {templates.map((t) => {
-                        const content = getTemplateContent(t);
+                        const mapping = getTemplateMapping(t);
+                        const mappedCount = Object.keys(mapping).filter((k) => mapping[k] && mapping[k].trim().length > 0).length;
                         return (
                           <div
                             key={t.id}
-                            className="p-5 border border-border rounded-2xl bg-surface relative group space-y-4 hover:border-primary/40 transition-all shadow-sm flex flex-col justify-between"
+                            className="p-5 border border-border rounded-2xl bg-surface space-y-4 hover:border-primary/40 transition-all shadow-sm flex flex-col justify-between"
                           >
                             <div>
                               <div className="flex justify-between items-start">
@@ -502,16 +497,20 @@ function ContratosPage() {
                                     {t.name}
                                     {t.is_default && (
                                       <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-md border border-primary/20">
-                                        Padrão
+                                        Padrão Oficial
                                       </span>
                                     )}
                                   </div>
-                                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                    {t.description || content.substring(0, 120) + "..."}
-                                  </p>
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    {mappedCount > 0 ? (
+                                      <span className="text-success font-semibold">✓ {mappedCount} campos mapeados (Match OK)</span>
+                                    ) : (
+                                      <span className="text-warning font-semibold">⚠️ Mapeamento de campos pendente</span>
+                                    )}
+                                  </div>
                                 </div>
                                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-background border rounded-md text-muted-foreground shrink-0">
-                                  {t.file_type || "TXT"}
+                                  {t.file_type || "ARQUIVO"}
                                 </span>
                               </div>
 
@@ -521,27 +520,27 @@ function ContratosPage() {
                                     href={t.file_url}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="inline-flex items-center gap-1.5 text-xs text-primary font-medium hover:underline bg-primary/5 px-2.5 py-1 rounded-lg border border-primary/10"
+                                    className="inline-flex items-center gap-1.5 text-xs text-primary font-medium hover:underline bg-primary/5 px-3 py-1.5 rounded-xl border border-primary/10"
                                   >
-                                    <Paperclip className="h-3 w-3" /> Arquivo Original Anexado
+                                    <Paperclip className="h-3.5 w-3.5" /> Baixar Arquivo Original Anexado
                                   </a>
                                 </div>
                               )}
                             </div>
 
                             <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-border/50 text-xs">
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-2">
+                                <PrimaryButton
+                                  onClick={() => openUploadMatchModal(t)}
+                                  className="h-8 text-xs font-bold px-3"
+                                >
+                                  <ArrowRightLeft className="h-3.5 w-3.5 mr-1" /> Match de Campos
+                                </PrimaryButton>
                                 <GhostButton
                                   onClick={() => setPreviewTemplate(t)}
                                   className="h-8 text-xs font-semibold px-2.5"
                                 >
                                   <Eye className="h-3.5 w-3.5 mr-1" /> Prévia
-                                </GhostButton>
-                                <GhostButton
-                                  onClick={() => openEditTemplateModal(t)}
-                                  className="h-8 text-xs font-semibold px-2.5 text-primary hover:bg-primary/10"
-                                >
-                                  <Edit className="h-3.5 w-3.5 mr-1" /> Editar
                                 </GhostButton>
                               </div>
 
@@ -571,11 +570,16 @@ function ContratosPage() {
                       })}
 
                       {templates.length === 0 && (
-                        <div className="col-span-2 text-center py-12 text-muted-foreground text-sm border-2 border-dashed border-border rounded-2xl space-y-3">
-                          <p>Nenhum template personalizado cadastrado ainda.</p>
-                          <p className="text-xs">
-                            Clique em <b>"Novo Modelo de Contrato"</b> acima para criar seu modelo com as suas cláusulas e variáveis personalizadas!
-                          </p>
+                        <div className="col-span-2 text-center py-16 text-muted-foreground text-sm border-2 border-dashed border-border rounded-2xl space-y-4 bg-background/30">
+                          <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto text-primary">
+                            <Upload className="h-8 w-8" />
+                          </div>
+                          <div>
+                            <h4 className="font-display font-bold text-base text-foreground mb-1">Nenhum contrato anexado ainda</h4>
+                            <p className="text-xs max-w-md mx-auto">
+                              Clique no botão <b>"ANEXAR MEU CONTRATO"</b> para subir seu arquivo (Word, PDF ou Texto) e fazer a correspondência dos campos.
+                            </p>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -587,10 +591,10 @@ function ContratosPage() {
               {activeTab === "socios" && (
                 <SectionCard
                   title="Sócios Assinantes da GOAT Bar"
-                  subtitle="Representantes legais cadastrados para constar como contratada nos documentos"
+                  subtitle="Representantes legais cadastrados para constar como contratada nos contratos anexados"
                   action={
                     <PrimaryButton
-                      onClick={() => setShowSignerModal(true)}
+                      onClick={openCreateSignerModal}
                       className="h-9 px-4 text-sm font-bold"
                     >
                       <Plus className="h-4 w-4 mr-1" /> Novo Sócio
@@ -601,38 +605,58 @@ function ContratosPage() {
                     {signers.map((s) => (
                       <div
                         key={s.id}
-                        className={`p-4 border rounded-2xl flex justify-between items-center ${
+                        className={`p-5 border rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${
                           s.is_active ? "border-border bg-surface shadow-sm" : "border-border/50 bg-background opacity-60"
                         }`}
                       >
-                        <div>
+                        <div className="space-y-1">
                           <div className="font-display font-bold text-base flex items-center gap-2">
                             {s.name}
                             <span className="text-xs font-normal text-muted-foreground">
                               ({s.role || "Sócio Diretor"})
                             </span>
                           </div>
-                          <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-3">
-                            {s.cpf && <span>CPF: {s.cpf}</span>}
-                            {s.email && <span>E-mail: {s.email}</span>}
-                            {s.phone && <span>Tel: {s.phone}</span>}
+                          <div className="text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
+                            {s.cpf && <span>CPF: <b>{s.cpf}</b></span>}
+                            {s.email && <span>E-mail: <b>{s.email}</b></span>}
+                            {s.phone && <span>Tel: <b>{s.phone}</b></span>}
                           </div>
+                          {s.address && (
+                            <div className="text-xs text-primary font-medium mt-1">
+                              📍 Endereço: {s.address}
+                            </div>
+                          )}
                         </div>
-                        <div>
-                          <span
-                            className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${
-                              s.is_active ? "bg-success/15 text-success border border-success/20" : "bg-muted text-muted-foreground"
+                        <div className="flex items-center gap-2 shrink-0">
+                          <GhostButton
+                            onClick={() => openEditSignerModal(s)}
+                            className="h-8 text-xs font-bold px-3 border text-primary hover:bg-primary/10"
+                          >
+                            <Edit className="h-3.5 w-3.5 mr-1" /> Editar
+                          </GhostButton>
+                          <button
+                            onClick={() => handleToggleSignerActive(s)}
+                            className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full cursor-pointer transition-opacity hover:opacity-80 ${
+                              s.is_active ? "bg-success/15 text-success border border-success/20" : "bg-muted text-muted-foreground border"
                             }`}
+                            title="Clique para alternar o status do sócio"
                           >
                             {s.is_active ? "Ativo" : "Inativo"}
-                          </span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSigner(s.id)}
+                            className="text-xs text-destructive hover:bg-destructive/10 p-2 rounded-xl transition-colors"
+                            title="Excluir Sócio Assinante"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
                       </div>
                     ))}
 
                     {signers.length === 0 && (
                       <div className="text-center py-10 text-muted-foreground text-sm border-2 border-dashed border-border rounded-2xl">
-                        Nenhum sócio cadastrado. Cadastre o sócio para preencher automaticamente as tags <code className="text-primary font-bold">{"{{socio_nome}}"}</code> e <code className="text-primary font-bold">{"{{socio_cpf}}"}</code>.
+                        Nenhum sócio cadastrado. Cadastre o representante legal para substituição do sócio assinante e seu endereço.
                       </div>
                     )}
                   </div>
@@ -643,7 +667,7 @@ function ContratosPage() {
               {activeTab === "copos" && (
                 <SectionCard
                   title="Copos e Utensílios"
-                  subtitle="Tabela oficial de valores de reposição para inclusão automática na tag {{tabela_reposicao}}"
+                  subtitle="Tabela oficial de valores de reposição para quebras nos eventos"
                   action={
                     <PrimaryButton
                       onClick={() => setShowGlasswareModal(true)}
@@ -697,176 +721,212 @@ function ContratosPage() {
         </div>
       </div>
 
-      {/* --- MODAIS --- */}
-
-      {/* MODAL CRIAR / EDITAR TEMPLATE */}
-      {showTemplateModal && (
+      {/* --- MODAL DE UPLOAD DE CONTRATO & MATCH DE CAMPOS (DE-PARA) --- */}
+      {showUploadMatchModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="w-full max-w-4xl bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden my-8">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                <h2 className="font-display text-lg font-bold">
-                  {editingTemplate ? `Editar Modelo: ${editingTemplate.name}` : "Novo Modelo de Contrato"}
-                </h2>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary font-bold">
+                  <ArrowRightLeft className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="font-display text-lg font-bold">
+                    {editingTemplate ? `Match de Campos: ${editingTemplate.name}` : "Anexar Novo Contrato e Mapear Campos"}
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Faça a correspondência (De-Para) entre o seu contrato original e os dados do sistema GOAT Bar
+                  </p>
+                </div>
               </div>
               <button
-                onClick={() => setShowTemplateModal(false)}
+                onClick={() => setShowUploadMatchModal(false)}
                 className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+              {/* Passo 1: Seleção de Arquivo e Nome */}
+              <div className="p-5 rounded-2xl bg-background border border-border space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-display font-bold text-sm text-primary flex items-center gap-2">
+                    <Upload className="h-4 w-4" /> 1. Arquivo de Contrato Original (Word / PDF / Texto)
+                  </h3>
+                  {selectedFile && (
+                    <span className="text-xs text-success font-semibold">
+                      ✓ Arquivo Carregado: <b>{selectedFile.name}</b>
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="label-eyebrow block mb-1">Nome de Identificação do Modelo *</label>
+                    <input
+                      type="text"
+                      value={templateName}
+                      onChange={(e) => setTemplateName(e.target.value)}
+                      placeholder="Ex: Contrato Padrão de Eventos GOAT Bar"
+                      className="w-full h-10 px-4 rounded-xl bg-input border border-border text-sm font-medium focus:border-primary focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="label-eyebrow block mb-1">Selecione o Arquivo (.docx, .pdf, .txt) *</label>
+                    <input
+                      type="file"
+                      accept=".docx,.pdf,.txt,.html"
+                      onChange={(e) => handleFileSelect(e.target.files?.[0] || null)}
+                      className="w-full text-xs text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
                 <div>
-                  <label className="label-eyebrow block mb-1">Nome do Modelo *</label>
-                  <input
-                    type="text"
-                    value={templateForm.name}
-                    onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
-                    placeholder="Ex: Contrato de Casamento GOAT 2026"
-                    className="w-full h-10 px-4 rounded-xl bg-input border border-border text-sm font-medium focus:border-primary focus:outline-none"
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="label-eyebrow">Texto / Cláusulas do Seu Contrato</label>
+                    {templateContent && (
+                      <button
+                        type="button"
+                        onClick={autoMatchTagsInText}
+                        className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                      >
+                        <Sparkles className="h-3 w-3" /> Auto-Detectar Campos no Texto
+                      </button>
+                    )}
+                  </div>
+                  <textarea
+                    value={templateContent}
+                    onChange={(e) => setTemplateContent(e.target.value)}
+                    placeholder="Cole ou edite o texto do seu contrato aqui, ou insira as tags que deseja que o sistema substitua..."
+                    rows={8}
+                    className="w-full p-4 rounded-xl bg-input border border-border text-xs font-mono focus:border-primary focus:outline-none resize-y leading-relaxed"
                   />
                 </div>
-                <div>
-                  <label className="label-eyebrow block mb-1">Descrição Breve</label>
-                  <input
-                    type="text"
-                    value={templateForm.description}
-                    onChange={(e) => setTemplateForm({ ...templateForm, description: e.target.value })}
-                    placeholder="Ex: Modelo oficial para eventos sociais com bar completo"
-                    className="w-full h-10 px-4 rounded-xl bg-input border border-border text-sm focus:border-primary focus:outline-none"
-                  />
+              </div>
+
+              {/* Passo 2: Tabela de Match (De-Para) */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-display font-bold text-sm text-primary flex items-center gap-2">
+                      <ArrowRightLeft className="h-4 w-4" /> 2. Tabela de Correspondência de Campos (De-Para)
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Indique qual palavra, tag ou marcadores do seu documento correspondem a cada dado do sistema
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border border-border rounded-2xl overflow-hidden bg-background">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left bg-surface border-b border-border">
+                        <th className="px-4 py-3 font-bold text-muted-foreground">Dado do Sistema GOAT Bar</th>
+                        <th className="px-4 py-3 font-bold text-muted-foreground">Categoria</th>
+                        <th className="px-4 py-3 font-bold text-primary">Tag / Texto a Substituir no Seu Contrato</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {SystemFields.map((f) => (
+                        <tr key={f.key} className="hover:bg-surface/50 transition-colors">
+                          <td className="px-4 py-2.5 font-bold">
+                            <div>{f.label}</div>
+                            <div className="text-[10px] font-normal text-muted-foreground">{f.desc}</div>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span className="px-2 py-0.5 rounded bg-surface border text-[10px] font-medium">
+                              {f.category}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <input
+                              type="text"
+                              value={fieldMapping[f.key] || ""}
+                              onChange={(e) =>
+                                setFieldMapping({ ...fieldMapping, [f.key]: e.target.value })
+                              }
+                              placeholder={`Ex: ${f.defaultTag}`}
+                              className="w-full h-8 px-3 rounded-lg bg-surface border border-border text-xs font-mono font-bold focus:border-primary focus:outline-none text-primary"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="label-eyebrow">
-                    Texto do Contrato com Mapeamento de Campos
-                  </label>
-                  <span className="text-[10px] text-muted-foreground font-medium">
-                    Clique nas tags abaixo para inserir onde a informação deve ser gerada:
-                  </span>
-                </div>
-
-                {/* Bar de Tags Inseríveis Organizadadas */}
-                <div className="p-3 bg-background border border-border rounded-xl mb-3 space-y-2 max-h-48 overflow-y-auto">
-                  {VARIABLE_CATEGORIES.map((cat) => (
-                    <div key={cat.category} className="space-y-1">
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                        {cat.category}
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {cat.variables.map((v) => (
-                          <button
-                            key={v.key}
-                            type="button"
-                            onClick={() => insertVariableIntoTemplateContent(v.key)}
-                            className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-primary text-[10px] font-mono font-bold hover:bg-primary/20 transition-colors flex items-center gap-1"
-                            title={`Inserir {{${v.key}}} no texto do contrato`}
-                          >
-                            <span>+{`{{${v.key}}}`}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <textarea
-                  value={templateForm.content}
-                  onChange={(e) => setTemplateForm({ ...templateForm, content: e.target.value })}
-                  rows={14}
-                  className="w-full p-4 rounded-xl bg-input border border-border text-xs font-mono focus:border-primary focus:outline-none resize-y leading-relaxed shadow-inner"
-                />
-              </div>
-
-              <div className="p-4 rounded-xl bg-background border border-border space-y-2">
-                <label className="label-eyebrow block">Anexar ou Enviar Arquivo Original (Word, PDF ou Texto)</label>
-                <input
-                  type="file"
-                  accept=".docx,.pdf,.txt,.html"
-                  onChange={(e) => handleFileChange(e.target.files?.[0] || null)}
-                  className="w-full text-xs text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
-                />
-                {selectedFile && (
-                  <p className="text-[11px] text-success font-medium">
-                    ✓ Arquivo selecionado: <b>{selectedFile.name}</b>
-                  </p>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 pt-2">
                 <input
                   type="checkbox"
-                  id="is_default"
-                  checked={templateForm.is_default}
-                  onChange={(e) => setTemplateForm({ ...templateForm, is_default: e.target.checked })}
+                  id="is_default_check"
+                  checked={isDefault}
+                  onChange={(e) => setIsDefault(e.target.checked)}
                   className="rounded border-border"
                 />
-                <label htmlFor="is_default" className="text-xs text-muted-foreground cursor-pointer font-medium">
-                  Definir este modelo como padrão principal para todos os novos eventos
+                <label htmlFor="is_default_check" className="text-xs text-muted-foreground cursor-pointer font-medium">
+                  Definir este contrato anexado como o modelo padrão para os próximos eventos
                 </label>
               </div>
             </div>
 
             <div className="flex items-center justify-end gap-3 px-6 py-4 bg-background/50 border-t border-border">
-              <GhostButton onClick={() => setShowTemplateModal(false)}>Cancelar</GhostButton>
+              <GhostButton onClick={() => setShowUploadMatchModal(false)}>Cancelar</GhostButton>
               <PrimaryButton
                 onClick={async () => {
-                  if (!templateForm.name) return alert("Preencha o nome do modelo de contrato.");
-                  if (!templateForm.content || templateForm.content.trim().length < 10)
-                    return alert("O texto do contrato não pode estar vazio.");
+                  if (!templateName) return alert("Preencha o nome de identificação do seu contrato.");
+                  if (!templateContent && !selectedFile)
+                    return alert("Envie o arquivo do contrato ou informe o texto das cláusulas.");
 
                   setUploading(true);
                   try {
                     let publicUrl = editingTemplate?.file_url || "";
                     let filePath = editingTemplate?.file_path || "";
-                    let fileType = editingTemplate?.file_type || "TEXT";
+                    let fileType = editingTemplate?.file_type || "ARQUIVO";
 
                     if (selectedFile) {
                       const res = await contractTemplatesService.uploadTemplateFile(selectedFile);
                       publicUrl = res.publicUrl;
                       filePath = res.filePath;
-                      fileType = selectedFile.name.split(".").pop() || "DOCX";
+                      fileType = selectedFile.name.split(".").pop()?.toUpperCase() || "DOCX";
                     }
 
                     const payload = {
-                      name: templateForm.name,
-                      description: templateForm.content, // armazena o texto do contrato com as tags
+                      name: templateName,
+                      description: templateContent,
                       file_url: publicUrl,
                       file_path: filePath,
                       file_type: fileType,
-                      is_default: templateForm.is_default,
+                      is_default: isDefault,
                       status: "active",
                       variables_schema: {
-                        content: templateForm.content,
-                        fields: ALL_VARIABLES.map((v) => v.key),
+                        content: templateContent,
+                        mapping: fieldMapping,
                       },
                     };
 
                     if (editingTemplate) {
                       await contractTemplatesService.updateTemplate(editingTemplate.id, payload);
-                      if (templateForm.is_default) {
+                      if (isDefault) {
                         await contractTemplatesService.setDefaultTemplate(editingTemplate.id);
                       }
-                      alert("Modelo de contrato atualizado com sucesso!");
+                      alert("Modelo de contrato e Match de campos atualizados com sucesso!");
                     } else {
                       const created = await contractTemplatesService.createTemplate(payload);
-                      if (templateForm.is_default && created?.id) {
+                      if (isDefault && created?.id) {
                         await contractTemplatesService.setDefaultTemplate(created.id);
                       }
-                      alert("Modelo de contrato cadastrado com sucesso!");
+                      alert("Contrato anexado e Match de campos configurado com sucesso!");
                     }
 
-                    setShowTemplateModal(false);
+                    setShowUploadMatchModal(false);
                     loadData();
                   } catch (e: any) {
-                    console.error("Erro ao salvar template:", e);
-                    alert(`Erro ao salvar modelo de contrato: ${e.message || "Erro desconhecido"}`);
+                    console.error("Erro ao salvar contrato e match:", e);
+                    alert(`Erro ao salvar: ${e.message || "Erro desconhecido"}`);
                   } finally {
                     setUploading(false);
                   }
@@ -879,14 +939,14 @@ function ContratosPage() {
                 ) : (
                   <Save className="h-4 w-4 mr-2" />
                 )}
-                {editingTemplate ? "Atualizar Modelo" : "Salvar Modelo de Contrato"}
+                Salvar Contrato e Match
               </PrimaryButton>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL VISUALIZAR / TESTAR TEMPLATE */}
+      {/* MODAL VISUALIZAR PRÉVIA DO CONTRATO COM MATCH */}
       {previewTemplate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="w-full max-w-4xl bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden my-8">
@@ -896,7 +956,7 @@ function ContratosPage() {
                   <FileText className="h-5 w-5 text-primary" /> {previewTemplate.name}
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  Simulação de preenchimento automático com dados de demonstração
+                  Simulação de preenchimento do seu contrato com os dados de teste do sistema
                 </p>
               </div>
               <button
@@ -909,12 +969,20 @@ function ContratosPage() {
 
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
               <div className="p-3 bg-primary/5 border border-primary/10 rounded-xl text-xs flex justify-between items-center">
-                <span className="font-bold text-primary">Simulação de Contrato Gerado:</span>
-                <span className="text-muted-foreground">Substituição automática das tags em tempo real</span>
+                <span className="font-bold text-primary">Prévia do Contrato com Substituição do Match:</span>
+                <span className="text-muted-foreground">As marcas e tags mapeadas foram substituídas</span>
               </div>
 
               <div className="p-6 bg-background border border-border rounded-xl font-mono text-xs whitespace-pre-wrap leading-relaxed shadow-inner">
-                {renderContractTemplate(getTemplateContent(previewTemplate), SAMPLE_VARIABLES)}
+                {renderContractTemplate(
+                  getTemplateContent(previewTemplate),
+                  SAMPLE_VARIABLES,
+                  getTemplateMapping(previewTemplate)
+                ) || (
+                  <div className="text-muted-foreground text-center py-8">
+                    Este arquivo de contrato não possui texto pré-visualizável diretamente. O arquivo anexado original será utilizado.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -922,11 +990,11 @@ function ContratosPage() {
               <GhostButton
                 onClick={() => {
                   setPreviewTemplate(null);
-                  openEditTemplateModal(previewTemplate);
+                  openUploadMatchModal(previewTemplate);
                 }}
                 className="text-xs font-bold text-primary"
               >
-                <Edit className="h-3.5 w-3.5 mr-1" /> Editar Este Modelo
+                <ArrowRightLeft className="h-3.5 w-3.5 mr-1" /> Alterar Match de Campos
               </GhostButton>
               <GhostButton onClick={() => setPreviewTemplate(null)}>Fechar</GhostButton>
             </div>
@@ -939,7 +1007,9 @@ function ContratosPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-md bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
-              <h2 className="font-display text-lg font-bold">Novo Sócio Assinante</h2>
+              <h2 className="font-display text-lg font-bold">
+                {editingSigner ? `Editar Sócio: ${editingSigner.name}` : "Novo Sócio Assinante"}
+              </h2>
               <button
                 onClick={() => setShowSignerModal(false)}
                 className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"
@@ -980,14 +1050,36 @@ function ContratosPage() {
                   />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label-eyebrow block mb-1">E-mail</label>
+                  <input
+                    type="email"
+                    value={newSigner.email}
+                    onChange={(e) => setNewSigner({ ...newSigner, email: e.target.value })}
+                    placeholder="socio@goatbar.com.br"
+                    className="w-full h-10 px-4 rounded-xl bg-input border border-border text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="label-eyebrow block mb-1">Telefone / Celular</label>
+                  <input
+                    type="text"
+                    value={newSigner.phone}
+                    onChange={(e) => setNewSigner({ ...newSigner, phone: e.target.value })}
+                    placeholder="(11) 99999-8888"
+                    className="w-full h-10 px-4 rounded-xl bg-input border border-border text-sm"
+                  />
+                </div>
+              </div>
               <div>
-                <label className="label-eyebrow block mb-1">E-mail</label>
+                <label className="label-eyebrow block mb-1">Endereço Completo do Sócio</label>
                 <input
-                  type="email"
-                  value={newSigner.email}
-                  onChange={(e) => setNewSigner({ ...newSigner, email: e.target.value })}
-                  placeholder="socio@goatbar.com.br"
-                  className="w-full h-10 px-4 rounded-xl bg-input border border-border text-sm"
+                  type="text"
+                  value={newSigner.address}
+                  onChange={(e) => setNewSigner({ ...newSigner, address: e.target.value })}
+                  placeholder="Ex: Rua Haddock Lobo, 500, Apto 12, Jardins - São Paulo/SP"
+                  className="w-full h-10 px-4 rounded-xl bg-input border border-border text-sm font-medium"
                 />
               </div>
             </div>
@@ -996,14 +1088,19 @@ function ContratosPage() {
               <PrimaryButton
                 onClick={async () => {
                   if (!newSigner.name) return alert("Preencha o nome do sócio.");
-                  await contractSignersService.createSigner(newSigner);
+                  if (editingSigner) {
+                    await contractSignersService.updateSigner(editingSigner.id, newSigner);
+                    alert("Dados do sócio atualizados com sucesso!");
+                  } else {
+                    await contractSignersService.createSigner(newSigner);
+                    alert("Sócio cadastrado com sucesso!");
+                  }
                   setShowSignerModal(false);
                   loadData();
-                  alert("Sócio cadastrado com sucesso!");
                 }}
                 className="font-bold"
               >
-                Salvar Sócio
+                {editingSigner ? "Atualizar Sócio" : "Salvar Sócio"}
               </PrimaryButton>
             </div>
           </div>
