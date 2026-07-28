@@ -2,9 +2,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
 import { numberToWordsBRL } from "@/lib/number-to-words-brl";
 import {
+  onlyDigits,
   formatBrazilianDocument,
   getBrazilianDocumentType,
-  formatDocumentWithType,
+  getBrazilianDocumentLabel,
+  validateBrazilianDocument,
+  sanitizeTemplateResiduals,
 } from "@/lib/format-document";
 
 // --- Tipos para os Serviços ---
@@ -229,7 +232,7 @@ export function renderContractTemplate(
   customMapping?: Record<string, string>
 ): string {
   if (!templateBody) return "";
-  let result = templateBody;
+  let result = sanitizeTemplateResiduals(templateBody);
 
   // 1. Limpa invólucros de chips HTML (<span class="docx-field-chip"...>...</span>) extraindo o token limpo
   result = result.replace(/<span[^>]*class="docx-field-chip"[^>]*>([\s\S]*?)<\/span>/gi, (_match, inner) => {

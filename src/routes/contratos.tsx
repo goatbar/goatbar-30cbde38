@@ -3,6 +3,12 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
 import {
+  formatBrazilianDocument,
+  maskBrazilianDocumentInput,
+  onlyDigits,
+  validateBrazilianDocument,
+} from "@/lib/format-document";
+import {
   Plus,
   Download,
   FileText,
@@ -734,7 +740,7 @@ function ContratosPage() {
                             </span>
                           </div>
                           <div className="text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
-                            {s.cpf && <span>CPF: <b>{s.cpf}</b></span>}
+                            {s.cpf && <span>CPF: <b>{formatBrazilianDocument(s.cpf)}</b></span>}
                             {s.email && <span>E-mail: <b>{s.email}</b></span>}
                             {s.phone && <span>Tel: <b>{s.phone}</b></span>}
                           </div>
@@ -933,8 +939,9 @@ function ContratosPage() {
                   <input
                     type="text"
                     value={newSigner.cpf}
-                    onChange={(e) => setNewSigner({ ...newSigner, cpf: e.target.value })}
+                    onChange={(e) => setNewSigner({ ...newSigner, cpf: maskBrazilianDocumentInput(e.target.value) })}
                     placeholder="000.000.000-00"
+                    maxLength={14}
                     className="w-full h-10 px-4 rounded-xl bg-input border border-border text-sm"
                   />
                 </div>
@@ -987,11 +994,22 @@ function ContratosPage() {
               <PrimaryButton
                 onClick={async () => {
                   if (!newSigner.name) return alert("Preencha o nome do sócio.");
+                  const payload = {
+                    ...newSigner,
+                    cpf: onlyDigits(newSigner.cpf),
+                  };
+                  if (payload.cpf) {
+                    const val = validateBrazilianDocument(payload.cpf);
+                    if (!val.valid) {
+                      alert(`Documento do Sócio Inválido:\n${val.error || "O CPF informado é inválido."}`);
+                      return;
+                    }
+                  }
                   if (editingSigner) {
-                    await contractSignersService.updateSigner(editingSigner.id, newSigner);
+                    await contractSignersService.updateSigner(editingSigner.id, payload);
                     alert("Dados do sócio atualizados com sucesso!");
                   } else {
-                    await contractSignersService.createSigner(newSigner);
+                    await contractSignersService.createSigner(payload);
                     alert("Sócio cadastrado com sucesso!");
                   }
                   setShowSignerModal(false);

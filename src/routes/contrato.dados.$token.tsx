@@ -15,6 +15,12 @@ import {
   Hash,
 } from "lucide-react";
 import { clientContractFormService } from "@/services/contract-service";
+import {
+  maskBrazilianDocumentInput,
+  onlyDigits,
+  getBrazilianDocumentLabel,
+  validateBrazilianDocument,
+} from "@/lib/format-document";
 
 export const Route = createFileRoute("/contrato/dados/$token")({
   component: ContratoDadosPublicPage,
@@ -136,11 +142,17 @@ function ContratoDadosPublicPage() {
 
     const brEventDate = eventDate ? eventDate.split("-").reverse().join("/") : "";
 
+    const docValidation = validateBrazilianDocument(cpf);
+    if (!docValidation.valid) {
+      alert(docValidation.error || "O documento (CPF/CNPJ) informado é inválido. Verifique os números preenchidos.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       await clientContractFormService.submitClientData(token, {
         client_name: clientName,
-        cpf_cnpj: cpf,
+        cpf_cnpj: onlyDigits(cpf),
         email,
         address,
         notes: [
@@ -233,14 +245,14 @@ function ContratoDadosPublicPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
-                  <label className="label-eyebrow block mb-2">CPF *</label>
+                  <label className="label-eyebrow block mb-2">{getBrazilianDocumentLabel(cpf)} (CPF / CNPJ) *</label>
                   <input
                     required
                     type="text"
-                    placeholder="000.000.000-00"
-                    maxLength={14}
+                    placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                    maxLength={18}
                     value={cpf}
-                    onChange={(e) => setCpf(e.target.value)}
+                    onChange={(e) => setCpf(maskBrazilianDocumentInput(e.target.value))}
                     className="w-full h-11 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none"
                   />
                 </div>

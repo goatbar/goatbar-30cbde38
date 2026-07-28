@@ -3,7 +3,7 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { calcularOrcamentoEvento, type Evento, type EventoStatus } from "@/lib/mock-data";
 import { fmtBRL } from "@/lib/format";
-import { formatBrazilianDocument, getBrazilianDocumentType } from "@/lib/format-document";
+import { formatBrazilianDocument, getBrazilianDocumentType, validateBrazilianDocument } from "@/lib/format-document";
 import {
   Calendar,
   MapPin,
@@ -631,6 +631,14 @@ function EventoInterna() {
     if (!realClientData) {
       alert("Os dados do cliente são necessários. Solicite os dados primeiro ou gere o link.");
       return;
+    }
+
+    if (realClientData.cpf_cnpj) {
+      const docVal = validateBrazilianDocument(realClientData.cpf_cnpj);
+      if (!docVal.valid) {
+        alert(`Não foi possível gerar o contrato.\n\nMotivo: ${docVal.error || "O documento informado é inválido."}\n\nPor favor, corrija os dados do contratante antes de prosseguir.`);
+        return;
+      }
     }
     const tId = selectedTemplate || realTemplates.find((t) => t.is_default)?.id || realTemplates[0]?.id;
     const sId = selectedSigner || realSigners.find((s) => s.is_active)?.id || realSigners[0]?.id;

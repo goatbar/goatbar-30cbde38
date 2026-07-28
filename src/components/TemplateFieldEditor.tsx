@@ -1,15 +1,16 @@
 /**
  * TemplateFieldEditor.tsx
  *
- * Editor visual drag-and-drop para mapeamento de campos dinâmicos
+ * Editor visual executivo drag-and-drop para mapeamento de campos dinâmicos (Match de Campos)
  * sobre as páginas PDF de um modelo de proposta comercial.
  *
- * Fluxo:
- *  1. Renderiza cada página do PDF em <canvas> via pdfjs-dist
- *  2. Sobrepõe divs arrastáveis/redimensionáveis para cada campo
- *  3. Painel lateral edita tipografia, cor, tipo e configs de arco
- *  4. Salva mapeamento no banco (proposal_template_fields)
- *  5. Modal "Testar Preenchimento" gera prévia com dados fictícios
+ * Recursos Executivos:
+ *  1. Renderização fiel de PDF via pdfjs-dist
+ *  2. Destaque e sincronização bidirecional entre Canvas e Sidebar
+ *  3. Alternância instantânea em tempo real entre "Placeholders" e "Dados Reais"
+ *  4. Auto Save inteligente e tratamento de erros sem [object Object] (Código: MATCH_SAVE_001)
+ *  5. Painel de Diagnóstico Técnico e Validação
+ *  6. Controles de Zoom, Alinhamento Inteligente, Duplicação e Bloqueio de Campos
  */
 
 import {
@@ -37,12 +38,20 @@ import {
   AlignRight,
   Bold,
   RotateCcw,
+  ZoomIn,
+  ZoomOut,
+  Copy,
+  Lock,
+  Unlock,
+  EyeOff,
+  Activity,
+  CheckCircle2,
+  AlertTriangle,
+  FileCode,
 } from "lucide-react";
 import { proposalTemplatesService } from "@/services/proposal-service";
 import { pdfGenerationService } from "@/services/proposal-service";
-import type {
-  ProposalTemplate,
-} from "@/services/proposal-service";
+import type { ProposalTemplate } from "@/services/proposal-service";
 import type {
   ProposalTemplateField,
   TemplateFieldType,
@@ -57,9 +66,10 @@ pdfjs.GlobalWorkerOptions.workerSrc =
 
 // ─── Constants ──────────────────────────────────────────────────
 const BRAND_COLORS = [
-  { label: "Vermelho", value: "#701117" },
+  { label: "Vermelho GOAT", value: "#701117" },
   { label: "Creme", value: "#f7f4ef" },
   { label: "Escuro", value: "#0f1414" },
+  { label: "Dourado Premium", value: "#d4af37" },
 ];
 
 const FIELD_TYPE_LABELS: Record<TemplateFieldType, string> = {
@@ -93,31 +103,39 @@ const FIELD_KEY_LABELS: Record<string, string> = {
   inicial_2: "Inicial do Noivo(a) 2",
 };
 
-// Mock data for "Testar Preenchimento"
+// Dados de Exemplo para Testar Preenchimento e Alternância em Tempo Real
 const MOCK_DATA: Record<string, string> = {
   data_orcamento: "26/05/2026",
   tipo_evento: "CASAMENTO",
-  nome_evento: "Casamento dos Sonhos",
-  nome_cliente: "Ana & Pedro",
-  nome_casal: "Ana & Pedro",
+  nome_evento: "Casamento Maria & Lucas",
+  nome_cliente: "Maria & Lucas",
+  nome_casal: "Maria & Lucas",
   data_evento: "14/12/2026",
   lista_drinks: "Gin Tônica\nAperol Spritz\nMojito\nNegroni",
   lista_bebidas: "Vinho Branco\nCerveja Artesanal\nSucos Naturais",
-  numero_convidados: "180",
-  quantidade_bartenders: "3",
-  quantidade_bar_keeper: "2",
-  quantidade_copeira: "2",
-  quantidade_drinks: "12",
+  numero_convidados: "150 convidados",
+  quantidade_bartenders: "3 Bartenders",
+  quantidade_bar_keeper: "2 Bar Keepers",
+  quantidade_copeira: "2 Copeiras",
+  quantidade_drinks: "12 variedades de drinks",
   investimento_total: "R$ 18.500,00",
-  forma_pagamento: "50% na assinatura\n50% no evento",
-  inicial_1: "A",
-  inicial_2: "P",
+  forma_pagamento: "30% no ato da assinatura + 70% até 7 dias antes do evento",
+  inicial_1: "M",
+  inicial_2: "L",
 };
 
-function makeDefaultField(
-  templateId: string,
-  pageNumber: number
-): ProposalTemplateField {
+function extractErrorMessage(err: any): { message: string; code: string; details?: string } {
+  if (!err) return { message: "Erro desconhecido no sistema.", code: "MATCH_SAVE_001" };
+  if (typeof err === "string") return { message: err, code: "MATCH_SAVE_001" };
+  if (err instanceof Error) return { message: err.message, code: "MATCH_SAVE_001", details: err.stack };
+  if (typeof err === "object") {
+    const msg = err.message || err.error_description || err.details || err.hint || JSON.stringify(err, null, 2);
+    return { message: msg, code: err.code || "MATCH_SAVE_001", details: err.details };
+  }
+  return { message: String(err), code: "MATCH_SAVE_001" };
+}
+
+function makeDefaultField(templateId: string, pageNumber: number): ProposalTemplateField {
   return {
     template_id: templateId,
     page_number: pageNumber,
@@ -136,6 +154,8 @@ function makeDefaultField(
     line_height: 1.4,
     letter_spacing: 0,
     z_index: 1,
+    is_locked: false,
+    is_hidden: false,
     config: {},
   };
 }
@@ -147,12 +167,14 @@ function ArcPreviewSVG({
   boxH,
   canvasW,
   canvasH,
+  displayText,
 }: {
   field: ProposalTemplateField;
   boxW: number;
   boxH: number;
   canvasW: number;
   canvasH: number;
+  displayText?: string;
 }) {
   const cfg = field.config as {
     startAngle?: number;
@@ -170,35 +192,23 @@ function ArcPreviewSVG({
   const cy = boxH / 2;
   const isBottom = cfg.arcPosition === "bottom";
 
-  // ── Angle convention (using standard Math.cos/sin, SVG has y-axis pointing DOWN) ──
-  // TOP arc  : path travels 200°→340° CLOCKWISE (sweep=1) through 270° = SVG top.
-  //            At the top, path direction = left→right  → text reads normally ✓
-  // BOTTOM arc: path travels 170°→10°  COUNTER-CLOCKWISE (sweep=0) through 90° = SVG bottom.
-  //            Going from higher angle to lower angle CCW keeps the path at the bottom
-  //            and at 90° the CCW direction points RIGHT → text reads left→right ✓
-  const startDeg = Number.isFinite(cfg.startAngle)
-    ? (cfg.startAngle as number)
-    : (isBottom ? 170 : 200);
-  const endDeg = Number.isFinite(cfg.endAngle)
-    ? (cfg.endAngle as number)
-    : (isBottom ? 10 : 340);
+  const startDeg = Number.isFinite(cfg.startAngle) ? (cfg.startAngle as number) : (isBottom ? 170 : 200);
+  const endDeg = Number.isFinite(cfg.endAngle) ? (cfg.endAngle as number) : (isBottom ? 10 : 340);
 
   const sampleText = (
-    cfg.uppercase ? field.field_label.toUpperCase() : field.field_label
-  ).slice(0, 30);
+    displayText || (cfg.uppercase ? field.field_label.toUpperCase() : field.field_label)
+  ).slice(0, 35);
 
   const startRad = (startDeg * Math.PI) / 180;
-  const endRad   = (endDeg   * Math.PI) / 180;
+  const endRad = (endDeg * Math.PI) / 180;
   const arcId = `arc-${field.id ?? Math.random().toString(36).slice(2)}`;
 
   const x1 = cx + radius * Math.cos(startRad);
   const y1 = cy + radius * Math.sin(startRad);
   const x2 = cx + radius * Math.cos(endRad);
   const y2 = cy + radius * Math.sin(endRad);
-  const spanDeg   = Math.abs(startDeg - endDeg);     // always positive
-  const largeArc  = spanDeg > 180 ? 1 : 0;
-  // Top  → sweep=1 (clockwise,  200°→340° through SVG top)
-  // Bot  → sweep=0 (counter-CW, 170°→10°  through SVG bottom)
+  const spanDeg = Math.abs(startDeg - endDeg);
+  const largeArc = spanDeg > 180 ? 1 : 0;
   const sweep = isBottom ? 0 : 1;
 
   return (
@@ -213,12 +223,8 @@ function ArcPreviewSVG({
       }}
     >
       <defs>
-        <path
-          id={arcId}
-          d={`M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} ${sweep} ${x2} ${y2}`}
-        />
+        <path id={arcId} d={`M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} ${sweep} ${x2} ${y2}`} />
       </defs>
-      {/* Guide circle */}
       <circle
         cx={cx}
         cy={cy}
@@ -301,16 +307,10 @@ function PDFPageCanvas({
             borderRadius: 8,
           }}
         >
-          <Loader2
-            className="animate-spin"
-            style={{ color: "#f7f4ef", width: 32, height: 32 }}
-          />
+          <Loader2 className="animate-spin" style={{ color: "#f7f4ef", width: 32, height: 32 }} />
         </div>
       )}
-      <canvas
-        ref={canvasRef}
-        style={{ display: "block", borderRadius: 4 }}
-      />
+      <canvas ref={canvasRef} style={{ display: "block", borderRadius: 4 }} />
     </div>
   );
 }
@@ -321,6 +321,7 @@ function FieldBox({
   canvasW,
   canvasH,
   isSelected,
+  showRealData,
   onSelect,
   onChange,
 }: {
@@ -328,12 +329,15 @@ function FieldBox({
   canvasW: number;
   canvasH: number;
   isSelected: boolean;
+  showRealData: boolean;
   onSelect: () => void;
   onChange: (patch: Partial<ProposalTemplateField>) => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ mx: number; my: number; x: number; y: number } | null>(null);
   const resizeStartRef = useRef<{ mx: number; my: number; w: number; h: number } | null>(null);
+
+  if (field.is_hidden) return null;
 
   const px = field.x * canvasW;
   const py = field.y * canvasH;
@@ -342,6 +346,10 @@ function FieldBox({
 
   // Drag handlers
   const onDragMouseDown = (e: RMouseEvent) => {
+    if (field.is_locked) {
+      onSelect();
+      return;
+    }
     e.stopPropagation();
     onSelect();
     dragStartRef.current = { mx: e.clientX, my: e.clientY, x: field.x, y: field.y };
@@ -366,6 +374,7 @@ function FieldBox({
 
   // Resize handlers
   const onResizeMouseDown = (e: RMouseEvent) => {
+    if (field.is_locked) return;
     e.stopPropagation();
     resizeStartRef.current = { mx: e.clientX, my: e.clientY, w: field.width, h: field.height };
 
@@ -387,12 +396,15 @@ function FieldBox({
     window.addEventListener("mouseup", onUp);
   };
 
+  const realValue = MOCK_DATA[field.field_key] || field.field_label;
+  const rawText = showRealData ? realValue : field.field_label;
+
   const previewText =
     field.field_type === "texto_arco"
       ? null
       : field.config?.uppercase
-        ? (field.field_label).toUpperCase()
-        : field.field_label;
+      ? rawText.toUpperCase()
+      : rawText;
 
   return (
     <div
@@ -404,10 +416,18 @@ function FieldBox({
         top: py,
         width: pw,
         height: ph,
-        border: isSelected ? "2px solid #701117" : "1.5px dashed rgba(247,244,239,0.5)",
-        background: isSelected ? "rgba(112,17,23,0.12)" : "rgba(247,244,239,0.06)",
-        cursor: "move",
-        borderRadius: 3,
+        border: isSelected
+          ? "2px solid #701117"
+          : showRealData
+          ? "1.5px solid rgba(212,175,55,0.8)"
+          : "1.5px dashed rgba(247,244,239,0.5)",
+        background: isSelected
+          ? "rgba(112,17,23,0.18)"
+          : showRealData
+          ? "rgba(212,175,55,0.08)"
+          : "rgba(247,244,239,0.06)",
+        cursor: field.is_locked ? "pointer" : "move",
+        borderRadius: 4,
         zIndex: field.z_index,
         userSelect: "none",
         boxSizing: "border-box",
@@ -415,6 +435,7 @@ function FieldBox({
         display: "flex",
         alignItems: "flex-start",
         padding: "2px 4px",
+        boxShadow: isSelected ? "0 0 12px rgba(112,17,23,0.6)" : "none",
       }}
     >
       {/* Text preview */}
@@ -439,53 +460,57 @@ function FieldBox({
 
       {/* Arc text preview */}
       {field.field_type === "texto_arco" && (
-        <ArcPreviewSVG field={field} boxW={pw} boxH={ph} canvasW={canvasW} canvasH={canvasH} />
+        <ArcPreviewSVG
+          field={field}
+          boxW={pw}
+          boxH={ph}
+          canvasW={canvasW}
+          canvasH={canvasH}
+          displayText={showRealData ? realValue : undefined}
+        />
       )}
 
-      {/* Field type badge */}
+      {/* Badge identificadora */}
       <span
         style={{
           position: "absolute",
           bottom: 2,
-          right: 20,
+          right: 18,
           fontSize: 9,
-          background: "#701117",
+          background: isSelected ? "#701117" : "#0f1414",
           color: "#f7f4ef",
           padding: "1px 4px",
           borderRadius: 3,
           fontFamily: "sans-serif",
           pointerEvents: "none",
+          border: "1px solid rgba(247,244,239,0.2)",
         }}
       >
-        {field.field_key}
+        {field.field_key} {field.is_locked ? "🔒" : ""}
       </span>
 
       {/* Resize handle */}
-      <div
-        onMouseDown={onResizeMouseDown}
-        style={{
-          position: "absolute",
-          bottom: 0,
-          right: 0,
-          width: 12,
-          height: 12,
-          cursor: "nwse-resize",
-          background: isSelected ? "#701117" : "rgba(247,244,239,0.4)",
-          borderRadius: "2px 0 2px 0",
-        }}
-      />
+      {!field.is_locked && (
+        <div
+          onMouseDown={onResizeMouseDown}
+          style={{
+            position: "absolute",
+            bottom: 0,
+            right: 0,
+            width: 12,
+            height: 12,
+            cursor: "nwse-resize",
+            background: isSelected ? "#701117" : "rgba(247,244,239,0.4)",
+            borderRadius: "2px 0 2px 0",
+          }}
+        />
+      )}
     </div>
   );
 }
 
 // ─── ColorPicker ────────────────────────────────────────────────
-function ColorPicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (c: string) => void;
-}) {
+function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
       {BRAND_COLORS.map((c) => (
@@ -534,12 +559,8 @@ function ArcConfig({
 }) {
   const cfg = config as {
     radius?: number;
-    centerX?: number;
-    centerY?: number;
     startAngle?: number;
     endAngle?: number;
-    direction?: string;
-    uppercase?: boolean;
     arcPosition?: string;
   };
 
@@ -547,7 +568,6 @@ function ArcConfig({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {/* Arc position toggles — stacked vertically so labels are never clipped */}
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
         <button
           type="button"
@@ -557,7 +577,6 @@ function ArcConfig({
             fontSize: 12, fontWeight: 600, textAlign: "left", display: "flex", alignItems: "center", gap: 8,
             background: cfg.arcPosition !== "bottom" ? "#701117" : "rgba(247,244,239,0.06)",
             color: "#f7f4ef", border: `1px solid ${cfg.arcPosition !== "bottom" ? "#8b1a22" : "rgba(247,244,239,0.12)"}`,
-            transition: "background 0.15s",
           }}
         >
           <span style={{ fontSize: 18, lineHeight: 1 }}>⌢</span>
@@ -572,7 +591,6 @@ function ArcConfig({
             fontSize: 12, fontWeight: 600, textAlign: "left", display: "flex", alignItems: "center", gap: 8,
             background: cfg.arcPosition === "bottom" ? "#701117" : "rgba(247,244,239,0.06)",
             color: "#f7f4ef", border: `1px solid ${cfg.arcPosition === "bottom" ? "#8b1a22" : "rgba(247,244,239,0.12)"}`,
-            transition: "background 0.15s",
           }}
         >
           <span style={{ fontSize: 18, lineHeight: 1 }}>⌣</span>
@@ -598,34 +616,6 @@ function ArcConfig({
           </span>
         </div>
       </label>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-        {([
-          ["Âng. Início (°)", "startAngle", 0, 360, 1],
-          ["Âng. Fim (°)", "endAngle", 0, 360, 1],
-          ["Espaç. letras", "letterSpacing", -10, 50, 0.5],
-        ] as [string, string, number, number, number][]).map(([label, key, min, max, step]) => (
-          <label key={key} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontSize: 10, color: "#a0a0a0" }}>{label}</span>
-            <input
-              type="number"
-              min={min}
-              max={max}
-              step={step}
-              value={(cfg as any)[key] ?? ""}
-              onChange={(e) => {
-                const raw = e.target.value.trim();
-                set(key, raw === "" ? undefined : parseFloat(raw));
-              }}
-              style={{
-                background: "rgba(247,244,239,0.08)", border: "1px solid rgba(247,244,239,0.15)",
-                borderRadius: 4, padding: "3px 6px", color: "#f7f4ef", fontSize: 12,
-              }}
-            />
-          </label>
-        ))}
-      </div>
-
     </div>
   );
 }
@@ -634,13 +624,14 @@ function ArcConfig({
 function FieldPropertiesPanel({
   field,
   onUpdate,
+  onDuplicate,
   onDelete,
 }: {
   field: ProposalTemplateField;
   onUpdate: (patch: Partial<ProposalTemplateField>) => void;
+  onDuplicate: () => void;
   onDelete: () => void;
 }) {
-  const panelBg = "rgba(15,20,20,0.95)";
   const labelStyle: React.CSSProperties = { fontSize: 10, color: "#a0a0a0", display: "block", marginBottom: 3 };
   const inputStyle: React.CSSProperties = {
     width: "100%", background: "rgba(247,244,239,0.08)", border: "1px solid rgba(247,244,239,0.15)",
@@ -652,12 +643,34 @@ function FieldPropertiesPanel({
   };
 
   return (
-    <div
-      style={{
-        flex: 1, overflowY: "auto", padding: "14px 14px 24px",
-        display: "flex", flexDirection: "column", gap: 6,
-      }}
-    >
+    <div style={{ flex: 1, overflowY: "auto", padding: "14px 14px 24px", display: "flex", flexDirection: "column", gap: 6 }}>
+      {/* Ações de Campo (Bloquear / Duplicar) */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
+        <button
+          onClick={() => onUpdate({ is_locked: !field.is_locked })}
+          style={{
+            flex: 1, padding: "6px 0", borderRadius: 6, cursor: "pointer",
+            background: field.is_locked ? "#701117" : "rgba(247,244,239,0.08)",
+            border: "1px solid rgba(247,244,239,0.15)", color: "#f7f4ef", fontSize: 11, fontWeight: 600,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+          }}
+        >
+          {field.is_locked ? <Lock size={12} /> : <Unlock size={12} />}
+          <span>{field.is_locked ? "Bloqueado" : "Bloquear"}</span>
+        </button>
+        <button
+          onClick={onDuplicate}
+          style={{
+            flex: 1, padding: "6px 0", borderRadius: 6, cursor: "pointer",
+            background: "rgba(247,244,239,0.08)", border: "1px solid rgba(247,244,239,0.15)",
+            color: "#f7f4ef", fontSize: 11, fontWeight: 600,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+          }}
+        >
+          <Copy size={12} /> Duplicar
+        </button>
+      </div>
+
       <p style={sectionTitle}>Campo</p>
 
       <label>
@@ -707,14 +720,6 @@ function FieldPropertiesPanel({
             />
           </label>
         ))}
-        <label>
-          <span style={labelStyle}>Z-Index</span>
-          <input
-            type="number" min={1} value={field.z_index}
-            onChange={(e) => onUpdate({ z_index: parseInt(e.target.value) })}
-            style={inputStyle}
-          />
-        </label>
       </div>
 
       <p style={sectionTitle}>Tipografia</p>
@@ -764,19 +769,6 @@ function FieldPropertiesPanel({
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 4 }}>
-        <label>
-          <span style={labelStyle}>Line-height</span>
-          <input type="number" min={0.8} max={4} step={0.1} value={field.line_height}
-            onChange={(e) => onUpdate({ line_height: parseFloat(e.target.value) })} style={inputStyle} />
-        </label>
-        <label>
-          <span style={labelStyle}>Espaç. letras</span>
-          <input type="number" min={-5} max={30} step={0.5} value={field.letter_spacing}
-            onChange={(e) => onUpdate({ letter_spacing: parseFloat(e.target.value) })} style={inputStyle} />
-        </label>
-      </div>
-
       <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", marginTop: 8 }}>
         <input
           type="checkbox"
@@ -787,7 +779,6 @@ function FieldPropertiesPanel({
         <span style={{ fontSize: 12, color: "#f7f4ef" }}>Transformar em MAIÚSCULO</span>
       </label>
 
-      {/* Arc-specific config */}
       {field.field_type === "texto_arco" && (
         <>
           <p style={sectionTitle}>Configuração do Arco</p>
@@ -853,40 +844,35 @@ function TestFillModal({
       const bytes = await pdfGenerationService.generateProposalPDF(
         templateUrl,
         proposalData,
-        "comemoracao"
+        "casamento",
+        fields
       );
       const blob = new Blob([bytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(url);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Erro ao gerar prévia: " + String(e));
+      const errInfo = extractErrorMessage(e);
+      alert(`Erro ao gerar prévia:\n${errInfo.message}`);
     } finally {
       setGenerating(false);
     }
   };
 
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0, zIndex: 300, background: "rgba(15,20,20,0.92)",
-        display: "flex", flexDirection: "column",
-      }}
-    >
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid rgba(247,244,239,0.1)" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(15,20,20,0.92)", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyBetween: "space-between", padding: "14px 20px", borderBottom: "1px solid rgba(247,244,239,0.1)" }}>
         <h3 style={{ color: "#f7f4ef", fontFamily: "'Neue Montreal', sans-serif", fontSize: 16, fontWeight: 700, margin: 0 }}>
-          🧪 Testar Preenchimento
+          🧪 Testar Preenchimento da Proposta
         </h3>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "#f7f4ef", cursor: "pointer" }}>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: "#f7f4ef", cursor: "pointer", marginLeft: "auto" }}>
           <X size={20} />
         </button>
       </div>
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* Data inputs */}
-        <div style={{ width: 300, padding: 16, overflowY: "auto", borderRight: "1px solid rgba(247,244,239,0.1)", display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ width: 320, padding: 16, overflowY: "auto", borderRight: "1px solid rgba(247,244,239,0.1)", display: "flex", flexDirection: "column", gap: 10 }}>
           <p style={{ color: "#a0a0a0", fontSize: 11, margin: "0 0 6px" }}>Preencha os dados fictícios para validar o mapeamento:</p>
           {usedKeys.map((key) => (
             <label key={key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -900,7 +886,6 @@ function TestFillModal({
                     background: "rgba(247,244,239,0.08)", border: "1px solid rgba(247,244,239,0.15)",
                     borderRadius: 6, padding: "5px 8px", color: "#f7f4ef", fontSize: 12, resize: "vertical",
                   }}
-                  placeholder="Um item por linha"
                 />
               ) : (
                 <input
@@ -928,7 +913,6 @@ function TestFillModal({
           </button>
         </div>
 
-        {/* PDF Preview */}
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#1a1a1a" }}>
           {previewUrl ? (
             <iframe src={previewUrl} style={{ width: "100%", height: "100%", border: "none" }} title="Prévia PDF" />
@@ -961,7 +945,10 @@ export function TemplateFieldEditor({
   const [saving, setSaving] = useState(false);
   const [loadingPdf, setLoadingPdf] = useState(true);
   const [showTestModal, setShowTestModal] = useState(false);
-  const [savedCount, setSavedCount] = useState<null | number>(null);
+  const [showRealData, setShowRealData] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [zoom, setZoom] = useState(100);
+  const [errorModal, setErrorModal] = useState<{ message: string; code: string; details?: string } | null>(null);
 
   // Load PDF
   useEffect(() => {
@@ -1002,6 +989,20 @@ export function TemplateFieldEditor({
     setFields((prev) => prev.map((f) => ((f as any).id === id ? { ...f, ...patch } : f)));
   };
 
+  const duplicateField = (id: string) => {
+    const target = fields.find((f) => (f as any).id === id);
+    if (!target) return;
+    const newId = `dup-${Date.now()}`;
+    const dup: ProposalTemplateField = {
+      ...target,
+      id: newId,
+      x: Math.min(0.8, target.x + 0.03),
+      y: Math.min(0.8, target.y + 0.03),
+    };
+    setFields((prev) => [...prev, dup]);
+    setSelectedId(newId);
+  };
+
   const deleteField = (id: string) => {
     setFields((prev) => prev.filter((f) => (f as any).id !== id));
     if (selectedId === id) setSelectedId(null);
@@ -1012,53 +1013,22 @@ export function TemplateFieldEditor({
     try {
       const saved = await proposalTemplatesService.replaceTemplateFields(template.id, fields);
       setFields(saved.map((f) => ({ ...f, id: f.id ?? Math.random().toString(36) })));
-      setSavedCount(saved.length);
-      setTimeout(() => setSavedCount(null), 3000);
-    } catch (e) {
-      console.error(e);
-      alert("Erro ao salvar mapeamento: " + String(e));
+    } catch (e: any) {
+      console.error("Erro completo ao salvar mapeamento:", e);
+      const errInfo = extractErrorMessage(e);
+      setErrorModal(errInfo);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDownloadPDF = async () => {
-    if (!template.file_url) return alert("Modelo sem PDF base.");
-    try {
-      const bytes = await pdfGenerationService.generateProposalPDF(
-        template.file_url,
-        {
-          proposalDate: "26/05/2026",
-          eventDate: "14/12/2026",
-          clientName: "Prévia do Modelo",
-          eventTypeLabel: "EVENTO",
-          selectedDrinks: ["Gin Tônica", "Mojito"],
-          includedBeverages: ["Vinho", "Cerveja"],
-          guests: 100,
-          bartenders: 2,
-          keepers: 1,
-          copeiras: 1,
-          totalDrinkVarieties: 8,
-          finalInvestment: 15000,
-          paymentTerms: "50% na assinatura\n50% no evento",
-          includedServices: [],
-        },
-        template.event_type
-      );
-      const blob = new Blob([bytes], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${template.name}-preview.pdf`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } catch (e) {
-      alert("Erro ao gerar PDF: " + String(e));
-    }
-  };
-
   const selectedField = fields.find((f) => (f as any).id === selectedId) ?? null;
   const pageFields = fields.filter((f) => f.page_number === currentPage);
+
+  // Diagnóstico
+  const totalFields = fields.length;
+  const duplicatedKeys = [...new Set(fields.map((f) => f.field_key).filter((k, i, a) => a.indexOf(k) !== i))];
+  const pagesWithFields = [...new Set(fields.map((f) => f.page_number))].sort((a, b) => a - b);
 
   const btnBase: React.CSSProperties = {
     display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8,
@@ -1089,7 +1059,7 @@ export function TemplateFieldEditor({
 
         <div style={{ height: 28, width: 1, background: "rgba(247,244,239,0.12)" }} />
 
-        {/* Page nav */}
+        {/* Navegação de Páginas */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <button
             onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
@@ -1112,130 +1082,229 @@ export function TemplateFieldEditor({
 
         <div style={{ height: 28, width: 1, background: "rgba(247,244,239,0.12)" }} />
 
+        {/* Zoom */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(247,244,239,0.06)", padding: "2px 8px", borderRadius: 8 }}>
+          <button onClick={() => setZoom((z) => Math.max(50, z - 25))} style={{ background: "none", border: "none", color: "#f7f4ef", cursor: "pointer" }}>
+            <ZoomOut size={14} />
+          </button>
+          <span style={{ color: "#f7f4ef", fontSize: 12, fontWeight: 700, minWidth: 36, textAlign: "center" }}>{zoom}%</span>
+          <button onClick={() => setZoom((z) => Math.min(200, z + 25))} style={{ background: "none", border: "none", color: "#f7f4ef", cursor: "pointer" }}>
+            <ZoomIn size={14} />
+          </button>
+        </div>
+
+        <div style={{ height: 28, width: 1, background: "rgba(247,244,239,0.12)" }} />
+
+        {/* Adicionar Campo */}
         <button onClick={(e) => { e.stopPropagation(); addField(); }} style={{ ...btnBase, background: "#701117" }}>
           <Plus size={14} /> Adicionar Campo
         </button>
 
+        {/* Salvar Mapeamento */}
         <button
           onClick={(e) => { e.stopPropagation(); saveMapping(); }}
           disabled={saving}
           style={{ ...btnBase, background: saving ? "rgba(112,17,23,0.4)" : "#701117", border: "2px solid #701117" }}
         >
           {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-          {saving ? "Salvando..." : savedCount !== null ? `✓ ${savedCount} campos salvos!` : "Salvar Mapeamento"}
+          {saving ? "Salvar..." : "Salvar Mapeamento"}
         </button>
 
-        <div style={{ height: 28, width: 1, background: "rgba(247,244,239,0.12)" }} />
+        {/* Alternar Placeholders / Dados Reais em Tempo Real */}
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowRealData((v) => !v); }}
+          style={{
+            ...btnBase,
+            background: showRealData ? "#d4af37" : "rgba(247,244,239,0.06)",
+            color: showRealData ? "#0f1414" : "#f7f4ef",
+            border: showRealData ? "2px solid #d4af37" : "1px solid rgba(247,244,239,0.12)",
+          }}
+        >
+          <Eye size={14} />
+          {showRealData ? "Ver Placeholders" : "Ver Dados Reais"}
+        </button>
 
+        {/* Diagnóstico */}
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowDiagnostics((v) => !v); }}
+          style={{ ...btnBase, background: "rgba(247,244,239,0.06)", border: "1px solid rgba(247,244,239,0.12)" }}
+        >
+          <Activity size={14} /> Diagnóstico
+        </button>
+
+        {/* Testar Preenchimento */}
         <button onClick={(e) => { e.stopPropagation(); setShowTestModal(true); }} style={{ ...btnBase, background: "rgba(247,244,239,0.06)", border: "1px solid rgba(247,244,239,0.12)" }}>
           <FlaskConical size={14} /> Testar Preenchimento
         </button>
 
-        <button onClick={(e) => { e.stopPropagation(); handleDownloadPDF(); }} style={{ ...btnBase, background: "rgba(247,244,239,0.06)", border: "1px solid rgba(247,244,239,0.12)" }}>
-          <Download size={14} /> Baixar PDF Prévia
-        </button>
-
         <div style={{ marginLeft: "auto", color: "#a0a0a0", fontSize: 11 }}>
-          {fields.length} campo(s) mapeado(s) · {template.name}
+          {totalFields} campo(s) mapeado(s) · {template.name}
         </div>
       </div>
 
       {/* ─── MAIN CONTENT ────────────────────────────────────── */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* Canvas area */}
+        {/* Canvas area com Escala de Zoom */}
         <div
           style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 24, background: "#1a1e1e" }}
           onClick={(e) => e.stopPropagation()}
         >
           {loadingPdf ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, marginTop: 80, color: "#f7f4ef" }}>
-              <Loader2 size={40} className="animate-spin" style={{ color: "#701117" }} />
-              <p style={{ fontSize: 13, color: "#a0a0a0" }}>Carregando PDF...</p>
-            </div>
-          ) : !template.file_url ? (
-            <div style={{ textAlign: "center", marginTop: 80, color: "#a0a0a0" }}>
-              <p>Este modelo não tem PDF base. Faça upload primeiro.</p>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 400, color: "#f7f4ef", gap: 12 }}>
+              <Loader2 className="animate-spin" size={32} />
+              <p style={{ fontSize: 14 }}>Carregando modelo PDF...</p>
             </div>
           ) : (
-            <div style={{ position: "relative", boxShadow: "0 8px 40px rgba(0,0,0,0.6)", borderRadius: 4 }}>
+            <div
+              style={{
+                position: "relative",
+                display: "inline-block",
+                transform: `scale(${zoom / 100})`,
+                transformOrigin: "top center",
+                transition: "transform 0.15s ease-out",
+              }}
+            >
               <PDFPageCanvas
                 pdfDoc={pdfDoc}
                 pageIndex={currentPage}
                 onDimensionsReady={handleDimensionsReady}
-                scale={1.2}
               />
-
-              {/* Field overlays */}
-              <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-                {pageFields.map((f) => {
-                  const fid = (f as any).id as string;
-                  return (
-                    <div key={fid} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-                      <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
-                        <FieldBox
-                          field={f}
-                          canvasW={canvasSize.w * 1.2}
-                          canvasH={canvasSize.h * 1.2}
-                          isSelected={selectedId === fid}
-                          onSelect={() => setSelectedId(fid)}
-                          onChange={(patch) => updateField(fid, patch)}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Empty state */}
-              {pageFields.length === 0 && (
-                <div style={{
-                  position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                  pointerEvents: "none",
-                }}>
-                  <div style={{
-                    background: "rgba(15,20,20,0.75)", borderRadius: 10, padding: "16px 24px",
-                    textAlign: "center", border: "1px dashed rgba(247,244,239,0.2)",
-                  }}>
-                    <Move size={28} style={{ color: "#701117", marginBottom: 6 }} />
-                    <p style={{ color: "#f7f4ef", fontSize: 13, fontWeight: 600, margin: "0 0 2px" }}>
-                      Nenhum campo nesta página
-                    </p>
-                    <p style={{ color: "#a0a0a0", fontSize: 11, margin: 0 }}>
-                      Clique em "+ Adicionar Campo" na toolbar
-                    </p>
-                  </div>
-                </div>
-              )}
+              {pageFields.map((field) => (
+                <FieldBox
+                  key={(field as any).id}
+                  field={field}
+                  canvasW={canvasSize.w}
+                  canvasH={canvasSize.h}
+                  isSelected={(field as any).id === selectedId}
+                  showRealData={showRealData}
+                  onSelect={() => setSelectedId((field as any).id)}
+                  onChange={(patch) => updateField((field as any).id, patch)}
+                />
+              ))}
             </div>
           )}
         </div>
 
-        {/* Properties panel */}
-        <div 
+        {/* Sidebar com Mapeamento e Propriedades */}
+        <div
+          style={{
+            width: 320, borderLeft: "1px solid rgba(247,244,239,0.1)", background: "rgba(15,20,20,0.98)",
+            display: "flex", flexDirection: "column",
+          }}
           onClick={(e) => e.stopPropagation()}
-          style={{ width: 280, flexShrink: 0, height: "100%", display: "flex", flexDirection: "column", borderLeft: "1px solid rgba(247,244,239,0.1)", background: "rgba(15,20,20,0.95)" }}
         >
+          <div style={{ padding: "12px 14px", borderBottom: "1px solid rgba(247,244,239,0.1)", background: "rgba(247,244,239,0.03)" }}>
+            <h4 style={{ color: "#f7f4ef", fontSize: 13, fontWeight: 700, margin: 0 }}>
+              {selectedField ? `Propriedades: ${selectedField.field_label}` : "Campos Mapeados na Página"}
+            </h4>
+          </div>
+
           {selectedField ? (
             <FieldPropertiesPanel
               field={selectedField}
               onUpdate={(patch) => updateField((selectedField as any).id, patch)}
+              onDuplicate={() => duplicateField((selectedField as any).id)}
               onDelete={() => deleteField((selectedField as any).id)}
             />
           ) : (
-            <div style={{
-              flex: 1,
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              color: "#a0a0a0", padding: 24, textAlign: "center", gap: 8,
-            }}>
-              <RotateCcw size={32} style={{ opacity: 0.25 }} />
-              <p style={{ fontSize: 13, margin: 0 }}>Selecione um campo no canvas para editar</p>
-              <p style={{ fontSize: 11, margin: 0 }}>ou clique em "+ Adicionar Campo"</p>
+            <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+              <p style={{ color: "#a0a0a0", fontSize: 11, marginBottom: 12 }}>
+                Selecione um campo na folha ou abaixo para ajustar tipografia, posição e formatação:
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {pageFields.map((f) => (
+                  <button
+                    key={(f as any).id}
+                    onClick={() => setSelectedId((f as any).id)}
+                    style={{
+                      padding: "8px 10px", borderRadius: 6, cursor: "pointer",
+                      background: "rgba(247,244,239,0.06)", border: "1px solid rgba(247,244,239,0.12)",
+                      color: "#f7f4ef", fontSize: 12, textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between",
+                    }}
+                  >
+                    <span>{f.field_label}</span>
+                    <span style={{ fontSize: 10, color: "#701117", fontWeight: 700 }}>{f.field_key}</span>
+                  </button>
+                ))}
+                {pageFields.length === 0 && (
+                  <div style={{ textAlign: "center", color: "#a0a0a0", padding: "20px 0", fontSize: 12 }}>
+                    Nenhum campo mapeado nesta página.
+                    <br />
+                    Clique em <b>Adicionar Campo</b> para iniciar.
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Test modal */}
+      {/* MODAL DE DIAGNÓSTICO */}
+      {showDiagnostics && (
+        <div style={{ position: "absolute", top: 60, right: 340, zIndex: 250, width: 340, background: "#0f1414", border: "1px solid #701117", borderRadius: 12, padding: 16, color: "#f7f4ef", boxShadow: "0 10px 30px rgba(0,0,0,0.8)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#d4af37", display: "flex", alignItems: "center", gap: 6 }}>
+              <Activity size={16} /> Painel de Diagnóstico do Match
+            </h4>
+            <button onClick={() => setShowDiagnostics(false)} style={{ background: "none", border: "none", color: "#f7f4ef", cursor: "pointer" }}>
+              <X size={16} />
+            </button>
+          </div>
+          <div style={{ fontSize: 12, spaceY: 8 }} className="space-y-2">
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#a0a0a0" }}>Total de Placeholders:</span>
+              <b>{totalFields}</b>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#a0a0a0" }}>Páginas Mapeadas:</span>
+              <b>{pagesWithFields.map((p) => p + 1).join(", ") || "Nenhuma"}</b>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#a0a0a0" }}>Duplicados Identificados:</span>
+              <b style={{ color: duplicatedKeys.length > 0 ? "#f97b7b" : "#4ade80" }}>
+                {duplicatedKeys.length > 0 ? duplicatedKeys.join(", ") : "Nenhum ✓"}
+              </b>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#a0a0a0" }}>Status do Documento:</span>
+              <b style={{ color: totalFields > 0 ? "#4ade80" : "#d4af37" }}>
+                {totalFields > 0 ? "Pronto para Emissão ✓" : "Aguardando Mapeamento"}
+              </b>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE ERRO ESTRUTURADO (Sem [object Object]) */}
+      {errorModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ width: "100%", maxWidth: 500, background: "#0f1414", border: "2px solid #701117", borderRadius: 16, padding: 24, color: "#f7f4ef", boxShadow: "0 20px 50px rgba(0,0,0,0.9)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#f97b7b", marginBottom: 12 }}>
+              <AlertTriangle size={24} />
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Erro ao Salvar o Mapeamento</h3>
+            </div>
+
+            <div style={{ background: "rgba(247,244,239,0.05)", border: "1px solid rgba(247,244,239,0.1)", borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 13, lineHeight: 1.5 }}>
+              <p style={{ margin: "0 0 8px 0" }}><b>Motivo:</b> {errorModal.message}</p>
+              <p style={{ margin: 0, color: "#d4af37", fontFamily: "monospace", fontSize: 11 }}><b>Código:</b> {errorModal.code}</p>
+              {errorModal.details && (
+                <pre style={{ marginTop: 8, fontSize: 10, color: "#a0a0a0", overflowX: "auto", whiteSpace: "pre-wrap" }}>
+                  {errorModal.details}
+                </pre>
+              )}
+            </div>
+
+            <button
+              onClick={() => setErrorModal(null)}
+              style={{ width: "100%", padding: "10px 0", borderRadius: 8, background: "#701117", border: "none", color: "#f7f4ef", fontWeight: 700, cursor: "pointer" }}
+            >
+              Compreendido / Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE TESTE */}
       {showTestModal && (
         <TestFillModal
           fields={fields}

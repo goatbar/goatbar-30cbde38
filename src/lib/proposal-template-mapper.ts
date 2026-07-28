@@ -40,6 +40,8 @@ export interface ProposalTemplateField {
   line_height: number;
   letter_spacing: number;
   z_index: number;
+  is_locked?: boolean;
+  is_hidden?: boolean;
   config: Record<string, unknown> & CircularFieldConfig;
   created_at?: string;
   updated_at?: string;
