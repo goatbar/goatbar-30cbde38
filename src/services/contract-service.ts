@@ -4,9 +4,9 @@ import { numberToWordsBRL } from "@/lib/number-to-words-brl";
 import {
   onlyDigits,
   formatBrazilianDocument,
+  formatBrazilianDocumentWithLabel,
   getBrazilianDocumentType,
   getBrazilianDocumentLabel,
-  formatDocumentWithType,
   validateBrazilianDocument,
   sanitizeTemplateResiduals,
 } from "@/lib/format-document";
@@ -589,9 +589,14 @@ export const eventContractsService = {
     // 9. Extração dos Dados Atualizados do Contratante (Vindo do Formulário do Link como Fonte de Verdade)
     const clientNotes = (clientData?.notes && typeof clientData.notes === "object" ? clientData.notes : {}) as any;
     const rawDocument = clientData?.cpf_cnpj || clientNotes?.cpf_cnpj || evento.client_cpf_cnpj;
-    const formattedDocument = formatBrazilianDocument(rawDocument);
-    const documentWithType = formatDocumentWithType(rawDocument);
+    const documentValidation = validateBrazilianDocument(rawDocument);
     const documentType = getBrazilianDocumentType(rawDocument);
+    const formattedDocument = documentValidation.digits
+      ? documentValidation.formatted || formatBrazilianDocument(rawDocument)
+      : "";
+    const documentWithType = documentValidation.digits
+      ? `${getBrazilianDocumentLabel(rawDocument)}: ${formattedDocument}`
+      : "Documento: Não informado";
 
     const rgClient = clientData?.rg || clientNotes?.rg || "Não informado";
     const whatsappClient = clientData?.whatsapp || clientData?.phone || evento.phone || "Não informado";

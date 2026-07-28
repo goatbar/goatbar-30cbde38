@@ -1,7 +1,7 @@
--- ============================================================
+-- ------------------------------------------------------------
 -- Migração: Contratos, Assinantes e Tabelas de Suporte
 -- Cria as tabelas e RLS para o módulo de contratos
--- ============================================================
+-- ------------------------------------------------------------
 
 -- 1. Tabela de templates de contrato
 CREATE TABLE IF NOT EXISTS contract_templates (
