@@ -36,6 +36,7 @@ import {
   eventContractsService,
   clientContractFormService,
   renderContractTemplate,
+  getTemplateContent,
   DEFAULT_CONTRACT_BODY,
   type ContractTemplate,
   type ContractSigner,
@@ -580,10 +581,8 @@ function EventoInterna() {
       const sId = selectedSigner || realContract?.signer_id || realSigners.find((s) => s.is_active)?.id;
       const vars = await eventContractsService.compileContractVariables(eventoId, sId);
       setCompiledVariables(vars);
-      const templateToUse = realTemplates.find((t) => t.id === selectedTemplate) || realTemplates.find((t) => t.is_default);
-      const templateContent = templateToUse?.description && templateToUse.description.length > 50
-        ? templateToUse.description
-        : DEFAULT_CONTRACT_BODY;
+      const templateToUse = realTemplates.find((t) => t.id === selectedTemplate) || realTemplates.find((t) => t.is_default) || realTemplates[0];
+      const templateContent = getTemplateContent(templateToUse);
       const text = renderContractTemplate(templateContent, vars);
       setCompiledContractText(text);
       setShowContractPreviewModal(true);

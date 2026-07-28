@@ -131,8 +131,29 @@ export const contractTemplatesService = {
 };
 
 // --- Helper de Renderização de Template com Variáveis ---
+export function getTemplateContent(template?: ContractTemplate | null): string {
+  if (!template) return DEFAULT_CONTRACT_BODY;
+
+  if (
+    template.variables_schema &&
+    typeof template.variables_schema === "object" &&
+    !Array.isArray(template.variables_schema)
+  ) {
+    const schemaObj = template.variables_schema as any;
+    if (schemaObj.content && typeof schemaObj.content === "string" && schemaObj.content.trim().length > 10) {
+      return schemaObj.content;
+    }
+  }
+
+  if (template.description && template.description.trim().length > 20) {
+    return template.description;
+  }
+
+  return DEFAULT_CONTRACT_BODY;
+}
+
 export function renderContractTemplate(templateBody: string, variables: Record<string, any>): string {
-  let result = templateBody;
+  let result = templateBody || DEFAULT_CONTRACT_BODY;
   Object.keys(variables).forEach((key) => {
     const val = variables[key] !== undefined && variables[key] !== null ? String(variables[key]) : "";
     const regex = new RegExp(`{{\\s*${key}\\s*}}`, "gi");
