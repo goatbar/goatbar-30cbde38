@@ -6,6 +6,7 @@ import {
   formatBrazilianDocument,
   formatBrazilianDocumentWithLabel,
   getBrazilianDocumentType,
+  getBrazilianDocumentLabel,
   validateBrazilianDocument,
   sanitizeTemplateResiduals,
 } from "@/lib/format-document";
@@ -555,7 +556,9 @@ export const eventContractsService = {
     const formattedDocument = documentValidation.digits
       ? documentValidation.formatted || formatBrazilianDocument(rawDocument)
       : "";
-    const documentWithType = formatBrazilianDocumentWithLabel(rawDocument);
+    const documentWithType = documentValidation.digits
+      ? `${getBrazilianDocumentLabel(rawDocument)}: ${formattedDocument}`
+      : "Documento: Não informado";
 
     const rgClient = clientData?.rg || clientNotes?.rg || "Não informado";
     const whatsappClient = clientData?.whatsapp || clientData?.phone || evento.phone || "Não informado";

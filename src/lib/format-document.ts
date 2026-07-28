@@ -53,26 +53,6 @@ export function getBrazilianDocumentLabel(value: string | null | undefined): str
 
 
 /**
- * Retorna o documento formatado com o rótulo do tipo na frente, usando
- * os utilitários centrais de normalização, identificação e máscara.
- */
-export function formatBrazilianDocumentWithLabel(value: string | null | undefined): string {
-  const digits = onlyDigits(value);
-
-  if (!digits) {
-    return "Documento: Não informado";
-  }
-
-  return `${getBrazilianDocumentLabel(digits)}: ${formatBrazilianDocument(digits)}`;
-}
-
-/**
- * Compatibilidade para modelos/código legado que ainda referenciam este nome.
- * Não contém regra própria: delega para o formatador central com rótulo.
- */
-export const formatDocumentWithType = formatBrazilianDocumentWithLabel;
-
-/**
  * Máscara em tempo real para uso em inputs de formulário (até 14 dígitos).
  */
 export function maskBrazilianDocumentInput(value: string): string {
