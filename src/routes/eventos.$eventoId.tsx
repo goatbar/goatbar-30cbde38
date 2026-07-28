@@ -42,6 +42,7 @@ import {
   DEFAULT_CONTRACT_BODY,
   type ContractTemplate,
 } from "@/services/contract-service";
+import { convertHtmlToPdf, dispatchContractToZapSign, getZapSignStatus } from "@/services/zapsign-service";
 import { ContractReviewModal } from "@/components/contract-editor/ContractReviewModal";
 import {
   eventBudgetService,
@@ -190,6 +191,15 @@ function EventoInterna() {
     setRealTemplates(tps);
     setRealSigners(sigs);
     setRealContract(contract);
+
+    if (contract?.id) {
+      try {
+        const sigData = await getZapSignStatus(contract.id);
+        setZapSignDetails(sigData);
+      } catch (e) {
+        console.warn("Status ZapSign não pôde ser consultado:", e);
+      }
+    }
 
     if (tps.length > 0) {
       const defT = tps.find((t) => t.is_default) || tps[0];
@@ -624,6 +634,66 @@ function EventoInterna() {
       console.error("❌ [Contract Preview] EXCEÇÃO DETALHADA ao gerar pré-visualização:", e);
       console.error("Stack trace completo:", e?.stack);
       alert(`Erro ao gerar pré-visualização do contrato: ${e?.message || "Verifique as configurações do modelo ou evento."}`);
+    }
+  };
+
+  const [isDispatchingZapSign, setIsDispatchingZapSign] = useState(false);
+  const [zapSignDetails, setZapSignDetails] = useState<any>(null);
+
+  const handleDispatchZapSign = async () => {
+    if (!realContract) {
+      alert("Nenhum contrato gerado para este evento.");
+      return;
+    }
+
+    if (!realClientData?.email) {
+      alert("O e-mail do contratante é obrigatório para envio de assinatura. Atualize os Dados do Contratante.");
+      return;
+    }
+
+    setIsDispatchingZapSign(true);
+    try {
+      // 1. Utiliza o gerador existente de minuta/match sem duplicar ou recompilar lógica
+      const sId = selectedSigner || realContract.signer_id || (realSigners && realSigners.find((s) => s.is_active)?.id);
+      const vars = await eventContractsService.compileContractVariables(eventoId, sId);
+      const templateToUse =
+        (realTemplates && realTemplates.find((t) => t.id === (selectedTemplate || realContract.template_id))) ||
+        (realTemplates && realTemplates.find((t) => t.is_default)) ||
+        (realTemplates && realTemplates[0]);
+
+      if (!templateToUse) {
+        alert("Nenhum modelo de contrato selecionado.");
+        setIsDispatchingZapSign(false);
+        return;
+      }
+
+      const templateContent = getTemplateContent(templateToUse);
+      const mapping = getTemplateMapping(templateToUse);
+      const compiledHtml = renderContractTemplate(templateContent, vars, mapping);
+
+      // 2. Converte o resultado compilado existente para PDF imutável (etapa adicional única)
+      const { base64, hash } = await convertHtmlToPdf(
+        compiledHtml,
+        `Contrato_${realClientData.client_name || "Evento"}`
+      );
+
+      console.log("🔹 [ZapSign Dispatch] Hash SHA-256 do PDF imutável:", hash);
+
+      // 3. Dispara para a ZapSign via Edge Function / Serviço (passando contractId + pdfBase64)
+      const result = await dispatchContractToZapSign(realContract.id, base64);
+
+      if (result.success) {
+        await handleStatusChange("em_assinatura", "Contrato enviado para assinatura digital via ZapSign.");
+        alert(`Contrato enviado para a ZapSign com sucesso!\n\nID do Documento: ${result.externalDocToken || result.signatureRequestId}\nHash SHA-256: ${hash.substring(0, 16)}...`);
+        await loadContractModule();
+      } else {
+        alert(`Erro ao enviar contrato para ZapSign: ${result.error || "Erro desconhecido"}`);
+      }
+    } catch (err: any) {
+      console.error("Erro no disparo ZapSign:", err);
+      alert(`Erro ao disparar contrato para assinatura: ${err.message || "Erro inesperado"}`);
+    } finally {
+      setIsDispatchingZapSign(false);
     }
   };
 
@@ -2173,56 +2243,126 @@ function EventoInterna() {
 
                         {realContract.status === "draft" && (
                           <div className="bg-primary/5 border border-primary/10 p-8 rounded-2xl text-center space-y-4">
-                            <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                              O contrato está pronto. Ao enviar, os signatários receberão um e-mail para
-                              assinar digitalmente através do <b>ZapSign / Docusign</b>.
-                            </p>
+                            <div className="h-12 w-12 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto text-primary">
+                              <FileSignature className="h-6 w-6" />
+                            </div>
+                            <div>
+                              <h4 className="font-display font-bold text-lg text-foreground">Enviar para Assinatura Eletrônica (ZapSign)</h4>
+                              <p className="text-xs text-muted-foreground max-w-md mx-auto mt-1">
+                                O contrato será convertido em PDF imutável e enviado via API ZapSign para o contratante (<b>{realClientData?.email || "sem e-mail"}</b>) e sócio representante.
+                              </p>
+                            </div>
                             <PrimaryButton
-                              onClick={async () => {
-                                await eventContractsService.updateContractStatus(
-                                  realContract.id,
-                                  "sent",
-                                );
-                                handleStatusChange(
-                                  "em_assinatura",
-                                  "Contrato disparado para assinatura.",
-                                );
-                                loadAllData();
-                              }}
-                              className="h-12 px-10 font-bold"
+                              onClick={handleDispatchZapSign}
+                              disabled={isDispatchingZapSign}
+                              className="h-12 px-10 font-bold shadow-lg shadow-primary/20"
                             >
-                              DISPARAR ASSINATURAS
+                              {isDispatchingZapSign ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  GERANDO PDF & ENVIANDO...
+                                </>
+                              ) : (
+                                "ENVIAR PARA ASSINATURA (ZAPSIGN)"
+                              )}
                             </PrimaryButton>
                           </div>
                         )}
 
                         {(realContract.status === "sent" ||
+                          realContract.status === "em_assinatura" ||
                           realContract.status === "partially_signed") && (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="p-4 rounded-xl border border-warning/30 bg-warning/5 flex items-center gap-4">
-                              <div className="h-10 w-10 bg-warning/20 rounded-full flex items-center justify-center text-warning animate-pulse">
-                                <Clock className="h-5 w-5" />
-                              </div>
-                              <div>
-                                <div className="text-xs font-bold text-warning uppercase">
-                                  AGUARDANDO CLIENTE
+                          <div className="space-y-4">
+                            <div className="p-4 bg-surface border border-border rounded-2xl flex flex-wrap justify-between items-center gap-3">
+                              <div className="space-y-1">
+                                <div className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+                                  <Sparkles className="h-4 w-4" /> Provedor Oficial: <b>ZapSign</b>
                                 </div>
-                                <div className="text-[10px] text-muted-foreground italic">
-                                  E-mail enviado há 2 horas
+                                <div className="text-xs text-muted-foreground font-mono">
+                                  ID Documento: <b>{realContract.external_id || zapSignDetails?.externalRequestId || "Aguardando..."}</b>
                                 </div>
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => loadContractModule()}
+                                className="px-3 py-1.5 bg-background border border-border rounded-xl text-xs font-bold hover:bg-surface transition-colors flex items-center gap-1.5"
+                              >
+                                <History className="h-3.5 w-3.5 text-primary" /> Sincronizar Status
+                              </button>
                             </div>
-                            <div className="p-4 rounded-xl border border-success/30 bg-success/5 flex items-center gap-4">
-                              <div className="h-10 w-10 bg-success/20 rounded-full flex items-center justify-center text-success">
-                                <CheckCircle2 className="h-5 w-5" />
+
+                            {/* Signatários */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {/* Cliente */}
+                              <div className="p-4 rounded-xl border border-warning/30 bg-warning/5 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="text-xs font-bold text-warning uppercase flex items-center gap-1.5">
+                                    <Clock className="h-4 w-4 animate-pulse" /> Contratante (Cliente)
+                                  </div>
+                                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-warning/15 text-warning">
+                                    Pendente
+                                  </span>
+                                </div>
+                                <div className="text-xs font-bold text-foreground truncate">
+                                  {realClientData?.client_name || "Cliente"}
+                                </div>
+                                <div className="text-[11px] text-muted-foreground truncate">
+                                  E-mail: {realClientData?.email || "N/A"}
+                                </div>
+                                {zapSignDetails?.signers?.[0]?.sign_url && (
+                                  <div className="pt-2 flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(zapSignDetails.signers[0].sign_url);
+                                        alert("Link de assinatura do cliente copiado!");
+                                      }}
+                                      className="px-2.5 py-1 bg-surface border border-border rounded-lg text-[11px] font-bold text-primary hover:bg-background flex items-center gap-1"
+                                    >
+                                      <Copy className="h-3 w-3" /> Copiar Link
+                                    </button>
+                                    <a
+                                      href={zapSignDetails.signers[0].sign_url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="px-2.5 py-1 bg-primary text-primary-foreground rounded-lg text-[11px] font-bold hover:bg-primary/90 flex items-center gap-1"
+                                    >
+                                      <LinkIcon className="h-3 w-3" /> Abrir Link
+                                    </a>
+                                  </div>
+                                )}
                               </div>
-                              <div>
-                                <div className="text-xs font-bold text-success uppercase">
-                                  ASSINADO PELA GOAT
+
+                              {/* Sócio GOAT Bar */}
+                              <div className="p-4 rounded-xl border border-border bg-surface space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="text-xs font-bold text-primary uppercase flex items-center gap-1.5">
+                                    <CheckCircle2 className="h-4 w-4" /> Contratada (GOAT Bar)
+                                  </div>
+                                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-primary/15 text-primary">
+                                    Representante Legal
+                                  </span>
                                 </div>
-                                <div className="text-[10px] text-muted-foreground italic">
-                                  Assinado por Sócio Diretor
+                                <div className="text-xs font-bold text-foreground truncate">
+                                  {realSigners?.find((s) => s.id === realContract.signer_id)?.name || "Sócio Diretor"}
                                 </div>
+                                <div className="text-[11px] text-muted-foreground truncate">
+                                  E-mail: {realSigners?.find((s) => s.id === realContract.signer_id)?.email || "N/A"}
+                                </div>
+                                {zapSignDetails?.signers?.[1]?.sign_url && (
+                                  <div className="pt-2 flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(zapSignDetails.signers[1].sign_url);
+                                        alert("Link de assinatura da empresa copiado!");
+                                      }}
+                                      className="px-2.5 py-1 bg-background border border-border rounded-lg text-[11px] font-bold text-primary hover:bg-surface flex items-center gap-1"
+                                    >
+                                      <Copy className="h-3 w-3" /> Copiar Link
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>

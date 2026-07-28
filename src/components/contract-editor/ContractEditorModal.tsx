@@ -24,6 +24,8 @@ import {
   getTemplateContent,
 } from "@/services/contract-service";
 import { WordFormattingToolbar } from "./WordFormattingToolbar";
+import { normalizeEditorHtml } from "@/utils/normalize-editor-html";
+
 
 interface ContractEditorModalProps {
   template: ContractTemplate | null;
@@ -147,18 +149,21 @@ export const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
         fileType = selectedFile.name.split(".").pop()?.toUpperCase() || "DOCX";
       }
 
+      const cleanHtmlToSave = normalizeEditorHtml(store.html);
+
       const payload = {
         name: templateName,
-        description: store.html,
+        description: cleanHtmlToSave,
         file_url: publicUrl,
         file_path: filePath,
         file_type: fileType,
         is_default: isDefault,
         status: "active",
         variables_schema: {
-          content: store.html,
+          content: cleanHtmlToSave,
         },
       };
+
 
       if (template) {
         await contractTemplatesService.updateTemplate(template.id, payload);

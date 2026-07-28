@@ -76,17 +76,6 @@ export const CONTRACT_DOCUMENT_CSS = `
     margin-bottom: 0.25rem;
   }
 
-  /* Quebra de Página */
-  .docx-page-break {
-    page-break-after: always !important;
-    break-after: page !important;
-    display: block !important;
-    height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-  }
-
   /* Elementos Visuais do Editor (Exibidos apenas no Canvas de Edição) */
   .docx-field-chip {
     background-color: rgba(99, 102, 241, 0.15) !important;
@@ -125,6 +114,40 @@ export const CONTRACT_DOCUMENT_CSS = `
   .docx-chip-del:hover {
     background: #ef4444 !important;
     color: #ffffff !important;
+  }
+
+  /* Paginação de Tela vs Impressão */
+  @media screen {
+    .docx-page-break {
+      display: block !important;
+      border-top: 1px dashed #a5b4fc !important;
+      margin: 2.5rem 0 !important;
+      padding: 8px 0 !important;
+      text-align: center !important;
+      color: #6366f1 !important;
+      font-size: 10px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.05em !important;
+      user-select: none !important;
+    }
+    .docx-page-break::after {
+      content: "— QUEBRA DE PÁGINA A4 —";
+    }
+  }
+
+  @media print {
+    .docx-page-break {
+      page-break-after: always !important;
+      break-after: page !important;
+      display: block !important;
+      height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+    }
+    .docx-page-break::after {
+      content: "" !important;
+    }
   }
 `;
 
@@ -216,3 +239,4 @@ export const CONTRACT_PRINT_HTML_SHELL = (title: string, bodyHtml: string): stri
   </body>
 </html>
 `;
+

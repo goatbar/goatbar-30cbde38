@@ -19,6 +19,7 @@ import {
 } from "@/services/contract-service";
 import { WordFormattingToolbar } from "./WordFormattingToolbar";
 import { normalizeEditorHtml } from "@/utils/normalize-editor-html";
+import { prepareContractExportHtml } from "@/utils/prepare-contract-export-html";
 import { CONTRACT_DOCUMENT_CSS, CONTRACT_PRINT_HTML_SHELL } from "@/lib/contract-document-styles";
 
 interface ContractReviewModalProps {
@@ -30,7 +31,7 @@ interface ContractReviewModalProps {
   compiledHtml: string;
   rawTemplateContent: string;
   compiledVariables: Record<string, any>;
-  onConfirmSend: () => void;
+  onConfirmSend: (finalCleanHtml?: string) => void;
 }
 
 export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
@@ -44,7 +45,8 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
   compiledVariables,
   onConfirmSend,
 }) => {
-  const [editableContent, setEditableContent] = useState(compiledHtml);
+  // Estado CANÔNICO ÚNICO do HTML na revisão
+  const [reviewHtml, setReviewHtml] = useState(compiledHtml);
   const editorRef = useRef<HTMLDivElement>(null);
 
   // Modal de Busca e Substituição
@@ -53,7 +55,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
   const [replaceText, setReplaceText] = useState("");
 
   useEffect(() => {
-    setEditableContent(compiledHtml);
+    setReviewHtml(compiledHtml);
   }, [compiledHtml]);
 
   if (!isOpen) return null;
@@ -65,25 +67,24 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
   );
 
   const handlePrintPdf = () => {
-    const rawHtmlToPrint = editorRef.current ? editorRef.current.innerHTML : editableContent;
-    const cleanHtml = normalizeEditorHtml(rawHtmlToPrint);
+    const exportHtml = prepareContractExportHtml(reviewHtml);
     const win = window.open("", "_blank");
     if (win) {
-      win.document.write(CONTRACT_PRINT_HTML_SHELL(`Contrato GOAT Bar - ${eventName}`, cleanHtml));
+      win.document.write(CONTRACT_PRINT_HTML_SHELL(`Contrato GOAT Bar - ${eventName}`, exportHtml));
       win.document.close();
       win.print();
     }
   };
 
   const handleCopyText = () => {
-    const rawHtmlToCopy = editorRef.current ? editorRef.current.innerHTML : editableContent;
-    const cleanHtml = normalizeEditorHtml(rawHtmlToCopy);
+    const exportHtml = prepareContractExportHtml(reviewHtml);
     const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = cleanHtml;
+    tempDiv.innerHTML = exportHtml;
     const textContent = tempDiv.innerText || tempDiv.textContent || "";
     navigator.clipboard.writeText(textContent);
     alert("Texto do contrato copiado com sucesso!");
   };
+
 
 
   const handleInsertTable = () => {
@@ -262,14 +263,13 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
               <div
                 ref={editorRef}
                 contentEditable={true}
-                onInput={() => {
-                  if (editorRef.current) {
-                    setEditableContent(editorRef.current.innerHTML);
-                  }
+                onInput={(e) => {
+                  setReviewHtml(e.currentTarget.innerHTML);
                 }}
-                dangerouslySetInnerHTML={{ __html: compiledHtml }}
+                dangerouslySetInnerHTML={{ __html: reviewHtml }}
                 className="outline-none min-h-[950px] text-sm leading-relaxed"
               />
+
             </div>
           </main>
 
@@ -336,7 +336,8 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
             <button
               type="button"
               onClick={() => {
-                onConfirmSend();
+                const exportHtml = prepareContractExportHtml(reviewHtml);
+                onConfirmSend(exportHtml);
                 onClose();
               }}
               className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs px-5 py-2.5 rounded-xl shadow-md shadow-primary/20 transition-all flex items-center gap-2"
@@ -346,6 +347,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
             </button>
           </div>
         </footer>
+
       </div>
     </div>
   );

@@ -12,6 +12,8 @@ import {
 } from "@/lib/format-document";
 import { normalizeEditorHtml } from "@/utils/normalize-editor-html";
 import { validateExportHtml } from "@/utils/validate-export-html";
+import { prepareContractExportHtml, ContractExportValidationError } from "@/utils/prepare-contract-export-html";
+
 
 
 // --- Tipos para os Serviços ---
@@ -308,14 +310,21 @@ export function renderContractTemplate(
   // 2. Substituição das variáveis
   const renderedHtml = replaceContractVariables(normalizedHtml, variables, customMapping);
 
-  // 3. Validação do HTML final
-  const validation = validateExportHtml(renderedHtml);
-  if (!validation.valid) {
-    console.warn("⚠️ [Contract Validation Warning] O HTML do contrato final possui avisos de validação:", validation.errors);
+  // 3. Sanitização e Validação do HTML final
+  try {
+    return prepareContractExportHtml(renderedHtml);
+  } catch (err: any) {
+    if (err instanceof ContractExportValidationError) {
+      throw new ContractRenderError({
+        message: err.message,
+        errors: err.errors,
+        unresolvedFields: err.unresolvedFields,
+      });
+    }
+    throw err;
   }
-
-  return renderedHtml;
 }
+
 
 
 export const DEFAULT_CONTRACT_BODY = "";
