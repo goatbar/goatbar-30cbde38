@@ -29,58 +29,74 @@ export const SidebarFields: React.FC<SidebarFieldsProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("TODOS");
 
-  // Conta a ocorrência de cada campo no documento para feedback visual em tempo real
+  // Conta a ocorrência de cada campo no documento de forma 100% segura contra falhas
   const fieldUsageCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     if (!documentHtml) return counts;
 
-    ALL_EDITOR_FIELDS.forEach((f) => {
-      const token1 = `{{${f.key}}}`;
-      const token2 = f.defaultTag;
-      // Regex case insensitive
-      const regex1 = new RegExp(token1.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-      const regex2 = new RegExp(token2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    try {
+      ALL_EDITOR_FIELDS.forEach((f) => {
+        const token1 = `{{${f.key}}}`;
+        const token2 = f.defaultTag || "";
 
-      const match1 = (documentHtml.match(regex1) || []).length;
-      const match2 = (documentHtml.match(regex2) || []).length;
+        const escaped1 = token1.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const match1 = (documentHtml.match(new RegExp(escaped1, "gi")) || []).length;
 
-      counts[f.key] = match1 + match2;
-    });
+        let match2 = 0;
+        if (token2) {
+          const escaped2 = token2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          match2 = (documentHtml.match(new RegExp(escaped2, "gi")) || []).length;
+        }
+
+        counts[f.key] = match1 + match2;
+      });
+    } catch (err) {
+      console.warn("Erro ao calcular contagem de campos:", err);
+    }
 
     return counts;
   }, [documentHtml]);
 
-  // Filtragem dos campos pela busca e categoria
+  // Filtragem segura dos campos pela busca e categoria selecionada
   const filteredCategories = useMemo(() => {
-    return EDITOR_FIELD_CATEGORIES.map((cat) => {
-      if (selectedCategory !== "TODOS" && cat.category !== selectedCategory) {
-        return { ...cat, fields: [] };
-      }
+    try {
+      return EDITOR_FIELD_CATEGORIES.map((cat) => {
+        if (selectedCategory !== "TODOS" && cat.category !== selectedCategory) {
+          return { ...cat, fields: [] };
+        }
 
-      const matchingFields = cat.fields.filter((f) => {
-        if (!searchQuery) return true;
-        const q = searchQuery.toLowerCase();
-        return (
-          f.label.toLowerCase().includes(q) ||
-          f.key.toLowerCase().includes(q) ||
-          f.desc.toLowerCase().includes(q) ||
-          f.defaultTag.toLowerCase().includes(q)
-        );
-      });
+        const matchingFields = (cat.fields || []).filter((f) => {
+          if (!searchQuery) return true;
+          const q = searchQuery.toLowerCase().trim();
+          return (
+            (f.label && f.label.toLowerCase().includes(q)) ||
+            (f.key && f.key.toLowerCase().includes(q)) ||
+            (f.desc && f.desc.toLowerCase().includes(q)) ||
+            (f.defaultTag && f.defaultTag.toLowerCase().includes(q))
+          );
+        });
 
-      return { ...cat, fields: matchingFields };
-    }).filter((cat) => cat.fields.length > 0);
+        return { ...cat, fields: matchingFields };
+      }).filter((cat) => cat.fields && cat.fields.length > 0);
+    } catch (e) {
+      console.error("Erro ao filtrar categorias no sidebar:", e);
+      return EDITOR_FIELD_CATEGORIES;
+    }
   }, [searchQuery, selectedCategory]);
 
   const handleDragStart = (e: React.DragEvent, field: EditorFieldDef) => {
-    e.dataTransfer.setData("application/json", JSON.stringify(field));
-    e.dataTransfer.setData("text/plain", `{{${field.key}}}`);
-    e.dataTransfer.effectAllowed = "copy";
+    try {
+      e.dataTransfer.setData("application/json", JSON.stringify(field));
+      e.dataTransfer.setData("text/plain", `{{${field.key}}}`);
+      e.dataTransfer.effectAllowed = "copy";
+    } catch (err) {
+      console.warn("Drag start transfer error:", err);
+    }
   };
 
   return (
     <aside className="w-80 border-r border-border bg-surface flex flex-col h-full overflow-hidden shrink-0 select-none shadow-sm z-10">
-      {/* Top Header & Search */}
+      {/* Header & Busca */}
       <div className="p-4 border-b border-border space-y-3 bg-background/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -103,7 +119,7 @@ export const SidebarFields: React.FC<SidebarFieldsProps> = ({
           />
         </div>
 
-        {/* Bar de Categorias */}
+        {/* NAVEGAÇÃO DE CATEGORIAS SEGURA */}
         <div className="flex overflow-x-auto gap-1 pb-1 scrollbar-none">
           <button
             type="button"
@@ -127,7 +143,7 @@ export const SidebarFields: React.FC<SidebarFieldsProps> = ({
                   : "bg-background text-muted-foreground hover:text-foreground border border-border"
               }`}
             >
-              {cat.category.split(" ")[0]} {cat.category.split(" ")[1]}
+              {cat.category}
             </button>
           ))}
         </div>
@@ -145,11 +161,11 @@ export const SidebarFields: React.FC<SidebarFieldsProps> = ({
           <div key={cat.category} className="space-y-2">
             <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 px-1 flex items-center justify-between">
               <span>{cat.category}</span>
-              <span className="text-[9px] font-mono">({cat.fields.length})</span>
+              <span className="text-[9px] font-mono">({cat.fields?.length || 0})</span>
             </div>
 
             <div className="space-y-1.5">
-              {cat.fields.map((field) => {
+              {(cat.fields || []).map((field) => {
                 const count = fieldUsageCounts[field.key] || 0;
                 const isHighlighted = activeHighlightField === field.key;
 

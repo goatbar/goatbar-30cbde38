@@ -430,6 +430,8 @@ export const eventContractsService = {
     const totalVal = currentBudget?.final_budget_value || evento.current_budget_value || 0;
     const entryVal = totalVal * 0.5;
     const remainingVal = totalVal - entryVal;
+    const numGuests = Number(evento.guests) || 1;
+    const valPerPerson = (currentBudget as any)?.value_per_person || (totalVal > 0 && numGuests > 0 ? totalVal / numGuests : 0);
 
     // Monta o dicionário de variáveis com suporte a notação por ponto e underline
     const variables: Record<string, string> = {
@@ -441,6 +443,7 @@ export const eventContractsService = {
       "evento.local": evento.event_location || "A definir",
       "evento.cidade": evento.city || "A definir",
       "evento.convidados": String(evento.guests || 0),
+      "evento.valor_por_pessoa": fmt(valPerPerson),
 
       // 👤 Cliente
       "cliente.nome": clientData?.client_name || evento.client_name || "Não informado",
@@ -486,6 +489,7 @@ export const eventContractsService = {
       evento_local: evento.event_location || "A definir",
       evento_cidade: evento.city || "A definir",
       evento_convidados: String(evento.guests || 0),
+      evento_valor_por_pessoa: fmt(valPerPerson),
       evento_valor_total: fmt(totalVal),
       evento_forma_pagamento: currentBudget?.payment_method || "A combinar",
       drinks_lista: drinksArray.length > 0 ? drinksArray.join(", ") : "Conforme cardápio selecionado",

@@ -11,8 +11,8 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const navigate = useNavigate();
   const { user, loading: sessionLoading, signIn } = useAuth();
-  const [email, setEmail] = useState("drinksgoatbar@gmail.com");
-  const [password, setPassword] = useState("Goatbar@1234");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,7 +78,7 @@ function LoginPage() {
             Entre com suas credenciais para acessar o painel.
           </p>
 
-          <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+          <form onSubmit={handleSubmit} autoComplete="off" className="mt-8 space-y-4">
             <div>
               <label className="label-eyebrow block mb-2">E-mail</label>
               <input
@@ -86,6 +86,7 @@ function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="off"
                 className="w-full h-11 px-4 rounded-lg bg-surface border border-border focus:border-primary focus:outline-none text-sm transition-colors"
                 placeholder="seu@email.com"
               />
@@ -98,6 +99,7 @@ function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
                 className="w-full h-11 px-4 rounded-lg bg-surface border border-border focus:border-primary focus:outline-none text-sm transition-colors"
                 placeholder="••••••••"
               />

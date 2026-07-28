@@ -149,6 +149,7 @@ const SAMPLE_VARIABLES: Record<string, string> = {
   "evento.local": "Espaço Villa Bisutti",
   "evento.cidade": "São Paulo",
   "evento.convidados": "150",
+  "evento.valor_por_pessoa": "R$ 45,33",
   "cliente.nome": "Maria Fernanda Oliveira",
   "cliente.documento": "123.456.789-00",
   "cliente.telefone": "(11) 98765-4321",

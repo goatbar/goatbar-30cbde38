@@ -35,6 +35,7 @@ export const EDITOR_FIELD_CATEGORIES: FieldCategoryDef[] = [
       { key: "evento.local", label: "Local do Evento", category: "Evento", desc: "Espaço ou salão de festas", sampleValue: "Espaço Villa Bisutti", defaultTag: "[LOCAL_EVENTO]" },
       { key: "evento.cidade", label: "Cidade", category: "Evento", desc: "Cidade da realização", sampleValue: "São Paulo", defaultTag: "[CIDADE_EVENTO]" },
       { key: "evento.convidados", label: "Número de Convidados", category: "Evento", desc: "Total de convidados", sampleValue: "150", defaultTag: "[QTD_CONVIDADOS]" },
+      { key: "evento.valor_por_pessoa", label: "Valor por Pessoa", category: "Evento", desc: "Valor individual por pessoa do orçamento", sampleValue: "R$ 45,33", defaultTag: "[VALOR_POR_PESSOA]" },
     ],
   },
   {
