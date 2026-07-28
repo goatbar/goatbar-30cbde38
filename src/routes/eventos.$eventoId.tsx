@@ -587,24 +587,42 @@ function EventoInterna() {
 
   const handlePreviewGeneratedContract = async () => {
     try {
-      const sId = selectedSigner || realContract?.signer_id || realSigners.find((s) => s.is_active)?.id;
+      console.log("🔹 [Contract Preview] 1. Iniciando carregamento dos dados...");
+      const sId = selectedSigner || realContract?.signer_id || (realSigners && realSigners.find((s) => s.is_active)?.id);
+
+      console.log("🔹 [Contract Preview] 2. Compilando variáveis do evento:", eventoId, "Sócio ID:", sId);
       const vars = await eventContractsService.compileContractVariables(eventoId, sId);
       setCompiledVariables(vars);
-      const templateToUse = realTemplates.find((t) => t.id === selectedTemplate) || realTemplates.find((t) => t.is_default) || realTemplates[0];
+
+      const templateToUse =
+        (realTemplates && realTemplates.find((t) => t.id === selectedTemplate)) ||
+        (realTemplates && realTemplates.find((t) => t.is_default)) ||
+        (realTemplates && realTemplates[0]);
 
       if (!templateToUse) {
+        console.warn("⚠️ [Contract Preview] Nenhum modelo de contrato anexado ou selecionado.");
         alert("Nenhum modelo de contrato anexado. Por favor, acesse Documentos > Contratos e anexe seu modelo primeiro.");
         return;
       }
 
+      console.log("🔹 [Contract Preview] 3. Template carregado com sucesso:", templateToUse.name);
+
       const templateContent = getTemplateContent(templateToUse);
       const mapping = getTemplateMapping(templateToUse);
+
+      console.log("🔹 [Contract Preview] 4. Match de campos carregado:", Object.keys(mapping || {}).length, "mapeamento(s)");
+
       const text = renderContractTemplate(templateContent, vars, mapping);
+
+      console.log("🔹 [Contract Preview] 5. Documento gerado com sucesso! Tamanho final:", text.length, "caracteres");
+      console.log("🔹 [Contract Preview] 6. Pré-visualização iniciada.");
+
       setCompiledContractText(text);
       setShowContractPreviewModal(true);
     } catch (e: any) {
-      console.error("Erro ao carregar preview do contrato:", e);
-      alert(`Erro ao gerar pré-visualização do contrato: ${e.message || "Verifique se o evento possui orçamento e cliente cadastrados."}`);
+      console.error("❌ [Contract Preview] EXCEÇÃO DETALHADA ao gerar pré-visualização:", e);
+      console.error("Stack trace completo:", e?.stack);
+      alert(`Erro ao gerar pré-visualização do contrato: ${e?.message || "Verifique as configurações do modelo ou evento."}`);
     }
   };
 

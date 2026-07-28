@@ -517,7 +517,22 @@ export const eventContractsService = {
       }
     }
 
-    // 9. Cálculos de Condição, Meio de Pagamento e Cláusula Completa
+    // 9. Extração dos Dados Atualizados do Contratante (Vindo do Formulário do Link)
+    const clientNotes = (clientData?.notes && typeof clientData.notes === "object" ? clientData.notes : {}) as any;
+    const rgClient = clientData?.rg || clientNotes?.rg || "Não informado";
+    const whatsappClient = clientData?.whatsapp || clientData?.phone || evento.phone || "Não informado";
+    const cepClient = clientData?.cep || clientNotes?.cep || "Não informado";
+    const cityClient = clientData?.city || clientNotes?.city || evento.city || "Não informado";
+    const stateClient = clientData?.state || clientNotes?.state || "SP";
+
+    // Local do Evento Atualizado pelo Formulário
+    const venueName = clientNotes?.venue_name || evento.event_location || "A definir";
+    const venueAddress = clientNotes?.venue_address || clientData?.address || evento.event_location || "A definir";
+    const venueCity = clientNotes?.venue_city || evento.city || "A definir";
+    const venueCep = clientNotes?.venue_cep || "A definir";
+    const venueComplement = clientNotes?.venue_complement || "";
+
+    // 10. Cálculos de Condição, Meio de Pagamento e Cláusula Completa
     const meioPagamentoStr = currentBudget?.payment_channel || clientNotes?.payment_channel || "PIX";
     const percentualNum = totalVal > 0 ? Math.round((entryVal / totalVal) * 100) : 50;
     const percentualText = `${percentualNum}%`;
@@ -543,21 +558,6 @@ export const eventContractsService = {
     } else {
       clausulaPagamentoStr = `O CONTRATANTE efetuará o pagamento de ${fmt(entryVal)} (${numberToWordsBRL(entryVal).toLowerCase()}) no ato da assinatura do contrato, permanecendo o saldo remanescente de ${fmt(remainingVal)} (${numberToWordsBRL(remainingVal).toLowerCase()}), que deverá ser quitado até a data limite de ${finalPaymentDateStr} (7 dias antes da realização do evento), por meio de ${meioPagamentoStr}.`;
     }
-
-    // Extração dos Dados Atualizados do Contratante (Vindo do Formulário do Link)
-    const clientNotes = (clientData?.notes && typeof clientData.notes === "object" ? clientData.notes : {}) as any;
-    const rgClient = clientData?.rg || clientNotes?.rg || "Não informado";
-    const whatsappClient = clientData?.whatsapp || clientData?.phone || evento.phone || "Não informado";
-    const cepClient = clientData?.cep || clientNotes?.cep || "Não informado";
-    const cityClient = clientData?.city || clientNotes?.city || evento.city || "Não informado";
-    const stateClient = clientData?.state || clientNotes?.state || "SP";
-
-    // Local do Evento Atualizado pelo Formulário
-    const venueName = clientNotes?.venue_name || evento.event_location || "A definir";
-    const venueAddress = clientNotes?.venue_address || clientData?.address || evento.event_location || "A definir";
-    const venueCity = clientNotes?.venue_city || evento.city || "A definir";
-    const venueCep = clientNotes?.venue_cep || "A definir";
-    const venueComplement = clientNotes?.venue_complement || "";
 
     // Monta o dicionário completo de variáveis
     const variables: Record<string, string> = {
