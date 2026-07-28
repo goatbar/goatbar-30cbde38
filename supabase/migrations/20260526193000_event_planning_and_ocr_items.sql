@@ -1,8 +1,8 @@
--- ============================================================
+-- ------------------------------------------------------------
 -- Migration: Event Planning & OCR Items
 -- Adds tables and relations for receipt items, event planning,
 -- and event closing functionalities.
--- ============================================================
+-- ------------------------------------------------------------
 
 -- 1. Link financial_expenses to events
 ALTER TABLE public.financial_expenses

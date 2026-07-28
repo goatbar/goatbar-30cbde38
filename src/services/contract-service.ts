@@ -4,6 +4,7 @@ import { numberToWordsBRL } from "@/lib/number-to-words-brl";
 import {
   onlyDigits,
   formatBrazilianDocument,
+  formatBrazilianDocumentWithLabel,
   getBrazilianDocumentType,
   getBrazilianDocumentLabel,
   validateBrazilianDocument,

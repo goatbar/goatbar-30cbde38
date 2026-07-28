@@ -51,6 +51,7 @@ export function getBrazilianDocumentLabel(value: string | null | undefined): str
   return "Documento";
 }
 
+
 /**
  * Máscara em tempo real para uso em inputs de formulário (até 14 dígitos).
  */
