@@ -3,6 +3,7 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { calcularOrcamentoEvento, type Evento, type EventoStatus } from "@/lib/mock-data";
 import { fmtBRL } from "@/lib/format";
+import { formatBrazilianDocument, getBrazilianDocumentType } from "@/lib/format-document";
 import {
   Calendar,
   MapPin,
@@ -2028,7 +2029,10 @@ function EventoInterna() {
                     >
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-4 bg-primary/5 rounded-2xl border border-primary/10">
                         <DataField label="Razão Social / Nome" value={realClientData.client_name} />
-                        <DataField label="Documento (CPF/CNPJ)" value={realClientData.cpf_cnpj} />
+                        <DataField
+                          label={getBrazilianDocumentType(realClientData.cpf_cnpj)}
+                          value={formatBrazilianDocument(realClientData.cpf_cnpj)}
+                        />
                         <DataField label="E-mail de Contato" value={realClientData.email} />
                         <DataField label="Local / Endereço do Evento" value={realClientData.address} />
 

@@ -1,6 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
 import { numberToWordsBRL } from "@/lib/number-to-words-brl";
+import {
+  formatBrazilianDocument,
+  getBrazilianDocumentType,
+  formatDocumentWithType,
+} from "@/lib/format-document";
 
 // --- Tipos para os Serviços ---
 export interface ContractTemplate {
@@ -223,28 +228,49 @@ export function renderContractTemplate(
   variables: Record<string, any>,
   customMapping?: Record<string, string>
 ): string {
-  let result = templateBody || "";
+  if (!templateBody) return "";
+  let result = templateBody;
 
-  // 1. Substituição via mapeamento customizado (De-Para do Usuário)
+  // 1. Limpa invólucros de chips HTML (<span class="docx-field-chip"...>...</span>) extraindo o token limpo
+  result = result.replace(/<span[^>]*class="docx-field-chip"[^>]*>([\s\S]*?)<\/span>/gi, (_match, inner) => {
+    return inner.replace(/<button[^>]*>.*?<\/button>/gi, "").trim();
+  });
+
+  // 2. Substituição via mapeamento customizado (De-Para do Usuário)
   if (customMapping) {
     Object.keys(customMapping).forEach((sysKey) => {
       const matchToken = customMapping[sysKey];
       if (matchToken && matchToken.trim().length > 0) {
-        const val = variables[sysKey] !== undefined && variables[sysKey] !== null ? String(variables[sysKey]) : "";
-        // Escapar caracteres de regex se necessário
+        const rawVal = variables[sysKey];
+        const val = rawVal !== undefined && rawVal !== null && String(rawVal).trim().length > 0
+          ? String(rawVal)
+          : "Não informado";
+
         const escaped = matchToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const regex = new RegExp(escaped, "gi");
+        // Elimina o token completo e qualquer sufixo 'xx' ou 'x' colado
+        const regex = new RegExp(`${escaped}(?:xx|x)?`, "gi");
         result = result.replace(regex, val);
       }
     });
   }
 
-  // 2. Substituição padrão para tags {{chave}}
+  // 3. Substituição padrão para tags {{chave}} e [CHAVE] eliminando sufixos 'xx'
   Object.keys(variables).forEach((key) => {
-    const val = variables[key] !== undefined && variables[key] !== null ? String(variables[key]) : "";
-    const regex = new RegExp(`{{\\s*${key}\\s*}}`, "gi");
-    result = result.replace(regex, val);
+    const rawVal = variables[key];
+    const val = rawVal !== undefined && rawVal !== null && String(rawVal).trim().length > 0
+      ? String(rawVal)
+      : "Não informado";
+
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const curlyRegex = new RegExp(`{{\\s*${escapedKey}\\s*}}(?:xx|x)?`, "gi");
+    const bracketRegex = new RegExp(`\\[\\s*${escapedKey.toUpperCase()}\\s*\\](?:xx|x)?`, "gi");
+
+    result = result.replace(curlyRegex, val).replace(bracketRegex, val);
   });
+
+  // 4. Limpeza final de qualquer placeholder genérico não substituído e sufixos 'xx' residuais
+  result = result.replace(/\{\{\s*[\w.]+\s*\}\}(?:xx|x)?/gi, "Não informado");
+  result = result.replace(/\[\s*[\w._]+\s*\](?:xx|x)?/gi, "Não informado");
 
   return result;
 }
@@ -517,8 +543,13 @@ export const eventContractsService = {
       }
     }
 
-    // 9. Extração dos Dados Atualizados do Contratante (Vindo do Formulário do Link)
+    // 9. Extração dos Dados Atualizados do Contratante (Vindo do Formulário do Link como Fonte de Verdade)
     const clientNotes = (clientData?.notes && typeof clientData.notes === "object" ? clientData.notes : {}) as any;
+    const rawDocument = clientData?.cpf_cnpj || clientNotes?.cpf_cnpj || evento.client_cpf_cnpj;
+    const formattedDocument = formatBrazilianDocument(rawDocument);
+    const documentWithType = formatDocumentWithType(rawDocument);
+    const documentType = getBrazilianDocumentType(rawDocument);
+
     const rgClient = clientData?.rg || clientNotes?.rg || "Não informado";
     const whatsappClient = clientData?.whatsapp || clientData?.phone || evento.phone || "Não informado";
     const cepClient = clientData?.cep || clientNotes?.cep || "Não informado";
@@ -580,9 +611,11 @@ export const eventContractsService = {
       "evento.valor_por_pessoa": fmt(valPerPerson),
       "evento.valor_por_pessoa_extenso": numberToWordsBRL(valPerPerson),
 
-      // 👤 Cliente (Preenchido pelo Contratante no Link)
+      // 👤 Cliente (Preenchido pelo Contratante no Link - Fonte Principal)
       "cliente.nome": clientData?.client_name || evento.client_name || "Não informado",
-      "cliente.documento": clientData?.cpf_cnpj || "Não informado",
+      "cliente.documento": formattedDocument || "Não informado",
+      "cliente.documento_com_rotulo": documentWithType || "Não informado",
+      "cliente.tipo_documento": documentType,
       "cliente.rg": rgClient,
       "cliente.telefone": clientData?.phone || evento.phone || "Não informado",
       "cliente.whatsapp": whatsappClient,
@@ -613,7 +646,7 @@ export const eventContractsService = {
       "empresa.cnpj": "42.123.456/0001-99",
       "empresa.endereco": "Av. Brigadeiro Faria Lima, 2000 - São Paulo/SP",
       "empresa.responsavel": signer?.name || "Representante GOAT Bar",
-      "empresa.cpf_responsavel": signer?.cpf || "",
+      "empresa.cpf_responsavel": formatBrazilianDocument(signer?.cpf || ""),
       "empresa.cargo_responsavel": signer?.role || "Sócio Diretor",
       "empresa.endereco_responsavel": signer?.address || "",
 
@@ -627,7 +660,9 @@ export const eventContractsService = {
 
       // Aliases em Underscore
       cliente_nome: clientData?.client_name || evento.client_name || "Não informado",
-      cliente_documento: clientData?.cpf_cnpj || "Não informado",
+      cliente_documento: formattedDocument || "Não informado",
+      cliente_documento_com_rotulo: documentWithType || "Não informado",
+      cliente_tipo_documento: documentType,
       cliente_endereco: clientData?.address || evento.event_location || "Não informado",
       cliente_email: clientData?.email || evento.email || "Não informado",
       cliente_telefone: clientData?.phone || evento.phone || "Não informado",
