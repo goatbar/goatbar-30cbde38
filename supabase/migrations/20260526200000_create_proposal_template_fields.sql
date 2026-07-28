@@ -1,10 +1,10 @@
--- ============================================================
+-- ------------------------------------------------------------
 -- Tabela: proposal_template_fields
 -- Armazena o mapeamento visual de campos dinâmicos em cada
 -- modelo de proposta comercial.
 -- Coordenadas x, y, width, height são relativas (0.0 a 1.0)
 -- à dimensão da página do PDF.
--- ============================================================
+-- ------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS public.proposal_template_fields (
   id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),

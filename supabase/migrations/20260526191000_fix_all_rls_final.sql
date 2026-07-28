@@ -1,11 +1,11 @@
--- ============================================================
+-- ------------------------------------------------------------
 -- FIX TOTAL: Recriar todas as políticas de RLS do storage
 -- e das tabelas de proposta e contrato
--- ============================================================
+-- ------------------------------------------------------------
 
--- ============================================================
+-- ------------------------------------------------------------
 -- 1. STORAGE: proposal-templates
--- ============================================================
+-- ------------------------------------------------------------
 
 -- Limpar TODAS as políticas existentes deste bucket
 DO $$
@@ -41,9 +41,9 @@ CREATE POLICY "storage_proposal_templates_delete"
   ON storage.objects FOR DELETE
   USING (bucket_id = 'proposal-templates');
 
--- ============================================================
+-- ------------------------------------------------------------
 -- 2. STORAGE: generated-proposals
--- ============================================================
+-- ------------------------------------------------------------
 
 DO $$
 DECLARE r RECORD;
@@ -74,9 +74,9 @@ CREATE POLICY "storage_generated_proposals_delete"
   ON storage.objects FOR DELETE
   USING (bucket_id = 'generated-proposals');
 
--- ============================================================
+-- ------------------------------------------------------------
 -- 3. STORAGE: contract-templates e signed-contracts
--- ============================================================
+-- ------------------------------------------------------------
 
 DO $$
 DECLARE r RECORD;
@@ -116,9 +116,9 @@ CREATE POLICY "storage_signed_contracts_update"
   USING (bucket_id = 'signed-contracts')
   WITH CHECK (bucket_id = 'signed-contracts');
 
--- ============================================================
+-- ------------------------------------------------------------
 -- 4. TABELAS: Garantir RLS aberta em todas as tabelas de proposta/contrato
--- ============================================================
+-- ------------------------------------------------------------
 
 -- proposal_templates
 ALTER TABLE public.proposal_templates ENABLE ROW LEVEL SECURITY;

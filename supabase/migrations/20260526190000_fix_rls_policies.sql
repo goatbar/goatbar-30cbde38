@@ -1,7 +1,7 @@
--- ============================================================
+-- ------------------------------------------------------------
 -- Fix RLS: permitir anon também fazer upload nos buckets de proposta
 -- Garante que usuários autenticados E anônimos possam inserir/ler
--- ============================================================
+-- ------------------------------------------------------------
 
 -- Storage: proposal-templates — liberar para anon também
 DROP POLICY IF EXISTS "Upload Anon Proposal Templates" ON storage.objects;
