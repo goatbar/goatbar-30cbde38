@@ -51,27 +51,26 @@ export function getBrazilianDocumentLabel(value: string | null | undefined): str
   return "Documento";
 }
 
+
 /**
- * Retorna o documento formatado com o rótulo do tipo na frente.
- * Exemplos:
- *   "13291720247"     → "CPF: 132.917.202-47"
- *   "12345678000190"  → "CNPJ: 12.345.678/0001-90"
- *   ""  | null        → "Documento: Não informado"
+ * Retorna o documento formatado com o rótulo do tipo na frente, usando
+ * os utilitários centrais de normalização, identificação e máscara.
  */
-export function formatDocumentWithType(
-  value: string | null | undefined,
-): string {
+export function formatBrazilianDocumentWithLabel(value: string | null | undefined): string {
   const digits = onlyDigits(value);
 
   if (!digits) {
     return "Documento: Não informado";
   }
 
-  const label = getBrazilianDocumentLabel(digits);
-  const formatted = formatBrazilianDocument(digits);
-
-  return `${label}: ${formatted}`;
+  return `${getBrazilianDocumentLabel(digits)}: ${formatBrazilianDocument(digits)}`;
 }
+
+/**
+ * Compatibilidade para modelos/código legado que ainda referenciam este nome.
+ * Não contém regra própria: delega para o formatador central com rótulo.
+ */
+export const formatDocumentWithType = formatBrazilianDocumentWithLabel;
 
 /**
  * Máscara em tempo real para uso em inputs de formulário (até 14 dígitos).
