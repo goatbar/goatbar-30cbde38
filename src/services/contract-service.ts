@@ -6,9 +6,11 @@ import {
   formatBrazilianDocument,
   getBrazilianDocumentType,
   getBrazilianDocumentLabel,
+  formatDocumentWithType,
   validateBrazilianDocument,
   sanitizeTemplateResiduals,
 } from "@/lib/format-document";
+
 
 // --- Tipos para os Serviços ---
 export interface ContractTemplate {
