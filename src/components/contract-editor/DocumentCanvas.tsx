@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import { Upload, Trash2, Tag, Check, Layers } from "lucide-react";
+import { Upload, Trash2, Tag, Check, Layers, FileText } from "lucide-react";
 import { ALL_EDITOR_FIELDS, type EditorFieldDef } from "./contract-editor-store";
 
 interface DocumentCanvasProps {
@@ -36,6 +36,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
       ];
 
       keysToMatch.forEach((token) => {
+        if (!token) return;
         const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const regex = new RegExp(escaped, "gi");
 
@@ -137,7 +138,6 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
         }
         range.insertNode(frag);
       } else if (canvasRef.current) {
-        // Fallback: insere no final
         canvasRef.current.insertAdjacentHTML("beforeend", chipHtml);
       }
 
@@ -152,18 +152,26 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
 
   return (
     <main className="flex-1 bg-muted/40 p-4 md:p-8 overflow-y-auto flex flex-col items-center select-text relative">
+      {/* Indicador de Páginas Contínuas */}
+      {html && (
+        <div className="mb-3 px-3 py-1 bg-background/80 border border-border rounded-full text-[11px] font-bold text-muted-foreground flex items-center gap-2 shadow-sm">
+          <FileText className="h-3.5 w-3.5 text-primary" />
+          <span>Documento Carregado • 100% das páginas acessíveis e editáveis</span>
+        </div>
+      )}
+
       {/* Container de Escala do Zoom */}
       <div
-        className="transition-transform duration-150 ease-out origin-top flex flex-col items-center"
+        className="transition-transform duration-150 ease-out origin-top flex flex-col items-center w-full"
         style={{ transform: `scale(${zoom / 100})` }}
       >
-        {/* Folha A4 Canvas */}
+        {/* Folha A4 Canvas Contínua sem limitação de altura */}
         <div
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={handleCanvasClick}
-          className={`w-full max-w-[800px] min-h-[1050px] bg-white text-slate-900 rounded-xl shadow-2xl border transition-all p-10 md:p-14 relative docx-canvas-paper ${
+          className={`w-full max-w-[850px] min-h-[1100px] h-auto bg-white text-slate-900 rounded-xl shadow-2xl border transition-all p-8 md:p-14 relative docx-canvas-paper ${
             isDragOver
               ? "border-primary ring-4 ring-primary/20 bg-primary/5"
               : "border-slate-200"
@@ -178,7 +186,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
               <div>
                 <h4 className="font-bold text-base text-slate-700">Nenhum documento carregado</h4>
                 <p className="text-xs text-slate-500 max-w-sm mt-1">
-                  Arraste seu arquivo <b>.DOCX</b> para esta área ou clique no botão acima para importar seu modelo de contrato com formatação preservada.
+                  Arraste seu arquivo <b>.DOCX</b> para esta área ou clique no botão acima para importar seu modelo de contrato com 100% das páginas e formatação.
                 </p>
               </div>
 
@@ -202,12 +210,12 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
             ref={canvasRef}
             contentEditable={true}
             onInput={handleInput}
-            className="outline-none min-h-[900px] text-sm leading-relaxed"
+            className="outline-none min-h-[950px] text-sm leading-relaxed overflow-visible"
           />
         </div>
       </div>
 
-      {/* Estilos para Badges/Chips no Documento Canvas */}
+      {/* Estilos para Badges/Chips e Regras Multi-página */}
       <style>{`
         .docx-field-chip {
           background-color: rgba(99, 102, 241, 0.15) !important;
@@ -253,6 +261,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
           width: 100%;
           border-collapse: collapse;
           margin: 1rem 0;
+          break-inside: avoid;
         }
         .docx-canvas-paper th, .docx-canvas-paper td {
           border: 1px solid #cbd5e1;
@@ -262,6 +271,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
           font-weight: 700;
           margin-top: 1rem;
           margin-bottom: 0.5rem;
+          break-after: avoid;
         }
       `}</style>
     </main>

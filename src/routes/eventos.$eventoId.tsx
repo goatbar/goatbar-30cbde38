@@ -40,9 +40,8 @@ import {
   getTemplateMapping,
   DEFAULT_CONTRACT_BODY,
   type ContractTemplate,
-  type ContractSigner,
 } from "@/services/contract-service";
-
+import { ContractReviewModal } from "@/components/contract-editor/ContractReviewModal";
 import {
   eventBudgetService,
   type Event as RealEvent,
@@ -2815,80 +2814,22 @@ function EventoInterna() {
         />
       )}
 
-      {/* CONTRACT PREVIEW MODAL */}
-      {showContractPreviewModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="w-full max-w-4xl bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden my-8">
-            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
-              <div>
-                <h2 className="font-display text-xl font-bold flex items-center gap-2">
-                  <FileSignature className="h-5 w-5 text-primary" /> Contrato Gerado Automaticamente
-                </h2>
-                <p className="text-xs text-muted-foreground">Documento preenchido com as informações reais do cliente, evento e orçamento</p>
-              </div>
-              <button
-                onClick={() => setShowContractPreviewModal(false)}
-                className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-              <div className="p-4 bg-primary/5 border border-primary/15 rounded-xl text-xs grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div><span className="text-muted-foreground">Cliente:</span> <b>{compiledVariables.cliente_nome}</b></div>
-                <div><span className="text-muted-foreground">Documento:</span> <b>{compiledVariables.cliente_documento}</b></div>
-                <div><span className="text-muted-foreground">Data do Evento:</span> <b>{compiledVariables.evento_data}</b></div>
-                <div><span className="text-muted-foreground">Valor Total:</span> <b className="text-primary">{compiledVariables.evento_valor_total}</b></div>
-              </div>
-
-              <div className="p-6 bg-background border border-border rounded-xl font-mono text-xs whitespace-pre-wrap leading-relaxed shadow-inner">
-                {compiledContractText}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between px-6 py-4 bg-background/50 border-t border-border">
-              <GhostButton
-                onClick={() => {
-                  navigator.clipboard.writeText(compiledContractText);
-                  alert("Texto do contrato copiado para a área de transferência!");
-                }}
-                className="h-10 text-xs font-bold"
-              >
-                <Copy className="h-3.5 w-3.5 mr-1" /> Copiar Minuta
-              </GhostButton>
-
-              <div className="flex items-center gap-3">
-                <GhostButton onClick={() => setShowContractPreviewModal(false)}>Fechar</GhostButton>
-                <PrimaryButton
-                  onClick={() => {
-                    const win = window.open("", "_blank");
-                    if (win) {
-                      win.document.write(`
-                        <html>
-                          <head>
-                            <title>Contrato GOAT Bar - ${compiledVariables.cliente_nome}</title>
-                            <style>
-                              body { font-family: system-ui, sans-serif; padding: 40px; line-height: 1.6; white-space: pre-wrap; font-size: 13px; color: #111; }
-                              h1 { text-align: center; margin-bottom: 30px; font-size: 18px; }
-                            </style>
-                          </head>
-                          <body>${compiledContractText}</body>
-                        </html>
-                      `);
-                      win.document.close();
-                      win.print();
-                    }
-                  }}
-                  className="h-10 px-5 font-bold shadow-md shadow-primary/20"
-                >
-                  <Download className="h-4 w-4 mr-1.5" /> Imprimir / Salvar PDF
-                </PrimaryButton>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* CONTRACT REVISION & VALIDATION MODAL */}
+      <ContractReviewModal
+        isOpen={showContractPreviewModal}
+        onClose={() => setShowContractPreviewModal(false)}
+        template={realTemplates.find((t) => t.id === selectedTemplate) || realTemplates.find((t) => t.is_default) || realTemplates[0] || null}
+        signer={realSigners.find((s) => s.id === selectedSigner) || realSigners.find((s) => s.is_active) || null}
+        eventName={evento.event_name || evento.client_name || "Evento"}
+        compiledHtml={compiledContractText}
+        rawTemplateContent={getTemplateContent(realTemplates.find((t) => t.id === selectedTemplate) || realTemplates.find((t) => t.is_default) || realTemplates[0] || null)}
+        compiledVariables={compiledVariables}
+        onConfirmSend={async () => {
+          await handleStatusChange("em_assinatura", "Contrato revisado e aprovado no sistema.");
+          alert("Contrato aprovado e enviado para assinatura com sucesso!");
+          loadContractModule();
+        }}
+      />
     </>
   );
 }
