@@ -427,8 +427,53 @@ export const eventContractsService = {
       ? glasses.map((g) => `• ${g.name} (${g.type || "Copo"}): ${fmt(g.replacement_value)} por unidade`).join("\n")
       : "• Copos Padrão: R$ 15,00 por unidade em caso de quebra/perda";
 
-    // Monta o dicionário de variáveis
+    const totalVal = currentBudget?.final_budget_value || evento.current_budget_value || 0;
+    const entryVal = totalVal * 0.5;
+    const remainingVal = totalVal - entryVal;
+
+    // Monta o dicionário de variáveis com suporte a notação por ponto e underline
     const variables: Record<string, string> = {
+      // 🥂 Evento
+      "evento.nome": evento.event_name || evento.client_name || "Evento GOAT Bar",
+      "evento.tipo": evento.event_type || "Evento Social",
+      "evento.data": evento.date ? new Date(evento.date + "T00:00:00").toLocaleDateString("pt-BR") : "A definir",
+      "evento.horario": evento.event_time || "A definir",
+      "evento.local": evento.event_location || "A definir",
+      "evento.cidade": evento.city || "A definir",
+      "evento.convidados": String(evento.guests || 0),
+
+      // 👤 Cliente
+      "cliente.nome": clientData?.client_name || evento.client_name || "Não informado",
+      "cliente.documento": clientData?.cpf_cnpj || "Não informado",
+      "cliente.telefone": clientData?.phone || evento.phone || "Não informado",
+      "cliente.email": clientData?.email || evento.email || "Não informado",
+      "cliente.endereco": clientData?.address || evento.event_location || "Não informado",
+
+      // 💰 Financeiro
+      "financeiro.valor_total": fmt(totalVal),
+      "financeiro.valor_entrada": fmt(entryVal),
+      "financeiro.saldo_restante": fmt(remainingVal),
+      "financeiro.forma_pagamento": currentBudget?.payment_method || "A combinar",
+      "financeiro.data_vencimento": evento.date ? new Date(evento.date + "T00:00:00").toLocaleDateString("pt-BR") : "A definir",
+
+      // 🏢 Empresa / GOAT Bar
+      "empresa.nome": "GOAT BAR EVENTOS LTDA",
+      "empresa.cnpj": "42.123.456/0001-99",
+      "empresa.endereco": "Av. Brigadeiro Faria Lima, 2000 - São Paulo/SP",
+      "empresa.responsavel": signer?.name || "Representante GOAT Bar",
+      "empresa.cpf_responsavel": signer?.cpf || "",
+      "empresa.cargo_responsavel": signer?.role || "Sócio Diretor",
+      "empresa.endereco_responsavel": signer?.address || "",
+
+      // 🍹 Cardápio & Utensílios
+      "cardapio.drinks": drinksArray.length > 0 ? drinksArray.join(", ") : "Conforme cardápio selecionado",
+      "cardapio.descricao": descricaoBebidas || "Serviço de bar de coquetéis artesanais",
+      "cardapio.tabela_reposicao": tabelaReposicaoLines,
+
+      // 🗓️ Geral
+      "geral.data_emissao": new Date().toLocaleDateString("pt-BR"),
+
+      // Mapeamentos legados em Underscore
       cliente_nome: clientData?.client_name || evento.client_name || "Não informado",
       cliente_documento: clientData?.cpf_cnpj || "Não informado",
       cliente_endereco: clientData?.address || evento.event_location || "Não informado",
@@ -441,7 +486,7 @@ export const eventContractsService = {
       evento_local: evento.event_location || "A definir",
       evento_cidade: evento.city || "A definir",
       evento_convidados: String(evento.guests || 0),
-      evento_valor_total: fmt(currentBudget?.final_budget_value || evento.current_budget_value || 0),
+      evento_valor_total: fmt(totalVal),
       evento_forma_pagamento: currentBudget?.payment_method || "A combinar",
       drinks_lista: drinksArray.length > 0 ? drinksArray.join(", ") : "Conforme cardápio selecionado",
       bebidas_descricao: descricaoBebidas || "Serviço de bar de coquetéis artesanais",
