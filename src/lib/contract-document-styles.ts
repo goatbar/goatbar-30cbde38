@@ -9,9 +9,19 @@ export const CONTRACT_DOCUMENT_CSS = `
   /* Regras Globais da Folha A4 */
   .docx-canvas-paper {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    color: #0f172a;
+    color: #0f172a !important;
+    background-color: #ffffff !important;
     font-size: 13px;
     line-height: 1.6;
+  }
+
+  /* Forçar isolamento de cor para elementos dentro da folha contra override de Tema Escuro */
+  .docx-canvas-paper p,
+  .docx-canvas-paper div,
+  .docx-canvas-paper span,
+  .docx-canvas-paper td,
+  .docx-canvas-paper li {
+    color: #0f172a !important;
   }
 
   /* Parágrafos e Espaçamentos */
@@ -29,7 +39,7 @@ export const CONTRACT_DOCUMENT_CSS = `
   .docx-canvas-paper h5,
   .docx-canvas-paper h6 {
     font-weight: 700;
-    color: #020617;
+    color: #020617 !important;
     margin-top: 1.25rem;
     margin-bottom: 0.5rem;
     line-height: 1.3;
@@ -49,20 +59,28 @@ export const CONTRACT_DOCUMENT_CSS = `
     margin: 1rem 0;
     break-inside: avoid;
     page-break-inside: avoid;
+    background-color: #ffffff !important;
   }
 
   .docx-canvas-paper th,
   .docx-canvas-paper td {
-    border: 1px solid #cbd5e1;
+    border: 1px solid #cbd5e1 !important;
     padding: 8px 12px;
     text-align: left;
     vertical-align: top;
+    color: #0f172a !important;
   }
 
   .docx-canvas-paper th {
-    background-color: #f8fafc;
+    background-color: #f8fafc !important;
+    color: #020617 !important;
     font-weight: 700;
   }
+
+  .docx-canvas-paper td {
+    background-color: #ffffff !important;
+  }
+
 
   /* Listas */
   .docx-canvas-paper ul,

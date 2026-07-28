@@ -267,8 +267,9 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
                   setReviewHtml(e.currentTarget.innerHTML);
                 }}
                 dangerouslySetInnerHTML={{ __html: reviewHtml }}
-                className="outline-none min-h-[950px] text-sm leading-relaxed"
+                className="outline-none min-h-[950px] text-sm leading-relaxed bg-white text-slate-900"
               />
+
 
             </div>
           </main>
