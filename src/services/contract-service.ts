@@ -559,6 +559,8 @@ export const eventContractsService = {
       clausulaPagamentoStr = `O CONTRATANTE efetuará o pagamento de ${fmt(entryVal)} (${numberToWordsBRL(entryVal).toLowerCase()}) no ato da assinatura do contrato, permanecendo o saldo remanescente de ${fmt(remainingVal)} (${numberToWordsBRL(remainingVal).toLowerCase()}), que deverá ser quitado até a data limite de ${finalPaymentDateStr} (7 dias antes da realização do evento), por meio de ${meioPagamentoStr}.`;
     }
 
+    const paymentMethodText = formaPagamentoDesc;
+
     // Monta o dicionário completo de variáveis
     const variables: Record<string, string> = {
       // 🥂 Evento
@@ -644,7 +646,9 @@ export const eventContractsService = {
       financeiro_valor_entrada: fmt(entryVal),
       financeiro_valor_restante: fmt(remainingVal),
       financeiro_data_pagamento_final: finalPaymentDateStr,
+      financeiro_forma_pagamento: formaPagamentoDesc,
       evento_forma_pagamento: paymentMethodText,
+      forma_pagamento: paymentMethodText,
       drinks_lista: drinksArray.length > 0 ? drinksArray.join(", ") : "Conforme cardápio selecionado",
       bebidas_descricao: descricaoBebidas || "Serviço de bar de coquetéis artesanais",
       tabela_reposicao: tabelaReposicaoLines,
