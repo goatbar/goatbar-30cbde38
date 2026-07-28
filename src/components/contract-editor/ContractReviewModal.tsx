@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   FileCheck2,
   CheckCircle2,
@@ -10,12 +10,14 @@ import {
   UserCheck,
   Calendar,
   Building2,
+  Search,
 } from "lucide-react";
 import {
   validateContractPlaceholders,
   type ContractTemplate,
   type ContractSigner,
 } from "@/services/contract-service";
+import { WordFormattingToolbar } from "./WordFormattingToolbar";
 
 interface ContractReviewModalProps {
   isOpen: boolean;
@@ -40,6 +42,18 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
   compiledVariables,
   onConfirmSend,
 }) => {
+  const [editableContent, setEditableContent] = useState(compiledHtml);
+  const editorRef = useRef<HTMLDivElement>(null);
+
+  // Modal de Busca e Substituição
+  const [showFindReplace, setShowFindReplace] = useState(false);
+  const [findText, setFindText] = useState("");
+  const [replaceText, setReplaceText] = useState("");
+
+  useEffect(() => {
+    setEditableContent(compiledHtml);
+  }, [compiledHtml]);
+
   if (!isOpen) return null;
 
   // Validação estrita dos placeholders presentes no modelo
@@ -49,6 +63,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
   );
 
   const handlePrintPdf = () => {
+    const htmlToPrint = editorRef.current ? editorRef.current.innerHTML : editableContent;
     const win = window.open("", "_blank");
     if (win) {
       win.document.write(`
@@ -60,9 +75,10 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
               table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
               th, td { border: 1px solid #cbd5e1; padding: 8px 12px; }
               h1, h2, h3 { font-weight: 700; margin-top: 1rem; }
+              .docx-page-break { page-break-after: always; break-after: page; display: block; border-bottom: 2px dashed #94a3b8; margin: 2rem 0; }
             </style>
           </head>
-          <body>${compiledHtml}</body>
+          <body>${htmlToPrint}</body>
         </html>
       `);
       win.document.close();
@@ -71,29 +87,69 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
   };
 
   const handleCopyText = () => {
-    // Remove HTML tags for plain text copy fallback
+    const htmlToCopy = editorRef.current ? editorRef.current.innerHTML : editableContent;
     const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = compiledHtml;
+    tempDiv.innerHTML = htmlToCopy;
     const textContent = tempDiv.innerText || tempDiv.textContent || "";
     navigator.clipboard.writeText(textContent);
     alert("Texto do contrato copiado com sucesso!");
   };
 
+  const handleInsertTable = () => {
+    const tableHtml = `
+      <table style="width:100%; border-collapse:collapse; margin:1rem 0; border:1px solid #cbd5e1;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <th style="border:1px solid #cbd5e1; padding:8px; text-align:left;">Item</th>
+            <th style="border:1px solid #cbd5e1; padding:8px; text-align:left;">Descrição</th>
+            <th style="border:1px solid #cbd5e1; padding:8px; text-align:left;">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="border:1px solid #cbd5e1; padding:8px;">01</td>
+            <td style="border:1px solid #cbd5e1; padding:8px;">Serviço de Bar de Coquetéis</td>
+            <td style="border:1px solid #cbd5e1; padding:8px;">Incluso</td>
+          </tr>
+        </tbody>
+      </table>&nbsp;
+    `;
+    document.execCommand("insertHTML", false, tableHtml);
+  };
+
+  const handleInsertPageBreak = () => {
+    const breakHtml = `<div style="page-break-after:always; break-after:page; border-bottom:2px dashed #6366f1; text-align:center; color:#6366f1; font-size:10px; font-weight:bold; margin:2rem 0; padding:4px;" contenteditable="false">--- QUEBRA DE PÁGINA ---</div><p>&nbsp;</p>`;
+    document.execCommand("insertHTML", false, breakHtml);
+  };
+
+  const handleReplaceAll = () => {
+    if (!findText) return;
+    if (editorRef.current) {
+      const currentHtml = editorRef.current.innerHTML;
+      const escaped = findText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(escaped, "gi");
+      const updated = currentHtml.replace(regex, replaceText);
+      editorRef.current.innerHTML = updated;
+      setEditableContent(updated);
+      setShowFindReplace(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 backdrop-blur-md p-3 md:p-6 overflow-hidden">
-      <div className="w-full h-full max-w-6xl bg-surface border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 backdrop-blur-md p-2 md:p-4 overflow-hidden">
+      <div className="w-full h-full max-w-[1500px] bg-surface border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* HEADER */}
-        <header className="flex items-center justify-between px-6 py-4 border-b border-border bg-background/50 shrink-0">
+        <header className="flex items-center justify-between px-6 py-3 border-b border-border bg-background/50 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 bg-success/15 rounded-xl flex items-center justify-center text-success font-bold shadow-inner">
+            <div className="h-9 w-9 bg-success/15 rounded-xl flex items-center justify-center text-success font-bold shadow-inner">
               <FileCheck2 className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="font-display text-lg font-bold text-foreground">
-                Tela de Revisão e Validação do Contrato
+              <h2 className="font-display text-base font-bold text-foreground">
+                Revisão e Ajustes de Formatação do Contrato (Estilo Word)
               </h2>
-              <p className="text-xs text-muted-foreground">
-                Processo determinístico • Substituição estrita dos placeholders do modelo sem alteração de formatação
+              <p className="text-[11px] text-muted-foreground">
+                Substituição determinística dos placeholders • Ajuste fino de texto, fontes, recuos e parágrafos antes da emissão
               </p>
             </div>
           </div>
@@ -107,10 +163,22 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
           </button>
         </header>
 
+        {/* BARRA DE FERRAMENTAS ESTILO WORD */}
+        <WordFormattingToolbar
+          onCommand={(cmd, val) => {
+            if (editorRef.current) {
+              setEditableContent(editorRef.current.innerHTML);
+            }
+          }}
+          onInsertTable={handleInsertTable}
+          onInsertPageBreak={handleInsertPageBreak}
+          onOpenFindReplace={() => setShowFindReplace(true)}
+        />
+
         {/* CORPO DE REVISÃO E PRÉVIA */}
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
           {/* PAINEL ESQUERDO: METADADOS E PAINEL DE VALIDAÇÃO (Col-span 4) */}
-          <aside className="w-full lg:w-96 border-r border-border bg-background/40 p-4 space-y-4 overflow-y-auto shrink-0">
+          <aside className="w-full lg:w-80 border-r border-border bg-background/40 p-4 space-y-4 overflow-y-auto shrink-0 select-none">
             {/* Metadados da Emissão */}
             <div className="p-3.5 bg-surface border border-border rounded-xl space-y-2.5">
               <div className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
@@ -122,7 +190,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
                   <span className="text-muted-foreground flex items-center gap-1">
                     <FileSignature className="h-3 w-3" /> Modelo:
                   </span>
-                  <span className="font-bold text-foreground truncate max-w-[160px]">
+                  <span className="font-bold text-foreground truncate max-w-[140px]">
                     {template?.name || "Modelo Padrão"}
                   </span>
                 </div>
@@ -131,7 +199,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
                   <span className="text-muted-foreground flex items-center gap-1">
                     <Calendar className="h-3 w-3" /> Evento:
                   </span>
-                  <span className="font-bold text-foreground truncate max-w-[160px]">
+                  <span className="font-bold text-foreground truncate max-w-[140px]">
                     {eventName}
                   </span>
                 </div>
@@ -140,7 +208,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
                   <span className="text-muted-foreground flex items-center gap-1">
                     <UserCheck className="h-3 w-3" /> Sócio GOAT:
                   </span>
-                  <span className="font-bold text-foreground truncate max-w-[160px]">
+                  <span className="font-bold text-foreground truncate max-w-[140px]">
                     {signer?.name || "Não selecionado"}
                   </span>
                 </div>
@@ -152,7 +220,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold text-foreground">Status dos Campos no Modelo</h4>
                 <span className="text-[10px] font-bold text-muted-foreground font-mono">
-                  {filled.length} preenchidos / {unfilled.length} pendentes
+                  {filled.length} ok / {unfilled.length} pendentes
                 </span>
               </div>
 
@@ -161,14 +229,11 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
                 <div className="p-3 bg-warning/10 border border-warning/30 rounded-xl space-y-2">
                   <div className="flex items-center gap-2 text-xs font-bold text-warning">
                     <AlertTriangle className="h-4 w-4 shrink-0 animate-bounce" />
-                    <span>{unfilled.length} campo(s) sem informação cadastrada</span>
+                    <span>{unfilled.length} campo(s) sem informação</span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Os seguintes placeholders do modelo não possuem dados no evento:
-                  </p>
-                  <ul className="space-y-1 max-h-36 overflow-y-auto">
+                  <ul className="space-y-1 max-h-32 overflow-y-auto">
                     {unfilled.map((item) => (
-                      <li key={item.key} className="text-[11px] font-mono text-warning/90 bg-background/50 px-2 py-1 rounded border border-warning/20">
+                      <li key={item.key} className="text-[10px] font-mono text-warning/90 bg-background/50 px-2 py-0.5 rounded border border-warning/20">
                         <b>{item.token}</b>: {item.value}
                       </li>
                     ))}
@@ -177,7 +242,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
               ) : (
                 <div className="p-3 bg-success/10 border border-success/30 rounded-xl flex items-center gap-2 text-xs font-bold text-success">
                   <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  <span>Todos os {filled.length} placeholders foram preenchidos com sucesso!</span>
+                  <span>Todos os {filled.length} placeholders validados!</span>
                 </div>
               )}
 
@@ -199,19 +264,63 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
             </div>
           </aside>
 
-          {/* PAINEL DIREITO: PRÉVIA DO CONTRATO GERADO */}
+          {/* PAINEL DIREITO: EDITOR VISUAL CANVASA A4 FORMATÁVEL ESTILO WORD */}
           <main className="flex-1 bg-muted/40 p-4 md:p-8 overflow-y-auto flex flex-col items-center">
-            <div className="w-full max-w-[850px] bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-200 p-8 md:p-14 relative docx-canvas-paper min-h-[900px]">
+            <div className="w-full max-w-[850px] min-h-[1100px] bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-200 p-8 md:p-14 relative docx-canvas-paper">
               <div
+                ref={editorRef}
+                contentEditable={true}
+                onInput={() => {
+                  if (editorRef.current) {
+                    setEditableContent(editorRef.current.innerHTML);
+                  }
+                }}
                 dangerouslySetInnerHTML={{ __html: compiledHtml }}
-                className="text-sm leading-relaxed"
+                className="outline-none min-h-[950px] text-sm leading-relaxed"
               />
             </div>
           </main>
         </div>
 
+        {/* MODAL DE BUSCA E SUBSTITUIÇÃO */}
+        {showFindReplace && (
+          <div className="absolute top-16 right-8 z-30 w-80 bg-surface border border-border rounded-xl shadow-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-xs flex items-center gap-1.5">
+                <Search className="h-3.5 w-3.5 text-primary" /> Localizar e Substituir
+              </h4>
+              <button onClick={() => setShowFindReplace(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="space-y-2 text-xs">
+              <input
+                type="text"
+                placeholder="Localizar texto..."
+                value={findText}
+                onChange={(e) => setFindText(e.target.value)}
+                className="w-full h-8 px-2.5 rounded-lg bg-input border border-border focus:border-primary focus:outline-none"
+              />
+              <input
+                type="text"
+                placeholder="Substituir por..."
+                value={replaceText}
+                onChange={(e) => setReplaceText(e.target.value)}
+                className="w-full h-8 px-2.5 rounded-lg bg-input border border-border focus:border-primary focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleReplaceAll}
+                className="w-full h-8 bg-primary text-primary-foreground font-bold rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                Substituir Tudo
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* FOOTER */}
-        <footer className="flex flex-wrap items-center justify-between px-6 py-4 bg-background/60 border-t border-border gap-3 shrink-0">
+        <footer className="flex flex-wrap items-center justify-between px-6 py-3 bg-background/60 border-t border-border gap-3 shrink-0">
           <button
             type="button"
             onClick={handleCopyText}

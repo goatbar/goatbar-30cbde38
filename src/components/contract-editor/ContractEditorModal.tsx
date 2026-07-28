@@ -22,8 +22,8 @@ import { DocumentCanvas } from "./DocumentCanvas";
 import {
   contractTemplatesService,
   getTemplateContent,
-  type ContractTemplate,
 } from "@/services/contract-service";
+import { WordFormattingToolbar } from "./WordFormattingToolbar";
 
 interface ContractEditorModalProps {
   template: ContractTemplate | null;
@@ -334,6 +334,51 @@ export const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
             </button>
           </div>
         </header>
+
+        {/* BARRA DE FERRAMENTAS ESTILO WORD */}
+        <WordFormattingToolbar
+          onCommand={(cmd, val) => {
+            const canvasEl = document.querySelector(".docx-canvas-paper [contenteditable]");
+            if (canvasEl) {
+              store.setHtml(canvasEl.innerHTML, `Formatação (${cmd})`);
+            }
+          }}
+          onInsertTable={() => {
+            const tableHtml = `
+              <table style="width:100%; border-collapse:collapse; margin:1rem 0; border:1px solid #cbd5e1;">
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th style="border:1px solid #cbd5e1; padding:8px; text-align:left;">Item</th>
+                    <th style="border:1px solid #cbd5e1; padding:8px; text-align:left;">Descrição</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style="border:1px solid #cbd5e1; padding:8px;">01</td>
+                    <td style="border:1px solid #cbd5e1; padding:8px;">Descrição do serviço</td>
+                  </tr>
+                </tbody>
+              </table>&nbsp;
+            `;
+            document.execCommand("insertHTML", false, tableHtml);
+            const canvasEl = document.querySelector(".docx-canvas-paper [contenteditable]");
+            if (canvasEl) {
+              store.setHtml(canvasEl.innerHTML, "Inserir Tabela");
+            }
+          }}
+          onInsertPageBreak={() => {
+            const breakHtml = `<div style="page-break-after:always; break-after:page; border-bottom:2px dashed #6366f1; text-align:center; color:#6366f1; font-size:10px; font-weight:bold; margin:2rem 0; padding:4px;" contenteditable="false">--- QUEBRA DE PÁGINA ---</div><p>&nbsp;</p>`;
+            document.execCommand("insertHTML", false, breakHtml);
+            const canvasEl = document.querySelector(".docx-canvas-paper [contenteditable]");
+            if (canvasEl) {
+              store.setHtml(canvasEl.innerHTML, "Inserir Quebra de Página");
+            }
+          }}
+          canUndo={store.canUndo}
+          canRedo={store.canRedo}
+          onUndo={store.undo}
+          onRedo={store.redo}
+        />
 
         {/* CORPO DO EDITOR: Sidebar Fixa (Esquerda) + Folha Canvas A4 (Direita) */}
         <div className="flex-1 flex overflow-hidden">

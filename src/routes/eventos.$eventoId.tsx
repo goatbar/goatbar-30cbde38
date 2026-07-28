@@ -189,6 +189,15 @@ function EventoInterna() {
     setRealTemplates(tps);
     setRealSigners(sigs);
     setRealContract(contract);
+
+    if (tps.length > 0) {
+      const defT = tps.find((t) => t.is_default) || tps[0];
+      if (defT) setSelectedTemplate(defT.id);
+    }
+    if (sigs.length > 0) {
+      const defS = sigs.find((s) => s.is_active) || sigs[0];
+      if (defS) setSelectedSigner(defS.id);
+    }
     if (contract?.signed_file_url && !contract?.template_id) {
       setContractMode("upload");
     }
@@ -2065,14 +2074,11 @@ function EventoInterna() {
                         </div>
 
                         <div className="bg-surface p-4 rounded-xl border border-border flex gap-4 items-center">
-                          <div className="h-10 w-10 bg-success/10 rounded-full flex items-center justify-center text-success shrink-0">
+                          <div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center text-primary shrink-0">
                             <CheckCircle2 className="h-5 w-5" />
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            <span className="font-bold text-foreground">DICA:</span> O contrato incluirá
-                            automaticamente a lista de drinks (<b>{draft.drinks.length} itens</b>), os
-                            valores negociados (<b>{fmtBRL(calc.valorTotalOrcamento)}</b>) e a tabela de
-                            reposição de copos.
+                          <div className="text-xs text-muted-foreground leading-relaxed">
+                            <span className="font-bold text-foreground font-display">MODO ESTREITO DE EMISSÃO:</span> O contrato utilizará rigorosamente a estrutura do modelo selecionado, substituindo apenas os placeholders mapeados com os dados atualizados do evento, contratante e orçamento.
                           </div>
                         </div>
 

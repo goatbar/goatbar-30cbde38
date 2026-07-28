@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
+import { numberToWordsBRL } from "@/lib/number-to-words-brl";
 
 // --- Tipos para os Serviços ---
 export interface ContractTemplate {
@@ -516,7 +517,34 @@ export const eventContractsService = {
       }
     }
 
-    // 9. Extração dos Dados Atualizados do Contratante (Vindo do Formulário do Link)
+    // 9. Cálculos de Condição, Meio de Pagamento e Cláusula Completa
+    const meioPagamentoStr = currentBudget?.payment_channel || clientNotes?.payment_channel || "PIX";
+    const percentualNum = totalVal > 0 ? Math.round((entryVal / totalVal) * 100) : 50;
+    const percentualText = `${percentualNum}%`;
+    const percentualExtenso = percentualNum === 30 ? "30% (trinta por cento)" :
+                              percentualNum === 40 ? "40% (quarenta por cento)" :
+                              percentualNum === 50 ? "50% (cinquenta por cento)" :
+                              `${percentualNum}%`;
+
+    let formaPagamentoDesc = "";
+    if (entryVal >= totalVal) {
+      formaPagamentoDesc = `Pagamento integral via ${meioPagamentoStr} no ato da assinatura do contrato.`;
+    } else if (percentualNum > 0) {
+      formaPagamentoDesc = `${percentualText} no ato da assinatura do contrato e o valor restante deverá ser pago até a data limite de ${finalPaymentDateStr} (7 dias antes da realização do evento), por meio de ${meioPagamentoStr}.`;
+    } else {
+      formaPagamentoDesc = `Entrada de ${fmt(entryVal)} no ato da assinatura do contrato e saldo remanescente de ${fmt(remainingVal)} até a data limite de ${finalPaymentDateStr} (${meioPagamentoStr}).`;
+    }
+
+    let clausulaPagamentoStr = "";
+    if (entryVal >= totalVal) {
+      clausulaPagamentoStr = `O CONTRATANTE efetuará o pagamento integral do valor de ${fmt(totalVal)} (${numberToWordsBRL(totalVal).toLowerCase()}) no ato da assinatura do contrato, por meio de ${meioPagamentoStr}.`;
+    } else if (percentualNum > 0 && Math.abs(entryVal - (totalVal * percentualNum / 100)) < 10) {
+      clausulaPagamentoStr = `O CONTRATANTE pagará ${percentualExtenso} do valor total do contrato no ato da assinatura, correspondente a ${fmt(entryVal)} (${numberToWordsBRL(entryVal).toLowerCase()}), ficando o saldo remanescente de ${fmt(remainingVal)} (${numberToWordsBRL(remainingVal).toLowerCase()}) para pagamento até a data limite de ${finalPaymentDateStr} (7 dias antes da realização do evento), por meio de ${meioPagamentoStr}.`;
+    } else {
+      clausulaPagamentoStr = `O CONTRATANTE efetuará o pagamento de ${fmt(entryVal)} (${numberToWordsBRL(entryVal).toLowerCase()}) no ato da assinatura do contrato, permanecendo o saldo remanescente de ${fmt(remainingVal)} (${numberToWordsBRL(remainingVal).toLowerCase()}), que deverá ser quitado até a data limite de ${finalPaymentDateStr} (7 dias antes da realização do evento), por meio de ${meioPagamentoStr}.`;
+    }
+
+    // Extração dos Dados Atualizados do Contratante (Vindo do Formulário do Link)
     const clientNotes = (clientData?.notes && typeof clientData.notes === "object" ? clientData.notes : {}) as any;
     const rgClient = clientData?.rg || clientNotes?.rg || "Não informado";
     const whatsappClient = clientData?.whatsapp || clientData?.phone || evento.phone || "Não informado";
@@ -530,9 +558,6 @@ export const eventContractsService = {
     const venueCity = clientNotes?.venue_city || evento.city || "A definir";
     const venueCep = clientNotes?.venue_cep || "A definir";
     const venueComplement = clientNotes?.venue_complement || "";
-
-    // Forma de Pagamento amigável
-    const paymentMethodText = currentBudget?.payment_method || clientNotes?.payment_method || "50% no ato + 50% até 7 dias antes do evento";
 
     // Monta o dicionário completo de variáveis
     const variables: Record<string, string> = {
@@ -551,6 +576,7 @@ export const eventContractsService = {
       "evento.complemento_local": venueComplement,
       "evento.convidados": String(evento.guests || 0),
       "evento.valor_por_pessoa": fmt(valPerPerson),
+      "evento.valor_por_pessoa_extenso": numberToWordsBRL(valPerPerson),
 
       // 👤 Cliente (Preenchido pelo Contratante no Link)
       "cliente.nome": clientData?.client_name || evento.client_name || "Não informado",
@@ -564,12 +590,19 @@ export const eventContractsService = {
       "cliente.cidade": cityClient,
       "cliente.estado": stateClient,
 
-      // 💰 Financeiro (Cálculos Automáticos)
+      // 💰 Financeiro (Cálculos Automáticos em Número, por Extenso e Cláusula Completa)
       "financeiro.valor_total": fmt(totalVal),
+      "financeiro.valor_total_extenso": numberToWordsBRL(totalVal),
       "financeiro.valor_entrada": fmt(entryVal),
+      "financeiro.valor_entrada_extenso": numberToWordsBRL(entryVal),
       "financeiro.valor_restante": fmt(remainingVal),
+      "financeiro.valor_restante_extenso": numberToWordsBRL(remainingVal),
       "financeiro.saldo_restante": fmt(remainingVal),
-      "financeiro.forma_pagamento": paymentMethodText,
+      "financeiro.saldo_restante_extenso": numberToWordsBRL(remainingVal),
+      "financeiro.percentual_entrada": percentualText,
+      "financeiro.meio_pagamento": meioPagamentoStr,
+      "financeiro.forma_pagamento": formaPagamentoDesc,
+      "financeiro.clausula_pagamento": clausulaPagamentoStr,
       "financeiro.data_pagamento_final": finalPaymentDateStr,
       "financeiro.data_vencimento": finalPaymentDateStr,
 
