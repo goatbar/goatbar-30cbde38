@@ -126,35 +126,212 @@ export async function convertHtmlToPdf(
 
 
 /**
- * Serviço frontend para disparar contratos para assinatura na ZapSign via Edge Function.
- * Envia o identificador contractId de forma segura.
+ * Realiza o disparo direto para a API REST oficial da ZapSign (https://api.zapsign.com.br/api/v1/docs/).
+ */
+export async function createRealZapSignDocument(payload: {
+  apiToken: string;
+  docName: string;
+  pdfBase64?: string;
+  pdfUrl?: string;
+  signers: Array<{
+    name: string;
+    email: string;
+    send_automatic_email?: boolean;
+    qualification?: string;
+  }>;
+}) {
+  const zapsignUrl = `https://api.zapsign.com.br/api/v1/docs/?api_token=${payload.apiToken.trim()}`;
+
+  const requestBody: any = {
+    name: payload.docName,
+    signers: payload.signers.map((s) => ({
+      name: s.name,
+      email: s.email,
+      send_automatic_email: s.send_automatic_email !== false,
+      qualification: s.qualification || "Signatário",
+    })),
+    lang: "pt-br",
+  };
+
+  if (payload.pdfBase64) {
+    requestBody.base64_pdf = payload.pdfBase64;
+  } else if (payload.pdfUrl) {
+    requestBody.url_pdf = payload.pdfUrl;
+  }
+
+  const res = await fetch(zapsignUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error("❌ Erro retornado pela API ZapSign:", errorText);
+    throw new Error(`Falha ao criar documento na ZapSign (${res.status}): ${errorText}`);
+  }
+
+  const data = await res.json();
+  return data;
+}
+
+/**
+ * Disparo direto via cliente frontend para a API ZapSign utilizando a chave VITE_ZAPSIGN_API_TOKEN.
+ */
+async function dispatchZapSignDirectly(
+  contractId: string,
+  apiToken: string,
+  pdfBase64?: string,
+  pdfUrl?: string
+): Promise<ZapSignRequestResponse> {
+  // 1. Busca contrato
+  const { data: contract, error: cErr } = await (supabase as any)
+    .from("event_contracts")
+    .select("*, signer:contract_signers(*)")
+    .eq("id", contractId)
+    .single();
+
+  if (cErr || !contract) throw new Error("Contrato não encontrado.");
+
+  // 2. Busca dados do evento e cliente
+  const { data: clientData } = await (supabase as any)
+    .from("event_contract_client_data")
+    .select("*")
+    .eq("event_id", contract.event_id)
+    .maybeSingle();
+
+  const { data: evento } = await (supabase as any)
+    .from("events")
+    .select("client_name, email, event_name")
+    .eq("id", contract.event_id)
+    .single();
+
+  const clientName = clientData?.client_name || evento?.client_name || "Contratante";
+  const clientEmail = clientData?.email || evento?.email || "";
+  const clientCpf = clientData?.cpf || "";
+
+  if (!clientEmail) {
+    throw new Error("E-mail do contratante não informado. Atualize os Dados do Contratante.");
+  }
+
+  const signersPayload = [
+    {
+      name: clientName,
+      email: clientEmail,
+      send_automatic_email: true,
+      qualification: "Contratante",
+    },
+  ];
+
+  if (contract.signer?.name && contract.signer?.email) {
+    signersPayload.push({
+      name: contract.signer.name,
+      email: contract.signer.email,
+      send_automatic_email: true,
+      qualification: "Contratada (GOAT Bar)",
+    });
+  }
+
+  const docName = `Contrato - ${evento?.event_name || clientName} (v${contract.version || 1})`;
+
+  // Chamada à API ZapSign Oficial
+  const providerData = await createRealZapSignDocument({
+    apiToken,
+    docName,
+    pdfBase64,
+    pdfUrl: pdfUrl || contract.generated_file_url,
+    signers: signersPayload,
+  });
+
+  const externalDocToken = providerData.token || providerData.open_id?.toString() || "";
+  const providerStatus = providerData.status || "pending";
+
+  // Salva no banco local contract_signature_requests
+  const { data: sigReq } = await (supabase as any)
+    .from("contract_signature_requests")
+    .insert({
+      event_id: contract.event_id,
+      contract_id: contractId,
+      contract_version_id: contract.version || 1,
+      provider: "zapsign",
+      external_request_id: externalDocToken,
+      signer_name: clientName,
+      signer_document: clientCpf,
+      signer_email: clientEmail,
+      original_file_path: pdfUrl || contract.generated_file_url || "",
+      original_file_hash: "",
+      internal_status: "pending_signature",
+      provider_status: providerStatus,
+      provider_response: providerData,
+      sent_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  // Atualiza contrato
+  await (supabase as any)
+    .from("event_contracts")
+    .update({
+      status: "sent",
+      external_id: externalDocToken,
+      sent_for_signature_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", contractId);
+
+  return {
+    success: true,
+    signatureRequestId: sigReq?.id || externalDocToken,
+    externalDocToken,
+    status: "pending_signature",
+    signers: providerData.signers || [],
+    docUrl: contract.generated_file_url,
+  };
+}
+
+/**
+ * Serviço frontend para disparar contratos para assinatura na ZapSign via Edge Function ou Cliente Direto.
  */
 export async function dispatchContractToZapSign(
   contractId: string,
   pdfBase64?: string,
   pdfUrl?: string
 ): Promise<ZapSignRequestResponse> {
+  const getEnv = (key: string) => {
+    try {
+      return (import.meta as any).env?.[key] || (typeof process !== "undefined" ? process.env[key] : undefined);
+    } catch {
+      return undefined;
+    }
+  };
+
+  const apiToken = getEnv("VITE_ZAPSIGN_API_TOKEN") || getEnv("ZAPSIGN_API_TOKEN");
+
+  // 1. Tenta chamar a Edge Function do Supabase primeiro
   try {
     const { data, error } = await supabase.functions.invoke("zapsign-create-doc", {
-      body: {
-        contractId,
-        pdfBase64,
-        pdfUrl,
-      },
+      body: { contractId, pdfBase64, pdfUrl },
     });
 
-    if (error) {
-      console.error("Erro ao chamar Edge Function zapsign-create-doc:", error);
-      // Retorna fallback gracioso se as Edge Functions ainda não estiverem deployadas no Supabase CLI local
-      return await dispatchZapSignFallback(contractId, pdfBase64, pdfUrl);
+    if (!error && data?.success && data?.externalDocToken && !data.externalDocToken.startsWith("zapsign_mock_")) {
+      return data as ZapSignRequestResponse;
     }
-
-    return data as ZapSignRequestResponse;
-  } catch (err: any) {
-    console.warn("Edge function invocation failed, using client-side fallback handler:", err);
-    return await dispatchZapSignFallback(contractId, pdfBase64, pdfUrl);
+  } catch (e) {
+    console.warn("Edge Function zapsign-create-doc não disponível, tentando envio direto:", e);
   }
+
+  // 2. Se temos o Token da API ZapSign no ambiente (.env), fazemos a requisição direta à ZapSign
+  if (apiToken && apiToken.trim().length > 0) {
+    return await dispatchZapSignDirectly(contractId, apiToken, pdfBase64, pdfUrl);
+  }
+
+  // 3. Fallback gracioso com aviso em log
+  console.warn("⚠️ VITE_ZAPSIGN_API_TOKEN não configurado no .env. Para enviar contratos para a sua conta real no ZapSign, adicione VITE_ZAPSIGN_API_TOKEN no seu .env.");
+  return await dispatchZapSignFallback(contractId, pdfBase64, pdfUrl);
 }
+
 
 /**
  * Consulta o status atual de uma solicitação de assinatura.
