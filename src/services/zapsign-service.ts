@@ -42,28 +42,46 @@ export async function convertHtmlToPdf(
 ): Promise<{ blob: Blob; base64: string; hash: string }> {
   const cleanHtml = prepareContractExportHtml(htmlContent);
 
-  // Cria elemento temporário posicionado para renderização do Canvas pelo html2pdf.js
-  const container = document.createElement("div");
-  container.style.position = "absolute";
-  container.style.left = "-9999px";
-  container.style.top = "0";
-  container.style.width = "800px";
-  container.style.backgroundColor = "#ffffff";
-  container.style.color = "#0f172a";
+  // Cria iframe isolado para evitar a leitura de folhas de estilo globais da app contendo oklch() pelo html2canvas
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "absolute";
+  iframe.style.left = "-9999px";
+  iframe.style.top = "0";
+  iframe.style.width = "800px";
+  iframe.style.height = "1100px";
+  iframe.style.border = "none";
+  document.body.appendChild(iframe);
 
-  container.innerHTML = `
-    <style>
-      ${CONTRACT_DOCUMENT_CSS}
-      body, .docx-canvas-paper {
-        background-color: #ffffff !important;
-        color: #0f172a !important;
-      }
-    </style>
-    <div class="docx-canvas-paper" style="padding: 24px; background: #ffffff; color: #0f172a;">
-      ${cleanHtml}
-    </div>
-  `;
-  document.body.appendChild(container);
+  const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!iframeDoc) {
+    document.body.removeChild(iframe);
+    throw new Error("Não foi possível inicializar iframe para geração do PDF.");
+  }
+
+  iframeDoc.open();
+  iframeDoc.write(`
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8">
+        <title>${title}</title>
+        <style>
+          ${CONTRACT_DOCUMENT_CSS}
+          body {
+            margin: 0;
+            padding: 24px;
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+            font-family: system-ui, -apple-system, sans-serif;
+          }
+        </style>
+      </head>
+      <body class="docx-canvas-paper">
+        ${cleanHtml}
+      </body>
+    </html>
+  `);
+  iframeDoc.close();
 
   try {
     // Importa html2pdf dinamicamente
@@ -77,12 +95,13 @@ export async function convertHtmlToPdf(
       pagebreak: { mode: ["avoid-all", "css", "legacy"] },
     };
 
+    const targetElement = iframeDoc.body;
     const pdfArrayBuffer: ArrayBuffer = await html2pdf()
       .set(opt)
-      .from(container)
+      .from(targetElement)
       .outputPdf("arraybuffer");
 
-    document.body.removeChild(container);
+    document.body.removeChild(iframe);
 
     const hash = await calculateSha256(pdfArrayBuffer);
     const pdfBlob = new Blob([pdfArrayBuffer], { type: "application/pdf" });
@@ -97,13 +116,14 @@ export async function convertHtmlToPdf(
 
     return { blob: pdfBlob, base64, hash };
   } catch (err: any) {
-    if (document.body.contains(container)) {
-      document.body.removeChild(container);
+    if (document.body.contains(iframe)) {
+      document.body.removeChild(iframe);
     }
     console.error("Erro ao converter HTML para PDF:", err);
     throw new Error(`Não foi possível converter a minuta compilada para formato PDF: ${err?.message || String(err)}`);
   }
 }
+
 
 /**
  * Serviço frontend para disparar contratos para assinatura na ZapSign via Edge Function.
