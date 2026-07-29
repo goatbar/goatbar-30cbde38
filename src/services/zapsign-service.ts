@@ -41,11 +41,28 @@ export async function convertHtmlToPdf(
 ): Promise<{ blob: Blob; base64: string; hash: string }> {
   const cleanHtml = prepareContractExportHtml(htmlContent);
 
-  // Cria elemento temporário para renderizar o HTML com a shell canônica de impressão
+  // Cria elemento temporário posicionado para renderização do Canvas pelo html2pdf.js
   const container = document.createElement("div");
-  container.innerHTML = CONTRACT_PRINT_HTML_SHELL(title, cleanHtml);
-  document.body.appendChild(container);
+  container.style.position = "absolute";
+  container.style.left = "-9999px";
+  container.style.top = "0";
+  container.style.width = "800px";
+  container.style.backgroundColor = "#ffffff";
+  container.style.color = "#0f172a";
 
+  container.innerHTML = `
+    <style>
+      ${CONTRACT_DOCUMENT_CSS}
+      body, .docx-canvas-paper {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+      }
+    </style>
+    <div class="docx-canvas-paper" style="padding: 24px; background: #ffffff; color: #0f172a;">
+      ${cleanHtml}
+    </div>
+  `;
+  document.body.appendChild(container);
 
   try {
     // Importa html2pdf dinamicamente
@@ -58,9 +75,6 @@ export async function convertHtmlToPdf(
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" as const },
       pagebreak: { mode: ["avoid-all", "css", "legacy"] },
     };
-
-
-
 
     const pdfArrayBuffer: ArrayBuffer = await html2pdf()
       .set(opt)
@@ -81,12 +95,12 @@ export async function convertHtmlToPdf(
     const base64 = btoa(binary);
 
     return { blob: pdfBlob, base64, hash };
-  } catch (err) {
+  } catch (err: any) {
     if (document.body.contains(container)) {
       document.body.removeChild(container);
     }
     console.error("Erro ao converter HTML para PDF:", err);
-    throw new Error("Não foi possível converter a minuta compilada para formato PDF.");
+    throw new Error(`Não foi possível converter a minuta compilada para formato PDF: ${err?.message || String(err)}`);
   }
 }
 
