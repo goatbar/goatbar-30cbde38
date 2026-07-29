@@ -1,7 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { normalizeEditorHtml } from "@/utils/normalize-editor-html";
 import { prepareContractExportHtml } from "@/utils/prepare-contract-export-html";
-import { CONTRACT_PRINT_HTML_SHELL } from "@/lib/contract-document-styles";
+import { CONTRACT_DOCUMENT_CSS, CONTRACT_PRINT_HTML_SHELL } from "@/lib/contract-document-styles";
+
 
 export interface ZapSignSigner {
   token: string;

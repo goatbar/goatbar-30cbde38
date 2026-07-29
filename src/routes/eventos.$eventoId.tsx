@@ -640,7 +640,7 @@ function EventoInterna() {
   const [isDispatchingZapSign, setIsDispatchingZapSign] = useState(false);
   const [zapSignDetails, setZapSignDetails] = useState<any>(null);
 
-  const handleDispatchZapSign = async () => {
+  const handleDispatchZapSign = async (overrideHtml?: string) => {
     if (!realContract) {
       alert("Nenhum contrato gerado para este evento.");
       return;
@@ -653,29 +653,32 @@ function EventoInterna() {
 
     setIsDispatchingZapSign(true);
     try {
-      // 1. Utiliza o gerador existente de minuta/match sem duplicar ou recompilar lógica
-      const sId = selectedSigner || realContract.signer_id || (realSigners && realSigners.find((s) => s.is_active)?.id);
-      const vars = await eventContractsService.compileContractVariables(eventoId, sId);
-      const templateToUse =
-        (realTemplates && realTemplates.find((t) => t.id === (selectedTemplate || realContract.template_id))) ||
-        (realTemplates && realTemplates.find((t) => t.is_default)) ||
-        (realTemplates && realTemplates[0]);
+      let compiledHtml = overrideHtml;
+      if (!compiledHtml) {
+        const sId = selectedSigner || realContract.signer_id || (realSigners && realSigners.find((s) => s.is_active)?.id);
+        const vars = await eventContractsService.compileContractVariables(eventoId, sId);
+        const templateToUse =
+          (realTemplates && realTemplates.find((t) => t.id === (selectedTemplate || realContract.template_id))) ||
+          (realTemplates && realTemplates.find((t) => t.is_default)) ||
+          (realTemplates && realTemplates[0]);
 
-      if (!templateToUse) {
-        alert("Nenhum modelo de contrato selecionado.");
-        setIsDispatchingZapSign(false);
-        return;
+        if (!templateToUse) {
+          alert("Nenhum modelo de contrato selecionado.");
+          setIsDispatchingZapSign(false);
+          return;
+        }
+
+        const templateContent = getTemplateContent(templateToUse);
+        const mapping = getTemplateMapping(templateToUse);
+        compiledHtml = renderContractTemplate(templateContent, vars, mapping);
       }
-
-      const templateContent = getTemplateContent(templateToUse);
-      const mapping = getTemplateMapping(templateToUse);
-      const compiledHtml = renderContractTemplate(templateContent, vars, mapping);
 
       // 2. Converte o resultado compilado existente para PDF imutável (etapa adicional única)
       const { base64, hash } = await convertHtmlToPdf(
         compiledHtml,
         `Contrato_${realClientData.client_name || "Evento"}`
       );
+
 
       console.log("🔹 [ZapSign Dispatch] Hash SHA-256 do PDF imutável:", hash);
 
@@ -3000,12 +3003,12 @@ function EventoInterna() {
         compiledHtml={compiledContractText}
         rawTemplateContent={getTemplateContent(realTemplates.find((t) => t.id === selectedTemplate) || realTemplates.find((t) => t.is_default) || realTemplates[0] || null)}
         compiledVariables={compiledVariables}
-        onConfirmSend={async () => {
-          await handleStatusChange("em_assinatura", "Contrato revisado e aprovado no sistema.");
-          alert("Contrato aprovado e enviado para assinatura com sucesso!");
-          loadContractModule();
+        onConfirmSend={async (finalCleanHtml) => {
+          setShowContractPreviewModal(false);
+          await handleDispatchZapSign(finalCleanHtml);
         }}
       />
+
     </>
   );
 }
