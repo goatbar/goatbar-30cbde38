@@ -57,67 +57,68 @@
 :root {
   --radius: 0.75rem;
 
-  /* Core palette — exact values from brief */
-  --background: oklch(0.18 0.005 180); /* #0F1414 */
-  --surface: oklch(0.21 0.006 180); /* #161C1C  cards */
-  --surface-2: oklch(0.24 0.007 180); /* one step lighter */
-  --foreground: oklch(0.96 0.01 80); /* #F7F4EF */
-  --muted: oklch(0.24 0.007 180);
-  --muted-foreground: oklch(0.68 0.01 180);
-  --card: oklch(0.21 0.006 180);
-  --card-foreground: oklch(0.96 0.01 80);
-  --popover: oklch(0.21 0.006 180);
-  --popover-foreground: oklch(0.96 0.01 80);
+  /* Core palette — standard hex/rgba colors compatible with html2canvas */
+  --background: #0f1414;
+  --surface: #161c1c;
+  --surface-2: #1c2424;
+  --foreground: #f7f4ef;
+  --muted: #1c2424;
+  --muted-foreground: #a0acac;
+  --card: #161c1c;
+  --card-foreground: #f7f4ef;
+  --popover: #161c1c;
+  --popover-foreground: #f7f4ef;
 
-  --primary: oklch(0.42 0.13 22); /* #701117 wine */
-  --primary-foreground: oklch(0.97 0.01 80);
-  --primary-glow: oklch(0.55 0.18 22);
+  --primary: #701117;
+  --primary-foreground: #f9f5f0;
+  --primary-glow: #aa2027;
 
-  --secondary: oklch(0.26 0.008 180);
-  --secondary-foreground: oklch(0.96 0.01 80);
-  --accent: oklch(0.42 0.13 22);
-  --accent-foreground: oklch(0.97 0.01 80);
+  --secondary: #202828;
+  --secondary-foreground: #f7f4ef;
+  --accent: #701117;
+  --accent-foreground: #f9f5f0;
 
-  --destructive: oklch(0.55 0.22 25);
-  --destructive-foreground: oklch(0.98 0.005 80);
-  --success: oklch(0.65 0.14 155);
-  --warning: oklch(0.78 0.14 75);
+  --destructive: #b92b27;
+  --destructive-foreground: #fcf6f5;
+  --success: #28a745;
+  --warning: #e0a800;
 
-  --border: oklch(0.28 0.008 180); /* #222A2A */
-  --border-strong: oklch(0.34 0.009 180);
-  --input: oklch(0.24 0.007 180);
-  --ring: oklch(0.42 0.13 22);
+  --border: #222a2a;
+  --border-strong: #2c3636;
+  --input: #1c2424;
+  --ring: #701117;
 
   /* Sidebar tokens */
-  --sidebar: oklch(0.16 0.005 180);
-  --sidebar-foreground: oklch(0.86 0.01 80);
-  --sidebar-primary: oklch(0.42 0.13 22);
-  --sidebar-primary-foreground: oklch(0.97 0.01 80);
-  --sidebar-accent: oklch(0.22 0.006 180);
-  --sidebar-accent-foreground: oklch(0.96 0.01 80);
-  --sidebar-border: oklch(0.24 0.007 180);
-  --sidebar-ring: oklch(0.42 0.13 22);
+  --sidebar: #0d1212;
+  --sidebar-foreground: #cfd8d8;
+  --sidebar-primary: #701117;
+  --sidebar-primary-foreground: #f9f5f0;
+  --sidebar-accent: #192020;
+  --sidebar-accent-foreground: #f7f4ef;
+  --sidebar-border: #1c2424;
+  --sidebar-ring: #701117;
 
   /* Charts */
-  --chart-1: oklch(0.55 0.18 22);
-  --chart-2: oklch(0.7 0.04 80);
-  --chart-3: oklch(0.5 0.06 180);
-  --chart-4: oklch(0.42 0.13 22);
-  --chart-5: oklch(0.78 0.14 75);
+  --chart-1: #aa2027;
+  --chart-2: #c4c1b0;
+  --chart-3: #4a8080;
+  --chart-4: #701117;
+  --chart-5: #e0a800;
 
   /* Gradients & shadows */
-  --gradient-wine: linear-gradient(135deg, oklch(0.42 0.13 22), oklch(0.55 0.18 22));
-  --gradient-surface: linear-gradient(180deg, oklch(0.22 0.006 180), oklch(0.18 0.005 180));
-  --shadow-elegant: 0 20px 60px -20px oklch(0 0 0 / 0.6);
-  --shadow-glow: 0 0 40px -10px oklch(0.42 0.13 22 / 0.5);
+  --gradient-wine: linear-gradient(135deg, #701117, #aa2027);
+  --gradient-surface: linear-gradient(180deg, #192020, #0f1414);
+  --shadow-elegant: 0 20px 60px -20px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 0 40px -10px rgba(112, 17, 23, 0.5);
 }
 
 .dark {
   /* same as root — system is dark by default */
-  --background: oklch(0.18 0.005 180);
-  --surface: oklch(0.21 0.006 180);
-  --foreground: oklch(0.96 0.01 80);
+  --background: #0f1414;
+  --surface: #161c1c;
+  --foreground: #f7f4ef;
 }
+
 
 @layer base {
   * {
@@ -174,11 +175,12 @@
 
   /* Glass topbar */
   .topbar-glass {
-    background-color: color-mix(in oklab, var(--background) 70%, transparent);
+    background-color: rgba(15, 20, 20, 0.7);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     border-bottom: 1px solid var(--border);
   }
+
 
   /* Scrollbar */
   ::-webkit-scrollbar {
