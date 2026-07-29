@@ -1,54 +1,72 @@
 import { supabase } from "@/integrations/supabase/client";
 import { dispatchContractToZapSign, getZapSignStatus } from "./zapsign-service";
+import {
+  dispatchContractToAssinafy,
+  syncAssinafyStatus,
+  downloadAssinafyArtifact,
+  resendAssinafySignature,
+} from "./assinafy-service";
 
-/**
- * Interface genérica para provedores de assinatura digital.
- */
 export interface SignatureProvider {
   name: string;
-  createDocument(payload: {
-    contractId: string;
-    pdfBase64?: string;
-    pdfUrl?: string;
-  }): Promise<{ providerDocumentId: string; status: string; signers?: any[] }>;
+  createRequest(payload: { contractId: string; pdfBase64?: string; pdfUrl?: string }): Promise<{
+    success: boolean;
+    externalDocumentId?: string;
+    externalAssignmentId?: string;
+    status: string;
+    signatureUrl?: string;
+  }>;
 
   getSignatureLink(providerDocumentId: string, signerEmail: string): Promise<string>;
 
-  syncStatus(contractId: string): Promise<{ status: string; fullySigned: boolean; signedFileUrl?: string }>;
+  syncStatus(contractId: string): Promise<{
+    status: string;
+    fullySigned: boolean;
+    signedFileUrl?: string;
+    artifacts?: Record<string, unknown>;
+  }>;
 
-  downloadSigned(providerDocumentId: string): Promise<{ fileUrl: string }>;
+  downloadArtifact(
+    providerDocumentId: string,
+    artifactName?: string,
+  ): Promise<{ fileUrl?: string; blob?: Blob }>;
+
+  resend(documentId: string, assignmentId: string, signerId: string): Promise<boolean>;
 }
 
-/**
- * Provedor Oficial ZapSign.
- */
 export const zapSignSignatureProvider: SignatureProvider = {
   name: "ZapSign",
 
-  async createDocument(payload) {
-    console.log("[ZapSign Provider] Iniciando criação do documento para contractId:", payload.contractId);
-    const res = await dispatchContractToZapSign(payload.contractId, payload.pdfBase64, payload.pdfUrl);
-
-    if (!res.success) {
-      throw new Error(res.error || "Falha ao disparar contrato para a ZapSign.");
-    }
-
+  async createRequest(payload) {
+    // Para manter compatibilidade de tipo, convertemos a resposta legada
+    const res = await dispatchContractToZapSign(
+      payload.contractId,
+      payload.pdfBase64,
+      payload.pdfUrl,
+    );
     return {
-      providerDocumentId: res.externalDocToken || res.signatureRequestId || "",
-      status: res.status || "pending",
-      signers: res.signers || [],
+      success: res.success,
+      externalDocumentId: res.externalDocToken,
+      status: res.status,
+      signatureUrl: res.docUrl,
     };
   },
 
   async getSignatureLink(providerDocumentId, signerEmail) {
-    const { data } = await (supabase as any)
+    const { data } = await supabase
       .from("contract_signature_requests")
       .select("provider_response")
       .eq("external_request_id", providerDocumentId)
+      .eq("signature_provider", "zapsign")
       .maybeSingle();
 
-    const signers = data?.provider_response?.signers || [];
-    const match = signers.find((s: any) => s.email?.toLowerCase() === signerEmail.toLowerCase());
+    const signers =
+      ((data?.provider_response as Record<string, unknown>)?.signers as Array<
+        Record<string, unknown>
+      >) || [];
+    const match = signers.find(
+      (s) => typeof s.email === "string" && s.email.toLowerCase() === signerEmail.toLowerCase(),
+    );
     return match?.sign_url || `https://app.zapsign.com.br/verificar/${providerDocumentId}`;
   },
 
@@ -62,53 +80,73 @@ export const zapSignSignatureProvider: SignatureProvider = {
     };
   },
 
-  async downloadSigned(providerDocumentId) {
-    const { data } = await (supabase as any)
+  async downloadArtifact(providerDocumentId, artifactName) {
+    const { data } = await supabase
       .from("contract_signature_requests")
       .select("signed_file_path")
       .eq("external_request_id", providerDocumentId)
+      .eq("signature_provider", "zapsign")
       .maybeSingle();
 
     return { fileUrl: data?.signed_file_path || "" };
   },
+
+  async resend(documentId, assignmentId, signerId) {
+    throw new Error("Reenvio não suportado na API legado da ZapSign.");
+  },
 };
 
+export const assinafySignatureProvider: SignatureProvider = {
+  name: "assinafy",
 
-export const getActiveSignatureProvider = (): SignatureProvider => {
-  return zapSignSignatureProvider;
+  async createRequest(payload) {
+    const res = await dispatchContractToAssinafy(
+      payload.contractId,
+      payload.pdfBase64,
+      payload.pdfUrl,
+    );
+    return {
+      success: res.success,
+      externalDocumentId: res.externalDocumentId,
+      externalAssignmentId: res.externalAssignmentId,
+      status: res.status,
+      signatureUrl: res.signatureUrl,
+    };
+  },
+
+  async getSignatureLink(providerDocumentId, signerEmail) {
+    // A Assinafy virtual deve buscar o sign_url dos signers no banco, ou usar url unica se a API devolver.
+    const { data } = await supabase
+      .from("contract_signature_signers")
+      .select("status") // Ou url se houver
+      .eq("external_signer_id", signerEmail)
+      .maybeSingle();
+
+    return ""; // Pode retornar vazio se nǜo for necessrio
+  },
+
+  async syncStatus(contractId) {
+    const res = await syncAssinafyStatus(contractId);
+    return {
+      status: res.status,
+      fullySigned: res.status === "signed" || res.status === "completed",
+      artifacts: res.artifacts,
+    };
+  },
+
+  async downloadArtifact(providerDocumentId, artifactName = "original") {
+    const blob = await downloadAssinafyArtifact(providerDocumentId, artifactName);
+    return { blob };
+  },
+
+  async resend(documentId, assignmentId, signerId) {
+    return resendAssinafySignature(documentId, assignmentId, signerId);
+  },
 };
 
-/**
- * Handler de Webhooks para ZapSign / Provedores de assinatura.
- */
-export const handleSignatureWebhook = async (provider: string, payload: any) => {
-  console.log(`[Webhook Handler] Evento do provedor ${provider}:`, payload);
-  if (provider === "zapsign") {
-    const externalId = payload.token || payload.doc_token;
-    const eventType = payload.event_type || payload.status;
-    const isSigned = eventType === "doc_signed" || eventType === "signed" || eventType === "doc_completed";
-
-    if (externalId) {
-      const { data: contract } = await supabase
-        .from("event_contracts")
-        .select("id, event_id")
-        .eq("external_id", externalId)
-        .maybeSingle();
-
-      if (contract) {
-        await supabase
-          .from("event_contracts")
-          .update({
-            status: isSigned ? "signed" : "sent",
-            signed_file_url: payload.signed_file || payload.signed_file_url,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", contract.id);
-
-        return { success: true, contractId: contract.id };
-      }
-    }
+export const getSignatureProvider = (providerName?: string): SignatureProvider => {
+  if (providerName === "zapsign") {
+    return zapSignSignatureProvider;
   }
-  return { success: false };
+  return assinafySignatureProvider;
 };
-

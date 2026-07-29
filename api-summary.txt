@@ -1,0 +1,1118 @@
+=== GET /v1/accounts/{accountId} ===
+Summary: Get account
+Description: Retrieve a workspace account the user belongs to.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Faccounts%2F%7BaccountId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/accounts/{accountId} ===
+Summary: Update account
+Description: Update a workspace account's profile.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Faccounts%2F%7BaccountId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== DELETE /v1/accounts/{accountId} ===
+Summary: Delete account
+Description: Delete a workspace account.
+
+By default the request fails with `400` when the workspace has an active paid subscription â the `restrictions` array in the response lists each blocker by code so you can address them individually before retrying. Pass `force: true` to cancel any active paid subscription automatically and proceed with immediate deletion.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=delete&path=%2Fv1%2Faccounts%2F%7BaccountId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Ddelete%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Ddelete%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/DeletionRestrictions)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/accounts/{accountId}/theme ===
+Summary: Get account theme
+Description: Retrieve account theme information (branding name, colors, and logo URL).
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Ftheme) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ftheme%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ftheme%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/accounts/{accountId}/logo ===
+Summary: Download account logo
+Description: Download the account logo image binary.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Flogo) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Flogo%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Flogo%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId
+Responses:
+  - 200
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/accounts/{accountId}/logo ===
+Summary: Upload account logo
+Description: Upload or replace the account logo image.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Flogo) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Flogo%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Flogo%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId
+Request Body:
+  - multipart/form-data
+Responses:
+  - 200 JSON (Ref: #/components/schemas/Envelope)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== DELETE /v1/accounts/{accountId}/logo ===
+Summary: Delete account logo
+Description: Remove the account logo image.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=delete&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Flogo) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Ddelete%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Flogo%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Ddelete%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Flogo%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId
+Responses:
+  - 200 JSON (Ref: #/components/schemas/Envelope)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/accounts ===
+Summary: List my accounts
+Description: List the workspace accounts the authenticated user belongs to.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Faccounts) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%20and%20help%20me%20integrate%20this%20endpoint.)
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/accounts ===
+Summary: Create account
+Description: Create a new workspace account owned by the authenticated user.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Faccounts) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%20and%20help%20me%20integrate%20this%20endpoint.)
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/documents/{documentId}/activities ===
+Summary: List document activities
+Description: List the activities recorded for a document. Each entry carries an event-specific `payload` snapshot (keys vary per event) and the request `origin` (`ip`, `user-agent`).
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fdocuments%2F%7BdocumentId%7D%2Factivities) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Factivities%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Factivities%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: DocumentId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/assignments ===
+Summary: List assignments
+Description: List the assignments belonging to the authenticated user's current account.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fassignments) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fassignments%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fassignments%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: Page, PerPage
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/documents/{documentId}/assignments ===
+Summary: Create assignment (request signatures)
+Description: Request signatures on a document. Use `method: virtual` to sign without input fields, or `method: collect` to place input fields on specific pages.
+
+For **virtual**, the document may be in `uploaded`, `metadata_processing` or `metadata_ready`; it is promoted to `pending_signature` automatically once metadata processing completes. For **collect**, the document must be in `metadata_ready` (fields reference specific pages).
+
+`step` controls signing order: signers sharing a step sign in parallel, and the next step is notified only after the previous step completes. If supplied, every signer must supply it and values must be contiguous starting at 1.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Fdocuments%2F%7BdocumentId%7D%2Fassignments) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fassignments%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fassignments%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: DocumentId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/documents/{documentId}/assignments/estimate-cost ===
+Summary: Estimate assignment cost
+Description: Estimate the cost of creating an assignment without creating it, returning a cost breakdown and the current account balances. Signer IDs are not required â only the verification/notification method affects cost. Each assignment consumes 1 document from the plan allowance; if exhausted, an extra document is charged from credits (`needs_extra_document` = true). `blocking_reason` may be `PendingPayment`, `InsufficientDocuments` or `InsufficientCredits`.
+
+### Pricing
+
+Per-unit costs (in credits) used to build the estimate:
+
+| Item | Cost |
+|------|------|
+| Extra document | 1 credit |
+| Email notification | 0 credits |
+| WhatsApp notification | 0.45 credits |
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Fdocuments%2F%7BdocumentId%7D%2Fassignments%2Festimate-cost) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fassignments%252Festimate-cost%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fassignments%252Festimate-cost%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: DocumentId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/documents/{documentId}/assignments/{assignmentId}/signers/{signerId}/resend ===
+Summary: Resend signature request
+Description: Resend the signature-request notification to a specific signer of an assignment.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Fdocuments%2F%7BdocumentId%7D%2Fassignments%2F%7BassignmentId%7D%2Fsigners%2F%7BsignerId%7D%2Fresend) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fassignments%252F%257BassignmentId%257D%252Fsigners%252F%257BsignerId%257D%252Fresend%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fassignments%252F%257BassignmentId%257D%252Fsigners%252F%257BsignerId%257D%252Fresend%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: DocumentId, assignmentId, signerId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/documents/{documentId}/assignments/{assignmentId}/signers/{signerId}/estimate-resend-cost ===
+Summary: Estimate resend cost
+Description: Estimate the cost of resending the signature request to a signer.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Fdocuments%2F%7BdocumentId%7D%2Fassignments%2F%7BassignmentId%7D%2Fsigners%2F%7BsignerId%7D%2Festimate-resend-cost) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fassignments%252F%257BassignmentId%257D%252Fsigners%252F%257BsignerId%257D%252Festimate-resend-cost%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fassignments%252F%257BassignmentId%257D%252Fsigners%252F%257BsignerId%257D%252Festimate-resend-cost%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: DocumentId, assignmentId, signerId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/documents/{documentId}/assignments/{assignmentId}/reset-expiration ===
+Summary: Reset assignment expiration
+Description: Set a new expiration date for an assignment.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Fdocuments%2F%7BdocumentId%7D%2Fassignments%2F%7BassignmentId%7D%2Freset-expiration) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fassignments%252F%257BassignmentId%257D%252Freset-expiration%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fassignments%252F%257BassignmentId%257D%252Freset-expiration%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: DocumentId, assignmentId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/auth/authenticate ===
+Summary: Start social login (OAuth)
+Description: Begins the OAuth flow with a social provider and redirects to the provider's consent screen. Browser-facing, not a JSON endpoint.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fauth%2Fauthenticate) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fauth%252Fauthenticate%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fauth%252Fauthenticate%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: authclient
+Responses:
+  - 302
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/login-callback ===
+Summary: Social login callback
+Description: Front-end OAuth callback target; receives the access token after a successful social login. Browser-facing.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Flogin-callback) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Flogin-callback%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Flogin-callback%20and%20help%20me%20integrate%20this%20endpoint.)
+Responses:
+  - 200
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/login ===
+Summary: Login
+Description: Authenticate with email and password and receive a JWT access token.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Flogin) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Flogin%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Flogin%20and%20help%20me%20integrate%20this%20endpoint.)
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/authentication/request-password-reset ===
+Summary: Request password reset
+Description: Send the user an email with instructions to reset their password. Used when the password was forgotten or never set.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Fauthentication%2Frequest-password-reset) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fauthentication%252Frequest-password-reset%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fauthentication%252Frequest-password-reset%20and%20help%20me%20integrate%20this%20endpoint.)
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/authentication/reset-password ===
+Summary: Reset password
+Description: Reset the user's password using the token received by email.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Fauthentication%2Freset-password) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fauthentication%252Freset-password%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fauthentication%252Freset-password%20and%20help%20me%20integrate%20this%20endpoint.)
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/authentication/change-password ===
+Summary: Change password
+Description: Change the authenticated user's password.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Fauthentication%2Fchange-password) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fauthentication%252Fchange-password%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fauthentication%252Fchange-password%20and%20help%20me%20integrate%20this%20endpoint.)
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/accounts/{accountId}/documents ===
+Summary: List documents
+Description: List documents of the workspace.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fdocuments) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fdocuments%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fdocuments%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, status, method, search, tags, sort, Page, PerPage
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/accounts/{accountId}/documents ===
+Summary: Upload and create document
+Description: Create a document from an uploaded file. Maximum file size 25MB; maximum 2000 pages.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fdocuments) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fdocuments%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fdocuments%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId
+Request Body:
+  - multipart/form-data
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/accounts/{accountId}/documents/search ===
+Summary: Search documents (lightweight)
+Description: Search documents of the workspace, returning a compact representation (no expanded assignment/pages).
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fdocuments%2Fsearch) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fdocuments%252Fsearch%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fdocuments%252Fsearch%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, Search, status, Page, PerPage
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/documents/statuses ===
+Summary: List document statuses
+Description: The supported document statuses and whether a document in each status can be deleted.
+
+| Status | Deletable | Description |
+|--------|-----------|-------------|
+| `uploading` | no | The document upload is in process. |
+| `uploaded` | no | The document has been uploaded. |
+| `metadata_processing` | no | The initial processing is under way. |
+| `metadata_ready` | yes | The initial processing has been completed. |
+| `expired` | yes | The signature deadline has been reached. |
+| `certificating` | no | The document has been signed and is being certificated. |
+| `certificated` | no | The document is certificated. |
+| `rejected_by_signer` | yes | A signer declined signing the document. |
+| `pending_signature` | yes | The document is waiting for signatures. |
+| `rejected_by_user` | yes | The signature process was cancelled by a user. |
+| `failed` | yes | The document processing has failed. |
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fdocuments%2Fstatuses) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fdocuments%252Fstatuses%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fdocuments%252Fstatuses%20and%20help%20me%20integrate%20this%20endpoint.)
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/documents/{documentId} ===
+Summary: Get document
+Description: Get a document by its ID. `decline_reason` is only present when the access token belongs to the document's creator.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fdocuments%2F%7BdocumentId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: DocumentId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== DELETE /v1/documents/{documentId} ===
+Summary: Delete document
+Description: Delete a document by its ID. Only documents in a deletable status can be removed (see GET /v1/documents/statuses).
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=delete&path=%2Fv1%2Fdocuments%2F%7BdocumentId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Ddelete%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Ddelete%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: DocumentId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PATCH /v1/documents/{documentId} ===
+Summary: Rename document
+Description: Update a document's name. Only allowed before any assignment is created (i.e. while the document is in `uploaded` or `metadata_ready` status and has no signers yet); once the signature process has started or the document is certificated, the name is locked. The name is normalized: diacritics are removed and unsupported characters are replaced with dashes.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=patch&path=%2Fv1%2Fdocuments%2F%7BdocumentId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpatch%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpatch%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: DocumentId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/documents/{documentId}/download/{artifactName} ===
+Summary: Download document artifact
+Description: Download a document artifact. Artifact types: original, certificated, certificate-page, bundle.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fdocuments%2F%7BdocumentId%7D%2Fdownload%2F%7BartifactName%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fdownload%252F%257BartifactName%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fdownload%252F%257BartifactName%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: DocumentId, artifactName
+Responses:
+  - 200
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/documents/{documentSignatureHash}/verify ===
+Summary: Verify a signed document
+Description: Verify a document by its signature hash (found on a signed document) and return its certification details. Always returns `200`: when the hash is not found or the document is not signed, `is_valid` is `false`, the other fields are `null`, and `message` explains why. Public endpoint.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fdocuments%2F%7BdocumentSignatureHash%7D%2Fverify) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentSignatureHash%257D%252Fverify%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentSignatureHash%257D%252Fverify%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: documentSignatureHash
+Responses:
+  - 200 JSON (Inline)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/accounts/{accountId}/documents/{documentId}/tags ===
+Summary: List document tags
+Description: List the tags attached to a document.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fdocuments%2F%7BdocumentId%7D%2Ftags) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fdocuments%252F%257BdocumentId%257D%252Ftags%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fdocuments%252F%257BdocumentId%257D%252Ftags%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, documentId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/accounts/{accountId}/documents/{documentId}/tags ===
+Summary: Replace document tags
+Description: Replace the full set of tags attached to a document.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fdocuments%2F%7BdocumentId%7D%2Ftags) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fdocuments%252F%257BdocumentId%257D%252Ftags%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fdocuments%252F%257BdocumentId%257D%252Ftags%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, documentId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/accounts/{accountId}/documents/{documentId}/tags ===
+Summary: Attach document tags
+Description: Attach one or more tags to a document.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fdocuments%2F%7BdocumentId%7D%2Ftags) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fdocuments%252F%257BdocumentId%257D%252Ftags%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fdocuments%252F%257BdocumentId%257D%252Ftags%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, documentId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== DELETE /v1/accounts/{accountId}/documents/{documentId}/tags/{tagId} ===
+Summary: Detach document tag
+Description: Detach a single tag from a document.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=delete&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fdocuments%2F%7BdocumentId%7D%2Ftags%2F%7BtagId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Ddelete%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fdocuments%252F%257BdocumentId%257D%252Ftags%252F%257BtagId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Ddelete%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fdocuments%252F%257BdocumentId%257D%252Ftags%252F%257BtagId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, documentId, tagId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/accounts/{accountId}/fields ===
+Summary: List fields
+Description: List the field definitions of a workspace.
+
+When `include_standard` is enabled, records of type `signature`, `initial` and `signatureDate` are also returned.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Ffields) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ffields%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ffields%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, include_inactive, include_standard
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/accounts/{accountId}/fields ===
+Summary: Create field
+Description: Create a field definition in the workspace.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Ffields) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ffields%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ffields%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/accounts/{accountId}/fields/{fieldId} ===
+Summary: Get field
+Description: Retrieve a single field definition.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Ffields%2F%7BfieldId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ffields%252F%257BfieldId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ffields%252F%257BfieldId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, fieldId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/accounts/{accountId}/fields/{fieldId} ===
+Summary: Update field
+Description: Update a field definition.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Ffields%2F%7BfieldId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ffields%252F%257BfieldId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ffields%252F%257BfieldId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, fieldId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== DELETE /v1/accounts/{accountId}/fields/{fieldId} ===
+Summary: Delete field
+Description: Delete a field definition.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=delete&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Ffields%2F%7BfieldId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Ddelete%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ffields%252F%257BfieldId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Ddelete%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ffields%252F%257BfieldId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, fieldId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/accounts/{accountId}/fields/{fieldId}/validate ===
+Summary: Validate field value
+Description: Validate an input value against a field definition. Typically called with a signer access code during the signing flow.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Ffields%2F%7BfieldId%7D%2Fvalidate) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ffields%252F%257BfieldId%257D%252Fvalidate%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ffields%252F%257BfieldId%257D%252Fvalidate%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, fieldId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/accounts/{accountId}/fields/validate-multiple ===
+Summary: Validate multiple field values
+Description: Validate multiple input values at once. The request body is a JSON array of `{field_id, value}` objects.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Ffields%2Fvalidate-multiple) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ffields%252Fvalidate-multiple%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ffields%252Fvalidate-multiple%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/field-types ===
+Summary: List field types
+Description: List the possible field types. `cpf` expects 11 digits; `cnpj` accepts 14-char values (letters A-Z allowed in positions 1â12 per the CNPJ AlfanumÃ©rico rule; check digits 13â14 stay numeric). Punctuation is ignored during validation.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Ffield-types) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Ffield-types%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Ffield-types%20and%20help%20me%20integrate%20this%20endpoint.)
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/documents/{documentId}/thumbnail ===
+Summary: Download document thumbnail
+Description: Download the thumbnail image of a document's first page.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fdocuments%2F%7BdocumentId%7D%2Fthumbnail) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fthumbnail%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fthumbnail%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: DocumentId
+Responses:
+  - 200
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/documents/{documentId}/pages/{pageId}/download ===
+Summary: Download document page
+Description: Download the rendered image of a specific document page.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fdocuments%2F%7BdocumentId%7D%2Fpages%2F%7BpageId%7D%2Fdownload) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fpages%252F%257BpageId%257D%252Fdownload%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fpages%252F%257BpageId%257D%252Fdownload%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: DocumentId, pageId
+Responses:
+  - 200
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/public/documents/{documentId} ===
+Summary: View public document
+Description: Retrieve a publicly shared document by ID. Public endpoint.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fpublic%2Fdocuments%2F%7BdocumentId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fpublic%252Fdocuments%252F%257BdocumentId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fpublic%252Fdocuments%252F%257BdocumentId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: documentId
+Responses:
+  - 200 JSON (Inline)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/public/documents/{documentId}/send-token ===
+Summary: Send access token for public document
+Description: Send a one-time access token (email/WhatsApp) to view a public document. Public endpoint.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Fpublic%2Fdocuments%2F%7BdocumentId%7D%2Fsend-token) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fpublic%252Fdocuments%252F%257BdocumentId%257D%252Fsend-token%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fpublic%252Fdocuments%252F%257BdocumentId%257D%252Fsend-token%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: documentId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Ref: #/components/schemas/Envelope)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/accounts/{accountId}/signers ===
+Summary: List signers
+Description: List the signers of a workspace.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fsigners) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fsigners%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fsigners%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, search, Page, PerPage
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/accounts/{accountId}/signers ===
+Summary: Create signer
+Description: Create a signer in the workspace.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fsigners) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fsigners%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fsigners%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/accounts/{accountId}/signers/{signerId} ===
+Summary: Get signer
+Description: Retrieve a signer's information.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fsigners%2F%7BsignerId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fsigners%252F%257BsignerId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fsigners%252F%257BsignerId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, signerId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/accounts/{accountId}/signers/{signerId} ===
+Summary: Update signer
+Description: Update a signer's information.
+
+**Verification integrity:** `email` / `whatsapp_phone_number` cannot be changed while the signer has verified that channel on an in-flight (not yet certificated) document â the response is `400` naming the offending document(s). Already-certificated documents do not block updates. Changing a channel that has *unverified* in-flight requests rotates their access/verification codes (invalidating previously sent links/OTPs); use the resend endpoint to redeliver. `full_name` can always be updated.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fsigners%2F%7BsignerId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fsigners%252F%257BsignerId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fsigners%252F%257BsignerId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, signerId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== DELETE /v1/accounts/{accountId}/signers/{signerId} ===
+Summary: Delete signer
+Description: Delete a signer.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=delete&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fsigners%2F%7BsignerId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Ddelete%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fsigners%252F%257BsignerId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Ddelete%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fsigners%252F%257BsignerId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, signerId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/signers/self ===
+Summary: Get current signer
+Description: Return the signer identified by the signer access code, including the `has_signature`/`has_initial`/`is_signature_reusable` flags.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fsigners%2Fself) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fsigners%252Fself%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fsigners%252Fself%20and%20help%20me%20integrate%20this%20endpoint.)
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/signers/{signerId}/document ===
+Summary: Get signer's document
+Description: Return the document and the signer's assignment items, scoped to the signer access code.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fsigners%2F%7BsignerId%7D%2Fdocument) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fsigners%252F%257BsignerId%257D%252Fdocument%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fsigners%252F%257BsignerId%257D%252Fdocument%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: signerId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/sign ===
+Summary: View document to sign
+Description: Retrieve the document a signer has been invited to sign, using the signer access code. Marks the document as viewed. Returns 409 while the document is still being prepared (retry with backoff).
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fsign) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fsign%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fsign%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: has_accepted_terms
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 409
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/documents/{documentId}/assignments/{assignmentId} ===
+Summary: Sign assignment items
+Description: Sign a document with input fields (collect method): submit the signer's item values, completing their items. For **virtual** assignments the signer must first confirm their data via `PUT /v1/documents/{documentId}/signers/confirm-data`, otherwise this returns `400` (Signer data must be confirmed before signing). The request body is a JSON array of item entries. Uses the signer access code.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Fdocuments%2F%7BdocumentId%7D%2Fassignments%2F%7BassignmentId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fassignments%252F%257BassignmentId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fassignments%252F%257BassignmentId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: DocumentId, assignmentId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 409
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/documents/{documentId}/assignments/{assignmentId}/reject ===
+Summary: Reject (decline) assignment
+Description: The signer declines to sign the document, giving a reason. Uses the signer access code.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Fdocuments%2F%7BdocumentId%7D%2Fassignments%2F%7BassignmentId%7D%2Freject) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fassignments%252F%257BassignmentId%257D%252Freject%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fassignments%252F%257BassignmentId%257D%252Freject%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: DocumentId, assignmentId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/signers/documents/sign-multiple ===
+Summary: Sign multiple documents
+Description: Sign several documents in one request, for a signer with multiple pending documents. Each document must be prepared for the **virtual** signature method. Uses the signer access code.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Fsigners%2Fdocuments%2Fsign-multiple) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fsigners%252Fdocuments%252Fsign-multiple%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fsigners%252Fdocuments%252Fsign-multiple%20and%20help%20me%20integrate%20this%20endpoint.)
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/signers/documents/decline-multiple ===
+Summary: Decline multiple documents
+Description: Decline several documents in one request. Uses the signer access code.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Fsigners%2Fdocuments%2Fdecline-multiple) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fsigners%252Fdocuments%252Fdecline-multiple%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fsigners%252Fdocuments%252Fdecline-multiple%20and%20help%20me%20integrate%20this%20endpoint.)
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/verify ===
+Summary: Verify signer code (OTP)
+Description: Submit the verification code (OTP) sent to the signer to unlock the signing flow. Uses the signer access code.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Fverify) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fverify%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fverify%20and%20help%20me%20integrate%20this%20endpoint.)
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Ref: #/components/schemas/Envelope)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/documents/{documentId}/signers/confirm-data ===
+Summary: Confirm signer data
+Description: The signer confirms or updates their data before signing. Uses the signer access code.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Fdocuments%2F%7BdocumentId%7D%2Fsigners%2Fconfirm-data) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fsigners%252Fconfirm-data%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fsigners%252Fconfirm-data%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: DocumentId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/signers/accept-terms ===
+Summary: Accept terms (signer)
+Description: Record that the signer accepted the terms of use. Uses the signer access code.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Fsigners%2Faccept-terms) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fsigners%252Faccept-terms%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Fsigners%252Faccept-terms%20and%20help%20me%20integrate%20this%20endpoint.)
+Responses:
+  - 200 JSON (Ref: #/components/schemas/Envelope)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/signature ===
+Summary: Upload signature image
+Description: Upload the signer's signature (or initials) image as the raw request body. Uses the signer access code.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Fsignature) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fsignature%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fsignature%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: type, reuse
+Request Body:
+  - image/png
+Responses:
+  - 200 JSON (Ref: #/components/schemas/Envelope)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/signature/{signatureType} ===
+Summary: Download signature image
+Description: Download the signer's stored signature/initials image. Uses the signer access code.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fsignature%2F%7BsignatureType%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fsignature%252F%257BsignatureType%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fsignature%252F%257BsignatureType%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: signatureType
+Responses:
+  - 200
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/signers/{signerId}/documents ===
+Summary: List signer's documents
+Description: List the documents a signer is party to. Uses the signer access code.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fsigners%2F%7BsignerId%7D%2Fdocuments) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fsigners%252F%257BsignerId%257D%252Fdocuments%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fsigners%252F%257BsignerId%257D%252Fdocuments%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: signerId, Page, PerPage
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/signers/{signerId}/documents/search ===
+Summary: Search signer's documents
+Description: Search the documents a signer is party to (compact representation). Uses the signer access code.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fsigners%2F%7BsignerId%7D%2Fdocuments%2Fsearch) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fsigners%252F%257BsignerId%257D%252Fdocuments%252Fsearch%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fsigners%252F%257BsignerId%257D%252Fdocuments%252Fsearch%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: signerId, Search
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/signers/{signerId}/documents/{documentId}/download/{artifactName} ===
+Summary: Download signer's document artifact
+Description: Download an artifact of a document the signer is party to. Public (signer-link) endpoint. Artifact types: original, certificated, certificate-page, bundle.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fsigners%2F%7BsignerId%7D%2Fdocuments%2F%7BdocumentId%7D%2Fdownload%2F%7BartifactName%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fsigners%252F%257BsignerId%257D%252Fdocuments%252F%257BdocumentId%257D%252Fdownload%252F%257BartifactName%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fsigners%252F%257BsignerId%257D%252Fdocuments%252F%257BdocumentId%257D%252Fdownload%252F%257BartifactName%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: signerId, DocumentId, artifactName
+Responses:
+  - 200
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/authentication/social-login ===
+Summary: Social login
+Description: Exchange a token from a social login provider (currently only `google`) for an Assinafy access token.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Fauthentication%2Fsocial-login) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fauthentication%252Fsocial-login%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fauthentication%252Fsocial-login%20and%20help%20me%20integrate%20this%20endpoint.)
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/auth/link-social-login ===
+Summary: Link social login
+Description: Link a social-login provider account to the authenticated user.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Fauth%2Flink-social-login) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fauth%252Flink-social-login%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fauth%252Flink-social-login%20and%20help%20me%20integrate%20this%20endpoint.)
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Ref: #/components/schemas/Envelope)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/accounts/{accountId}/stats ===
+Summary: Account document KPIs
+Description: Precomputed per-account document-funnel KPIs. `granularity=monthly` (default) returns the last 12 months, most recent first; `granularity=daily` with `month=YYYY-MM` returns that month's days. Series are zero-filled.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fstats) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fstats%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fstats%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, granularity, month
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/users/self/stats ===
+Summary: My cross-account document KPIs
+Description: The authenticated user's document-funnel KPIs summed across all accounts they currently belong to. `granularity=monthly` (default) returns the last 12 months, most recent first; `granularity=daily` with `month=YYYY-MM` returns that month's days. Series are zero-filled.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fusers%2Fself%2Fstats) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fusers%252Fself%252Fstats%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fusers%252Fself%252Fstats%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: granularity, month
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/accounts/{accountId}/tags ===
+Summary: List tags
+Description: List the tags of a workspace.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Ftags) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ftags%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ftags%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, Search
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/accounts/{accountId}/tags ===
+Summary: Create tag
+Description: Create a tag in the workspace. Names are unique per workspace (case-insensitive); a collision returns 409.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Ftags) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ftags%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ftags%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 409 JSON (Inline)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/accounts/{accountId}/tags/{tagId} ===
+Summary: Update tag
+Description: Update a tag's name or color.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Ftags%2F%7BtagId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ftags%252F%257BtagId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ftags%252F%257BtagId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, tagId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== DELETE /v1/accounts/{accountId}/tags/{tagId} ===
+Summary: Delete tag
+Description: Delete a tag. Pass `?force=true` to detach it from any documents/templates it is attached to.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=delete&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Ftags%2F%7BtagId%7D) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Ddelete%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ftags%252F%257BtagId%257D%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Ddelete%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ftags%252F%257BtagId%257D%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, tagId, force
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/accounts/{accountId}/templates ===
+Summary: List templates
+Description: List the templates of a workspace.
+
+The `status` field of a template is one of:
+
+| Status | Description |
+|--------|-------------|
+| `uploading` | The template is being uploaded. |
+| `uploaded` | The template has been uploaded. |
+| `processing` | The template is being processed. |
+| `ready` | The template is ready to use. |
+| `failed` | The template processing has failed. |
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Ftemplates) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ftemplates%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ftemplates%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, Search, Page, PerPage
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/accounts/{accountId}/templates/{templateId}/documents ===
+Summary: Create document from template
+Description: Generate a new document from a template, creating its assignment in the same call. Provide one signer entry per template role; the signers must already exist in the account.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Ftemplates%2F%7BtemplateId%7D%2Fdocuments) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ftemplates%252F%257BtemplateId%257D%252Fdocuments%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ftemplates%252F%257BtemplateId%257D%252Fdocuments%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, templateId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/accounts/{accountId}/templates/{templateId}/documents/estimate-cost ===
+Summary: Estimate document-from-template cost
+Description: Estimate the cost of creating a document from a template without creating it. Contact information is not required â only the role_id and optionally a verification or notification method are needed. Each document always consumes 1 document from the plan's monthly allowance; if exhausted, the ExtraDocument cost is charged from credits (needs_extra_document = true). blocking_reason may be PendingPayment, InsufficientDocuments, or InsufficientCredits.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Ftemplates%2F%7BtemplateId%7D%2Fdocuments%2Festimate-cost) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ftemplates%252F%257BtemplateId%257D%252Fdocuments%252Festimate-cost%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Ftemplates%252F%257BtemplateId%257D%252Fdocuments%252Festimate-cost%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, templateId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/users/self ===
+Summary: Get the authenticated user
+Description: Returns the profile of the user owning the access token.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fusers%2Fself) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fusers%252Fself%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fusers%252Fself%20and%20help%20me%20integrate%20this%20endpoint.)
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/users/api-keys ===
+Summary: Get API key
+Description: Retrieve a masked version of the existing API key. The full key cannot be retrieved. Returns `null` when no key has been generated yet.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fusers%2Fapi-keys) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fusers%252Fapi-keys%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fusers%252Fapi-keys%20and%20help%20me%20integrate%20this%20endpoint.)
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/users/api-keys ===
+Summary: Create API key
+Description: Generate an API key for the user, used via the `X-Api-Key` header. Generating a new key deletes the previous one. Never use an API key from a front-end application.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Fusers%2Fapi-keys) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fusers%252Fapi-keys%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Fusers%252Fapi-keys%20and%20help%20me%20integrate%20this%20endpoint.)
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== DELETE /v1/users/api-keys ===
+Summary: Delete API key
+Description: Delete the existing API key.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=delete&path=%2Fv1%2Fusers%2Fapi-keys) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Ddelete%26path%3D%252Fv1%252Fusers%252Fapi-keys%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Ddelete%26path%3D%252Fv1%252Fusers%252Fapi-keys%20and%20help%20me%20integrate%20this%20endpoint.)
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/accounts/{accountId}/webhooks/subscriptions ===
+Summary: Get webhook subscription
+Description: Retrieve the current webhook subscription for the account â which events it is subscribed to and the delivery configuration.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fwebhooks%2Fsubscriptions) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fwebhooks%252Fsubscriptions%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fwebhooks%252Fsubscriptions%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/accounts/{accountId}/webhooks/subscriptions ===
+Summary: Update webhook subscription
+Description: Update the webhook subscription settings for the account â which events are monitored, whether delivery is enabled, and the delivery/contact details.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fwebhooks%2Fsubscriptions) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fwebhooks%252Fsubscriptions%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fwebhooks%252Fsubscriptions%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId
+Request Body:
+  - application/json
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== PUT /v1/accounts/{accountId}/webhooks/inactivate ===
+Summary: Inactivate webhook subscription
+Description: Deactivate the webhook integration for the account. While inactive, no events are sent to the configured endpoint.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=put&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fwebhooks%2Finactivate) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fwebhooks%252Finactivate%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dput%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fwebhooks%252Finactivate%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/webhooks/event-types ===
+Summary: List webhook event types
+Description: List all available event types that can be subscribed to via webhooks.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fwebhooks%2Fevent-types) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fwebhooks%252Fevent-types%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fwebhooks%252Fevent-types%20and%20help%20me%20integrate%20this%20endpoint.)
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/accounts/{accountId}/webhooks ===
+Summary: List webhook deliveries
+Description: Retrieve the delivery history for webhooks sent to the account's configured endpoint â use it to monitor status, debug failures, and verify payloads. Pagination is returned in the `X-Pagination-*` response headers.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fwebhooks) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fwebhooks%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fwebhooks%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, event, delivered, from, to, page, per-page
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== POST /v1/accounts/{accountId}/webhooks/{historyId}/retry ===
+Summary: Retry webhook delivery
+Description: Manually retry a webhook delivery for a specific entry, without waiting for automatic retries. Returns the newly created dispatch entry.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=post&path=%2Fv1%2Faccounts%2F%7BaccountId%7D%2Fwebhooks%2F%7BhistoryId%7D%2Fretry) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fwebhooks%252F%257BhistoryId%257D%252Fretry%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dpost%26path%3D%252Fv1%252Faccounts%252F%257BaccountId%257D%252Fwebhooks%252F%257BhistoryId%257D%252Fretry%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: AccountId, historyId
+Responses:
+  - 200 JSON (Inline)
+  - 400 (Ref: #/components/responses/ValidationError)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 404 (Ref: #/components/responses/NotFound)
+  - 500 (Ref: #/components/responses/ServerError)
+
+=== GET /v1/documents/{documentId}/assignments/{assignmentId}/whatsapp-notifications ===
+Summary: List WhatsApp notifications
+Description: List all WhatsApp notification messages sent for an assignment. The response includes the rendered template text split into `header`, `body` and `buttons` â exactly what the signer would see. In sandbox/stage, WhatsApp messages are simulated (no real delivery) and button URLs include access/verification codes you can use to simulate the signing flow.
+
+[Copy as Markdown](https://api.assinafy.com.br/v1/docs/markdown?method=get&path=%2Fv1%2Fdocuments%2F%7BdocumentId%7D%2Fassignments%2F%7BassignmentId%7D%2Fwhatsapp-notifications) [Open in ChatGPT](https://chatgpt.com/?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fassignments%252F%257BassignmentId%257D%252Fwhatsapp-notifications%20and%20help%20me%20integrate%20this%20endpoint.) [Open in Claude](https://claude.ai/new?q=Read%20the%20API%20documentation%20at%20https%3A%2F%2Fapi.assinafy.com.br%2Fv1%2Fdocs%2Fmarkdown%3Fmethod%3Dget%26path%3D%252Fv1%252Fdocuments%252F%257BdocumentId%257D%252Fassignments%252F%257BassignmentId%257D%252Fwhatsapp-notifications%20and%20help%20me%20integrate%20this%20endpoint.)
+Params: DocumentId, assignmentId
+Responses:
+  - 200 JSON (Inline)
+  - 401 (Ref: #/components/responses/Unauthorized)
+  - 500 (Ref: #/components/responses/ServerError)
+

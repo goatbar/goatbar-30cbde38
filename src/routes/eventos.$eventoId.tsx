@@ -3,7 +3,11 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { calcularOrcamentoEvento, type Evento, type EventoStatus } from "@/lib/mock-data";
 import { fmtBRL } from "@/lib/format";
-import { formatBrazilianDocument, getBrazilianDocumentType, validateBrazilianDocument } from "@/lib/format-document";
+import {
+  formatBrazilianDocument,
+  getBrazilianDocumentType,
+  validateBrazilianDocument,
+} from "@/lib/format-document";
 import {
   Calendar,
   MapPin,
@@ -42,7 +46,8 @@ import {
   DEFAULT_CONTRACT_BODY,
   type ContractTemplate,
 } from "@/services/contract-service";
-import { convertHtmlToPdf, dispatchContractToZapSign, getZapSignStatus } from "@/services/zapsign-service";
+import { convertHtmlToPdf } from "@/services/pdf-service";
+import { getSignatureProvider } from "@/services/signature-provider";
 import { ContractReviewModal } from "@/components/contract-editor/ContractReviewModal";
 import {
   eventBudgetService,
@@ -194,10 +199,11 @@ function EventoInterna() {
 
     if (contract?.id) {
       try {
-        const sigData = await getZapSignStatus(contract.id);
-        setZapSignDetails(sigData);
+        const provider = getSignatureProvider(contract.signature_provider || contract.provider);
+        const sigData = await provider.syncStatus(contract.id);
+        setProviderDetails(sigData);
       } catch (e) {
-        console.warn("Status ZapSign não pôde ser consultado:", e);
+        console.warn("Status de assinatura não pôde ser consultado:", e);
       }
     }
 
@@ -602,9 +608,17 @@ function EventoInterna() {
   const handlePreviewGeneratedContract = async () => {
     try {
       console.log("🔹 [Contract Preview] 1. Iniciando carregamento dos dados...");
-      const sId = selectedSigner || realContract?.signer_id || (realSigners && realSigners.find((s) => s.is_active)?.id);
+      const sId =
+        selectedSigner ||
+        realContract?.signer_id ||
+        (realSigners && realSigners.find((s) => s.is_active)?.id);
 
-      console.log("🔹 [Contract Preview] 2. Compilando variáveis do evento:", eventoId, "Sócio ID:", sId);
+      console.log(
+        "🔹 [Contract Preview] 2. Compilando variáveis do evento:",
+        eventoId,
+        "Sócio ID:",
+        sId,
+      );
       const vars = await eventContractsService.compileContractVariables(eventoId, sId);
       setCompiledVariables(vars);
 
@@ -615,7 +629,9 @@ function EventoInterna() {
 
       if (!templateToUse) {
         console.warn("⚠️ [Contract Preview] Nenhum modelo de contrato anexado ou selecionado.");
-        alert("Nenhum modelo de contrato anexado. Por favor, acesse Documentos > Contratos e anexe seu modelo primeiro.");
+        alert(
+          "Nenhum modelo de contrato anexado. Por favor, acesse Documentos > Contratos e anexe seu modelo primeiro.",
+        );
         return;
       }
 
@@ -624,11 +640,19 @@ function EventoInterna() {
       const templateContent = getTemplateContent(templateToUse);
       const mapping = getTemplateMapping(templateToUse);
 
-      console.log("🔹 [Contract Preview] 4. Match de campos carregado:", Object.keys(mapping || {}).length, "mapeamento(s)");
+      console.log(
+        "🔹 [Contract Preview] 4. Match de campos carregado:",
+        Object.keys(mapping || {}).length,
+        "mapeamento(s)",
+      );
 
       const text = renderContractTemplate(templateContent, vars, mapping);
 
-      console.log("🔹 [Contract Preview] 5. Documento gerado com sucesso! Tamanho final:", text.length, "caracteres");
+      console.log(
+        "🔹 [Contract Preview] 5. Documento gerado com sucesso! Tamanho final:",
+        text.length,
+        "caracteres",
+      );
       console.log("🔹 [Contract Preview] 6. Pré-visualização iniciada.");
 
       setCompiledContractText(text);
@@ -636,38 +660,46 @@ function EventoInterna() {
     } catch (e: any) {
       console.error("❌ [Contract Preview] EXCEÇÃO DETALHADA ao gerar pré-visualização:", e);
       console.error("Stack trace completo:", e?.stack);
-      alert(`Erro ao gerar pré-visualização do contrato: ${e?.message || "Verifique as configurações do modelo ou evento."}`);
+      alert(
+        `Erro ao gerar pré-visualização do contrato: ${e?.message || "Verifique as configurações do modelo ou evento."}`,
+      );
     }
   };
 
-  const [isDispatchingZapSign, setIsDispatchingZapSign] = useState(false);
-  const [zapSignDetails, setZapSignDetails] = useState<any>(null);
+  const [isDispatchingSignature, setIsDispatchingSignature] = useState(false);
+  const [providerDetails, setProviderDetails] = useState<any>(null);
 
-  const handleDispatchZapSign = async (overrideHtml?: string) => {
+  const handleDispatchSignature = async (overrideHtml?: string) => {
     if (!realContract) {
       alert("Nenhum contrato gerado para este evento.");
       return;
     }
 
     if (!realClientData?.email) {
-      alert("O e-mail do contratante é obrigatório para envio de assinatura. Atualize os Dados do Contratante.");
+      alert(
+        "O e-mail do contratante é obrigatório para envio de assinatura. Atualize os Dados do Contratante.",
+      );
       return;
     }
 
-    setIsDispatchingZapSign(true);
+    setIsDispatchingSignature(true);
     try {
       let compiledHtml = overrideHtml;
       if (!compiledHtml) {
-        const sId = selectedSigner || realContract.signer_id || (realSigners && realSigners.find((s) => s.is_active)?.id);
+        const sId =
+          selectedSigner ||
+          realContract.signer_id ||
+          (realSigners && realSigners.find((s) => s.is_active)?.id);
         const vars = await eventContractsService.compileContractVariables(eventoId, sId);
         const templateToUse =
-          (realTemplates && realTemplates.find((t) => t.id === (selectedTemplate || realContract.template_id))) ||
+          (realTemplates &&
+            realTemplates.find((t) => t.id === (selectedTemplate || realContract.template_id))) ||
           (realTemplates && realTemplates.find((t) => t.is_default)) ||
           (realTemplates && realTemplates[0]);
 
         if (!templateToUse) {
           alert("Nenhum modelo de contrato selecionado.");
-          setIsDispatchingZapSign(false);
+          setIsDispatchingSignature(false);
           return;
         }
 
@@ -679,27 +711,37 @@ function EventoInterna() {
       // 2. Converte o resultado compilado existente para PDF imutável (etapa adicional única)
       const { base64, hash } = await convertHtmlToPdf(
         compiledHtml,
-        `Contrato_${realClientData.client_name || "Evento"}`
+        `Contrato_${realClientData.client_name || "Evento"}`,
       );
 
+      console.log("🔹 [Signature Dispatch] Hash SHA-256 do PDF imutável:", hash);
 
-      console.log("🔹 [ZapSign Dispatch] Hash SHA-256 do PDF imutável:", hash);
+      // 3. Dispara para o Provedor Ativo
+      const provider = getSignatureProvider(
+        realContract.signature_provider || realContract.provider,
+      );
+      const result = await provider.createRequest({
+        contractId: realContract.id,
+        pdfBase64: base64,
+      });
 
-      // 3. Dispara para a ZapSign via Edge Function / Serviço (passando contractId + pdfBase64)
-      const result = await dispatchContractToZapSign(realContract.id, base64);
-
-      if (result.success) {
-        await handleStatusChange("em_assinatura", "Contrato enviado para assinatura digital via ZapSign.");
-        alert(`Contrato enviado para a ZapSign com sucesso!\n\nID do Documento: ${result.externalDocToken || result.signatureRequestId}\nHash SHA-256: ${hash.substring(0, 16)}...`);
+      if (result.success && result.externalDocumentId) {
+        await handleStatusChange(
+          "em_assinatura",
+          `Contrato enviado para assinatura digital via ${provider.name}.`,
+        );
+        alert(
+          `Contrato enviado para ${provider.name} com sucesso!\n\nID do Documento: ${result.externalDocumentId}\nHash SHA-256: ${hash.substring(0, 16)}...`,
+        );
         await loadContractModule();
       } else {
-        alert(`Erro ao enviar contrato para ZapSign: ${result.error || "Erro desconhecido"}`);
+        alert(`Erro ao enviar contrato: Resultado vazio.`);
       }
     } catch (err: any) {
-      console.error("Erro no disparo ZapSign:", err);
+      console.error("Erro no disparo de assinatura:", err);
       alert(`Erro ao disparar contrato para assinatura: ${err.message || "Erro inesperado"}`);
     } finally {
-      setIsDispatchingZapSign(false);
+      setIsDispatchingSignature(false);
     }
   };
 
@@ -712,11 +754,14 @@ function EventoInterna() {
     if (realClientData.cpf_cnpj) {
       const docVal = validateBrazilianDocument(realClientData.cpf_cnpj);
       if (!docVal.valid) {
-        alert(`Não foi possível gerar o contrato.\n\nMotivo: ${docVal.error || "O documento informado é inválido."}\n\nPor favor, corrija os dados do contratante antes de prosseguir.`);
+        alert(
+          `Não foi possível gerar o contrato.\n\nMotivo: ${docVal.error || "O documento informado é inválido."}\n\nPor favor, corrija os dados do contratante antes de prosseguir.`,
+        );
         return;
       }
     }
-    const tId = selectedTemplate || realTemplates.find((t) => t.is_default)?.id || realTemplates[0]?.id;
+    const tId =
+      selectedTemplate || realTemplates.find((t) => t.is_default)?.id || realTemplates[0]?.id;
     const sId = selectedSigner || realSigners.find((s) => s.is_active)?.id || realSigners[0]?.id;
 
     if (!tId || !sId) {
@@ -726,13 +771,11 @@ function EventoInterna() {
 
     try {
       if (!draft) return;
-      await eventContractsService.createContractForEvent(
-        draft.id,
-        tId,
-        sId,
-      );
+      await eventContractsService.createContractForEvent(draft.id, tId, sId);
       await handleStatusChange("em_assinatura", "Contrato gerado automaticamente no sistema.");
-      alert("Contrato gerado com sucesso! Todas as variáveis do cliente e orçamento foram preenchidas automaticamente.");
+      alert(
+        "Contrato gerado com sucesso! Todas as variáveis do cliente e orçamento foram preenchidas automaticamente.",
+      );
       await loadContractModule();
       handlePreviewGeneratedContract();
     } catch (e: any) {
@@ -892,7 +935,9 @@ function EventoInterna() {
               <div>
                 <div className="flex items-center gap-3">
                   <h2 className="text-2xl font-display font-bold tracking-tight">
-                    {isEditingHeader ? "Editando Cabeçalho" : draft.evento_nome || draft.cliente || draft.nome}
+                    {isEditingHeader
+                      ? "Editando Cabeçalho"
+                      : draft.evento_nome || draft.cliente || draft.nome}
                   </h2>
                   <button
                     onClick={() => {
@@ -1014,7 +1059,9 @@ function EventoInterna() {
                 value={draft.duracao ? String(draft.duracao) : ""}
                 isEditing={isEditingHeader}
                 type="number"
-                onChange={(v) => setDraft((p) => (p ? { ...p, duracao: v ? Number(v) : "" } : null))}
+                onChange={(v) =>
+                  setDraft((p) => (p ? { ...p, duracao: v ? Number(v) : "" } : null))
+                }
                 icon={<Clock className="h-3 w-3 text-primary/60" />}
               />
               <HeaderField
@@ -1278,7 +1325,8 @@ function EventoInterna() {
 
                   <div className="space-y-2 mt-6 border-t border-border/40 pt-6">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
-                      <div className="h-1.5 w-1.5 bg-primary rounded-full" /> Descrição das Bebidas Negociadas (Opcional)
+                      <div className="h-1.5 w-1.5 bg-primary rounded-full" /> Descrição das Bebidas
+                      Negociadas (Opcional)
                     </label>
                     <textarea
                       placeholder="Descreva detalhes das marcas e bebidas negociadas para este orçamento (ex: Vodka Absolut, Gin Tanqueray, Tônica Antarctica, etc...)"
@@ -1673,7 +1721,9 @@ function EventoInterna() {
                                     p
                                       ? {
                                           ...p,
-                                          descontos: (p.descontos || []).filter((_, idx) => idx !== i),
+                                          descontos: (p.descontos || []).filter(
+                                            (_, idx) => idx !== i,
+                                          ),
                                         }
                                       : null,
                                   )
@@ -1944,7 +1994,9 @@ function EventoInterna() {
                 <div className="p-5 bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/25 rounded-2xl flex flex-col gap-3">
                   <div className="flex items-center gap-2 mb-1">
                     <FileTextIcon className="h-5 w-5 text-primary" />
-                    <span className="font-display font-semibold text-sm">Proposta Comercial em PDF</span>
+                    <span className="font-display font-semibold text-sm">
+                      Proposta Comercial em PDF
+                    </span>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     {existingProposal
@@ -1958,10 +2010,14 @@ function EventoInterna() {
                         // Try to find default template for this event type
                         const evType = evento?.event_type?.toLowerCase() || "";
                         const mappedType: "casamento" | "aniversario" | "comemoracao" =
-                          evType.includes("casamento") ? "casamento" :
-                          evType.includes("aniversario") || evType.includes("aniversário") ? "aniversario" : "comemoracao";
+                          evType.includes("casamento")
+                            ? "casamento"
+                            : evType.includes("aniversario") || evType.includes("aniversário")
+                              ? "aniversario"
+                              : "comemoracao";
                         try {
-                          const tmpl = await proposalTemplatesService.getDefaultTemplate(mappedType);
+                          const tmpl =
+                            await proposalTemplatesService.getDefaultTemplate(mappedType);
                           setProposalTemplate(tmpl);
                         } catch {
                           setProposalTemplate(null);
@@ -2126,7 +2182,10 @@ function EventoInterna() {
                           value={formatBrazilianDocument(realClientData.cpf_cnpj)}
                         />
                         <DataField label="E-mail de Contato" value={realClientData.email} />
-                        <DataField label="Local / Endereço do Evento" value={realClientData.address} />
+                        <DataField
+                          label="Local / Endereço do Evento"
+                          value={realClientData.address}
+                        />
 
                         {realClientData.notes && (
                           <div className="md:col-span-2 mt-2 pt-4 border-t border-primary/10">
@@ -2192,7 +2251,12 @@ function EventoInterna() {
                             <CheckCircle2 className="h-5 w-5" />
                           </div>
                           <div className="text-xs text-muted-foreground leading-relaxed">
-                            <span className="font-bold text-foreground font-display">MODO ESTREITO DE EMISSÃO:</span> O contrato utilizará rigorosamente a estrutura do modelo selecionado, substituindo apenas os placeholders mapeados com os dados atualizados do evento, contratante e orçamento.
+                            <span className="font-bold text-foreground font-display">
+                              MODO ESTREITO DE EMISSÃO:
+                            </span>{" "}
+                            O contrato utilizará rigorosamente a estrutura do modelo selecionado,
+                            substituindo apenas os placeholders mapeados com os dados atualizados do
+                            evento, contratante e orçamento.
                           </div>
                         </div>
 
@@ -2238,8 +2302,18 @@ function EventoInterna() {
                             </PrimaryButton>
                           ) : (
                             <>
-                              <GhostButton onClick={handlePreviewGeneratedContract} className="h-11 px-6 font-bold border-2">VISUALIZAR MINUTA</GhostButton>
-                              <PrimaryButton onClick={handlePreviewGeneratedContract} className="h-11 px-6 font-bold">VER / IMPRIMIR PDF</PrimaryButton>
+                              <GhostButton
+                                onClick={handlePreviewGeneratedContract}
+                                className="h-11 px-6 font-bold border-2"
+                              >
+                                VISUALIZAR MINUTA
+                              </GhostButton>
+                              <PrimaryButton
+                                onClick={handlePreviewGeneratedContract}
+                                className="h-11 px-6 font-bold"
+                              >
+                                VER / IMPRIMIR PDF
+                              </PrimaryButton>
                             </>
                           )}
                         </div>
@@ -2261,23 +2335,27 @@ function EventoInterna() {
                               <FileSignature className="h-6 w-6" />
                             </div>
                             <div>
-                              <h4 className="font-display font-bold text-lg text-foreground">Enviar para Assinatura Eletrônica (ZapSign)</h4>
+                              <h4 className="font-display font-bold text-lg text-foreground">
+                                Enviar para Assinatura Eletrônica
+                              </h4>
                               <p className="text-xs text-muted-foreground max-w-md mx-auto mt-1">
-                                O contrato será convertido em PDF imutável e enviado via API ZapSign para o contratante (<b>{realClientData?.email || "sem e-mail"}</b>) e sócio representante.
+                                O contrato será convertido em PDF imutável e enviado via API para o
+                                contratante (<b>{realClientData?.email || "sem e-mail"}</b>) e sócio
+                                representante.
                               </p>
                             </div>
                             <PrimaryButton
-                              onClick={handleDispatchZapSign}
-                              disabled={isDispatchingZapSign}
+                              onClick={() => handleDispatchSignature()}
+                              disabled={isDispatchingSignature}
                               className="h-12 px-10 font-bold shadow-lg shadow-primary/20"
                             >
-                              {isDispatchingZapSign ? (
+                              {isDispatchingSignature ? (
                                 <>
                                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                                   GERANDO PDF & ENVIANDO...
                                 </>
                               ) : (
-                                "ENVIAR PARA ASSINATURA (ZAPSIGN)"
+                                "ENVIAR PARA ASSINATURA"
                               )}
                             </PrimaryButton>
                           </div>
@@ -2290,10 +2368,21 @@ function EventoInterna() {
                             <div className="p-4 bg-surface border border-border rounded-2xl flex flex-wrap justify-between items-center gap-3">
                               <div className="space-y-1">
                                 <div className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
-                                  <Sparkles className="h-4 w-4" /> Provedor Oficial: <b>ZapSign</b>
+                                  <Sparkles className="h-4 w-4" /> Provedor Ativo:{" "}
+                                  <b>
+                                    {realContract.provider === "zapsign"
+                                      ? "ZapSign (Legado)"
+                                      : "Assinafy"}
+                                  </b>
                                 </div>
                                 <div className="text-xs text-muted-foreground font-mono">
-                                  ID Documento: <b>{realContract.external_id || zapSignDetails?.externalRequestId || "Aguardando..."}</b>
+                                  ID Documento:{" "}
+                                  <b>
+                                    {realContract.external_id ||
+                                      providerDetails?.externalDocumentId ||
+                                      providerDetails?.externalRequestId ||
+                                      "Aguardando..."}
+                                  </b>
                                 </div>
                               </div>
                               <button
@@ -2305,13 +2394,14 @@ function EventoInterna() {
                               </button>
                             </div>
 
-                            {/* Signatários */}
+                            {/* Signatários (Simplificado para Assinafy ou ZapSign antigo) */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               {/* Cliente */}
                               <div className="p-4 rounded-xl border border-warning/30 bg-warning/5 space-y-2">
                                 <div className="flex items-center justify-between">
                                   <div className="text-xs font-bold text-warning uppercase flex items-center gap-1.5">
-                                    <Clock className="h-4 w-4 animate-pulse" /> Contratante (Cliente)
+                                    <Clock className="h-4 w-4 animate-pulse" /> Contratante
+                                    (Cliente)
                                   </div>
                                   <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-warning/15 text-warning">
                                     Pendente
@@ -2323,20 +2413,32 @@ function EventoInterna() {
                                 <div className="text-[11px] text-muted-foreground truncate">
                                   E-mail: {realClientData?.email || "N/A"}
                                 </div>
-                                {zapSignDetails?.signers?.[0]?.sign_url && (
+                                {((realContract.provider === "assinafy" &&
+                                  realContract.signature_url) ||
+                                  providerDetails?.signers?.[0]?.sign_url) && (
                                   <div className="pt-2 flex items-center gap-2">
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        navigator.clipboard.writeText(zapSignDetails.signers[0].sign_url);
-                                        alert("Link de assinatura do cliente copiado!");
+                                        const url =
+                                          realContract.provider === "assinafy"
+                                            ? realContract.signature_url
+                                            : providerDetails?.signers?.[0]?.sign_url;
+                                        if (url) {
+                                          navigator.clipboard.writeText(url);
+                                          alert("Link de assinatura do cliente copiado!");
+                                        }
                                       }}
                                       className="px-2.5 py-1 bg-surface border border-border rounded-lg text-[11px] font-bold text-primary hover:bg-background flex items-center gap-1"
                                     >
                                       <Copy className="h-3 w-3" /> Copiar Link
                                     </button>
                                     <a
-                                      href={zapSignDetails.signers[0].sign_url}
+                                      href={
+                                        realContract.provider === "assinafy"
+                                          ? realContract.signature_url
+                                          : providerDetails?.signers?.[0]?.sign_url
+                                      }
                                       target="_blank"
                                       rel="noreferrer"
                                       className="px-2.5 py-1 bg-primary text-primary-foreground rounded-lg text-[11px] font-bold hover:bg-primary/90 flex items-center gap-1"
@@ -2358,17 +2460,22 @@ function EventoInterna() {
                                   </span>
                                 </div>
                                 <div className="text-xs font-bold text-foreground truncate">
-                                  {realSigners?.find((s) => s.id === realContract.signer_id)?.name || "Sócio Diretor"}
+                                  {realSigners?.find((s) => s.id === realContract.signer_id)
+                                    ?.name || "Sócio Diretor"}
                                 </div>
                                 <div className="text-[11px] text-muted-foreground truncate">
-                                  E-mail: {realSigners?.find((s) => s.id === realContract.signer_id)?.email || "N/A"}
+                                  E-mail:{" "}
+                                  {realSigners?.find((s) => s.id === realContract.signer_id)
+                                    ?.email || "N/A"}
                                 </div>
                                 {zapSignDetails?.signers?.[1]?.sign_url && (
                                   <div className="pt-2 flex items-center gap-2">
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        navigator.clipboard.writeText(zapSignDetails.signers[1].sign_url);
+                                        navigator.clipboard.writeText(
+                                          zapSignDetails.signers[1].sign_url,
+                                        );
                                         alert("Link de assinatura da empresa copiado!");
                                       }}
                                       className="px-2.5 py-1 bg-background border border-border rounded-lg text-[11px] font-bold text-primary hover:bg-surface flex items-center gap-1"
@@ -2416,11 +2523,15 @@ function EventoInterna() {
                               Prefere assinar fora do sistema?
                             </div>
                             <p className="text-xs text-muted-foreground leading-relaxed">
-                              Se você já tem este contrato impresso e assinado manualmente pelo cliente, faça o upload do arquivo assinado (PDF ou imagem) para concluir a formalização diretamente.
+                              Se você já tem este contrato impresso e assinado manualmente pelo
+                              cliente, faça o upload do arquivo assinado (PDF ou imagem) para
+                              concluir a formalização diretamente.
                             </p>
                             <label className="h-10 px-4 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl flex items-center justify-center gap-2 text-xs font-bold cursor-pointer transition-all w-fit">
                               <Upload className="h-4 w-4" />
-                              {uploadingContract ? "ENVIANDO..." : "FAZER UPLOAD DO CONTRATO ASSINADO"}
+                              {uploadingContract
+                                ? "ENVIANDO..."
+                                : "FAZER UPLOAD DO CONTRATO ASSINADO"}
                               <input
                                 type="file"
                                 accept="application/pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -2474,13 +2585,13 @@ function EventoInterna() {
                             <CheckCircle2 className="h-8 w-8" />
                           </div>
                           <div>
-                            <div className="font-display font-bold text-lg">
-                              Contrato Assinado
-                            </div>
+                            <div className="font-display font-bold text-lg">Contrato Assinado</div>
                             <div className="text-xs text-muted-foreground flex items-center gap-2 mt-1">
                               <Clock className="h-3 w-3" /> Atualizado em{" "}
                               {new Date(
-                                realContract.fully_signed_at || realContract.updated_at || realContract.created_at
+                                realContract.fully_signed_at ||
+                                  realContract.updated_at ||
+                                  realContract.created_at,
                               ).toLocaleString()}
                             </div>
                           </div>
@@ -2529,10 +2640,12 @@ function EventoInterna() {
                             Selecione o Contrato Assinado
                           </h3>
                           <p className="text-sm text-muted-foreground">
-                            Formatos suportados: PDF, JPG, PNG, DOCX. O arquivo será armazenado com segurança no storage do Supabase e o status do evento mudará para "CONFIRMADO".
+                            Formatos suportados: PDF, JPG, PNG, DOCX. O arquivo será armazenado com
+                            segurança no storage do Supabase e o status do evento mudará para
+                            "CONFIRMADO".
                           </p>
                         </div>
-                        
+
                         <label className="h-12 px-8 bg-primary text-white hover:bg-primary/90 rounded-xl flex items-center justify-center gap-2 text-sm font-bold cursor-pointer transition-all shadow-lg shadow-primary/20">
                           <Upload className="h-4 w-4" />
                           {uploadingContract ? "ENVIANDO..." : "SELECIONAR ARQUIVO"}
@@ -2556,9 +2669,14 @@ function EventoInterna() {
                   <SectionCard title="Workflow Jurídico (Manual)" className="sticky top-6">
                     <div className="space-y-6 py-4">
                       <StatusStep done={true} title="Upload de contrato assinado pendente" />
-                      <StatusStep done={!!realContract?.signed_file_url} title="Contrato formalizado" />
+                      <StatusStep
+                        done={!!realContract?.signed_file_url}
+                        title="Contrato formalizado"
+                      />
                       <div className="pt-4 border-t border-border/40 text-[10px] text-muted-foreground leading-relaxed">
-                        Ao realizar o upload manual do contrato assinado, o status do evento é automaticamente alterado para <b>Confirmado</b> e a proposta de orçamento é travada para alterações futuras.
+                        Ao realizar o upload manual do contrato assinado, o status do evento é
+                        automaticamente alterado para <b>Confirmado</b> e a proposta de orçamento é
+                        travada para alterações futuras.
                       </div>
                     </div>
                   </SectionCard>
@@ -3008,18 +3126,31 @@ function EventoInterna() {
       <ContractReviewModal
         isOpen={showContractPreviewModal}
         onClose={() => setShowContractPreviewModal(false)}
-        template={realTemplates.find((t) => t.id === selectedTemplate) || realTemplates.find((t) => t.is_default) || realTemplates[0] || null}
-        signer={realSigners.find((s) => s.id === selectedSigner) || realSigners.find((s) => s.is_active) || null}
+        template={
+          realTemplates.find((t) => t.id === selectedTemplate) ||
+          realTemplates.find((t) => t.is_default) ||
+          realTemplates[0] ||
+          null
+        }
+        signer={
+          realSigners.find((s) => s.id === selectedSigner) ||
+          realSigners.find((s) => s.is_active) ||
+          null
+        }
         eventName={evento.event_name || evento.client_name || "Evento"}
         compiledHtml={compiledContractText}
-        rawTemplateContent={getTemplateContent(realTemplates.find((t) => t.id === selectedTemplate) || realTemplates.find((t) => t.is_default) || realTemplates[0] || null)}
+        rawTemplateContent={getTemplateContent(
+          realTemplates.find((t) => t.id === selectedTemplate) ||
+            realTemplates.find((t) => t.is_default) ||
+            realTemplates[0] ||
+            null,
+        )}
         compiledVariables={compiledVariables}
         onConfirmSend={async (finalCleanHtml) => {
           setShowContractPreviewModal(false);
-          await handleDispatchZapSign(finalCleanHtml);
+          await handleDispatchSignature(finalCleanHtml);
         }}
       />
-
     </>
   );
 }
@@ -3050,47 +3181,58 @@ function ProposalModal({
 }) {
   // Pre-fill with existing data or from current budget
   const evType = evento?.event_type?.toLowerCase() || "";
-  const mappedEventType: "casamento" | "aniversario" | "comemoracao" =
-    evType.includes("casamento") ? "casamento" :
-    evType.includes("aniversario") || evType.includes("aniversário") ? "aniversario" : "comemoracao";
+  const mappedEventType: "casamento" | "aniversario" | "comemoracao" = evType.includes("casamento")
+    ? "casamento"
+    : evType.includes("aniversario") || evType.includes("aniversário")
+      ? "aniversario"
+      : "comemoracao";
 
-  const defaultData: import("@/services/proposal-service").ProposalData = existingProposal?.proposal_data
-    ? (existingProposal.proposal_data as any)
-    : {
-        proposalDate: new Date().toLocaleDateString("pt-BR"),
-        eventDate: draft?.data
-          ? (() => { const [y, m, d] = (draft.data || "").split("-"); return `${d}/${m}/${y}`; })()
-          : "---",
-        eventTime: draft?.horario || "",
-        clientName: draft?.evento_nome || evento?.event_name || draft?.cliente || evento?.client_name || "",
-        eventTypeLabel:
-          mappedEventType === "casamento" ? "Casamento" :
-          mappedEventType === "aniversario" ? "Aniversário" : "Comemoração",
-        selectedDrinks: (draft?.drinks || [])
-          .map((id: string) => allDrinks.find((d: any) => d.id === id)?.nome)
-          .filter(Boolean),
-        includedBeverages: draft?.descricaoBebidas
-          ? draft.descricaoBebidas.split("\n").filter((l: string) => l.trim())
-          : [],
-        guests: draft?.convidados || 0,
-        bartenders: draft?.equipe?.bartender?.qtd || 0,
-        keepers: draft?.equipe?.keeper?.qtd || 0,
-        copeiras: draft?.equipe?.copeira?.qtd || 0,
-        totalDrinkVarieties: (draft?.drinks || []).length,
-        finalInvestment: calc?.valorTotalOrcamento || 0,
-        paymentTerms: draft?.pagamento?.formaPagamento || "A combinar",
-        includedServices: [
-          "Sistema de montagem e desmontagem da estrutura de bar",
-          "Cristalaria premium (taças e copos especiais)",
-          "Gelo e insumos de bar",
-          "Uniforme profissional da equipe Goat Bar",
-          "Harmonização entre drinks e gastronomia do evento",
-          "Direção criativa dos drinks e personalização do cardápio",
-        ],
-        observations: draft?.observacoes || "",
-      };
+  const defaultData: import("@/services/proposal-service").ProposalData =
+    existingProposal?.proposal_data
+      ? (existingProposal.proposal_data as any)
+      : {
+          proposalDate: new Date().toLocaleDateString("pt-BR"),
+          eventDate: draft?.data
+            ? (() => {
+                const [y, m, d] = (draft.data || "").split("-");
+                return `${d}/${m}/${y}`;
+              })()
+            : "---",
+          eventTime: draft?.horario || "",
+          clientName:
+            draft?.evento_nome || evento?.event_name || draft?.cliente || evento?.client_name || "",
+          eventTypeLabel:
+            mappedEventType === "casamento"
+              ? "Casamento"
+              : mappedEventType === "aniversario"
+                ? "Aniversário"
+                : "Comemoração",
+          selectedDrinks: (draft?.drinks || [])
+            .map((id: string) => allDrinks.find((d: any) => d.id === id)?.nome)
+            .filter(Boolean),
+          includedBeverages: draft?.descricaoBebidas
+            ? draft.descricaoBebidas.split("\n").filter((l: string) => l.trim())
+            : [],
+          guests: draft?.convidados || 0,
+          bartenders: draft?.equipe?.bartender?.qtd || 0,
+          keepers: draft?.equipe?.keeper?.qtd || 0,
+          copeiras: draft?.equipe?.copeira?.qtd || 0,
+          totalDrinkVarieties: (draft?.drinks || []).length,
+          finalInvestment: calc?.valorTotalOrcamento || 0,
+          paymentTerms: draft?.pagamento?.formaPagamento || "A combinar",
+          includedServices: [
+            "Sistema de montagem e desmontagem da estrutura de bar",
+            "Cristalaria premium (taças e copos especiais)",
+            "Gelo e insumos de bar",
+            "Uniforme profissional da equipe Goat Bar",
+            "Harmonização entre drinks e gastronomia do evento",
+            "Direção criativa dos drinks e personalização do cardápio",
+          ],
+          observations: draft?.observacoes || "",
+        };
 
-  const [formData, setFormData] = React.useState<import("@/services/proposal-service").ProposalData>(defaultData);
+  const [formData, setFormData] =
+    React.useState<import("@/services/proposal-service").ProposalData>(defaultData);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
   const [generatingPreview, setGeneratingPreview] = React.useState(false);
   const [savingPdf, setSavingPdf] = React.useState(false);
@@ -3122,7 +3264,6 @@ function ProposalModal({
     });
   };
 
-
   const validateProposalData = () => {
     const missing: string[] = [];
     if (!formData.proposalDate?.trim()) missing.push("Data do orçamento");
@@ -3130,7 +3271,8 @@ function ProposalModal({
     if (!formData.clientName?.trim()) missing.push("Nome exibido na capa");
     if (!formData.eventDate?.trim()) missing.push("Data do evento");
     if (!formData.selectedDrinks?.filter((d) => d.trim()).length) missing.push("Lista de drinks");
-    if (!formData.includedBeverages?.filter((b) => b.trim()).length) missing.push("Lista de bebidas");
+    if (!formData.includedBeverages?.filter((b) => b.trim()).length)
+      missing.push("Lista de bebidas");
     if (!formData.guests) missing.push("Número de convidados");
     if (!formData.bartenders && !formData.keepers && !formData.copeiras) missing.push("Equipe");
     if (!formData.finalInvestment) missing.push("Investimento");
@@ -3150,7 +3292,7 @@ function ProposalModal({
       const pdfBytes = await pdfGenerationService.generateProposalPDF(
         template?.file_url || null,
         formData,
-        mappedEventType
+        mappedEventType,
       );
       const blob = new Blob([pdfBytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
@@ -3184,7 +3326,7 @@ function ProposalModal({
       const pdfBytes = await pdfGenerationService.generateProposalPDF(
         template?.file_url || null,
         formData,
-        mappedEventType
+        mappedEventType,
       );
       const pdfUrl = await generatedProposalsService.uploadGeneratedPDF(eventoId, pdfBytes);
       const saved = await generatedProposalsService.saveProposal({
@@ -3235,7 +3377,9 @@ function ProposalModal({
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {/* CAPA */}
           <div className="space-y-3">
-            <div className="text-[11px] font-bold text-primary uppercase tracking-widest">1. Capa da Proposta</div>
+            <div className="text-[11px] font-bold text-primary uppercase tracking-widest">
+              1. Capa da Proposta
+            </div>
             <div>
               <label className="label-eyebrow block mb-1.5">Nome do Cliente / Casal / Evento</label>
               <input
@@ -3281,7 +3425,9 @@ function ProposalModal({
 
           {/* DRINKS */}
           <div className="space-y-3">
-            <div className="text-[11px] font-bold text-primary uppercase tracking-widest">2. Drinks & Experiências</div>
+            <div className="text-[11px] font-bold text-primary uppercase tracking-widest">
+              2. Drinks & Experiências
+            </div>
             <div>
               <label className="label-eyebrow block mb-1.5">Drinks no Cardápio</label>
               <div className="space-y-2">
@@ -3342,7 +3488,9 @@ function ProposalModal({
 
           {/* EQUIPE & VALORES */}
           <div className="space-y-3">
-            <div className="text-[11px] font-bold text-primary uppercase tracking-widest">3. Equipe & Valores</div>
+            <div className="text-[11px] font-bold text-primary uppercase tracking-widest">
+              3. Equipe & Valores
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label-eyebrow block mb-1.5">Convidados</label>
@@ -3413,7 +3561,9 @@ function ProposalModal({
 
           {/* SERVIÇOS & OBSERVAÇÕES */}
           <div className="space-y-3">
-            <div className="text-[11px] font-bold text-primary uppercase tracking-widest">4. Serviços & Observações</div>
+            <div className="text-[11px] font-bold text-primary uppercase tracking-widest">
+              4. Serviços & Observações
+            </div>
             <div>
               <label className="label-eyebrow block mb-1.5">Serviços Incluídos</label>
               <div className="space-y-2">
@@ -3461,11 +3611,7 @@ function ProposalModal({
             disabled={generatingPreview}
             className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl border border-border bg-background hover:bg-muted text-xs font-bold text-foreground transition-all disabled:opacity-50"
           >
-            {generatingPreview ? (
-              <span className="animate-spin">⟳</span>
-            ) : (
-              "⟳"
-            )} Atualizar Prévia
+            {generatingPreview ? <span className="animate-spin">⟳</span> : "⟳"} Atualizar Prévia
           </button>
           <button
             onClick={handleSaveAndDownload}
@@ -3495,9 +3641,13 @@ function ProposalModal({
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground text-sm">
-              <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 text-3xl">📄</div>
+              <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 text-3xl">
+                📄
+              </div>
               <span className="font-medium">
-                {generatingPreview ? "Gerando prévia do PDF..." : "Clique em 'Atualizar Prévia' para ver"}
+                {generatingPreview
+                  ? "Gerando prévia do PDF..."
+                  : "Clique em 'Atualizar Prévia' para ver"}
               </span>
             </div>
           )}
