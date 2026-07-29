@@ -13,6 +13,7 @@ import {
 import { normalizeEditorHtml } from "@/utils/normalize-editor-html";
 import { validateExportHtml } from "@/utils/validate-export-html";
 import { prepareContractExportHtml, ContractExportValidationError } from "@/utils/prepare-contract-export-html";
+import { calculateEndTime, calculateFinalPaymentDate } from "@/lib/date-utils";
 
 
 
@@ -253,9 +254,9 @@ export function replaceContractVariables(
   let result = sanitizeTemplateResiduals(templateBody);
 
   const formatVal = (rawVal: any) => {
-    if (rawVal === undefined || rawVal === null) return "Não informado";
+    if (rawVal === undefined || rawVal === null) return "";
     const str = String(rawVal).trim();
-    if (!str) return "Não informado";
+    if (!str) return "";
     if (/^\s*<(table|div|p|ul|ol|br|span|h[1-6])\b/i.test(str)) {
       return str;
     }
@@ -282,7 +283,14 @@ export function replaceContractVariables(
 
   // 2. Substituição padrão para tags {{chave}} e [CHAVE] eliminando sufixos 'xx'
   Object.keys(variables).forEach((key) => {
-    const val = formatVal(variables[key]);
+    const rawVal = variables[key];
+    const str = rawVal !== undefined && rawVal !== null ? String(rawVal).trim() : "";
+    if (str === "" || str === "Não informado" || str === "A definir") {
+      // Deixa a tag no lugar para a UI identificar a pendência
+      return;
+    }
+
+    const val = formatVal(rawVal);
     const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const curlyRegex = new RegExp(`{{\\s*${escapedKey}\\s*}}(?:xx|x)?`, "gi");
     const bracketRegex = new RegExp(`\\[\\s*${escapedKey.toUpperCase()}\\s*\\](?:xx|x)?`, "gi");
@@ -290,9 +298,8 @@ export function replaceContractVariables(
     result = result.replace(curlyRegex, val).replace(bracketRegex, val);
   });
 
-  // 3. Limpeza final de qualquer placeholder genérico não substituído e sufixos 'xx' residuais
-  result = result.replace(/\{\{\s*[\w.]+\s*\}\}(?:xx|x)?/gi, "Não informado");
-  result = result.replace(/\[\s*[\w._]+\s*\](?:xx|x)?/gi, "Não informado");
+  // 3. (Removido) Limpeza final de placeholders não substituídos, pois agora os deixamos no HTML final.
+
 
   return result;
 }
@@ -558,23 +565,10 @@ export const eventContractsService = {
       : "• Copos Padrão: R$ 15,00 por unidade em caso de quebra/perda";
 
     // 6. Cálculos de Horário e Período do Evento
-    const horaInicioStr = evento.event_time || "19:00";
-    const durationHours = Number(evento.duration_hours) || 6;
-    let horaFimStr = "01:00";
-
-    try {
-      const parts = horaInicioStr.split(":");
-      const startH = parseInt(parts[0], 10) || 19;
-      const startM = parseInt(parts[1], 10) || 0;
-      const totalMinutes = startH * 60 + startM + Math.round(durationHours * 60);
-      const endH = Math.floor(totalMinutes / 60) % 24;
-      const endM = totalMinutes % 60;
-      const formatTwo = (n: number) => String(n).padStart(2, "0");
-      horaFimStr = `${formatTwo(endH)}:${formatTwo(endM)}`;
-    } catch (err) {
-      console.warn("Erro ao calcular horário final do evento:", err);
-    }
-    const periodoEventoStr = `${horaInicioStr} às ${horaFimStr}`;
+    const horaInicioStr = evento.event_time || "";
+    const durationHours = evento.duration_hours != null ? Number(evento.duration_hours) : null;
+    const horaFimStr = calculateEndTime(horaInicioStr, durationHours);
+    const periodoEventoStr = horaInicioStr && horaFimStr ? `${horaInicioStr} às ${horaFimStr}` : "";
 
     // 7. Cálculos Financeiros
     const totalVal = currentBudget?.final_budget_value || evento.current_budget_value || 0;
@@ -584,16 +578,7 @@ export const eventContractsService = {
     const valPerPerson = (currentBudget as any)?.value_per_person || (totalVal > 0 && numGuests > 0 ? totalVal / numGuests : 0);
 
     // 8. Cálculo da Data de Pagamento Final (Data do Evento - 7 dias)
-    let finalPaymentDateStr = "A definir (7 dias antes do evento)";
-    if (evento.date) {
-      try {
-        const evDate = new Date(evento.date + "T00:00:00");
-        evDate.setDate(evDate.getDate() - 7);
-        finalPaymentDateStr = evDate.toLocaleDateString("pt-BR");
-      } catch (err) {
-        console.warn("Erro ao calcular data final de pagamento:", err);
-      }
-    }
+    const finalPaymentDateStr = calculateFinalPaymentDate(evento.date);
 
     // 9. Extração dos Dados Atualizados do Contratante (Vindo do Formulário do Link como Fonte de Verdade)
     const clientNotes = (clientData?.notes && typeof clientData.notes === "object" ? clientData.notes : {}) as any;
@@ -605,23 +590,23 @@ export const eventContractsService = {
       : "";
     const documentWithType = documentValidation.digits
       ? `${getBrazilianDocumentLabel(rawDocument)}: ${formattedDocument}`
-      : "Documento: Não informado";
+      : "";
 
-    const rgClient = clientData?.rg || clientNotes?.rg || "Não informado";
-    const whatsappClient = clientData?.whatsapp || clientData?.phone || evento.phone || "Não informado";
-    const cepClient = clientData?.cep || clientNotes?.cep || "Não informado";
-    const cityClient = clientData?.city || clientNotes?.city || evento.city || "Não informado";
-    const stateClient = clientData?.state || clientNotes?.state || "SP";
+    const rgClient = clientData?.rg || clientNotes?.rg || "";
+    const whatsappClient = clientData?.whatsapp || clientData?.phone || evento.phone || "";
+    const cepClient = clientData?.cep || clientNotes?.cep || "";
+    const cityClient = clientData?.city || clientNotes?.city || evento.city || "";
+    const stateClient = clientData?.state || clientNotes?.state || "";
 
     // Local do Evento Atualizado pelo Formulário
-    const venueName = clientNotes?.venue_name || evento.event_location || "A definir";
-    const venueAddress = clientNotes?.venue_address || clientData?.address || evento.event_location || "A definir";
-    const venueCity = clientNotes?.venue_city || evento.city || "A definir";
-    const venueCep = clientNotes?.venue_cep || "A definir";
+    const venueName = clientNotes?.venue_name || evento.event_location || "";
+    const venueAddress = clientNotes?.venue_address || clientData?.address || evento.event_location || "";
+    const venueCity = clientNotes?.venue_city || evento.city || "";
+    const venueCep = clientNotes?.venue_cep || "";
     const venueComplement = clientNotes?.venue_complement || "";
 
     // 10. Cálculos de Condição, Meio de Pagamento e Cláusula Completa
-    const meioPagamentoStr = currentBudget?.payment_channel || clientNotes?.payment_channel || "PIX";
+    const meioPagamentoStr = currentBudget?.payment_channel || clientNotes?.payment_channel || "";
     const percentualNum = totalVal > 0 ? Math.round((entryVal / totalVal) * 100) : 50;
     const percentualText = `${percentualNum}%`;
     const percentualExtenso = percentualNum === 30 ? "30% (trinta por cento)" :
@@ -652,32 +637,32 @@ export const eventContractsService = {
     // Monta o dicionário completo de variáveis
     const variables: Record<string, string> = {
       // 🥂 Evento
-      "evento.nome": evento.event_name || evento.client_name || "Evento GOAT Bar",
-      "evento.tipo": evento.event_type || "Evento Social",
-      "evento.data": evento.date ? new Date(evento.date + "T00:00:00").toLocaleDateString("pt-BR") : "A definir",
+      "evento.nome": evento.event_name || evento.client_name || "",
+      "evento.tipo": evento.event_type || "",
+      "evento.data": evento.date ? new Date(evento.date + "T12:00:00").toLocaleDateString("pt-BR") : "",
       "evento.hora_inicio": horaInicioStr,
       "evento.hora_fim": horaFimStr,
-      "evento.duracao_horas": `${durationHours} horas`,
+      "evento.duracao_horas": durationHours ? `${durationHours} horas` : "",
       "evento.periodo_evento": periodoEventoStr,
       "evento.local": venueName,
       "evento.endereco_local": venueAddress,
       "evento.cidade": venueCity,
       "evento.cep_local": venueCep,
       "evento.complemento_local": venueComplement,
-      "evento.convidados": String(evento.guests || 0),
-      "evento.valor_por_pessoa": fmt(valPerPerson),
-      "evento.valor_por_pessoa_extenso": numberToWordsBRL(valPerPerson),
+      "evento.convidados": evento.guests ? String(evento.guests) : "",
+      "evento.valor_por_pessoa": valPerPerson > 0 ? fmt(valPerPerson) : "",
+      "evento.valor_por_pessoa_extenso": valPerPerson > 0 ? numberToWordsBRL(valPerPerson) : "",
 
       // 👤 Cliente (Preenchido pelo Contratante no Link - Fonte Principal)
-      "cliente.nome": clientData?.client_name || evento.client_name || "Não informado",
-      "cliente.documento": formattedDocument || "Não informado",
-      "cliente.documento_com_rotulo": documentWithType || "Não informado",
+      "cliente.nome": clientData?.client_name || evento.client_name || "",
+      "cliente.documento": formattedDocument || "",
+      "cliente.documento_com_rotulo": documentWithType || "",
       "cliente.tipo_documento": documentType,
       "cliente.rg": rgClient,
-      "cliente.telefone": clientData?.phone || evento.phone || "Não informado",
+      "cliente.telefone": clientData?.phone || evento.phone || "",
       "cliente.whatsapp": whatsappClient,
-      "cliente.email": clientData?.email || evento.email || "Não informado",
-      "cliente.endereco": clientData?.address || evento.event_location || "Não informado",
+      "cliente.email": clientData?.email || evento.email || "",
+      "cliente.endereco": clientData?.address || evento.event_location || "",
       "cliente.cep": cepClient,
       "cliente.cidade": cityClient,
       "cliente.estado": stateClient,
@@ -702,37 +687,37 @@ export const eventContractsService = {
       "empresa.nome": "GOAT BAR EVENTOS LTDA",
       "empresa.cnpj": "42.123.456/0001-99",
       "empresa.endereco": "Av. Brigadeiro Faria Lima, 2000 - São Paulo/SP",
-      "empresa.responsavel": signer?.name || "Representante GOAT Bar",
-      "empresa.cpf_responsavel": formatBrazilianDocument(signer?.cpf || ""),
-      "empresa.cargo_responsavel": signer?.role || "Sócio Diretor",
+      "empresa.responsavel": signer?.name || "",
+      "empresa.cpf_responsavel": signer?.cpf ? formatBrazilianDocument(signer.cpf) : "",
+      "empresa.cargo_responsavel": signer?.role || "",
       "empresa.endereco_responsavel": signer?.address || "",
 
       // 🍹 Cardápio & Utensílios
-      "cardapio.drinks": drinksArray.length > 0 ? drinksArray.join(", ") : "Conforme cardápio selecionado",
-      "cardapio.descricao": descricaoBebidas || "Serviço de bar de coquetéis artesanais",
+      "cardapio.drinks": drinksArray.length > 0 ? drinksArray.join(", ") : "",
+      "cardapio.descricao": descricaoBebidas || "",
       "cardapio.tabela_reposicao": tabelaReposicaoLines,
 
       // 🗓️ Geral
       "geral.data_emissao": new Date().toLocaleDateString("pt-BR"),
 
       // Aliases em Underscore
-      cliente_nome: clientData?.client_name || evento.client_name || "Não informado",
-      cliente_documento: formattedDocument || "Não informado",
-      cliente_documento_com_rotulo: documentWithType || "Não informado",
+      cliente_nome: clientData?.client_name || evento.client_name || "",
+      cliente_documento: formattedDocument || "",
+      cliente_documento_com_rotulo: documentWithType || "",
       cliente_tipo_documento: documentType,
-      cliente_endereco: clientData?.address || evento.event_location || "Não informado",
-      cliente_email: clientData?.email || evento.email || "Não informado",
-      cliente_telefone: clientData?.phone || evento.phone || "Não informado",
-      evento_nome: evento.event_name || evento.client_name || "Evento GOAT Bar",
-      evento_tipo: evento.event_type || "Evento Social",
-      evento_data: evento.date ? new Date(evento.date + "T00:00:00").toLocaleDateString("pt-BR") : "A definir",
+      cliente_endereco: clientData?.address || evento.event_location || "",
+      cliente_email: clientData?.email || evento.email || "",
+      cliente_telefone: clientData?.phone || evento.phone || "",
+      evento_nome: evento.event_name || evento.client_name || "",
+      evento_tipo: evento.event_type || "",
+      evento_data: evento.date ? new Date(evento.date + "T12:00:00").toLocaleDateString("pt-BR") : "",
       evento_hora_inicio: horaInicioStr,
       evento_hora_fim: horaFimStr,
       evento_periodo_evento: periodoEventoStr,
       evento_local: venueName,
       evento_cidade: venueCity,
-      evento_convidados: String(evento.guests || 0),
-      evento_valor_por_pessoa: fmt(valPerPerson),
+      evento_convidados: evento.guests ? String(evento.guests) : "",
+      evento_valor_por_pessoa: valPerPerson > 0 ? fmt(valPerPerson) : "",
       evento_valor_total: fmt(totalVal),
       financeiro_valor_total: fmt(totalVal),
       financeiro_valor_entrada: fmt(entryVal),
@@ -741,12 +726,12 @@ export const eventContractsService = {
       financeiro_forma_pagamento: formaPagamentoDesc,
       evento_forma_pagamento: paymentMethodText,
       forma_pagamento: paymentMethodText,
-      drinks_lista: drinksArray.length > 0 ? drinksArray.join(", ") : "Conforme cardápio selecionado",
-      bebidas_descricao: descricaoBebidas || "Serviço de bar de coquetéis artesanais",
+      drinks_lista: drinksArray.length > 0 ? drinksArray.join(", ") : "",
+      bebidas_descricao: descricaoBebidas || "",
       tabela_reposicao: tabelaReposicaoLines,
-      socio_nome: signer?.name || "Representante GOAT Bar",
+      socio_nome: signer?.name || "",
       socio_cpf: signer?.cpf || "",
-      socio_cargo: signer?.role || "Sócio Diretor",
+      socio_cargo: signer?.role || "",
       socio_endereco: signer?.address || "",
       data_emissao: new Date().toLocaleDateString("pt-BR"),
     };

@@ -108,6 +108,7 @@ export interface Evento {
   email: string;
   data: string;
   horario: string;
+  duracao?: number | "";
   local: string;
   cidade: string;
   tipo: string;

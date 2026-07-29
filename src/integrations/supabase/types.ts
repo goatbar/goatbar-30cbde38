@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -636,6 +636,7 @@ export type Database = {
           current_profit_value: number | null
           date: string
           drinks: string[] | null
+          duration_hours: number | null
           email: string | null
           event_location: string | null
           event_time: string | null
@@ -660,6 +661,7 @@ export type Database = {
           current_profit_value?: number | null
           date: string
           drinks?: string[] | null
+          duration_hours?: number | null
           email?: string | null
           event_location?: string | null
           event_time?: string | null
@@ -684,6 +686,7 @@ export type Database = {
           current_profit_value?: number | null
           date?: string
           drinks?: string[] | null
+          duration_hours?: number | null
           email?: string | null
           event_location?: string | null
           event_time?: string | null

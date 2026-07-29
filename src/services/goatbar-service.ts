@@ -21,7 +21,7 @@ type Event = {
   total_cost: number;
   date: string;
   guests?: number;
-  duration?: number;
+  duration_hours?: number;
   total_profit?: number;
 };
 

@@ -290,6 +290,7 @@ function EventoInterna() {
     email: ev.email || "",
     data: ev.date,
     horario: ev.event_time || "",
+    duracao: ev.duration_hours || "",
     local: ev.event_location || "",
     cidade: ev.city || "",
     tipo: ev.event_type,
@@ -336,6 +337,7 @@ function EventoInterna() {
     email: ev.email || "",
     data: ev.date,
     horario: ev.event_time || "",
+    duracao: ev.duration_hours || "",
     local: ev.event_location || "",
     cidade: ev.city || "",
     tipo: ev.event_type,
@@ -435,6 +437,7 @@ function EventoInterna() {
         email: draft.email,
         date: draft.data,
         event_time: draft.horario,
+        duration_hours: draft.duracao ? Number(draft.duracao) : null,
         event_location: draft.local,
         city: draft.cidade,
         event_type: draft.tipo,
@@ -1004,6 +1007,14 @@ function EventoInterna() {
                 value={draft.horario}
                 isEditing={isEditingHeader}
                 onChange={(v) => setDraft((p) => (p ? { ...p, horario: v } : null))}
+                icon={<Clock className="h-3 w-3 text-primary/60" />}
+              />
+              <HeaderField
+                label="Duração (horas)"
+                value={draft.duracao ? String(draft.duracao) : ""}
+                isEditing={isEditingHeader}
+                type="number"
+                onChange={(v) => setDraft((p) => (p ? { ...p, duracao: v ? Number(v) : "" } : null))}
                 icon={<Clock className="h-3 w-3 text-primary/60" />}
               />
               <HeaderField
