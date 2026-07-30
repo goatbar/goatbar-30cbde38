@@ -67,6 +67,26 @@ export interface EventContract {
   fully_signed_at?: string;
 }
 
+/**
+ * Recupera o horário informado pelo cliente no formulário do contrato.
+ *
+ * Os envios atuais guardam o resumo do formulário em texto (uma informação
+ * por linha), enquanto registros mais novos/legados também podem usar JSON.
+ */
+export function extractClientEventTime(notes: unknown): string {
+  if (typeof notes === "string") {
+    return notes.match(/^Horário\s*:\s*(.+?)\s*$/imu)?.[1]?.trim() || "";
+  }
+
+  if (notes && typeof notes === "object" && !Array.isArray(notes)) {
+    const values = notes as Record<string, unknown>;
+    const eventTime = values.event_time ?? values.horario ?? values.eventTime;
+    return typeof eventTime === "string" ? eventTime.trim() : "";
+  }
+
+  return "";
+}
+
 // --- 1. Templates Service ---
 export const contractTemplatesService = {
   async listTemplates() {
@@ -653,8 +673,9 @@ export const eventContractsService = {
             .join("\n")
         : "• Copos Padrão: R$ 15,00 por unidade em caso de quebra/perda";
 
-    // 6. Cálculos de Horário e Período do Evento
-    const horaInicioStr = evento.event_time || "";
+    // 6. Cálculos de Horário e Período do Evento. O horário confirmado
+    // pelo cliente no formulário é a fonte principal para o contrato.
+    const horaInicioStr = extractClientEventTime(clientData?.notes) || evento.event_time || "";
     const durationHours = evento.duration_hours != null ? Number(evento.duration_hours) : null;
     const horaFimStr = calculateEndTime(horaInicioStr, durationHours);
     const periodoEventoStr = horaInicioStr && horaFimStr ? `${horaInicioStr} às ${horaFimStr}` : "";
