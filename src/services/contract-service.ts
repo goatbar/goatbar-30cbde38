@@ -416,6 +416,7 @@ export const eventContractsService = {
       `,
       )
       .eq("event_id", eventId)
+      .order("created_at", { ascending: false })
       .limit(1);
     if (error) throw error;
     return data && data.length > 0 ? data[0] : null;
@@ -428,14 +429,34 @@ export const eventContractsService = {
         event_id: eventId,
         template_id: templateId,
         signer_id: signerId,
-        status: "draft",
-        version: 1,
-        generated_at: new Date().toISOString(),
       })
       .select()
       .single();
     if (error) throw error;
-    return data;
+    return data as EventContract;
+  },
+
+  async updateDraftContract(contractId: string, templateId: string, signerId: string) {
+    const { data: current } = await supabase.from("event_contracts").select("version").eq("id", contractId).single();
+    const nextVersion = current ? (current.version || 1) + 1 : 2;
+
+    const { data, error } = await supabase
+      .from("event_contracts")
+      .update({
+        template_id: templateId,
+        signer_id: signerId,
+        version: nextVersion,
+        generated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", contractId)
+      .eq("status", "draft")
+      .is("signed_file_url", null)
+      .select()
+      .single();
+      
+    if (error) throw error;
+    return data as EventContract;
   },
 
   async updateContractStatus(contractId: string, status: string) {
@@ -451,6 +472,18 @@ export const eventContractsService = {
       .single();
     if (error) throw error;
     return data;
+  },
+
+  async deleteContract(contractId: string) {
+    const { error, count } = await supabase
+      .from("event_contracts")
+      .delete()
+      .eq("id", contractId)
+      .eq("status", "draft")
+      .is("signed_file_url", null)
+      .is("signature_certificate_url", null);
+      
+    if (error) throw error;
   },
 
   async uploadSignedContractFile(eventId: string, file: File): Promise<string> {

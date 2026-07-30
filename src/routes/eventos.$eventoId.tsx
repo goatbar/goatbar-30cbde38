@@ -43,6 +43,7 @@ import {
   renderContractTemplate,
   getTemplateContent,
   getTemplateMapping,
+  validateContractPlaceholders,
   DEFAULT_CONTRACT_BODY,
   type ContractTemplate,
 } from "@/services/contract-service";
@@ -163,6 +164,7 @@ function EventoInterna() {
   const [selectedSigner, setSelectedSigner] = useState("");
   const [contractMode, setContractMode] = useState<"system" | "upload">("system");
   const [uploadingContract, setUploadingContract] = useState(false);
+  const [isProcessingContract, setIsProcessingContract] = useState(false);
 
   // --- Contract Viewer States ---
   const [showContractPreviewModal, setShowContractPreviewModal] = useState(false);
@@ -704,6 +706,15 @@ function EventoInterna() {
         }
 
         const templateContent = getTemplateContent(templateToUse);
+        const { unfilled } = validateContractPlaceholders(templateContent, vars);
+
+        if (unfilled.length > 0) {
+          const pendings = unfilled.map(u => u.token).join("\n- ");
+          alert(`Não é possível enviar o contrato para assinatura, pois faltam informações nos seguintes campos:\n\n- ${pendings}\n\nPor favor, preencha as informações pendentes (atualize o evento) ou regenere o contrato.`);
+          setIsDispatchingSignature(false);
+          return;
+        }
+
         const mapping = getTemplateMapping(templateToUse);
         compiledHtml = renderContractTemplate(templateContent, vars, mapping);
       }
@@ -780,6 +791,94 @@ function EventoInterna() {
       handlePreviewGeneratedContract();
     } catch (e: any) {
       alert(`Erro ao gerar contrato: ${e.message || "Erro desconhecido"}`);
+    }
+  };
+
+  const handleDeleteContract = async () => {
+    if (isProcessingContract) return;
+    if (!realContract || realContract.status !== "draft") return;
+    if (realContract.external_id || realContract.signature_certificate_url || realContract.generated_file_url || providerDetails?.externalDocumentId) {
+       alert("Não é possível excluir um contrato que já foi enviado ou possui integrações ativas com o provedor de assinatura.");
+       return;
+    }
+    
+    if (!confirm("Tem certeza que deseja excluir o contrato atual? Esta ação não pode ser desfeita.")) return;
+    
+    setIsProcessingContract(true);
+    try {
+      await eventContractsService.deleteContract(realContract.id);
+      
+      await eventBudgetService.addBudgetHistory({
+        event_id: eventoId,
+        action: "Contrato em rascunho excluído",
+        previous_final_value: 0,
+        new_final_value: 0,
+        changed_fields: ["Contrato"],
+      });
+
+      alert("Contrato excluído com sucesso.");
+      await loadContractModule();
+      setShowContractPreviewModal(false);
+    } catch (e: any) {
+      alert(`Erro ao excluir contrato: ${e.message}`);
+    } finally {
+      setIsProcessingContract(false);
+    }
+  };
+
+  const handleRegenerateContract = async () => {
+    if (isProcessingContract) return;
+    if (!draft || !realContract || realContract.status !== "draft") return;
+    
+    if (realContract.external_id || realContract.signature_certificate_url || realContract.generated_file_url || providerDetails?.externalDocumentId) {
+       alert("Não é possível regenerar um contrato que já foi enviado ou possui integrações ativas com o provedor de assinatura.");
+       return;
+    }
+
+    const tId = selectedTemplate || realContract.template_id || realTemplates.find((t) => t.is_default)?.id || realTemplates[0]?.id;
+    const sId = selectedSigner || realContract.signer_id || realSigners.find((s) => s.is_active)?.id || realSigners[0]?.id;
+
+    if (!tId || !sId) {
+      alert("Selecione um modelo de contrato e um sócio assinante.");
+      return;
+    }
+
+    if (!confirm("A regeneração substituirá o contrato atual pelos dados e serviços atualizados do evento. Deseja prosseguir?")) {
+      return;
+    }
+
+    setIsProcessingContract(true);
+    try {
+      const vars = await eventContractsService.compileContractVariables(eventoId, sId);
+      const templateToUse = realTemplates.find((t) => t.id === tId);
+      if (!templateToUse) throw new Error("Template não encontrado.");
+
+      const templateContent = getTemplateContent(templateToUse);
+      const { unfilled } = validateContractPlaceholders(templateContent, vars);
+
+      if (unfilled.length > 0) {
+        const pendings = unfilled.map(u => u.token).join("\n- ");
+        alert(`Não é possível regenerar o contrato pois ainda faltam informações para os seguintes campos:\n\n- ${pendings}\n\nPor favor, preencha as informações pendentes antes de prosseguir.`);
+        return;
+      }
+
+      await eventContractsService.updateDraftContract(realContract.id, tId, sId);
+
+      await eventBudgetService.addBudgetHistory({
+        event_id: eventoId,
+        action: "Contrato regenerado a partir de dados atualizados",
+        previous_final_value: 0,
+        new_final_value: 0,
+        changed_fields: ["Contrato"],
+      });
+
+      alert("Contrato regenerado com sucesso!");
+      await loadContractModule();
+      setShowContractPreviewModal(false);
+    } catch (e: any) {
+      alert(`Erro ao regenerar contrato: ${e.message || "Erro desconhecido"}`);
+    } finally {
+      setIsProcessingContract(false);
     }
   };
 
@@ -2314,6 +2413,26 @@ function EventoInterna() {
                               >
                                 VER / IMPRIMIR PDF
                               </PrimaryButton>
+                              {realContract.status === "draft" && (
+                                <>
+                                  <GhostButton
+                                    onClick={handleRegenerateContract}
+                                    className="h-11 px-4 font-bold border-2 border-warning text-warning hover:bg-warning/10"
+                                    disabled={isProcessingContract}
+                                    title="Reconstruir contrato com base nos dados atuais"
+                                  >
+                                    REGENERAR
+                                  </GhostButton>
+                                  <GhostButton
+                                    onClick={handleDeleteContract}
+                                    className="h-11 px-4 font-bold border-2 border-destructive text-destructive hover:bg-destructive/10"
+                                    disabled={isProcessingContract}
+                                    title="Excluir contrato em rascunho"
+                                  >
+                                    EXCLUIR
+                                  </GhostButton>
+                                </>
+                              )}
                             </>
                           )}
                         </div>

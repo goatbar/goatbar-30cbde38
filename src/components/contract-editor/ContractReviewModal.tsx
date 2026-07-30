@@ -32,6 +32,7 @@ interface ContractReviewModalProps {
   rawTemplateContent: string;
   compiledVariables: Record<string, any>;
   onConfirmSend: (finalCleanHtml?: string) => void;
+  onRegenerateContract?: () => void;
 }
 
 export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
@@ -44,6 +45,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
   rawTemplateContent,
   compiledVariables,
   onConfirmSend,
+  onRegenerateContract,
 }) => {
   // Estado CANÔNICO ÚNICO do HTML na revisão
   const [reviewHtml, setReviewHtml] = useState(compiledHtml);
@@ -230,6 +232,15 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
                       </li>
                     ))}
                   </ul>
+                  {onRegenerateContract && (
+                    <button
+                      type="button"
+                      onClick={onRegenerateContract}
+                      className="w-full mt-2 py-1.5 bg-warning text-warning-foreground rounded-lg text-xs font-bold hover:bg-warning/90 transition-colors"
+                    >
+                      Regenerar Contrato
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="p-3 bg-success/10 border border-success/30 rounded-xl flex items-center gap-2 text-xs font-bold text-success">
@@ -336,12 +347,17 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
 
             <button
               type="button"
+              disabled={unfilled.length > 0}
               onClick={() => {
                 const exportHtml = prepareContractExportHtml(reviewHtml);
                 onConfirmSend(exportHtml);
                 onClose();
               }}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs px-5 py-2.5 rounded-xl shadow-md shadow-primary/20 transition-all flex items-center gap-2"
+              className={`text-xs px-5 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-2 ${
+                unfilled.length > 0 
+                  ? "bg-muted text-muted-foreground cursor-not-allowed" 
+                  : "bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-primary/20"
+              }`}
             >
               <FileCheck2 className="h-4 w-4" />
               <span>Aprovar e Enviar para Assinatura</span>
