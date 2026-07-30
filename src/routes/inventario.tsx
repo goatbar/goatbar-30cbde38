@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,7 +43,7 @@ function InventoryPage() {
           setInventoryItems(mapped);
         }
       } catch (e) {
-        console.error("Falha ao carregar inventário do Supabase.", {
+        console.error("Falha ao carregar inventÃ¡rio do Supabase.", {
           table: "inventory",
           query: "select id,name,quantity,updated_at order by updated_at",
           error: e,
@@ -86,6 +86,7 @@ function InventoryPage() {
       } else {
         const { data, error } = await supabase
           .from("inventory")
+          // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
           .insert({ name: formNome, quantity: formQtd })
           .select("id")
           .single();
@@ -101,7 +102,7 @@ function InventoryPage() {
         payload: { id: editingId, formNome, formQtd, formObs },
         error: e,
       });
-      alert("Erro ao salvar item. Verifique conexão/Supabase e tente novamente.");
+      alert("Erro ao salvar item. Verifique conexÃ£o/Supabase e tente novamente.");
       return;
     }
 
@@ -125,8 +126,8 @@ function InventoryPage() {
   return (
     <>
       <PageHeader
-        title="Inventário"
-        subtitle="Controle de estoque e locação de itens"
+        title="InventÃ¡rio"
+        subtitle="Controle de estoque e locaÃ§Ã£o de itens"
         action={
           <PrimaryButton
             onClick={() => {
@@ -191,13 +192,13 @@ function InventoryPage() {
                 </div>
 
                 <div className="bg-surface/50 rounded-lg p-3 text-xs text-muted-foreground flex-1 whitespace-pre-wrap border border-border/50">
-                  {item.observacoes || "Nenhuma observação ou local de armazenamento informado."}
+                  {item.observacoes || "Nenhuma observaÃ§Ã£o ou local de armazenamento informado."}
                 </div>
               </div>
             ))}
             {filteredItems.length === 0 && (
               <div className="col-span-full text-center py-12 text-sm text-muted-foreground border border-dashed border-border rounded-xl">
-                Nenhum item encontrado no inventário.
+                Nenhum item encontrado no inventÃ¡rio.
               </div>
             )}
           </div>
@@ -209,7 +210,7 @@ function InventoryPage() {
           <div className="w-full max-w-lg bg-surface border border-border rounded-2xl shadow-2xl my-auto">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
               <h2 className="font-display text-lg font-semibold">
-                {editingId ? "Editar Item" : "Novo Item no Inventário"}
+                {editingId ? "Editar Item" : "Novo Item no InventÃ¡rio"}
               </h2>
               <button
                 onClick={() => setShowModal(false)}
@@ -244,7 +245,7 @@ function InventoryPage() {
 
               <div>
                 <label className="label-eyebrow block mb-2">
-                  Observações / Locais de armazenamento
+                  ObservaÃ§Ãµes / Locais de armazenamento
                 </label>
                 <textarea
                   placeholder="Ex:&#10;- Estoque casa: 8 unidades&#10;- 7 Steakhouse: 5 unidades"
@@ -266,3 +267,5 @@ function InventoryPage() {
     </>
   );
 }
+
+

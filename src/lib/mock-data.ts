@@ -1,4 +1,4 @@
-// Mock data store — realistic fictional data for the Goat Bar Management System.
+﻿// Mock data store â€” realistic fictional data for the Goat Bar Management System.
 // Designed to be replaced by Lovable Cloud queries in the future.
 
 export type Unidade = "Eventos" | "7Steakhouse" | "Goat Botequim";
@@ -118,7 +118,7 @@ export interface Evento {
   status: EventoStatus;
   contratoId?: string;
 
-  // Novos campos de orçamento (Versão Atual)
+  // Novos campos de orÃ§amento (VersÃ£o Atual)
   drinksPorPessoa: number;
   markupAdicionalDrinks: number;
   equipe: {
@@ -266,14 +266,14 @@ export interface TipoEvento {
   equipePor50: number; // pessoas de equipe a cada 50 convidados
 }
 
-// ─── Drinks ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ Drinks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const drinks: Drink[] = [
   {
     id: "caipirinha",
     nome: "Caipirinha",
-    categoria: "Cachaça",
-    descricao: "Cachaça, limão e açúcar.",
+    categoria: "CachaÃ§a",
+    descricao: "CachaÃ§a, limÃ£o e aÃ§Ãºcar.",
     custoUnitario: 2.37,
     insumos: [],
     modalityConfig: {
@@ -286,13 +286,13 @@ export const drinks: Drink[] = [
   },
   {
     id: "caipivodka-limao",
-    nome: "Caipivodka Limão",
+    nome: "Caipivodka LimÃ£o",
     categoria: "Vodka",
-    descricao: "Vodka, limão e açúcar.",
+    descricao: "Vodka, limÃ£o e aÃ§Ãºcar.",
     custoUnitario: 2.2,
     insumos: [
       { nome: "Vodka", custo: 2.0 },
-      { nome: "Limão", custo: 0.2 },
+      { nome: "LimÃ£o", custo: 0.2 },
     ],
     modalityConfig: {
       evento: { active: true, cost: 2.2 },
@@ -304,13 +304,13 @@ export const drinks: Drink[] = [
   },
   {
     id: "caipi-limao-cravo-mel",
-    nome: "Caipivodka limão cravo e mel",
+    nome: "Caipivodka limÃ£o cravo e mel",
     categoria: "Vodka",
-    descricao: "Vodka, limão cravo e mel.",
+    descricao: "Vodka, limÃ£o cravo e mel.",
     custoUnitario: 2.7,
     insumos: [
       { nome: "Vodka", custo: 2.0 },
-      { nome: "Limão", custo: 0.2 },
+      { nome: "LimÃ£o", custo: 0.2 },
       { nome: "Cravo", custo: 0.1 },
       { nome: "Mel", custo: 0.4 },
     ],
@@ -343,7 +343,7 @@ export const drinks: Drink[] = [
     id: "caipivodka-abacaxi",
     nome: "Caipivodka Abacaxi",
     categoria: "Vodka",
-    descricao: "Vodka, abacaxi e raspas de limão.",
+    descricao: "Vodka, abacaxi e raspas de limÃ£o.",
     custoUnitario: 2.8,
     insumos: [
       { nome: "Vodka", custo: 2.0 },
@@ -360,14 +360,14 @@ export const drinks: Drink[] = [
   },
   {
     id: "caipivodka-maracuja",
-    nome: "Caip Maracujá com baunilha",
+    nome: "Caip MaracujÃ¡ com baunilha",
     categoria: "Vodka",
-    descricao: "Vodka, maracujá e açúcar de baunilha.",
+    descricao: "Vodka, maracujÃ¡ e aÃ§Ãºcar de baunilha.",
     custoUnitario: 3.2,
     insumos: [
       { nome: "Vodka", custo: 2.0 },
-      { nome: "Maracujá", custo: 0.9 },
-      { nome: "Açúcar Baunilha", custo: 0.3 },
+      { nome: "MaracujÃ¡", custo: 0.9 },
+      { nome: "AÃ§Ãºcar Baunilha", custo: 0.3 },
     ],
     modalityConfig: {
       evento: { active: true, cost: 3.2 },
@@ -381,12 +381,12 @@ export const drinks: Drink[] = [
     id: "moscow-mule",
     nome: "Moscow Mule",
     categoria: "Vodka",
-    descricao: "Vodka, limão e sifão de gengibre.",
+    descricao: "Vodka, limÃ£o e sifÃ£o de gengibre.",
     custoUnitario: 3.1,
     insumos: [
       { nome: "Vodka", custo: 2.0 },
-      { nome: "Limão", custo: 0.2 },
-      { nome: "Sifão", custo: 0.9 },
+      { nome: "LimÃ£o", custo: 0.2 },
+      { nome: "SifÃ£o", custo: 0.9 },
     ],
     modalityConfig: {
       evento: { active: true, cost: 3.1 },
@@ -400,12 +400,12 @@ export const drinks: Drink[] = [
     id: "london-mule",
     nome: "London Mule",
     categoria: "Gin",
-    descricao: "Gin, limão e sifão de gengibre.",
+    descricao: "Gin, limÃ£o e sifÃ£o de gengibre.",
     custoUnitario: 5.76,
     insumos: [
       { nome: "Gin", custo: 4.66 },
-      { nome: "Limão", custo: 0.2 },
-      { nome: "Sifão", custo: 0.9 },
+      { nome: "LimÃ£o", custo: 0.2 },
+      { nome: "SifÃ£o", custo: 0.9 },
     ],
     modalityConfig: {
       evento: { active: true, cost: 5.76 },
@@ -419,13 +419,13 @@ export const drinks: Drink[] = [
     id: "mojito",
     nome: "Mojito",
     categoria: "Rum",
-    descricao: "Vodka, limão, hortelã e água com gás.",
+    descricao: "Vodka, limÃ£o, hortelÃ£ e Ã¡gua com gÃ¡s.",
     custoUnitario: 3.0,
     insumos: [
       { nome: "Vodka", custo: 2.0 },
-      { nome: "Limão", custo: 0.2 },
-      { nome: "Hortelã", custo: 0.5 },
-      { nome: "Água com gás", custo: 0.3 },
+      { nome: "LimÃ£o", custo: 0.2 },
+      { nome: "HortelÃ£", custo: 0.5 },
+      { nome: "Ãgua com gÃ¡s", custo: 0.3 },
     ],
     modalityConfig: {
       evento: { active: true, cost: 3.0 },
@@ -437,17 +437,17 @@ export const drinks: Drink[] = [
   },
   {
     id: "aquario",
-    nome: "Aquário",
+    nome: "AquÃ¡rio",
     categoria: "Vodka",
-    descricao: "Vodka, limão, curaçao, alecrim e água com gás.",
+    descricao: "Vodka, limÃ£o, curaÃ§ao, alecrim e Ã¡gua com gÃ¡s.",
     custoUnitario: 4.25,
     insumos: [
       { nome: "Vodka", custo: 2.0 },
-      { nome: "Limão", custo: 0.2 },
-      { nome: "Curaçao", custo: 1.0 },
+      { nome: "LimÃ£o", custo: 0.2 },
+      { nome: "CuraÃ§ao", custo: 1.0 },
       { nome: "Alecrim", custo: 0.25 },
-      { nome: "Açúcar", custo: 0.5 },
-      { nome: "Água com gás", custo: 0.3 },
+      { nome: "AÃ§Ãºcar", custo: 0.5 },
+      { nome: "Ãgua com gÃ¡s", custo: 0.3 },
     ],
     modalityConfig: {
       evento: { active: true, cost: 4.25 },
@@ -461,12 +461,12 @@ export const drinks: Drink[] = [
     id: "sex-on-the-beach",
     nome: "Sex on The Beach",
     categoria: "Vodka",
-    descricao: "Vodka, suco de laranja, xarope de pêssego e grenadine.",
+    descricao: "Vodka, suco de laranja, xarope de pÃªssego e grenadine.",
     custoUnitario: 6.62,
     insumos: [
       { nome: "Vodka", custo: 2.0 },
       { nome: "Suco laranja", custo: 0.8 },
-      { nome: "Xarope pêssego", custo: 2.64 },
+      { nome: "Xarope pÃªssego", custo: 2.64 },
       { nome: "Grenadine", custo: 0.88 },
       { nome: "Jujuba", custo: 0.3 },
     ],
@@ -482,12 +482,12 @@ export const drinks: Drink[] = [
     id: "bossa-nova",
     nome: "Bossa Nova",
     categoria: "Vodka",
-    descricao: "Vodka, uva e água de coco.",
+    descricao: "Vodka, uva e Ã¡gua de coco.",
     custoUnitario: 4.0,
     insumos: [
       { nome: "Vodka", custo: 2.0 },
       { nome: "Uva", custo: 1.0 },
-      { nome: "Água de coco", custo: 1.0 },
+      { nome: "Ãgua de coco", custo: 1.0 },
     ],
     modalityConfig: {
       evento: { active: true, cost: 4.0 },
@@ -498,14 +498,14 @@ export const drinks: Drink[] = [
   },
   {
     id: "gin-tonica",
-    nome: "Gin Tônica",
+    nome: "Gin TÃ´nica",
     categoria: "Gin",
-    descricao: "Gin, tônica, limão siciliano e especiarias.",
+    descricao: "Gin, tÃ´nica, limÃ£o siciliano e especiarias.",
     custoUnitario: 6.71,
     insumos: [
       { nome: "Gin", custo: 4.66 },
-      { nome: "Tônica", custo: 1.5 },
-      { nome: "Limão siciliano", custo: 0.3 },
+      { nome: "TÃ´nica", custo: 1.5 },
+      { nome: "LimÃ£o siciliano", custo: 0.3 },
       { nome: "Especiaria", custo: 0.25 },
     ],
     modalityConfig: {
@@ -519,12 +519,12 @@ export const drinks: Drink[] = [
     id: "tom-collins",
     nome: "Tom Collins",
     categoria: "Gin",
-    descricao: "Gin, limão, água com gás e cereja.",
+    descricao: "Gin, limÃ£o, Ã¡gua com gÃ¡s e cereja.",
     custoUnitario: 5.91,
     insumos: [
       { nome: "Gin", custo: 4.66 },
-      { nome: "Limão", custo: 0.2 },
-      { nome: "Água com gás", custo: 0.3 },
+      { nome: "LimÃ£o", custo: 0.2 },
+      { nome: "Ãgua com gÃ¡s", custo: 0.3 },
       { nome: "Cereja", custo: 0.75 },
     ],
     modalityConfig: {
@@ -539,11 +539,11 @@ export const drinks: Drink[] = [
     id: "fitzgerald",
     nome: "Fitzgerald",
     categoria: "Gin",
-    descricao: "Gin, limão, angostura e twist.",
+    descricao: "Gin, limÃ£o, angostura e twist.",
     custoUnitario: 7.23,
     insumos: [
       { nome: "Gin", custo: 4.0 },
-      { nome: "Limão", custo: 0.2 },
+      { nome: "LimÃ£o", custo: 0.2 },
       { nome: "Angostura", custo: 2.83 },
       { nome: "Twist", custo: 0.2 },
     ],
@@ -558,13 +558,13 @@ export const drinks: Drink[] = [
     id: "bramble",
     nome: "Bramble",
     categoria: "Gin",
-    descricao: "Gin, limão e xarope de amora.",
+    descricao: "Gin, limÃ£o e xarope de amora.",
     custoUnitario: 7.06,
     insumos: [
       { nome: "Gin", custo: 4.66 },
-      { nome: "Limão", custo: 0.2 },
+      { nome: "LimÃ£o", custo: 0.2 },
       { nome: "Xarope amora", custo: 1.4 },
-      { nome: "Guarnição", custo: 0.8 },
+      { nome: "GuarniÃ§Ã£o", custo: 0.8 },
     ],
     modalityConfig: {
       evento: { active: true, cost: 7.06 },
@@ -577,13 +577,13 @@ export const drinks: Drink[] = [
     id: "aperol-spritz",
     nome: "Aperol Spritz",
     categoria: "Aperitivos",
-    descricao: "Aperol, champanhe, laranja e água com gás.",
+    descricao: "Aperol, champanhe, laranja e Ã¡gua com gÃ¡s.",
     custoUnitario: 10.5,
     insumos: [
       { nome: "Aperol", custo: 4.0 },
       { nome: "Champanhe", custo: 6.0 },
       { nome: "Laranja", custo: 0.2 },
-      { nome: "Água com gás", custo: 0.3 },
+      { nome: "Ãgua com gÃ¡s", custo: 0.3 },
     ],
     modalityConfig: {
       evento: { active: true, cost: 10.5 },
@@ -594,15 +594,15 @@ export const drinks: Drink[] = [
   },
   {
     id: "cest-la-vie",
-    nome: "C'est Lá Vie",
+    nome: "C'est LÃ¡ Vie",
     categoria: "Gin",
-    descricao: "Xarope, limão, champanhe, água com gás e gelo.",
+    descricao: "Xarope, limÃ£o, champanhe, Ã¡gua com gÃ¡s e gelo.",
     custoUnitario: 9.51,
     insumos: [
       { nome: "Xarope", custo: 2.64 },
-      { nome: "Limão", custo: 0.2 },
+      { nome: "LimÃ£o", custo: 0.2 },
       { nome: "Champanhe", custo: 6.0 },
-      { nome: "Água com gás", custo: 0.3 },
+      { nome: "Ãgua com gÃ¡s", custo: 0.3 },
       { nome: "Gelo", custo: 0.37 },
     ],
     modalityConfig: {
@@ -617,12 +617,12 @@ export const drinks: Drink[] = [
     id: "mint-jullep",
     nome: "Mint Jullep",
     categoria: "Whisky",
-    descricao: "Whisky, limão e hortelã.",
+    descricao: "Whisky, limÃ£o e hortelÃ£.",
     custoUnitario: 5.5,
     insumos: [
       { nome: "Whisky", custo: 5.0 },
-      { nome: "Limão", custo: 0.2 },
-      { nome: "Hortelã", custo: 0.3 },
+      { nome: "LimÃ£o", custo: 0.2 },
+      { nome: "HortelÃ£", custo: 0.3 },
     ],
     modalityConfig: {
       evento: { active: true, cost: 5.5 },
@@ -636,13 +636,13 @@ export const drinks: Drink[] = [
     id: "whisky-sour",
     nome: "Whisky Sour",
     categoria: "Whisky",
-    descricao: "Whisky, limão, proteína e guarnição.",
+    descricao: "Whisky, limÃ£o, proteÃ­na e guarniÃ§Ã£o.",
     custoUnitario: 5.8,
     insumos: [
       { nome: "Whisky", custo: 5.0 },
-      { nome: "Limão", custo: 0.2 },
-      { nome: "Proteína", custo: 0.3 },
-      { nome: "Guarnição", custo: 0.3 },
+      { nome: "LimÃ£o", custo: 0.2 },
+      { nome: "ProteÃ­na", custo: 0.3 },
+      { nome: "GuarniÃ§Ã£o", custo: 0.3 },
     ],
     modalityConfig: {
       evento: { active: true, cost: 5.8 },
@@ -672,12 +672,12 @@ export const drinks: Drink[] = [
   },
   {
     id: "campari-tonica",
-    nome: "Campari Tônica",
+    nome: "Campari TÃ´nica",
     categoria: "Aperitivos",
-    descricao: "Campari, tônica e twist laranja.",
+    descricao: "Campari, tÃ´nica e twist laranja.",
     custoUnitario: 9.7,
     insumos: [
-      { nome: "Tônica", custo: 1.5 },
+      { nome: "TÃ´nica", custo: 1.5 },
       { nome: "Campari", custo: 8.0 },
       { nome: "Twist laranja", custo: 0.2 },
     ],
@@ -710,13 +710,13 @@ export const drinks: Drink[] = [
     id: "stamping",
     nome: "Stamping Passion",
     categoria: "Vodka",
-    descricao: "Vodka, maracujá, limão, açúcar baunilha e tabasco.",
+    descricao: "Vodka, maracujÃ¡, limÃ£o, aÃ§Ãºcar baunilha e tabasco.",
     custoUnitario: 3.9,
     insumos: [
       { nome: "Vodka", custo: 2.0 },
-      { nome: "Maracujá", custo: 0.9 },
-      { nome: "Limão", custo: 0.2 },
-      { nome: "Açúcar baunilha", custo: 0.3 },
+      { nome: "MaracujÃ¡", custo: 0.9 },
+      { nome: "LimÃ£o", custo: 0.2 },
+      { nome: "AÃ§Ãºcar baunilha", custo: 0.3 },
       { nome: "Tabasco", custo: 0.4 },
     ],
     modalityConfig: {
@@ -731,13 +731,13 @@ export const drinks: Drink[] = [
     id: "olho-grego",
     nome: "Olho Grego",
     categoria: "Vodka",
-    descricao: "Vodka, limão, xarope amêndoas, xarope curaçao.",
+    descricao: "Vodka, limÃ£o, xarope amÃªndoas, xarope curaÃ§ao.",
     custoUnitario: 7.0,
     insumos: [
       { nome: "Vodka", custo: 4.0 },
-      { nome: "Limão", custo: 0.2 },
-      { nome: "Xarope amêndoas", custo: 1.4 },
-      { nome: "Xarope curaçao", custo: 1.4 },
+      { nome: "LimÃ£o", custo: 0.2 },
+      { nome: "Xarope amÃªndoas", custo: 1.4 },
+      { nome: "Xarope curaÃ§ao", custo: 1.4 },
     ],
     modalityConfig: {
       evento: { active: true, cost: 7.0 },
@@ -751,12 +751,12 @@ export const drinks: Drink[] = [
     id: "cosmopolitan",
     nome: "Cosmopolitan",
     categoria: "Vodka",
-    descricao: "Vodka, xarope cramberry, limão e cointreau.",
+    descricao: "Vodka, xarope cramberry, limÃ£o e cointreau.",
     custoUnitario: 8.97,
     insumos: [
       { nome: "Vodka", custo: 4.0 },
       { nome: "Xarope Cramberry", custo: 2.1 },
-      { nome: "Limão", custo: 0.2 },
+      { nome: "LimÃ£o", custo: 0.2 },
       { nome: "Cointreau", custo: 2.57 },
     ],
     modalityConfig: {
@@ -789,13 +789,13 @@ export const drinks: Drink[] = [
     id: "expresso-martini",
     nome: "Expresso Martini",
     categoria: "Vodka",
-    descricao: "Vodka, açúcar baunilha, bailays e café.",
+    descricao: "Vodka, aÃ§Ãºcar baunilha, bailays e cafÃ©.",
     custoUnitario: 4.86,
     insumos: [
       { nome: "Vodka", custo: 2.0 },
-      { nome: "Açúcar baunilha", custo: 0.5 },
+      { nome: "AÃ§Ãºcar baunilha", custo: 0.5 },
       { nome: "Bailays", custo: 1.86 },
-      { nome: "Café", custo: 0.5 },
+      { nome: "CafÃ©", custo: 0.5 },
     ],
     modalityConfig: {
       evento: { active: true, cost: 4.86 },
@@ -808,12 +808,12 @@ export const drinks: Drink[] = [
     id: "paloma",
     nome: "Paloma",
     categoria: "Tequila",
-    descricao: "Tequila, xarope grapefruit, limão e grapefruit.",
+    descricao: "Tequila, xarope grapefruit, limÃ£o e grapefruit.",
     custoUnitario: 13.98,
     insumos: [
       { nome: "Tequila", custo: 10.73 },
       { nome: "Xarope grapefruit", custo: 2.8 },
-      { nome: "Limão", custo: 0.2 },
+      { nome: "LimÃ£o", custo: 0.2 },
       { nome: "Grapefruit", custo: 0.25 },
     ],
     modalityConfig: {
@@ -827,12 +827,12 @@ export const drinks: Drink[] = [
   {
     id: "soda-italiana",
     nome: "Soda Italiana",
-    categoria: "Sem Álcool",
-    descricao: "Xarope e água com gás.",
+    categoria: "Sem Ãlcool",
+    descricao: "Xarope e Ã¡gua com gÃ¡s.",
     custoUnitario: 3.34,
     insumos: [
       { nome: "Xarope", custo: 2.64 },
-      { nome: "Água com gás", custo: 0.7 },
+      { nome: "Ãgua com gÃ¡s", custo: 0.7 },
     ],
     modalityConfig: {
       evento: { active: true, cost: 3.34 },
@@ -845,12 +845,12 @@ export const drinks: Drink[] = [
     id: "old-fashioned",
     nome: "Old Fashioned",
     categoria: "Whisky",
-    descricao: "Whisky premium, angostura e açúcar.",
+    descricao: "Whisky premium, angostura e aÃ§Ãºcar.",
     custoUnitario: 24.35,
     insumos: [
       { nome: "Whisky premium", custo: 20.0 },
       { nome: "Angostura", custo: 2.85 },
-      { nome: "Açúcar", custo: 1.5 },
+      { nome: "AÃ§Ãºcar", custo: 1.5 },
     ],
     modalityConfig: {
       evento: { active: false, cost: 0 },
@@ -864,11 +864,11 @@ export const drinks: Drink[] = [
   // --- DOSES BOTEQUIM ---
   {
     id: "dose-cachaca",
-    nome: "Cachaça (Dose)",
+    nome: "CachaÃ§a (Dose)",
     categoria: "Doses",
-    descricao: "Dose de cachaça premium.",
+    descricao: "Dose de cachaÃ§a premium.",
     custoUnitario: 1.5,
-    insumos: [{ nome: "Cachaça", custo: 1.5 }],
+    insumos: [{ nome: "CachaÃ§a", custo: 1.5 }],
     modalityConfig: {
       evento: { active: false, cost: 0 },
       steakhouse: { active: false, cost: 0 },
@@ -942,19 +942,19 @@ export const fichaTecnica = {};
 export const margem = (precoVenda: number, custo: number) =>
   ((precoVenda - custo) / precoVenda) * 100;
 
-// ─── Vendas (90 dias) ─────────────────────────────────────────────────────
+// â”€â”€â”€ Vendas (90 dias) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const vendas: Venda[] = [];
 
-// ─── Sessões Financeiras (Botequim/Steakhouse) ─────────────────────────────
+// â”€â”€â”€ SessÃµes Financeiras (Botequim/Steakhouse) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const financialSessions: FinancialSession[] = [];
 
-// ─── Eventos ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Eventos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const eventos: Evento[] = [];
 
-// ─── Contratos Legado (to be deprecated) ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Contratos Legado (to be deprecated) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const contratos: Contrato[] = [];
 
-// ─── Inventário ────────────────────────────────────────────────────────────
+// â”€â”€â”€ InventÃ¡rio â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const inventoryItems: InventoryItem[] = [
   {
     id: "inv-1",
@@ -971,11 +971,11 @@ export const inventoryItems: InventoryItem[] = [
   },
 ];
 
-// ─── Novos Módulos de Contrato ────────────────────────────────────────────────
+// â”€â”€â”€ Novos MÃ³dulos de Contrato â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const contractTemplates: ContractTemplate[] = [
   {
     id: "tpl1",
-    name: "Contrato Padrão Eventos",
+    name: "Contrato PadrÃ£o Eventos",
     fileUrl: "",
     fileType: "docx",
     isDefault: true,
@@ -987,21 +987,21 @@ export const contractTemplates: ContractTemplate[] = [
 export const contractSigners: ContractSigner[] = [
   {
     id: "sig1",
-    name: "Sócio Administrador",
+    name: "SÃ³cio Administrador",
     cpf: "000.000.000-00",
     email: "admin@goatbar.com.br",
     phone: "11999999999",
-    role: "Sócio Diretor",
+    role: "SÃ³cio Diretor",
     address: "Rua Exemplo, 123",
     isActive: true,
   },
 ];
 
 export const glasswares: Glassware[] = [
-  { id: "g1", name: "Taça Gin", type: "Taça", replacementValue: 45, isActive: true },
+  { id: "g1", name: "TaÃ§a Gin", type: "TaÃ§a", replacementValue: 45, isActive: true },
   { id: "g2", name: "Copo Long Drink", type: "Copo", replacementValue: 25, isActive: true },
   { id: "g3", name: "Copo Baixo", type: "Copo", replacementValue: 30, isActive: true },
-  { id: "g4", name: "Taça Coupe", type: "Taça", replacementValue: 40, isActive: true },
+  { id: "g4", name: "TaÃ§a Coupe", type: "TaÃ§a", replacementValue: 40, isActive: true },
   { id: "g5", name: "Copo Shot", type: "Copo", replacementValue: 15, isActive: true },
 ];
 
@@ -1010,7 +1010,7 @@ export const eventContractClientDatas: EventContractClientData[] = [];
 export const contractHistories: ContractHistory[] = [];
 export const contractSignatureHistories: ContractSignatureHistory[] = [];
 
-// ─── Parâmetros de cálculo ────────────────────────────────────────────────
+// â”€â”€â”€ ParÃ¢metros de cÃ¡lculo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const parametros: ParametroCalculo[] = [
   {
     id: "p1",
@@ -1019,7 +1019,7 @@ export const parametros: ParametroCalculo[] = [
     valor: 15,
     unidade: "%",
     groupo: "Repasse",
-    descricao: "Aplicado sobre receita líquida",
+    descricao: "Aplicado sobre receita lÃ­quida",
   },
   {
     id: "p2",
@@ -1040,7 +1040,7 @@ export const parametros: ParametroCalculo[] = [
   {
     id: "p4",
     chave: "margem_minima",
-    label: "Margem mínima aceitável",
+    label: "Margem mÃ­nima aceitÃ¡vel",
     valor: 35,
     unidade: "%",
     groupo: "Operacional",
@@ -1064,7 +1064,7 @@ export const parametros: ParametroCalculo[] = [
   {
     id: "p7",
     chave: "consumo_medio_pessoa",
-    label: "Consumo médio por convidado",
+    label: "Consumo mÃ©dio por convidado",
     valor: 4.5,
     unidade: "doses",
     groupo: "Consumo",
@@ -1091,7 +1091,8 @@ export const parametros: ParametroCalculo[] = [
     label: "Markup Eventos",
     valor: 3.5,
     unidade: "x",
-    groupo: "Precificação",
+    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+    groupo: "PrecificaÃ§Ã£o",
   },
   {
     id: "p11",
@@ -1099,7 +1100,8 @@ export const parametros: ParametroCalculo[] = [
     label: "Markup 7Steakhouse",
     valor: 3.0,
     unidade: "x",
-    groupo: "Precificação",
+    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+    groupo: "PrecificaÃ§Ã£o",
   },
   {
     id: "p12",
@@ -1107,7 +1109,8 @@ export const parametros: ParametroCalculo[] = [
     label: "Markup Goat Botequim",
     valor: 2.8,
     unidade: "x",
-    groupo: "Precificação",
+    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+    groupo: "PrecificaÃ§Ã£o",
   },
 ];
 
@@ -1130,7 +1133,7 @@ export const tiposEvento: TipoEvento[] = [
   },
   {
     id: "t3",
-    nome: "Aniversário",
+    nome: "AniversÃ¡rio",
     consumoBebidaPessoa: 4.5,
     geloKgPessoa: 1.2,
     insumosPessoa: 4.5,
@@ -1138,7 +1141,7 @@ export const tiposEvento: TipoEvento[] = [
   },
   {
     id: "t4",
-    nome: "Confraternização",
+    nome: "ConfraternizaÃ§Ã£o",
     consumoBebidaPessoa: 4,
     geloKgPessoa: 1.1,
     insumosPessoa: 4,
@@ -1146,7 +1149,7 @@ export const tiposEvento: TipoEvento[] = [
   },
 ];
 
-// ─── Cálculos derivados ───────────────────────────────────────────────────
+// â”€â”€â”€ CÃ¡lculos derivados â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function calcularEvento(evento: Evento, drinksList: Drink[] = drinks) {
   const tipo = tiposEvento.find((t) => t.nome === evento.tipo) || tiposEvento[0];
   const param = (k: string) => parametros.find((p) => p.chave === k)?.valor ?? 0;
@@ -1215,7 +1218,7 @@ export function calcularOrcamentoEvento(evento: Evento, drinksList: Drink[] = dr
   const pacotesGelo = Number(evento.gelo?.pacotesOverride) || Math.ceil((convidados / 100) * 35);
   const valorGelo = pacotesGelo * (Number(evento.gelo?.valorUnitario) || 6);
 
-  // --- LOGÍSTICA ---
+  // --- LOGÃSTICA ---
   const valorGasolina = evento.viagem?.incluir ? Number(evento.viagem.valor) || 0 : 0;
 
   // --- GASTOS DIVERSOS ---
@@ -1251,7 +1254,7 @@ export function calcularOrcamentoEvento(evento: Evento, drinksList: Drink[] = dr
   const valorPendente = valorTotalOrcamento - valorPago;
   const percPendente = 100 - percentualPago;
 
-  let statusPagamento = "Não pago";
+  let statusPagamento = "NÃ£o pago";
   if (percentualPago >= 100) statusPagamento = "Pago integralmente";
   else if (percentualPago > 0) statusPagamento = "Parcialmente pago";
 
@@ -1303,3 +1306,5 @@ export function rankingDrinks() {
   });
   return Array.from(map.values()).sort((a, b) => b.qtd - a.qtd);
 }
+
+

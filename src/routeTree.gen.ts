@@ -1,6 +1,5 @@
-/* eslint-disable */
+﻿/* eslint-disable */
 
-// @ts-nocheck
 
 // noinspection JSUnusedGlobalSymbols
 
@@ -362,3 +361,4 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+

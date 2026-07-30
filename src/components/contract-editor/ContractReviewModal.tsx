@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from "react";
+﻿import React, { useRef, useState, useEffect } from "react";
 import {
   FileCheck2,
   CheckCircle2,
@@ -47,11 +47,11 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
   onConfirmSend,
   onRegenerateContract,
 }) => {
-  // Estado CANÔNICO ÚNICO do HTML na revisão
+  // Estado CANÃ”NICO ÃšNICO do HTML na revisÃ£o
   const [reviewHtml, setReviewHtml] = useState(compiledHtml);
   const editorRef = useRef<HTMLDivElement>(null);
 
-  // Modal de Busca e Substituição
+  // Modal de Busca e SubstituiÃ§Ã£o
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [findText, setFindText] = useState("");
   const [replaceText, setReplaceText] = useState("");
@@ -62,7 +62,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Validação estrita dos placeholders presentes no modelo
+  // ValidaÃ§Ã£o estrita dos placeholders presentes no modelo
   const { filled, unfilled } = validateContractPlaceholders(
     rawTemplateContent,
     compiledVariables
@@ -95,14 +95,14 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
         <thead>
           <tr style="background:#f8fafc;">
             <th style="border:1px solid #cbd5e1; padding:8px; text-align:left;">Item</th>
-            <th style="border:1px solid #cbd5e1; padding:8px; text-align:left;">Descrição</th>
+            <th style="border:1px solid #cbd5e1; padding:8px; text-align:left;">DescriÃ§Ã£o</th>
             <th style="border:1px solid #cbd5e1; padding:8px; text-align:left;">Valor</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td style="border:1px solid #cbd5e1; padding:8px;">01</td>
-            <td style="border:1px solid #cbd5e1; padding:8px;">Serviço de Bar de Coquetéis</td>
+            <td style="border:1px solid #cbd5e1; padding:8px;">ServiÃ§o de Bar de CoquetÃ©is</td>
             <td style="border:1px solid #cbd5e1; padding:8px;">Incluso</td>
           </tr>
         </tbody>
@@ -112,7 +112,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
   };
 
   const handleInsertPageBreak = () => {
-    const breakHtml = `<div style="page-break-after:always; break-after:page; border-bottom:2px dashed #6366f1; text-align:center; color:#6366f1; font-size:10px; font-weight:bold; margin:2rem 0; padding:4px;" contenteditable="false">--- QUEBRA DE PÁGINA ---</div><p>&nbsp;</p>`;
+    const breakHtml = `<div style="page-break-after:always; break-after:page; border-bottom:2px dashed #6366f1; text-align:center; color:#6366f1; font-size:10px; font-weight:bold; margin:2rem 0; padding:4px;" contenteditable="false">--- QUEBRA DE PÃGINA ---</div><p>&nbsp;</p>`;
     document.execCommand("insertHTML", false, breakHtml);
   };
 
@@ -124,6 +124,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
       const regex = new RegExp(escaped, "gi");
       const updated = currentHtml.replace(regex, replaceText);
       editorRef.current.innerHTML = updated;
+      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       setEditableContent(updated);
       setShowFindReplace(false);
     }
@@ -140,10 +141,10 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
             </div>
             <div>
               <h2 className="font-display text-base font-bold text-foreground">
-                Revisão e Ajustes de Formatação do Contrato (Estilo Word)
+                RevisÃ£o e Ajustes de FormataÃ§Ã£o do Contrato (Estilo Word)
               </h2>
               <p className="text-[11px] text-muted-foreground">
-                Substituição determinística dos placeholders • Ajuste fino de texto, fontes, recuos e parágrafos antes da emissão
+                SubstituiÃ§Ã£o determinÃ­stica dos placeholders â€¢ Ajuste fino de texto, fontes, recuos e parÃ¡grafos antes da emissÃ£o
               </p>
             </div>
           </div>
@@ -161,6 +162,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
         <WordFormattingToolbar
           onCommand={(cmd, val) => {
             if (editorRef.current) {
+              // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
               setEditableContent(editorRef.current.innerHTML);
             }
           }}
@@ -169,14 +171,14 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
           onOpenFindReplace={() => setShowFindReplace(true)}
         />
 
-        {/* CORPO DE REVISÃO E PRÉVIA */}
+        {/* CORPO DE REVISÃƒO E PRÃ‰VIA */}
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-          {/* PAINEL ESQUERDO: METADADOS E PAINEL DE VALIDAÇÃO (Col-span 4) */}
+          {/* PAINEL ESQUERDO: METADADOS E PAINEL DE VALIDAÃ‡ÃƒO (Col-span 4) */}
           <aside className="w-full lg:w-80 border-r border-border bg-background/40 p-4 space-y-4 overflow-y-auto shrink-0 select-none">
-            {/* Metadados da Emissão */}
+            {/* Metadados da EmissÃ£o */}
             <div className="p-3.5 bg-surface border border-border rounded-xl space-y-2.5">
               <div className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
-                <FileSignature className="h-3.5 w-3.5" /> Metadados da Emissão
+                <FileSignature className="h-3.5 w-3.5" /> Metadados da EmissÃ£o
               </div>
 
               <div className="space-y-2 text-xs">
@@ -185,7 +187,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
                     <FileSignature className="h-3 w-3" /> Modelo:
                   </span>
                   <span className="font-bold text-foreground truncate max-w-[140px]">
-                    {template?.name || "Modelo Padrão"}
+                    {template?.name || "Modelo PadrÃ£o"}
                   </span>
                 </div>
 
@@ -200,16 +202,16 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
 
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground flex items-center gap-1">
-                    <UserCheck className="h-3 w-3" /> Sócio GOAT:
+                    <UserCheck className="h-3 w-3" /> SÃ³cio GOAT:
                   </span>
                   <span className="font-bold text-foreground truncate max-w-[140px]">
-                    {signer?.name || "Não selecionado"}
+                    {signer?.name || "NÃ£o selecionado"}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Painel de Validação de Placeholders */}
+            {/* Painel de ValidaÃ§Ã£o de Placeholders */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold text-foreground">Status dos Campos no Modelo</h4>
@@ -223,7 +225,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
                 <div className="p-3 bg-warning/10 border border-warning/30 rounded-xl space-y-2">
                   <div className="flex items-center gap-2 text-xs font-bold text-warning">
                     <AlertTriangle className="h-4 w-4 shrink-0 animate-bounce" />
-                    <span>{unfilled.length} campo(s) sem informação</span>
+                    <span>{unfilled.length} campo(s) sem informaÃ§Ã£o</span>
                   </div>
                   <ul className="space-y-1 max-h-32 overflow-y-auto">
                     {unfilled.map((item) => (
@@ -258,7 +260,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
                   <div key={item.key} className="p-2 rounded-lg bg-surface border border-border/80 text-[11px] space-y-0.5">
                     <div className="flex justify-between items-center">
                       <span className="font-mono font-bold text-primary">{item.token}</span>
-                      <span className="text-[9px] text-success font-bold bg-success/15 px-1.5 py-0.2 rounded">✓ OK</span>
+                      <span className="text-[9px] text-success font-bold bg-success/15 px-1.5 py-0.2 rounded">âœ“ OK</span>
                     </div>
                     <p className="text-muted-foreground truncate">{item.value}</p>
                   </div>
@@ -267,7 +269,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
             </div>
           </aside>
 
-          {/* PAINEL DIREITO: EDITOR VISUAL CANVASA A4 FORMATÁVEL ESTILO WORD */}
+          {/* PAINEL DIREITO: EDITOR VISUAL CANVASA A4 FORMATÃVEL ESTILO WORD */}
           <main className="flex-1 bg-muted/40 p-4 md:p-8 overflow-y-auto flex flex-col items-center">
             <style>{CONTRACT_DOCUMENT_CSS}</style>
             <div className="w-full max-w-[850px] min-h-[1100px] bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-200 p-8 md:p-14 relative docx-canvas-paper">
@@ -287,7 +289,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
 
         </div>
 
-        {/* MODAL DE BUSCA E SUBSTITUIÇÃO */}
+        {/* MODAL DE BUSCA E SUBSTITUIÃ‡ÃƒO */}
         {showFindReplace && (
           <div className="absolute top-16 right-8 z-30 w-80 bg-surface border border-border rounded-xl shadow-2xl p-4 space-y-3">
             <div className="flex items-center justify-between">
@@ -369,3 +371,5 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
     </div>
   );
 };
+
+

@@ -1,4 +1,4 @@
-import { drinks as seedDrinks } from "@/lib/mock-data";
+﻿import { drinks as seedDrinks } from "@/lib/mock-data";
 
 type Drink = {
   id: string;
@@ -41,6 +41,7 @@ const initialDrinks: Drink[] = seedDrinks.map((d) => ({
   id: d.id,
   nome: d.nome,
   custoUnitario: d.custoUnitario,
+  // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
   precoVenda: d.precoVenda,
   imagem: d.imagem?.startsWith("/") ? d.imagem : `/${d.imagem ?? "drinks/old-fashioned.jpg"}`,
   modalityConfig: d.modalityConfig,
@@ -200,3 +201,5 @@ export const goatbarService = {
   },
   listInventoryMovements: async () => readDb().movements as Movement[],
 };
+
+

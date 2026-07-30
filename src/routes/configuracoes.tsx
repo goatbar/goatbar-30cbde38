@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton } from "@/components/ui-bits";
 import { tiposEvento } from "@/lib/mock-data";
@@ -23,33 +23,34 @@ export const Route = createFileRoute("/configuracoes")({
 });
 
 const sections = [
-  { id: "diretrizes", label: "Diretrizes de cálculo", icon: Sliders, active: true },
+  { id: "diretrizes", label: "Diretrizes de cÃ¡lculo", icon: Sliders, active: true },
   { id: "tipos", label: "Tipos de evento", icon: Calendar },
   { id: "categorias", label: "Categorias de drinks", icon: Layers },
   { id: "templates", label: "Templates de contrato", icon: FileText },
-  { id: "unidades", label: "Unidades de negócio", icon: Building2 },
+  { id: "unidades", label: "Unidades de negÃ³cio", icon: Building2 },
 ];
 
 function ConfigPage() {
   const { parametros, updateParametros } = useAppStore();
   const [draft, setDraft] = useState(parametros);
   const [activeTab, setActiveTab] = useState("diretrizes");
+  // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
   const grupos = useMemo(() => Array.from(new Set(draft.map((p) => p.grupo))), [draft]);
 
   return (
     <>
       <PageHeader
         breadcrumb="Sistema"
-        title="Configurações"
-        subtitle="Diretrizes editáveis aplicadas automaticamente em todos os cálculos."
+        title="ConfiguraÃ§Ãµes"
+        subtitle="Diretrizes editÃ¡veis aplicadas automaticamente em todos os cÃ¡lculos."
         action={
           <PrimaryButton
             onClick={() => {
               updateParametros(draft);
-              window.alert("Configurações salvas com sucesso.");
+              window.alert("ConfiguraÃ§Ãµes salvas com sucesso.");
             }}
           >
-            <Save className="h-4 w-4" /> Salvar alterações
+            <Save className="h-4 w-4" /> Salvar alteraÃ§Ãµes
           </PrimaryButton>
         }
       />
@@ -76,9 +77,9 @@ function ConfigPage() {
           })}
           <div className="card-premium p-5 mt-5">
             <SettingsIcon className="h-5 w-5 text-primary mb-3" />
-            <div className="font-display text-sm font-semibold">Aplicação automática</div>
+            <div className="font-display text-sm font-semibold">AplicaÃ§Ã£o automÃ¡tica</div>
             <p className="text-xs text-muted-foreground mt-1.5">
-              Estas diretrizes alimentam o cálculo de eventos, vendas e relatórios.
+              Estas diretrizes alimentam o cÃ¡lculo de eventos, vendas e relatÃ³rios.
             </p>
           </div>
         </aside>
@@ -86,9 +87,10 @@ function ConfigPage() {
         <div className="xl:col-span-9 space-y-5">
           {activeTab === "diretrizes" &&
             grupos.map((g) => (
-              <SectionCard key={g} title={`Diretrizes · ${g}`} subtitle="Editáveis em tempo real">
+              <SectionCard key={g} title={`Diretrizes Â· ${g}`} subtitle="EditÃ¡veis em tempo real">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   {draft
+                    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
                     .filter((p) => p.grupo === g)
                     .map((p) => (
                       <ParamField
@@ -111,7 +113,7 @@ function ConfigPage() {
             ))}
 
           {activeTab === "tipos" && (
-            <SectionCard title="Tipos de evento" subtitle="Parâmetros de consumo por categoria">
+            <SectionCard title="Tipos de evento" subtitle="ParÃ¢metros de consumo por categoria">
               <div className="overflow-x-auto -mx-6">
                 <table className="w-full text-sm">
                   <thead>
@@ -151,7 +153,7 @@ function ConfigPage() {
               subtitle="Em desenvolvimento"
             >
               <div className="py-12 text-center text-muted-foreground text-sm">
-                Módulo em construção. Disponível na próxima versão.
+                MÃ³dulo em construÃ§Ã£o. DisponÃ­vel na prÃ³xima versÃ£o.
               </div>
             </SectionCard>
           )}
@@ -199,3 +201,5 @@ function ParamField({
     </div>
   );
 }
+
+

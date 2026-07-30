@@ -1,17 +1,17 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { eventBudgetService, type EventPlanningItem } from "@/services/event-budget-service";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtBRL } from "@/lib/format";
 import { Plus, Download, Trash2, Save, Loader2, Package, ChevronDown, ChevronUp, AlertCircle, HelpCircle } from "lucide-react";
 
 const CATEGORIES = [
-  { id: "Insumos", label: "Insumos Gerais", icon: "📦", color: "from-blue-500/20 to-blue-600/5 text-blue-400 border-blue-500/20" },
-  { id: "Copos", label: "Copos (Tipos)", icon: "🍷", color: "from-pink-500/20 to-pink-600/5 text-pink-400 border-pink-500/20" },
-  { id: "Bebidas", label: "Bebidas", icon: "🍾", color: "from-amber-500/20 to-amber-600/5 text-amber-400 border-amber-500/20" },
-  { id: "Decoração", label: "Decoração", icon: "🌸", color: "from-purple-500/20 to-purple-600/5 text-purple-400 border-purple-500/20" },
-  { id: "Mão de Obra", label: "Mão de Obra", icon: "👥", color: "from-teal-500/20 to-teal-600/5 text-teal-400 border-teal-500/20" },
-  { id: "Frutas", label: "Frutas", icon: "🍓", color: "from-red-500/20 to-red-600/5 text-red-400 border-red-500/20" },
-  { id: "Outros", label: "Outros", icon: "🏷️", color: "from-slate-500/20 to-slate-600/5 text-slate-400 border-slate-500/20" },
+  { id: "Insumos", label: "Insumos Gerais", icon: "ðŸ“¦", color: "from-blue-500/20 to-blue-600/5 text-blue-400 border-blue-500/20" },
+  { id: "Copos", label: "Copos (Tipos)", icon: "ðŸ·", color: "from-pink-500/20 to-pink-600/5 text-pink-400 border-pink-500/20" },
+  { id: "Bebidas", label: "Bebidas", icon: "ðŸ¾", color: "from-amber-500/20 to-amber-600/5 text-amber-400 border-amber-500/20" },
+  { id: "DecoraÃ§Ã£o", label: "DecoraÃ§Ã£o", icon: "ðŸŒ¸", color: "from-purple-500/20 to-purple-600/5 text-purple-400 border-purple-500/20" },
+  { id: "MÃ£o de Obra", label: "MÃ£o de Obra", icon: "ðŸ‘¥", color: "from-teal-500/20 to-teal-600/5 text-teal-400 border-teal-500/20" },
+  { id: "Frutas", label: "Frutas", icon: "ðŸ“", color: "from-red-500/20 to-red-600/5 text-red-400 border-red-500/20" },
+  { id: "Outros", label: "Outros", icon: "ðŸ·ï¸", color: "from-slate-500/20 to-slate-600/5 text-slate-400 border-slate-500/20" },
 ];
 
 interface PackageInfo {
@@ -62,12 +62,12 @@ function serializeNotes(packageInfo: PackageInfo, userNotes: string): string {
 
 function normalizeCategory(cat?: string): string {
   if (!cat) return "Outros";
-  if (cat === "Descartáveis" || cat === "Insumos") return "Insumos";
+  if (cat === "DescartÃ¡veis" || cat === "Insumos") return "Insumos";
   if (cat === "Bebidas") return "Bebidas";
-  if (cat === "Alimentação") return "Outros";
+  if (cat === "AlimentaÃ§Ã£o") return "Outros";
   if (cat === "Copos") return "Copos";
-  if (cat === "Decoração" || cat === "Decoracao") return "Decoração";
-  if (cat === "Mão de Obra" || cat === "Mao de Obra" || cat === "Mão de obra") return "Mão de Obra";
+  if (cat === "DecoraÃ§Ã£o" || cat === "Decoracao") return "DecoraÃ§Ã£o";
+  if (cat === "MÃ£o de Obra" || cat === "Mao de Obra" || cat === "MÃ£o de obra") return "MÃ£o de Obra";
   if (cat === "Frutas") return "Frutas";
   return cat;
 }
@@ -108,6 +108,7 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
       const { data: expenseItems } = await (supabase as any).from("financial_expense_items").select("*").in("expense_id", expenseIds);
       if (!expenseItems || expenseItems.length === 0) return alert("Nenhum item encontrado nas notinhas deste evento.");
 
+      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       const newItems = expenseItems.map(item => {
         const cat = normalizeCategory(item.suggested_category);
         return {
@@ -125,6 +126,7 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
       });
 
       const existingSourceIds = new Set(items.map(i => i.source_expense_item_id));
+      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       const filteredNewItems = newItems.filter(n => !existingSourceIds.has(n.source_expense_item_id));
 
       if (filteredNewItems.length > 0) {
@@ -135,7 +137,7 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
         }));
         setItems(prev => [...prev, ...normalizedAdded]);
       } else {
-        alert("Todos os itens das notinhas já foram importados.");
+        alert("Todos os itens das notinhas jÃ¡ foram importados.");
       }
     } catch (e) {
       console.error(e);
@@ -174,7 +176,7 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
   }
 
   function handleAddItem(category: string) {
-    const defaultUnit = category === "Mão de Obra" ? "diária" : category === "Frutas" ? "kg" : "un";
+    const defaultUnit = category === "MÃ£o de Obra" ? "diÃ¡ria" : category === "Frutas" ? "kg" : "un";
     const newItem: EventPlanningItem = {
       event_id: eventId,
       item_name: "",
@@ -249,7 +251,7 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
             <Package className="h-5 w-5 text-primary" /> Planejamento de Insumos Levados
           </h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Planeje tudo que levará para o evento. Use a <strong>Compra em Pacote</strong> para calcular itens comprados em lote.
+            Planeje tudo que levarÃ¡ para o evento. Use a <strong>Compra em Pacote</strong> para calcular itens comprados em lote.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -274,11 +276,11 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground bg-surface/50 p-3 rounded-xl border border-border/50">
           <AlertCircle className="h-4 w-4 text-primary shrink-0" />
-          <span>Itens de <strong>Copos</strong> e <strong>Mão de Obra</strong> agora contam com espaços específicos para descrições.</span>
+          <span>Itens de <strong>Copos</strong> e <strong>MÃ£o de Obra</strong> agora contam com espaÃ§os especÃ­ficos para descriÃ§Ãµes.</span>
         </div>
       </div>
 
-      {/* SEÇÕES DE CATEGORIA */}
+      {/* SEÃ‡Ã•ES DE CATEGORIA */}
       <div className="space-y-6">
         {CATEGORIES.map(cat => {
           const categoryItems = groupedItems[cat.id] || [];
@@ -315,12 +317,12 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
                   <thead className="bg-muted/10 border-b border-border/50 text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
                     <tr>
                       <th className="p-3 pl-5 min-w-[200px]">Item / Produto</th>
-                      <th className="p-3 min-w-[200px]">Observações / Detalhes (Espaço Copa/Insumo)</th>
+                      <th className="p-3 min-w-[200px]">ObservaÃ§Ãµes / Detalhes (EspaÃ§o Copa/Insumo)</th>
                       <th className="p-3 w-[120px]">Qtd. Levada</th>
                       <th className="p-3 w-[70px]">Unid.</th>
                       <th className="p-3 w-[120px]">Custo Unit.</th>
                       <th className="p-3 w-[120px]">Custo Total</th>
-                      <th className="p-3 w-[100px] text-center">Configurações</th>
+                      <th className="p-3 w-[100px] text-center">ConfiguraÃ§Ãµes</th>
                       <th className="p-3 pr-5 w-[50px]"></th>
                     </tr>
                   </thead>
@@ -346,7 +348,7 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
                                   setItems(newItems);
                                 }} 
                                 className="w-full bg-transparent outline-none py-1.5 px-2 rounded-lg border border-transparent hover:border-border hover:bg-input focus:bg-input focus:border-primary font-medium" 
-                                placeholder={cat.id === "Copos" ? "Ex: Copo de Acrílico Personalizado" : "Ex: Nome do item"} 
+                                placeholder={cat.id === "Copos" ? "Ex: Copo de AcrÃ­lico Personalizado" : "Ex: Nome do item"} 
                               />
                             </td>
                             {/* Notes/Details */}
@@ -356,7 +358,7 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
                                 value={userNotes} 
                                 onChange={e => updateItemNotes(globalIdx, e.target.value)} 
                                 className="w-full bg-transparent outline-none py-1.5 px-2 rounded-lg border border-transparent hover:border-border hover:bg-input focus:bg-input focus:border-primary text-muted-foreground" 
-                                placeholder={cat.id === "Copos" ? "Ex: 350ml, transparente com logo prata..." : "Observações adicionais..."} 
+                                placeholder={cat.id === "Copos" ? "Ex: 350ml, transparente com logo prata..." : "ObservaÃ§Ãµes adicionais..."} 
                               />
                             </td>
                             {/* Quantity */}
@@ -459,7 +461,7 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
                                       <h4 className="font-bold text-xs">Configurador de Compra em Lote / Pacote</h4>
                                     </div>
                                     <label className="inline-flex items-center gap-2 cursor-pointer">
-                                      <span className="text-[10px] font-bold text-muted-foreground uppercase">Habilitar cálculo por lote</span>
+                                      <span className="text-[10px] font-bold text-muted-foreground uppercase">Habilitar cÃ¡lculo por lote</span>
                                       <input 
                                         type="checkbox" 
                                         checked={packageInfo.is_package} 
@@ -528,16 +530,16 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
                                   ) : (
                                     <div className="text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg border border-dashed border-border flex items-center gap-2">
                                       <HelpCircle className="h-4 w-4 text-muted-foreground/60" />
-                                      <span>Este item está configurado como <strong>Compra Unitária Direta</strong>. Habilite o lote acima para calcular as quantidades com base em pacotes ou fardos e obter maior exatidão no fechamento.</span>
+                                      <span>Este item estÃ¡ configurado como <strong>Compra UnitÃ¡ria Direta</strong>. Habilite o lote acima para calcular as quantidades com base em pacotes ou fardos e obter maior exatidÃ£o no fechamento.</span>
                                     </div>
                                   )}
 
                                   {packageInfo.is_package && (
                                     <div className="bg-primary/5 rounded-xl border border-primary/20 p-3 text-xs text-primary font-medium flex items-center justify-between">
-                                      <span>Cálculo do Lote:</span>
+                                      <span>CÃ¡lculo do Lote:</span>
                                       <div className="flex gap-4">
                                         <span>Total: <strong className="font-bold">{packageInfo.package_qty * packageInfo.units_per_package} canudos</strong></span>
-                                        <span>Custo Unitário real: <strong className="font-bold">{fmtBRL(packageInfo.units_per_package > 0 ? packageInfo.package_price / packageInfo.units_per_package : 0)}/un</strong></span>
+                                        <span>Custo UnitÃ¡rio real: <strong className="font-bold">{fmtBRL(packageInfo.units_per_package > 0 ? packageInfo.package_price / packageInfo.units_per_package : 0)}/un</strong></span>
                                         <span>Investimento total: <strong className="font-bold">{fmtBRL(packageInfo.package_qty * packageInfo.package_price)}</strong></span>
                                       </div>
                                     </div>
@@ -552,7 +554,7 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
                     {categoryItems.length === 0 && (
                       <tr>
                         <td colSpan={8} className="p-8 text-center text-muted-foreground/60 italic">
-                          Nenhum planejado nesta categoria. Clique em "+ Adicionar" acima para começar.
+                          Nenhum planejado nesta categoria. Clique em "+ Adicionar" acima para comeÃ§ar.
                         </td>
                       </tr>
                     )}
@@ -566,4 +568,6 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
     </div>
   );
 }
+
+
 

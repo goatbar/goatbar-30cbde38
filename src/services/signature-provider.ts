@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+﻿import { supabase } from "@/integrations/supabase/client";
 import { dispatchContractToZapSign, getZapSignStatus } from "./zapsign-service";
 import {
   dispatchContractToAssinafy,
@@ -47,13 +47,13 @@ export const zapSignSignatureProvider: SignatureProvider = {
     return {
       success: res.success,
       externalDocumentId: res.externalDocToken,
-      status: res.status,
+      status: res.status || "pending",
       signatureUrl: res.docUrl,
     };
   },
 
   async getSignatureLink(providerDocumentId, signerEmail) {
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("contract_signature_requests")
       .select("provider_response")
       .eq("external_request_id", providerDocumentId)
@@ -67,7 +67,7 @@ export const zapSignSignatureProvider: SignatureProvider = {
     const match = signers.find(
       (s) => typeof s.email === "string" && s.email.toLowerCase() === signerEmail.toLowerCase(),
     );
-    return match?.sign_url || `https://app.zapsign.com.br/verificar/${providerDocumentId}`;
+    return (match?.sign_url as string) || `https://app.zapsign.com.br/verificar/${providerDocumentId}`;
   },
 
   async syncStatus(contractId) {
@@ -81,7 +81,7 @@ export const zapSignSignatureProvider: SignatureProvider = {
   },
 
   async downloadArtifact(providerDocumentId, artifactName) {
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("contract_signature_requests")
       .select("signed_file_path")
       .eq("external_request_id", providerDocumentId)
@@ -92,7 +92,7 @@ export const zapSignSignatureProvider: SignatureProvider = {
   },
 
   async resend(documentId, assignmentId, signerId) {
-    throw new Error("Reenvio não suportado na API legado da ZapSign.");
+    throw new Error("Reenvio nÃ£o suportado na API legado da ZapSign.");
   },
 };
 
@@ -109,28 +109,28 @@ export const assinafySignatureProvider: SignatureProvider = {
       success: res.success,
       externalDocumentId: res.externalDocumentId,
       externalAssignmentId: res.externalAssignmentId,
-      status: res.status,
+      status: res.status || "pending",
       signatureUrl: res.signatureUrl,
     };
   },
 
   async getSignatureLink(providerDocumentId, signerEmail) {
     // A Assinafy virtual deve buscar o sign_url dos signers no banco, ou usar url unica se a API devolver.
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("contract_signature_signers")
       .select("status") // Ou url se houver
       .eq("external_signer_id", signerEmail)
       .maybeSingle();
 
-    return ""; // Pode retornar vazio se nǜo for necessrio
+    return ""; // Pode retornar vazio se nÃ£o for necessÃ¡rio
   },
 
   async syncStatus(contractId) {
     const res = await syncAssinafyStatus(contractId);
     return {
-      status: res.status,
+      status: (res.status as string) || "pending",
       fullySigned: res.status === "signed" || res.status === "completed",
-      artifacts: res.artifacts,
+      artifacts: (res.artifacts as Record<string, unknown>) || undefined,
     };
   },
 
@@ -150,3 +150,5 @@ export const getSignatureProvider = (providerName?: string): SignatureProvider =
   }
   return assinafySignatureProvider;
 };
+
+

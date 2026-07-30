@@ -136,3 +136,9 @@ export async function resendAssignment(documentId: string, assignmentId: string,
     const url = `${ASSINAFY_BASE_URL}/v1/documents/${documentId}/assignments/${assignmentId}/signers/${signerId}/resend`;
     return await assinafyFetch(url, { method: "PUT", headers: getAssinafyHeaders() });
 }
+
+export async function cancelDocument(documentId: string) {
+    const url = "${ASSINAFY_BASE_URL}/v1/documents/${documentId}";
+    return await assinafyFetch(url, { method: "DELETE", headers: getAssinafyHeaders() });
+}
+

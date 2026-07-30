@@ -102,6 +102,26 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: true, message: "Confirmado não criado. Pronto para reenvio." }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
+    } else if (action === "confirm_canceled") {
+        await supabaseAdmin.from("contract_signature_reconciliations").insert({
+            request_id: requestId,
+            admin_user_id: user.id,
+            action: action,
+            reason: reason,
+            previous_status: reqToReconcile.dispatch_status,
+            new_status: "canceled",
+            associated_external_id: reqToReconcile.external_document_id
+        });
+
+        await supabaseAdmin.from("contract_signature_requests").update({
+            dispatch_status: "canceled",
+            internal_status: "cancelled",
+            cancelled_at: new Date().toISOString()
+        }).eq("id", requestId);
+
+        return new Response(JSON.stringify({ success: true, message: "Cancelamento confirmado manualmente." }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
     }
 
     throw new Error("Ação de reconciliação inválida");

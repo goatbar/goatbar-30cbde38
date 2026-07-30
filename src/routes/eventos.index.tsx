@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+﻿import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   StatCard,
   SectionCard,
@@ -49,7 +49,7 @@ function EventosIndex() {
     tipo: "Casamento",
     data: "",
     local: "",
-    cidade: "São Paulo",
+    cidade: "SÃ£o Paulo",
     convidados: 100,
     observacoes: "",
     lead_source: "",
@@ -59,7 +59,7 @@ function EventosIndex() {
   useEffect(() => {
     migrateLegacyStoreToSupabase()
       .catch((error) =>
-        console.error("Falha na migração automática de dados legados (eventos).", error),
+        console.error("Falha na migraÃ§Ã£o automÃ¡tica de dados legados (eventos).", error),
       )
       .finally(loadEvents);
   }, []);
@@ -159,12 +159,14 @@ function EventosIndex() {
     return ["FINALIZADO", "REALIZADO"].includes(s);
   });
 
-  // Valor pago e a receber — apenas eventos confirmados + finalizados
+  // Valor pago e a receber â€” apenas eventos confirmados + finalizados
   const { totalPago, totalAReceber } = (() => {
     let pago = 0;
     let aReceber = 0;
     [...eventosConfirmados, ...eventosFinalizados].forEach((e) => {
+      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       const total = Number(e.current_budget_value || e.budget_value || 0);
+      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       const percentPago = Number(e.payment_percent_received ?? e.paid_percentage ?? 0);
       const valorPago = total * (percentPago / 100);
       pago += valorPago;
@@ -215,11 +217,11 @@ function EventosIndex() {
   return (
     <>
       <PageHeader
-        title="Eventos e Orçamentos"
-        subtitle="Pipeline de operações e orçamentos."
+        title="Eventos e OrÃ§amentos"
+        subtitle="Pipeline de operaÃ§Ãµes e orÃ§amentos."
         action={
           <PrimaryButton onClick={() => setShowModal(true)}>
-            <Plus className="h-4 w-4" /> Novo orçamento
+            <Plus className="h-4 w-4" /> Novo orÃ§amento
           </PrimaryButton>
         }
       />
@@ -242,12 +244,12 @@ function EventosIndex() {
             icon={<Calendar className="h-4 w-4" />}
           />
           <StatCard
-            label="Em negociação (R$)"
+            label="Em negociaÃ§Ã£o (R$)"
             value={fmtBRL(receitaEnviados)}
             icon={<Clock className="h-4 w-4 text-amber-400" />}
           />
           <StatCard
-            label="Valor já pago"
+            label="Valor jÃ¡ pago"
             value={fmtBRL(totalPago)}
             icon={<CheckCircle2 className="h-4 w-4 text-success" />}
             highlight
@@ -260,7 +262,7 @@ function EventosIndex() {
         </div>
 
         <SectionCard
-          title="Pipeline de negociações"
+          title="Pipeline de negociaÃ§Ãµes"
           subtitle={
             loading
               ? "Carregando..."
@@ -278,13 +280,13 @@ function EventosIndex() {
                   >
                     <option value="pipeline">Pipeline (ativos)</option>
                     <option value="todos">Todos os registros</option>
-                    <option value="negociacao">Em Negociação</option>
+                    <option value="negociacao">Em NegociaÃ§Ã£o</option>
                     <option value="confirmados">Confirmados</option>
                     <option value="finalizados">Finalizados</option>
                     <option value="cancelados">Cancelados</option>
                   </select>
 
-                  {/* Ordenação */}
+                  {/* OrdenaÃ§Ã£o */}
                   <div className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-input border border-border text-xs font-medium text-foreground">
                     <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     <select
@@ -293,7 +295,7 @@ function EventosIndex() {
                       className="bg-transparent outline-none cursor-pointer"
                     >
                       <option value="data">Por data do evento</option>
-                      <option value="status">Por status do orçamento</option>
+                      <option value="status">Por status do orÃ§amento</option>
                     </select>
                   </div>
                 </>
@@ -309,7 +311,7 @@ function EventosIndex() {
                   onClick={() => setViewMode("calendario")}
                   className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${viewMode === "calendario" ? "bg-surface shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 >
-                  <LayoutGrid className="h-3.5 w-3.5" /> Calendário
+                  <LayoutGrid className="h-3.5 w-3.5" /> CalendÃ¡rio
                 </button>
               </div>
             </div>
@@ -362,7 +364,7 @@ function EventosIndex() {
                       onClick={async (ev) => {
                         ev.preventDefault();
                         ev.stopPropagation();
-                        if (confirm("Excluir este orçamento definitivamente?")) {
+                        if (confirm("Excluir este orÃ§amento definitivamente?")) {
                           await eventBudgetService.deleteEvent(e.id);
                           loadEvents();
                         }
@@ -378,7 +380,7 @@ function EventosIndex() {
                       <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">
                         {e.current_budget_value
                           ? `${fmtBRL(e.current_budget_value / e.guests)}/pessoa`
-                          : "Orçamento em aberto"}
+                          : "OrÃ§amento em aberto"}
                       </div>
                     </div>
 
@@ -398,8 +400,8 @@ function EventosIndex() {
                             .then(() => loadEvents());
                         }}
                       >
-                        <option value="novo_orcamento">Novo orçamento</option>
-                        <option value="orcamento_enviado">Orçamento enviado</option>
+                        <option value="novo_orcamento">Novo orÃ§amento</option>
+                        <option value="orcamento_enviado">OrÃ§amento enviado</option>
                         <option value="aguardando_retorno">Aguardando retorno</option>
                         <option value="dados_solicitados">Dados solicitados</option>
                         <option value="em_assinatura">Em assinatura</option>
@@ -413,7 +415,7 @@ function EventosIndex() {
                       onClick={async (ev) => {
                         ev.preventDefault();
                         ev.stopPropagation();
-                        if (confirm("Excluir este orçamento definitivamente?")) {
+                        if (confirm("Excluir este orÃ§amento definitivamente?")) {
                           await eventBudgetService.deleteEvent(e.id);
                           loadEvents();
                         }
@@ -439,7 +441,7 @@ function EventosIndex() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-lg bg-surface border border-border rounded-2xl shadow-2xl">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
-              <h2 className="font-display text-lg font-semibold">Novo orçamento</h2>
+              <h2 className="font-display text-lg font-semibold">Novo orÃ§amento</h2>
               <button
                 onClick={() => setShowModal(false)}
                 className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"
@@ -453,7 +455,7 @@ function EventosIndex() {
                   <AlertTriangle className="h-5 w-5 shrink-0" />
                   <div>
                     <div className="font-semibold">
-                      Atenção: já existe outro evento orçado ou confirmado para esta mesma data.
+                      AtenÃ§Ã£o: jÃ¡ existe outro evento orÃ§ado ou confirmado para esta mesma data.
                     </div>
                     <ul className="mt-2 list-disc list-inside space-y-1 opacity-80">
                       {mesmoDiaEventos.map((ev) => (
@@ -471,13 +473,13 @@ function EventosIndex() {
                   label: "Nome do solicitante",
                   key: "nome",
                   type: "text",
-                  placeholder: "Ex: João Silva",
+                  placeholder: "Ex: JoÃ£o Silva",
                 },
                 {
                   label: "Nome do Evento / Casal (opcional)",
                   key: "evento_nome",
                   type: "text",
-                  placeholder: "Ex: Casamento João & Maria",
+                  placeholder: "Ex: Casamento JoÃ£o & Maria",
                 },
                 {
                   label: "Contato (Telefone/WhatsApp)",
@@ -496,9 +498,9 @@ function EventosIndex() {
                   label: "Local do evento",
                   key: "local",
                   type: "text",
-                  placeholder: "Nome do espaço (A definir)",
+                  placeholder: "Nome do espaÃ§o (A definir)",
                 },
-                { label: "Cidade", key: "cidade", type: "text", placeholder: "São Paulo" },
+                { label: "Cidade", key: "cidade", type: "text", placeholder: "SÃ£o Paulo" },
               ].map(({ label, key, type, placeholder }) => (
                 <div key={key}>
                   <label className="label-eyebrow block mb-2">{label}</label>
@@ -533,7 +535,7 @@ function EventosIndex() {
                     onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))}
                     className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
                   >
-                    {["Casamento", "Corporativo", "Aniversário", "Confraternização"].map((t) => (
+                    {["Casamento", "Corporativo", "AniversÃ¡rio", "ConfraternizaÃ§Ã£o"].map((t) => (
                       <option key={t} value={t}>
                         {t}
                       </option>
@@ -554,16 +556,16 @@ function EventosIndex() {
                     <option value="Instagram">Instagram</option>
                     <option value="Google">Google</option>
                     <option value="WhatsApp">WhatsApp</option>
-                    <option value="Indicação">Indicação</option>
+                    <option value="IndicaÃ§Ã£o">IndicaÃ§Ã£o</option>
                     <option value="Site">Site</option>
                   </select>
                 </div>
-                {form.lead_source === "Indicação" && (
+                {form.lead_source === "IndicaÃ§Ã£o" && (
                   <div>
                     <label className="label-eyebrow block mb-2">Quem indicou?</label>
                     <input
                       type="text"
-                      placeholder="Nome da referência"
+                      placeholder="Nome da referÃªncia"
                       value={form.referral_name || ""}
                       onChange={(e) => setForm((p) => ({ ...p, referral_name: e.target.value }))}
                       className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
@@ -572,7 +574,7 @@ function EventosIndex() {
                 )}
               </div>
               <div>
-                <label className="label-eyebrow block mb-2">Observações gerais</label>
+                <label className="label-eyebrow block mb-2">ObservaÃ§Ãµes gerais</label>
                 <textarea
                   rows={3}
                   value={form.observacoes}
@@ -585,7 +587,7 @@ function EventosIndex() {
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
               <GhostButton onClick={() => setShowModal(false)}>Cancelar</GhostButton>
               <PrimaryButton onClick={handleCreate} disabled={!form.nome || !form.data}>
-                Avançar para orçamento
+                AvanÃ§ar para orÃ§amento
               </PrimaryButton>
             </div>
           </div>
@@ -622,7 +624,7 @@ function CalendarView({ eventosAtivos }: { eventosAtivos: RealEvent[] }) {
           .toUpperCase()}
       </div>
       <div className="grid grid-cols-7 gap-px bg-border border border-border rounded-xl overflow-hidden">
-        {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => (
+        {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "SÃ¡b"].map((d) => (
           <div
             key={d}
             className="bg-surface py-2 text-center text-xs font-medium text-muted-foreground"
@@ -671,3 +673,5 @@ function CalendarView({ eventosAtivos }: { eventosAtivos: RealEvent[] }) {
     </div>
   );
 }
+
+

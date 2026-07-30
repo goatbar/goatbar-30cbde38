@@ -74,3 +74,15 @@ export async function downloadAssinafyArtifact(
 
   return data as Blob; // Será retornado o binário diretamente
 }
+
+export async function cancelAssinafySignature(contractId: string): Promise<boolean> {
+  const { data, error } = await supabase.functions.invoke("assinafy-cancel", {
+    body: { contractId },
+  });
+
+  if (error || !data?.success) {
+    throw new Error(data?.error || "Falha ao cancelar assinatura");
+  }
+  return true;
+}
+
