@@ -79,7 +79,11 @@ export function normalizeWithDOMParser(html: string): string {
   // 3. Remover botões "×" que possam ter sobrado soltos
   const strayButtons = Array.from(doc.querySelectorAll("button"));
   strayButtons.forEach((btn) => {
-    if (btn.classList.contains("docx-chip-del") || btn.getAttribute("data-delete-key") || btn.textContent?.trim() === "×") {
+    if (
+      btn.classList.contains("docx-chip-del") ||
+      btn.getAttribute("data-delete-key") ||
+      btn.textContent?.trim() === "×"
+    ) {
       btn.remove();
     }
   });
@@ -121,14 +125,20 @@ export function normalizeWithRegexFallback(html: string): string {
   clean = clean.replace(/<button[^>]*>\s*×\s*<\/button>/gi, "");
 
   // 2. Extrai chave do chip data-field-key="key" e substitui o span inteiro por {{key}}
-  clean = clean.replace(/<span[^>]*data-field-key="([^"]+)"[^>]*>[\s\S]*?<\/span>/gi, (_match, key) => {
-    return `{{${key.trim()}}}`;
-  });
+  clean = clean.replace(
+    /<span[^>]*data-field-key="([^"]+)"[^>]*>[\s\S]*?<\/span>/gi,
+    (_match, key) => {
+      return `{{${key.trim()}}}`;
+    },
+  );
 
   // 3. Unwras de chips sem data-field-key
-  clean = clean.replace(/<span[^>]*class="[^"]*docx-field-chip[^"]*"[^>]*>([\s\S]*?)<\/span>/gi, (_match, inner) => {
-    return inner.replace(/<button[^>]*>.*?<\/button>/gi, "").trim();
-  });
+  clean = clean.replace(
+    /<span[^>]*class="[^"]*docx-field-chip[^"]*"[^>]*>([\s\S]*?)<\/span>/gi,
+    (_match, inner) => {
+      return inner.replace(/<button[^>]*>.*?<\/button>/gi, "").trim();
+    },
+  );
 
   // 4. Remove atributos de edição conhecidos
   EDITOR_ONLY_ATTRIBUTES.forEach((attr) => {
@@ -138,7 +148,10 @@ export function normalizeWithRegexFallback(html: string): string {
   clean = clean.replace(/\s+data-field-key="[^"]*"/gi, "");
 
   // 5. Quebra de página
-  clean = clean.replace(/<div[^>]*>---\s*QUEBRA DE P.*?GINA\s*---<\/div>/gi, '<div class="docx-page-break" style="page-break-after: always; break-after: page;"></div>');
+  clean = clean.replace(
+    /<div[^>]*>---\s*QUEBRA DE P.*?GINA\s*---<\/div>/gi,
+    '<div class="docx-page-break" style="page-break-after: always; break-after: page;"></div>',
+  );
 
   return clean;
 }

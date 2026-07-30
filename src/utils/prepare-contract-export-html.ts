@@ -11,12 +11,14 @@ import { validateExportHtml, type ExportHtmlValidationResult } from "./validate-
 export class ContractExportValidationError extends Error {
   errors: string[];
   unresolvedFields: string[];
+  issues: ExportHtmlValidationResult["issues"];
 
   constructor(validation: ExportHtmlValidationResult) {
     super("O contrato possui elementos de edição ou campos pendentes não substituídos.");
     this.name = "ContractExportValidationError";
     this.errors = validation.errors;
     this.unresolvedFields = validation.unresolvedFields;
+    this.issues = validation.issues;
   }
 }
 
@@ -32,7 +34,11 @@ export function prepareContractExportHtml(html: string): string {
   const validation = validateExportHtml(cleanHtml);
 
   if (!validation.valid) {
-    console.warn("⚠️ [Contract Export Validation Warning]:", validation.errors);
+    console.warn("⚠️ [Contract Export Validation Warning]:", {
+      errors: validation.errors,
+      unresolvedFields: validation.unresolvedFields,
+      issues: validation.issues,
+    });
     throw new ContractExportValidationError(validation);
   }
 
