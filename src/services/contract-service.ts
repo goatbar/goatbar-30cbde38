@@ -1,4 +1,4 @@
-﻿import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
 import { numberToWordsBRL } from "@/lib/number-to-words-brl";
 import {
@@ -13,12 +13,13 @@ import {
 } from "@/lib/format-document";
 import { normalizeEditorHtml } from "@/utils/normalize-editor-html";
 import { validateExportHtml } from "@/utils/validate-export-html";
-import { prepareContractExportHtml, ContractExportValidationError } from "@/utils/prepare-contract-export-html";
+import {
+  prepareContractExportHtml,
+  ContractExportValidationError,
+} from "@/utils/prepare-contract-export-html";
 import { calculateEndTime, calculateFinalPaymentDate } from "@/lib/date-utils";
 
-
-
-// --- Tipos para os ServiÃ§os ---
+// --- Tipos para os Serviços ---
 export interface ContractTemplate {
   id: string;
   name: string;
@@ -147,7 +148,7 @@ export const contractTemplatesService = {
   },
 };
 
-// --- Helper de RenderizaÃ§Ã£o e Mapeamento de Template com VariÃ¡veis ---
+// --- Helper de Renderização e Mapeamento de Template com Variáveis ---
 export function getTemplateContent(template?: ContractTemplate | null): string {
   if (!template) return "";
 
@@ -157,7 +158,11 @@ export function getTemplateContent(template?: ContractTemplate | null): string {
     !Array.isArray(template.variables_schema)
   ) {
     const schemaObj = template.variables_schema as any;
-    if (schemaObj.content && typeof schemaObj.content === "string" && schemaObj.content.trim().length > 0) {
+    if (
+      schemaObj.content &&
+      typeof schemaObj.content === "string" &&
+      schemaObj.content.trim().length > 0
+    ) {
       return schemaObj.content;
     }
   }
@@ -193,7 +198,7 @@ export interface PlaceholderValidationResult {
 
 export function validateContractPlaceholders(
   templateBody: string,
-  variables: Record<string, any>
+  variables: Record<string, any>,
 ): {
   filled: PlaceholderValidationResult[];
   unfilled: PlaceholderValidationResult[];
@@ -212,14 +217,17 @@ export function validateContractPlaceholders(
 
     if (key && !seenTokens.has(token)) {
       seenTokens.add(token);
-      const val = variables[key] !== undefined && variables[key] !== null ? String(variables[key]).trim() : "";
-      const isMissing = !val || val === "NÃ£o informado" || val === "A definir";
+      const val =
+        variables[key] !== undefined && variables[key] !== null
+          ? String(variables[key]).trim()
+          : "";
+      const isMissing = !val || val === "Não informado" || val === "A definir";
 
       const item: PlaceholderValidationResult = {
         token,
         key,
         label: key,
-        value: val || "Sem informaÃ§Ã£o cadastrada",
+        value: val || "Sem informação cadastrada",
         isFilled: !isMissing,
       };
 
@@ -237,19 +245,26 @@ export function validateContractPlaceholders(
 export class ContractRenderError extends Error {
   errors: string[];
   unresolvedFields: string[];
+  issues: ContractExportValidationError["issues"];
 
-  constructor(payload: { message: string; errors: string[]; unresolvedFields: string[] }) {
+  constructor(payload: {
+    message: string;
+    errors: string[];
+    unresolvedFields: string[];
+    issues: ContractExportValidationError["issues"];
+  }) {
     super(payload.message);
     this.name = "ContractRenderError";
     this.errors = payload.errors;
     this.unresolvedFields = payload.unresolvedFields;
+    this.issues = payload.issues;
   }
 }
 
 export function replaceContractVariables(
   templateBody: string,
   variables: Record<string, any>,
-  customMapping?: Record<string, string>
+  customMapping?: Record<string, string>,
 ): string {
   if (!templateBody) return "";
   let result = sanitizeTemplateResiduals(templateBody);
@@ -261,15 +276,11 @@ export function replaceContractVariables(
     if (/^\s*<(table|div|p|ul|ol|br|span|h[1-6])\b/i.test(str)) {
       return str;
     }
-    const escaped = str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+    const escaped = str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     return escaped.replace(/\r?\n/g, "<br />");
   };
 
-
-  // 1. SubstituiÃ§Ã£o via mapeamento customizado (De-Para do UsuÃ¡rio)
+  // 1. Substituição via mapeamento customizado (De-Para do Usuário)
   if (customMapping) {
     Object.keys(customMapping).forEach((sysKey) => {
       const matchToken = customMapping[sysKey];
@@ -282,12 +293,12 @@ export function replaceContractVariables(
     });
   }
 
-  // 2. SubstituiÃ§Ã£o padrÃ£o para tags {{chave}} e [CHAVE] eliminando sufixos 'xx'
+  // 2. Substituição padrão para tags {{chave}} e [CHAVE] eliminando sufixos 'xx'
   Object.keys(variables).forEach((key) => {
     const rawVal = variables[key];
     const str = rawVal !== undefined && rawVal !== null ? String(rawVal).trim() : "";
-    if (str === "" || str === "NÃ£o informado" || str === "A definir") {
-      // Deixa a tag no lugar para a UI identificar a pendÃªncia
+    if (str === "" || str === "Não informado" || str === "A definir") {
+      // Deixa a tag no lugar para a UI identificar a pendência
       return;
     }
 
@@ -299,8 +310,7 @@ export function replaceContractVariables(
     result = result.replace(curlyRegex, val).replace(bracketRegex, val);
   });
 
-  // 3. (Removido) Limpeza final de placeholders nÃ£o substituÃ­dos, pois agora os deixamos no HTML final.
-
+  // 3. (Removido) Limpeza final de placeholders não substituídos, pois agora os deixamos no HTML final.
 
   return result;
 }
@@ -308,17 +318,19 @@ export function replaceContractVariables(
 export function renderContractTemplate(
   templateBody: string,
   variables: Record<string, any>,
-  customMapping?: Record<string, string>
+  customMapping?: Record<string, string>,
 ): string {
   if (!templateBody) return "";
 
-  // 1. NormalizaÃ§Ã£o do HTML do editor (converte chips em {{chave}} e remove controles/atributos de ediÃ§Ã£o)
+  // 1. Normalização do HTML do editor (converte chips em {{chave}} e remove controles/atributos de edição)
+  console.debug("[Contract Render] HTML antes da normalização:", templateBody);
   const normalizedHtml = normalizeEditorHtml(templateBody);
+  console.debug("[Contract Render] HTML depois da normalização:", normalizedHtml);
 
-  // 2. SubstituiÃ§Ã£o das variÃ¡veis
+  // 2. Substituição das variáveis
   const renderedHtml = replaceContractVariables(normalizedHtml, variables, customMapping);
 
-  // 3. SanitizaÃ§Ã£o e ValidaÃ§Ã£o do HTML final
+  // 3. Sanitização e Validação do HTML final
   try {
     return prepareContractExportHtml(renderedHtml);
   } catch (err: any) {
@@ -327,13 +339,12 @@ export function renderContractTemplate(
         message: err.message,
         errors: err.errors,
         unresolvedFields: err.unresolvedFields,
+        issues: err.issues,
       });
     }
     throw err;
   }
 }
-
-
 
 export const DEFAULT_CONTRACT_BODY = "";
 
@@ -381,7 +392,11 @@ export const glasswareService = {
   },
 
   async createGlassware(payload: Omit<Glassware, "id" | "is_active">) {
-    const { data, error } = await supabase.from("glassware").insert({ ...payload, is_active: true }).select().single();
+    const { data, error } = await supabase
+      .from("glassware")
+      .insert({ ...payload, is_active: true })
+      .select()
+      .single();
     if (error) throw error;
     return data;
   },
@@ -401,7 +416,10 @@ export const glasswareService = {
 // --- 4. Event Contracts Service ---
 export const eventContractsService = {
   async listAllContracts() {
-    const { data, error } = await supabase.from("event_contracts").select("*").order("created_at", { ascending: false });
+    const { data, error } = await supabase
+      .from("event_contracts")
+      .select("*")
+      .order("created_at", { ascending: false });
     if (error) throw error;
     return data as EventContract[];
   },
@@ -423,7 +441,12 @@ export const eventContractsService = {
     return data && data.length > 0 ? data[0] : null;
   },
 
-  async createContractForEvent(eventId: string, templateId: string, signerId: string, customContent?: string) {
+  async createContractForEvent(
+    eventId: string,
+    templateId: string,
+    signerId: string,
+    customContent?: string,
+  ) {
     const { data, error } = await supabase
       .from("event_contracts")
       .insert({
@@ -438,7 +461,11 @@ export const eventContractsService = {
   },
 
   async updateDraftContract(contractId: string, templateId: string, signerId: string) {
-    const { data: current } = await supabase.from("event_contracts").select("version").eq("id", contractId).single();
+    const { data: current } = await supabase
+      .from("event_contracts")
+      .select("version")
+      .eq("id", contractId)
+      .single();
     const nextVersion = current ? (current.version || 1) + 1 : 2;
 
     const { data, error } = await supabase
@@ -448,14 +475,14 @@ export const eventContractsService = {
         signer_id: signerId,
         version: nextVersion,
         generated_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq("id", contractId)
       .eq("status", "draft")
       .is("signed_file_url", null)
       .select()
       .single();
-      
+
     if (error) throw error;
     return data as EventContract;
   },
@@ -483,7 +510,7 @@ export const eventContractsService = {
       .eq("status", "draft")
       .is("signed_file_url", null)
       .is("signature_certificate_url", null);
-      
+
     if (error) throw error;
   },
 
@@ -514,7 +541,11 @@ export const eventContractsService = {
     }
   },
 
-  async saveSignedContract(eventId: string, signedFileUrl: string, contractId?: string): Promise<any> {
+  async saveSignedContract(
+    eventId: string,
+    signedFileUrl: string,
+    contractId?: string,
+  ): Promise<any> {
     if (contractId) {
       const { data, error } = await supabase
         .from("event_contracts")
@@ -555,7 +586,7 @@ export const eventContractsService = {
       .eq("id", eventId)
       .single();
 
-    if (evError || !evento) throw new Error("Evento nÃ£o encontrado no banco de dados");
+    if (evError || !evento) throw new Error("Evento não encontrado no banco de dados");
 
     // 2. Busca dados do cliente no Supabase
     const { data: clientData } = await supabase
@@ -564,10 +595,10 @@ export const eventContractsService = {
       .eq("event_id", eventId)
       .maybeSingle();
 
-    // 3. Busca lista de copos para a tabela de reposiÃ§Ã£o
+    // 3. Busca lista de copos para a tabela de reposição
     const { data: glasses } = await supabase.from("glassware").select("*").eq("is_active", true);
 
-    // 4. Busca sÃ³cio assinante se informado
+    // 4. Busca sócio assinante se informado
     let signer: ContractSigner | null = null;
     if (signerId) {
       const { data: s } = await supabase
@@ -578,7 +609,7 @@ export const eventContractsService = {
       signer = s as ContractSigner | null;
     }
 
-    // 5. Busca o orÃ§amento atual para obter a descriÃ§Ã£o das bebidas
+    // 5. Busca o orçamento atual para obter a descrição das bebidas
     const { data: currentBudget } = await supabase
       .from("event_budget_versions")
       .select("*")
@@ -594,30 +625,39 @@ export const eventContractsService = {
 
     const drinksArray = Array.isArray(evento.drinks) ? evento.drinks : [];
 
-    const tabelaReposicaoLines = glasses && glasses.length > 0
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-      ? glasses.map((g) => `â€¢ ${g.name} (${g.type || "Copo"}): ${fmt(g.replacement_value)} por unidade`).join("\n")
-      : "â€¢ Copos PadrÃ£o: R$ 15,00 por unidade em caso de quebra/perda";
+    const tabelaReposicaoLines =
+      glasses && glasses.length > 0
+        ? glasses
+            .map(
+              (g) =>
+                `• ${g.name} (${g.type || "Copo"}): ${fmt(g.replacement_value ?? 0)} por unidade`,
+            )
+            .join("\n")
+        : "• Copos Padrão: R$ 15,00 por unidade em caso de quebra/perda";
 
-    // 6. CÃ¡lculos de HorÃ¡rio e PerÃ­odo do Evento
+    // 6. Cálculos de Horário e Período do Evento
     const horaInicioStr = evento.event_time || "";
     const durationHours = evento.duration_hours != null ? Number(evento.duration_hours) : null;
     const horaFimStr = calculateEndTime(horaInicioStr, durationHours);
-    const periodoEventoStr = horaInicioStr && horaFimStr ? `${horaInicioStr} Ã s ${horaFimStr}` : "";
+    const periodoEventoStr = horaInicioStr && horaFimStr ? `${horaInicioStr} às ${horaFimStr}` : "";
 
-    // 7. CÃ¡lculos Financeiros
+    // 7. Cálculos Financeiros
     const totalVal = currentBudget?.final_budget_value || evento.current_budget_value || 0;
     // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-    const entryVal = currentBudget?.paid_value || currentBudget?.deposit_value || (totalVal * 0.5);
+    const entryVal = currentBudget?.paid_value || currentBudget?.deposit_value || totalVal * 0.5;
     const remainingVal = Math.max(0, totalVal - entryVal);
     const numGuests = Number(evento.guests) || 1;
-    const valPerPerson = (currentBudget as any)?.value_per_person || (totalVal > 0 && numGuests > 0 ? totalVal / numGuests : 0);
+    const valPerPerson =
+      (currentBudget as any)?.value_per_person ||
+      (totalVal > 0 && numGuests > 0 ? totalVal / numGuests : 0);
 
-    // 8. CÃ¡lculo da Data de Pagamento Final (Data do Evento - 7 dias)
+    // 8. Cálculo da Data de Pagamento Final (Data do Evento - 7 dias)
     const finalPaymentDateStr = calculateFinalPaymentDate(evento.date);
 
-    // 9. ExtraÃ§Ã£o dos Dados Atualizados do Contratante (Vindo do FormulÃ¡rio do Link como Fonte de Verdade)
-    const clientNotes = (clientData?.notes && typeof clientData.notes === "object" ? clientData.notes : {}) as any;
+    // 9. Extração dos Dados Atualizados do Contratante (Vindo do Formulário do Link como Fonte de Verdade)
+    const clientNotes = (
+      clientData?.notes && typeof clientData.notes === "object" ? clientData.notes : {}
+    ) as any;
     // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     const rawDocument = clientData?.cpf_cnpj || clientNotes?.cpf_cnpj || evento.client_cpf_cnpj;
     const documentValidation = validateBrazilianDocument(rawDocument);
@@ -640,50 +680,57 @@ export const eventContractsService = {
     // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     const stateClient = clientData?.state || clientNotes?.state || "";
 
-    // Local do Evento Atualizado pelo FormulÃ¡rio
+    // Local do Evento Atualizado pelo Formulário
     const venueName = clientNotes?.venue_name || evento.event_location || "";
-    const venueAddress = clientNotes?.venue_address || clientData?.address || evento.event_location || "";
+    const venueAddress =
+      clientNotes?.venue_address || clientData?.address || evento.event_location || "";
     const venueCity = clientNotes?.venue_city || evento.city || "";
     const venueCep = clientNotes?.venue_cep || "";
     const venueComplement = clientNotes?.venue_complement || "";
 
-    // 10. CÃ¡lculos de CondiÃ§Ã£o, Meio de Pagamento e ClÃ¡usula Completa
+    // 10. Cálculos de Condição, Meio de Pagamento e Cláusula Completa
     // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     const meioPagamentoStr = currentBudget?.payment_channel || clientNotes?.payment_channel || "";
     const percentualNum = totalVal > 0 ? Math.round((entryVal / totalVal) * 100) : 50;
     const percentualText = `${percentualNum}%`;
-    const percentualExtenso = percentualNum === 30 ? "30% (trinta por cento)" :
-                              percentualNum === 40 ? "40% (quarenta por cento)" :
-                              percentualNum === 50 ? "50% (cinquenta por cento)" :
-                              `${percentualNum}%`;
+    const percentualExtenso =
+      percentualNum === 30
+        ? "30% (trinta por cento)"
+        : percentualNum === 40
+          ? "40% (quarenta por cento)"
+          : percentualNum === 50
+            ? "50% (cinquenta por cento)"
+            : `${percentualNum}%`;
 
     let formaPagamentoDesc = "";
     if (entryVal >= totalVal) {
       formaPagamentoDesc = `Pagamento integral via ${meioPagamentoStr} no ato da assinatura do contrato.`;
     } else if (percentualNum > 0) {
-      formaPagamentoDesc = `${percentualText} no ato da assinatura do contrato e o valor restante deverÃ¡ ser pago atÃ© a data limite de ${finalPaymentDateStr} (7 dias antes da realizaÃ§Ã£o do evento), por meio de ${meioPagamentoStr}.`;
+      formaPagamentoDesc = `${percentualText} no ato da assinatura do contrato e o valor restante deverá ser pago até a data limite de ${finalPaymentDateStr} (7 dias antes da realização do evento), por meio de ${meioPagamentoStr}.`;
     } else {
-      formaPagamentoDesc = `Entrada de ${fmt(entryVal)} no ato da assinatura do contrato e saldo remanescente de ${fmt(remainingVal)} atÃ© a data limite de ${finalPaymentDateStr} (${meioPagamentoStr}).`;
+      formaPagamentoDesc = `Entrada de ${fmt(entryVal)} no ato da assinatura do contrato e saldo remanescente de ${fmt(remainingVal)} até a data limite de ${finalPaymentDateStr} (${meioPagamentoStr}).`;
     }
 
     let clausulaPagamentoStr = "";
     if (entryVal >= totalVal) {
-      clausulaPagamentoStr = `O CONTRATANTE efetuarÃ¡ o pagamento integral do valor de ${fmt(totalVal)} (${numberToWordsBRL(totalVal).toLowerCase()}) no ato da assinatura do contrato, por meio de ${meioPagamentoStr}.`;
-    } else if (percentualNum > 0 && Math.abs(entryVal - (totalVal * percentualNum / 100)) < 10) {
-      clausulaPagamentoStr = `O CONTRATANTE pagarÃ¡ ${percentualExtenso} do valor total do contrato no ato da assinatura, correspondente a ${fmt(entryVal)} (${numberToWordsBRL(entryVal).toLowerCase()}), ficando o saldo remanescente de ${fmt(remainingVal)} (${numberToWordsBRL(remainingVal).toLowerCase()}) para pagamento atÃ© a data limite de ${finalPaymentDateStr} (7 dias antes da realizaÃ§Ã£o do evento), por meio de ${meioPagamentoStr}.`;
+      clausulaPagamentoStr = `O CONTRATANTE efetuará o pagamento integral do valor de ${fmt(totalVal)} (${numberToWordsBRL(totalVal).toLowerCase()}) no ato da assinatura do contrato, por meio de ${meioPagamentoStr}.`;
+    } else if (percentualNum > 0 && Math.abs(entryVal - (totalVal * percentualNum) / 100) < 10) {
+      clausulaPagamentoStr = `O CONTRATANTE pagará ${percentualExtenso} do valor total do contrato no ato da assinatura, correspondente a ${fmt(entryVal)} (${numberToWordsBRL(entryVal).toLowerCase()}), ficando o saldo remanescente de ${fmt(remainingVal)} (${numberToWordsBRL(remainingVal).toLowerCase()}) para pagamento até a data limite de ${finalPaymentDateStr} (7 dias antes da realização do evento), por meio de ${meioPagamentoStr}.`;
     } else {
-      clausulaPagamentoStr = `O CONTRATANTE efetuarÃ¡ o pagamento de ${fmt(entryVal)} (${numberToWordsBRL(entryVal).toLowerCase()}) no ato da assinatura do contrato, permanecendo o saldo remanescente de ${fmt(remainingVal)} (${numberToWordsBRL(remainingVal).toLowerCase()}), que deverÃ¡ ser quitado atÃ© a data limite de ${finalPaymentDateStr} (7 dias antes da realizaÃ§Ã£o do evento), por meio de ${meioPagamentoStr}.`;
+      clausulaPagamentoStr = `O CONTRATANTE efetuará o pagamento de ${fmt(entryVal)} (${numberToWordsBRL(entryVal).toLowerCase()}) no ato da assinatura do contrato, permanecendo o saldo remanescente de ${fmt(remainingVal)} (${numberToWordsBRL(remainingVal).toLowerCase()}), que deverá ser quitado até a data limite de ${finalPaymentDateStr} (7 dias antes da realização do evento), por meio de ${meioPagamentoStr}.`;
     }
 
     const paymentMethodText = formaPagamentoDesc;
 
-    // Monta o dicionÃ¡rio completo de variÃ¡veis
+    // Monta o dicionário completo de variáveis
     const variables: Record<string, string> = {
       // ðŸ¥‚ Evento
       // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       "evento.nome": evento.event_name || evento.client_name || "",
       "evento.tipo": evento.event_type || "",
-      "evento.data": evento.date ? new Date(evento.date + "T12:00:00").toLocaleDateString("pt-BR") : "",
+      "evento.data": evento.date
+        ? new Date(evento.date + "T12:00:00").toLocaleDateString("pt-BR")
+        : "",
       "evento.hora_inicio": horaInicioStr,
       "evento.hora_fim": horaFimStr,
       "evento.duracao_horas": durationHours ? `${durationHours} horas` : "",
@@ -711,7 +758,7 @@ export const eventContractsService = {
       "cliente.cidade": cityClient,
       "cliente.estado": stateClient,
 
-      // ðŸ’° Financeiro (CÃ¡lculos AutomÃ¡ticos em NÃºmero, por Extenso e ClÃ¡usula Completa)
+      // 💰 Financeiro (Cálculos Automáticos em Número, por Extenso e Cláusula Completa)
       "financeiro.valor_total": fmt(totalVal),
       "financeiro.valor_total_extenso": numberToWordsBRL(totalVal),
       "financeiro.valor_entrada": fmt(entryVal),
@@ -730,13 +777,13 @@ export const eventContractsService = {
       // ðŸ¢ Empresa / GOAT Bar
       "empresa.nome": "GOAT BAR EVENTOS LTDA",
       "empresa.cnpj": "42.123.456/0001-99",
-      "empresa.endereco": "Av. Brigadeiro Faria Lima, 2000 - SÃ£o Paulo/SP",
+      "empresa.endereco": "Av. Brigadeiro Faria Lima, 2000 - São Paulo/SP",
       "empresa.responsavel": signer?.name || "",
       "empresa.cpf_responsavel": signer?.cpf ? formatBrazilianDocument(signer.cpf) : "",
       "empresa.cargo_responsavel": signer?.role || "",
       "empresa.endereco_responsavel": signer?.address || "",
 
-      // ðŸ¹ CardÃ¡pio & UtensÃ­lios
+      // 🍹 Cardápio & Utensílios
       "cardapio.drinks": drinksArray.length > 0 ? drinksArray.join(", ") : "",
       "cardapio.descricao": descricaoBebidas || "",
       "cardapio.tabela_reposicao": tabelaReposicaoLines,
@@ -755,7 +802,9 @@ export const eventContractsService = {
       // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       evento_nome: evento.event_name || evento.client_name || "",
       evento_tipo: evento.event_type || "",
-      evento_data: evento.date ? new Date(evento.date + "T12:00:00").toLocaleDateString("pt-BR") : "",
+      evento_data: evento.date
+        ? new Date(evento.date + "T12:00:00").toLocaleDateString("pt-BR")
+        : "",
       evento_hora_inicio: horaInicioStr,
       evento_hora_fim: horaFimStr,
       evento_periodo_evento: periodoEventoStr,
@@ -858,5 +907,3 @@ export const clientContractFormService = {
     return data;
   },
 };
-
-

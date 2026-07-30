@@ -6,38 +6,85 @@
  * esteja presente no documento final a ser enviado para impressão, prévia ou PDF.
  */
 
+export type ExportHtmlIssueType =
+  | "placeholder"
+  | "editor_element"
+  | "editor_attribute"
+  | "temporary_tag"
+  | "empty_node";
+
+export interface ExportHtmlIssue {
+  type: ExportHtmlIssueType;
+  token: string;
+  rule: string;
+  message: string;
+}
+
 export interface ExportHtmlValidationResult {
   valid: boolean;
   errors: string[];
   unresolvedFields: string[];
+  issues: ExportHtmlIssue[];
+}
+
+function unique(values: string[]): string[] {
+  return Array.from(new Set(values));
 }
 
 export function validateExportHtml(html: string): ExportHtmlValidationResult {
-  const errors: string[] = [];
+  const issues: ExportHtmlIssue[] = [];
 
   if (!html || typeof html !== "string") {
     return {
       valid: false,
       errors: ["O HTML do contrato está vazio."],
       unresolvedFields: [],
+      issues: [
+        {
+          type: "empty_node",
+          token: "",
+          rule: "html_not_empty",
+          message: "O HTML do contrato está vazio.",
+        },
+      ],
     };
   }
 
-  // 1. Verificação de elementos ou classes proibidos do editor
   const forbiddenElements = [
-    { pattern: /class="[^"]*docx-field-chip[^"]*"/i, name: "Chip do editor (docx-field-chip)" },
-    { pattern: /class="[^"]*docx-chip-del[^"]*"/i, name: "Botão de exclusão do chip (docx-chip-del)" },
-    { pattern: /data-delete-key=/i, name: "Atributo data-delete-key" },
-    { pattern: /<button[^>]*>.*?×.*?<\/button>/i, name: "Botão de exclusão '×'" },
+    {
+      pattern: /class="[^"]*docx-field-chip[^"]*"/i,
+      name: "Chip do editor (docx-field-chip)",
+      rule: "editor_chip_class",
+    },
+    {
+      pattern: /class="[^"]*docx-chip-del[^"]*"/i,
+      name: "Botão de exclusão do chip (docx-chip-del)",
+      rule: "editor_delete_button_class",
+    },
+    {
+      pattern: /data-delete-key=/i,
+      name: "Atributo data-delete-key",
+      rule: "editor_delete_key_attribute",
+    },
+    {
+      pattern: /<button[^>]*>.*?×.*?<\/button>/i,
+      name: "Botão de exclusão '×'",
+      rule: "editor_delete_button",
+    },
   ];
 
-  forbiddenElements.forEach(({ pattern, name }) => {
-    if (pattern.test(html)) {
-      errors.push(`Elemento visual de edição encontrado: ${name}`);
+  forbiddenElements.forEach(({ pattern, name, rule }) => {
+    const match = html.match(pattern);
+    if (match) {
+      issues.push({
+        type: "editor_element",
+        token: match[0],
+        rule,
+        message: `Elemento visual de edição encontrado: ${name}`,
+      });
     }
   });
 
-  // 2. Verificação de atributos de edição proibidos
   const forbiddenAttributes = [
     "contenteditable",
     "data-editor",
@@ -48,25 +95,44 @@ export function validateExportHtml(html: string): ExportHtmlValidationResult {
 
   forbiddenAttributes.forEach((attr) => {
     const regex = new RegExp(`\\b${attr}\\s*=`, "i");
-    if (regex.test(html)) {
-      errors.push(`Atributo de edição proibido encontrado: ${attr}`);
+    const match = html.match(regex);
+    if (match) {
+      issues.push({
+        type: "editor_attribute",
+        token: match[0],
+        rule: `forbidden_attribute:${attr}`,
+        message: `Atributo de edição proibido encontrado: ${attr}`,
+      });
     }
   });
 
-  // 3. Detecção de placeholders de variáveis não resolvidos {{campo}} ou [CAMPO]
-  const unresolvedCurly = html.match(/\{\{\s*([a-zA-Z0-9._]+)\s*\}\}/g) ?? [];
-  const unresolvedBrackets = html.match(/\[([A-Z0-9_]{3,})\]/g) ?? [];
+  const placeholderRules = [
+    { regex: /\{\{\s*([a-zA-Z0-9._-]+)\s*\}\}/g, rule: "unresolved_curly_placeholder" },
+    { regex: /\$\{\s*([a-zA-Z0-9._-]+)\s*\}/g, rule: "unresolved_dollar_placeholder" },
+    { regex: /\[\s*([A-Z][A-Z0-9_]{2,})\s*\]/g, rule: "unresolved_bracket_placeholder" },
+  ];
 
-  const rawUnresolved = [...unresolvedCurly, ...unresolvedBrackets];
-  const unresolvedFields = Array.from(new Set(rawUnresolved));
+  placeholderRules.forEach(({ regex, rule }) => {
+    for (const match of html.matchAll(regex)) {
+      issues.push({
+        type: "placeholder",
+        token: match[0],
+        rule,
+        message: `Campo pendente não substituído: ${match[0]}`,
+      });
+    }
+  });
 
-  if (unresolvedFields.length > 0) {
-    errors.push(`Campos pendentes não substituídos no documento: ${unresolvedFields.join(", ")}`);
-  }
+  // Quebras de página normalizadas são legítimas e não entram como pendência.
+  const unresolvedFields = unique(
+    issues.filter((issue) => issue.type === "placeholder").map((issue) => issue.token),
+  );
+  const errors = unique(issues.map((issue) => issue.message));
 
   return {
-    valid: errors.length === 0,
+    valid: issues.length === 0,
     errors,
     unresolvedFields,
+    issues,
   };
 }
