@@ -20,18 +20,26 @@ describe("assinafy-cancel", () => {
     vi.clearAllMocks();
 
     maybeSingleMock = vi.fn();
-    limitMock = vi.fn().mockReturnValue({ maybeSingle: maybeSingleMock });
-    orderMock = vi.fn().mockReturnValue({ limit: limitMock });
-    selectMock = vi.fn().mockReturnValue({ order: orderMock });
-    inMock = vi.fn().mockReturnValue({ select: selectMock });
-    eqMock = vi.fn().mockReturnValue({ in: inMock, select: selectMock, eq: vi.fn().mockReturnThis() });
-    updateMock = vi.fn().mockReturnValue({ eq: eqMock });
+    const chainable = {
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      maybeSingle: maybeSingleMock,
+    };
+    
+    // Alias explicitly so they can be spied on if needed, but we mainly care about `maybeSingle` and `update`
+    eqMock = chainable.eq;
+    inMock = chainable.in;
+    selectMock = chainable.select;
+    orderMock = chainable.order;
+    limitMock = chainable.limit;
+    updateMock = chainable.update;
 
     supabaseAdminMock = {
-      from: vi.fn().mockReturnValue({
-        update: updateMock,
-        select: selectMock,
-      }),
+      from: vi.fn().mockReturnValue(chainable),
     };
   });
 

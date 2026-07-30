@@ -41,7 +41,7 @@ export function normalizeEditorHtml(html: string): string {
   return normalizeWithRegexFallback(html);
 }
 
-function normalizeWithDOMParser(html: string): string {
+export function normalizeWithDOMParser(html: string): string {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, "text/html");
 
@@ -99,7 +99,7 @@ function normalizeWithDOMParser(html: string): string {
 
     // Normalizar quebras de página visuais do editor (ex: <div ...>--- QUEBRA DE PÁGINA ---</div>)
     const textContent = el.textContent || "";
-    if (textContent.includes("--- QUEBRA DE PÁGINA ---")) {
+    if (/---\s*QUEBRA DE P.*?GINA\s*---/i.test(textContent)) {
       el.className = "docx-page-break";
       el.setAttribute("style", "page-break-after: always; break-after: page; display: block;");
       el.textContent = "";
@@ -112,7 +112,7 @@ function normalizeWithDOMParser(html: string): string {
 /**
  * Fallback de expressões regulares idêntico ao comportamental para ambientes sem DOM.
  */
-function normalizeWithRegexFallback(html: string): string {
+export function normalizeWithRegexFallback(html: string): string {
   let clean = html;
 
   // 1. Remove botões de exclusão de chip <button...>×</button>
@@ -138,7 +138,7 @@ function normalizeWithRegexFallback(html: string): string {
   clean = clean.replace(/\s+data-field-key="[^"]*"/gi, "");
 
   // 5. Quebra de página
-  clean = clean.replace(/<div[^>]*>--- QUEBRA DE PÁGINA ---<\/div>/gi, '<div class="docx-page-break" style="page-break-after: always; break-after: page;"></div>');
+  clean = clean.replace(/<div[^>]*>---\s*QUEBRA DE P.*?GINA\s*---<\/div>/gi, '<div class="docx-page-break" style="page-break-after: always; break-after: page;"></div>');
 
   return clean;
 }

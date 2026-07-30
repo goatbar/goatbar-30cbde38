@@ -1,11 +1,11 @@
-﻿import { test } from 'vitest';
+import { test } from 'vitest';
 /**
  * normalize-editor-html.test.ts
  *
  * SuÃ­te de testes automatizados cobrindo os 10 cenÃ¡rios obrigatÃ³rios da Etapa 8.
  */
 
-import { normalizeEditorHtml } from "./normalize-editor-html";
+import { normalizeEditorHtml, normalizeWithDOMParser, normalizeWithRegexFallback } from "./normalize-editor-html";
 import { validateExportHtml } from "./validate-export-html";
 import { renderContractTemplate, replaceContractVariables } from "../services/contract-service";
 
@@ -106,7 +106,43 @@ function runTests() {
   assert(pass1 === pass2, `NormalizaÃ§Ã£o deve ser idÃªntica. Pass1: '${pass1}', Pass2: '${pass2}'`);
   console.log("  âœ“ 8.10 IdempotÃªncia passou!");
 
-  console.log("\nðŸŽ‰ TODOS OS 10 TESTES AUTOMATIZADOS FORAM EXECUTADOS COM SUCESSO!");
+  // 8.11 Quebra de PÃ¡gina - Regex Fallback explÃ­cito
+  console.log("Testando 8.11: Quebra de PÃ¡gina (Regex Fallback)");
+  const normRegex = normalizeWithRegexFallback(input87);
+  assert(normRegex.includes(`class="docx-page-break"`), "Regex Fallback deve converter em classe docx-page-break");
+  console.log("  âœ“ 8.11 Regex Fallback explicit passou!");
+
+  // 8.12 Quebra de PÃ¡gina - DOMParser explÃ­cito
+  console.log("Testando 8.12: Quebra de PÃ¡gina (DOMParser)");
+  let OriginalDOMParser = (global as any).DOMParser;
+  try {
+    (global as any).DOMParser = class {
+      parseFromString(html: string) {
+        const el = {
+          textContent: "--- QUEBRA DE PÁGINA ---",
+          className: "",
+          hasAttribute: () => false,
+          setAttribute: function(k: string, v: string) { (this as any).style = v; },
+          removeAttribute: () => {},
+        };
+        return {
+          querySelectorAll: () => [],
+          createTextNode: () => ({}),
+          body: { 
+            querySelectorAll: () => [el],
+            get innerHTML() { return el.className === "docx-page-break" ? '<div class="docx-page-break"></div>' : html; }
+          }
+        };
+      }
+    };
+    const normDom = normalizeWithDOMParser(input87);
+    assert(normDom.includes(`class="docx-page-break"`), "DOMParser deve converter em classe docx-page-break");
+    console.log("  âœ“ 8.12 DOMParser explicit passou!");
+  } finally {
+    (global as any).DOMParser = OriginalDOMParser;
+  }
+
+  console.log("\nðŸŽ‰ TODOS OS TESTES AUTOMATIZADOS FORAM EXECUTADOS COM SUCESSO!");
 }
 
 test('Executa testes de normalização', () => { runTests(); });
