@@ -63,18 +63,34 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
   if (!isOpen) return null;
 
   // ValidaÃ§Ã£o estrita dos placeholders presentes no modelo
-  const { filled, unfilled } = validateContractPlaceholders(
-    rawTemplateContent,
-    compiledVariables
-  );
+  const { filled, unfilled } = validateContractPlaceholders(rawTemplateContent, compiledVariables);
 
   const handlePrintPdf = () => {
-    const exportHtml = prepareContractExportHtml(reviewHtml);
-    const win = window.open("", "_blank");
-    if (win) {
+    try {
+      const exportHtml = prepareContractExportHtml(reviewHtml);
+      const win = window.open("", "_blank");
+      if (!win) {
+        alert(
+          "O navegador bloqueou a janela de impressão. Permita pop-ups para este site e tente novamente.",
+        );
+        return;
+      }
+
       win.document.write(CONTRACT_PRINT_HTML_SHELL(`Contrato GOAT Bar - ${eventName}`, exportHtml));
       win.document.close();
-      win.print();
+      win.focus();
+      // Aguarda o navegador montar a nova página antes de abrir o diálogo.
+      window.setTimeout(() => win.print(), 150);
+    } catch (error) {
+      const pendingFields =
+        error && typeof error === "object" && "unresolvedFields" in error
+          ? ((error as { unresolvedFields?: string[] }).unresolvedFields ?? [])
+          : [];
+      alert(
+        pendingFields.length > 0
+          ? `Preencha os campos pendentes antes de gerar o PDF:\n\n${pendingFields.join("\n")}`
+          : "Não foi possível gerar o PDF. Revise o conteúdo da minuta e tente novamente.",
+      );
     }
   };
 
@@ -86,8 +102,6 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
     navigator.clipboard.writeText(textContent);
     alert("Texto do contrato copiado com sucesso!");
   };
-
-
 
   const handleInsertTable = () => {
     const tableHtml = `
@@ -144,7 +158,8 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
                 RevisÃ£o e Ajustes de FormataÃ§Ã£o do Contrato (Estilo Word)
               </h2>
               <p className="text-[11px] text-muted-foreground">
-                SubstituiÃ§Ã£o determinÃ­stica dos placeholders â€¢ Ajuste fino de texto, fontes, recuos e parÃ¡grafos antes da emissÃ£o
+                SubstituiÃ§Ã£o determinÃ­stica dos placeholders â€¢ Ajuste fino de texto, fontes,
+                recuos e parÃ¡grafos antes da emissÃ£o
               </p>
             </div>
           </div>
@@ -229,7 +244,10 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
                   </div>
                   <ul className="space-y-1 max-h-32 overflow-y-auto">
                     {unfilled.map((item) => (
-                      <li key={item.key} className="text-[10px] font-mono text-warning/90 bg-background/50 px-2 py-0.5 rounded border border-warning/20">
+                      <li
+                        key={item.key}
+                        className="text-[10px] font-mono text-warning/90 bg-background/50 px-2 py-0.5 rounded border border-warning/20"
+                      >
                         <b>{item.token}</b>: {item.value}
                       </li>
                     ))}
@@ -257,10 +275,15 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
                   Placeholders Identificados ({filled.length})
                 </div>
                 {filled.map((item) => (
-                  <div key={item.key} className="p-2 rounded-lg bg-surface border border-border/80 text-[11px] space-y-0.5">
+                  <div
+                    key={item.key}
+                    className="p-2 rounded-lg bg-surface border border-border/80 text-[11px] space-y-0.5"
+                  >
                     <div className="flex justify-between items-center">
                       <span className="font-mono font-bold text-primary">{item.token}</span>
-                      <span className="text-[9px] text-success font-bold bg-success/15 px-1.5 py-0.2 rounded">âœ“ OK</span>
+                      <span className="text-[9px] text-success font-bold bg-success/15 px-1.5 py-0.2 rounded">
+                        âœ“ OK
+                      </span>
                     </div>
                     <p className="text-muted-foreground truncate">{item.value}</p>
                   </div>
@@ -282,11 +305,8 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
                 dangerouslySetInnerHTML={{ __html: reviewHtml }}
                 className="outline-none min-h-[950px] text-sm leading-relaxed bg-white text-slate-900"
               />
-
-
             </div>
           </main>
-
         </div>
 
         {/* MODAL DE BUSCA E SUBSTITUIÃ‡ÃƒO */}
@@ -296,7 +316,10 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
               <h4 className="font-bold text-xs flex items-center gap-1.5">
                 <Search className="h-3.5 w-3.5 text-primary" /> Localizar e Substituir
               </h4>
-              <button onClick={() => setShowFindReplace(false)} className="text-muted-foreground hover:text-foreground">
+              <button
+                onClick={() => setShowFindReplace(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -356,8 +379,8 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
                 onClose();
               }}
               className={`text-xs px-5 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-2 ${
-                unfilled.length > 0 
-                  ? "bg-muted text-muted-foreground cursor-not-allowed" 
+                unfilled.length > 0
+                  ? "bg-muted text-muted-foreground cursor-not-allowed"
                   : "bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-primary/20"
               }`}
             >
@@ -366,10 +389,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
             </button>
           </div>
         </footer>
-
       </div>
     </div>
   );
 };
-
-

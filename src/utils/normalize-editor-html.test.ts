@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { renderContractTemplate } from "../services/contract-service";
+import { renderContractPreview, renderContractTemplate } from "../services/contract-service";
 import { normalizeEditorHtml } from "./normalize-editor-html";
 import {
   ContractExportValidationError,
@@ -49,6 +49,16 @@ describe("fluxo de pré-visualização de contratos", () => {
         },
       );
     }
+  });
+
+  test("a minuta abre com campos pendentes para permitir a revisão", () => {
+    const html = renderContractPreview(
+      "<p>Cliente: {{cliente.nome}}</p><p>Horário: {{evento.hora_fim}}</p>",
+      { "cliente.nome": "Maria" },
+    );
+
+    expect(html).toContain("Cliente: Maria");
+    expect(html).toContain("{{evento.hora_fim}}");
   });
 
   test("elemento contenteditable já sanitizado não bloqueia", () => {

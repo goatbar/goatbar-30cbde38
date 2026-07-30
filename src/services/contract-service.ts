@@ -346,6 +346,24 @@ export function renderContractTemplate(
   }
 }
 
+/**
+ * Compila o contrato para revisão sem aplicar a validação estrita de exportação.
+ *
+ * Campos ainda não preenchidos precisam permanecer visíveis na minuta para que o
+ * usuário consiga identificá-los no painel de pendências. A validação estrita
+ * continua sendo executada ao imprimir, copiar ou enviar o documento.
+ */
+export function renderContractPreview(
+  templateBody: string,
+  variables: Record<string, any>,
+  customMapping?: Record<string, string>,
+): string {
+  if (!templateBody) return "";
+
+  const normalizedHtml = normalizeEditorHtml(templateBody);
+  return replaceContractVariables(normalizedHtml, variables, customMapping);
+}
+
 export const DEFAULT_CONTRACT_BODY = "";
 
 // --- 2. Signers Service ---

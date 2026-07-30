@@ -41,6 +41,7 @@ import {
   eventContractsService,
   clientContractFormService,
   renderContractTemplate,
+  renderContractPreview,
   getTemplateContent,
   getTemplateMapping,
   validateContractPlaceholders,
@@ -673,7 +674,9 @@ function EventoInterna() {
       );
 
       console.debug("[Contract Preview] Conteúdo antes da normalização:", templateContent);
-      const text = renderContractTemplate(templateContent, vars, mapping);
+      // A minuta deve abrir mesmo quando houver campos pendentes. Esses campos
+      // ficam visíveis no painel de validação e só bloqueiam a exportação/envio.
+      const text = renderContractPreview(templateContent, vars, mapping);
       console.debug("[Contract Preview] Conteúdo final após normalização e substituição:", text);
 
       console.log(
