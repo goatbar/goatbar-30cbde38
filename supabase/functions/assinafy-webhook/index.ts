@@ -75,11 +75,24 @@ serve(async (req) => {
     const safePayload = JSON.parse(JSON.stringify(payload));
     const removeSensitive = (obj: any) => {
       if (!obj || typeof obj !== 'object') return;
-      ['cpf', 'email', 'telefone', 'phone', 'authorization', 'token', 'secret'].forEach(key => {
-        if (key in obj) obj[key] = '[REDACTED]';
-      });
+      
+      const sensitiveExact = ['email', 'e-mail', 'phone', 'telefone', 'mobile', 'cpf', 'document_number', 'authorization', 'token', 'access_token', 'api_key', 'apikey', 'secret', 'webhook_secret'];
+      
       for (const k in obj) {
-        if (typeof obj[k] === 'object') removeSensitive(obj[k]);
+        const lowerK = k.toLowerCase();
+        
+        // Se for um campo sensvel conhecido exato
+        if (sensitiveExact.includes(lowerK)) {
+          obj[k] = '[REDACTED]';
+        }
+        // Se contiver 'token', 'secret', 'password' mas no for um ID
+        else if ((lowerK.includes('token') || lowerK.includes('secret') || lowerK.includes('password')) && !lowerK.includes('id')) {
+          obj[k] = '[REDACTED]';
+        }
+        // Recurso
+        else if (typeof obj[k] === 'object') {
+          removeSensitive(obj[k]);
+        }
       }
     };
     removeSensitive(safePayload);
