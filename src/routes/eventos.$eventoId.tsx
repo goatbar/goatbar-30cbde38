@@ -49,7 +49,10 @@ import {
   type ContractTemplate,
 } from "@/services/contract-service";
 import { convertHtmlToPdf } from "@/services/pdf-service";
-import { convertAndDispatchSignature } from "@/services/signature-dispatch";
+import {
+  convertAndDispatchSignature,
+  getSignatureDispatchIdentifiers,
+} from "@/services/signature-dispatch";
 import { getSignatureProvider } from "@/services/signature-provider";
 import { ContractReviewModal } from "@/components/contract-editor/ContractReviewModal";
 import {
@@ -766,10 +769,12 @@ function EventoInterna() {
       const provider = getSignatureProvider(
         realContract.signature_provider || realContract.provider,
       );
+      const identifiers = getSignatureDispatchIdentifiers(eventoId, realContract);
+      console.log("[Signature Dispatch] identifiers", identifiers);
       const { pdf, result } = await convertAndDispatchSignature({
         html: compiledHtml,
         title: `Contrato_${realClientData.client_name || "Evento"}`,
-        contractId: realContract.id,
+        contractId: identifiers.contractId,
         convert: convertHtmlToPdf,
         provider,
       });

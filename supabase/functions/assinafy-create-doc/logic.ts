@@ -17,6 +17,10 @@ export class CreateDocHttpError extends Error {
   }
 }
 
+export function authenticatedClientOptions(authHeader: string) {
+  return { global: { headers: { Authorization: authHeader } } };
+}
+
 export type CreateDocPayload = {
   contractId: string;
   pdfBase64?: string;

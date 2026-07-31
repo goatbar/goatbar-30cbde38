@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { canonicalStringify } from "../supabase/functions/_shared/canonical-hash";
 import { getSignatureProvider } from "../src/services/signature-provider";
 
@@ -179,5 +179,54 @@ describe("assinafy-create-doc request validation", () => {
     ).resolves.toBe(
       "assinafy-create-doc failed:\nHTTP 422\ncode: pdf_required\nmessage: PDF é obrigatório\nrequestId: corr-1",
     );
+  });
+});
+
+import { resolveContractAccess } from "../supabase/functions/assinafy-create-doc/contract-access";
+import { authenticatedClientOptions } from "../supabase/functions/assinafy-create-doc/logic";
+import { getSignatureDispatchIdentifiers } from "../src/services/signature-dispatch";
+
+describe("assinafy-create-doc contract identity and authorization", () => {
+  it("sends event_contracts.id instead of the route events.id", () => {
+    const ids = getSignatureDispatchIdentifiers("event-7dbc", { id: "contract-real-id" });
+    expect(ids).toEqual({
+      eventId: "event-7dbc",
+      contractId: "contract-real-id",
+      contractRecordId: "contract-real-id",
+    });
+    expect(ids.contractId).not.toBe(ids.eventId);
+  });
+
+  it("returns 404 when the service-role existence lookup finds no contract", async () => {
+    const userLookup = vi.fn();
+    await expect(
+      resolveContractAccess(async () => ({ data: null, error: null }), userLookup),
+    ).rejects.toMatchObject({ status: 404, code: "contract_not_found" });
+    expect(userLookup).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when the contract exists but JWT/RLS cannot select it", async () => {
+    await expect(
+      resolveContractAccess(
+        async () => ({ data: { id: "contract-1" }, error: null }),
+        async () => ({ data: null, error: null }),
+      ),
+    ).rejects.toMatchObject({ status: 403, code: "contract_access_denied" });
+  });
+
+  it("returns the authorized contract and advances the flow", async () => {
+    const contract = { id: "contract-1", event_id: "event-1" };
+    await expect(
+      resolveContractAccess(
+        async () => ({ data: { id: contract.id }, error: null }),
+        async () => ({ data: contract, error: null }),
+      ),
+    ).resolves.toBe(contract);
+  });
+
+  it("passes the request Authorization header to the user-scoped Supabase client", () => {
+    expect(authenticatedClientOptions("Bearer test-jwt")).toEqual({
+      global: { headers: { Authorization: "Bearer test-jwt" } },
+    });
   });
 });

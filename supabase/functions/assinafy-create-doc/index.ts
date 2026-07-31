@@ -7,6 +7,7 @@ import {
   createAssignment,
 } from "../_shared/assinafy-client.ts";
 import { requireContractSignatureAccess } from "../_shared/auth-helper.ts";
+import { resolveContractAccess } from "./contract-access.ts";
 import {
   CreateDocHttpError,
   decodePdfBase64,
@@ -14,6 +15,7 @@ import {
   validateCreateDocPayload,
   validatePdfHash,
   validateSigner,
+  authenticatedClientOptions,
 } from "./logic.ts";
 import { ASSINAFY_ACCOUNT_ID, ASSINAFY_API_KEY } from "../_shared/assinafy-client.ts";
 
@@ -48,7 +50,7 @@ serve(async (req) => {
     const supabaseAuthClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } },
+      authenticatedClientOptions(authHeader),
     );
 
     const supabaseAdmin = createClient(
@@ -79,7 +81,7 @@ serve(async (req) => {
       correlationId,
     });
 
-    const access = await requireContractSignatureAccess(supabaseAuthClient, "create", contractId);
+    const access = await requireContractSignatureAccess(supabaseAuthClient, "create");
     console.info("[assinafy-create-doc] authenticated", {
       userId: access.user.id,
       contractId,
@@ -87,11 +89,45 @@ serve(async (req) => {
     });
     stage = "04_load_contract";
 
-    const { data: contract } = await supabaseAuthClient
-      .from("event_contracts")
-      .select("*, event:events(client_name, email)")
-      .eq("id", contractId)
-      .single();
+    const existenceLookup = async () => {
+      const result = await supabaseAdmin
+        .from("event_contracts")
+        .select("id")
+        .eq("id", contractId)
+        .maybeSingle();
+      console.info("[assinafy-create-doc] contract existence", {
+        stage,
+        userId: access.user.id,
+        contractId,
+        queryTable: "event_contracts",
+        queryErrorCode: result.error?.code || null,
+        contractExists: Boolean(result.data),
+        correlationId,
+      });
+      return result;
+    };
+    const authorizedLookup = async () => {
+      const result = await supabaseAuthClient
+        .from("event_contracts")
+        .select("*, event:events(client_name, email)")
+        .eq("id", contractId)
+        .maybeSingle();
+      console.info("[assinafy-create-doc] contract access", {
+        stage: "05_authorize_event",
+        userId: access.user.id,
+        contractId,
+        queryTable: "event_contracts",
+        queryErrorCode: result.error?.code || null,
+        rowFound: Boolean(result.data),
+        accessGranted: Boolean(result.data),
+        eventId: result.data?.event_id || null,
+        correlationId,
+      });
+      return result;
+    };
+    stage = "05_authorize_event";
+    const contract = await resolveContractAccess(existenceLookup, authorizedLookup);
+    const signer = validateSigner(contract.event?.client_name, contract.event?.email);
 
     if (!contract)
       throw new CreateDocHttpError(404, "contract_not_found", "Contrato não encontrado.");
