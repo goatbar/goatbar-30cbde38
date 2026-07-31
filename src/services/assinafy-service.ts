@@ -9,6 +9,48 @@ export interface AssinafyRequestResponse {
   signatureUrl?: string;
   status?: string;
   error?: string;
+  code?: string;
+  message?: string;
+  requestId?: string;
+}
+
+export async function formatAssinafyInvokeError(error: unknown): Promise<string> {
+  const candidate = error as {
+    message?: string;
+    context?: Response | { status?: number; json?: () => Promise<unknown>; headers?: Headers };
+  };
+  const response = candidate?.context;
+  const status =
+    response && typeof response === "object" && "status" in response ? response.status : undefined;
+  let body: { code?: string; message?: string; error?: string; requestId?: string } = {};
+  if (
+    response &&
+    typeof response === "object" &&
+    "json" in response &&
+    typeof response.json === "function"
+  ) {
+    try {
+      body = (await response.json()) as typeof body;
+    } catch {
+      /* A resposta pode não ser JSON. */
+    }
+  }
+  const headerRequestId =
+    response &&
+    typeof response === "object" &&
+    "headers" in response &&
+    response.headers instanceof Headers
+      ? response.headers.get("x-request-id")
+      : null;
+  const details = [
+    status ? `HTTP ${status}` : undefined,
+    body.code ? `code: ${body.code}` : undefined,
+    `message: ${body.message || body.error || candidate?.message || "Falha desconhecida"}`,
+    body.requestId || headerRequestId
+      ? `requestId: ${body.requestId || headerRequestId}`
+      : undefined,
+  ].filter(Boolean);
+  return `assinafy-create-doc failed:\n${details.join("\n")}`;
 }
 
 export async function dispatchContractToAssinafy(
@@ -22,7 +64,7 @@ export async function dispatchContractToAssinafy(
   });
 
   if (error) {
-    throw new Error(`Falha ao invocar assinafy-create-doc: ${error.message}`);
+    throw new Error(await formatAssinafyInvokeError(error));
   }
 
   if (!data?.success) {
