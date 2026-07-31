@@ -67,7 +67,9 @@ export const zapSignSignatureProvider: SignatureProvider = {
     const match = signers.find(
       (s) => typeof s.email === "string" && s.email.toLowerCase() === signerEmail.toLowerCase(),
     );
-    return (match?.sign_url as string) || `https://app.zapsign.com.br/verificar/${providerDocumentId}`;
+    return (
+      (match?.sign_url as string) || `https://app.zapsign.com.br/verificar/${providerDocumentId}`
+    );
   },
 
   async syncStatus(contractId) {
@@ -128,6 +130,7 @@ export const assinafySignatureProvider: SignatureProvider = {
   async syncStatus(contractId) {
     const res = await syncAssinafyStatus(contractId);
     return {
+      ...res,
       status: (res.status as string) || "pending",
       fullySigned: res.status === "signed" || res.status === "completed",
       artifacts: (res.artifacts as Record<string, unknown>) || undefined,
@@ -150,5 +153,3 @@ export const getSignatureProvider = (providerName?: string): SignatureProvider =
   }
   return assinafySignatureProvider;
 };
-
-

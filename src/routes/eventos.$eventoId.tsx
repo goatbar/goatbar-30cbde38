@@ -704,6 +704,7 @@ function EventoInterna() {
   };
 
   const [isDispatchingSignature, setIsDispatchingSignature] = useState(false);
+  const [isRefreshingSignature, setIsRefreshingSignature] = useState(false);
   const [providerDetails, setProviderDetails] = useState<any>(null);
 
   const handleDispatchSignature = async (overrideHtml?: string) => {
@@ -852,6 +853,22 @@ function EventoInterna() {
   const integrationState = realContract
     ? getSignatureIntegrationState(realContract.status, providerDetails)
     : "not_sent";
+
+  const refreshSignatureStatus = async () => {
+    if (!realContract?.id || isRefreshingSignature) return;
+    setIsRefreshingSignature(true);
+    try {
+      const provider = getSignatureProvider(
+        realContract.signature_provider || realContract.provider,
+      );
+      setProviderDetails(await provider.syncStatus(realContract.id));
+      toast.success("Status da assinatura atualizado.");
+    } catch (e: any) {
+      toast.error(`Não foi possível atualizar o status: ${e.message}`);
+    } finally {
+      setIsRefreshingSignature(false);
+    }
+  };
 
   const handleDeleteContract = async () => {
     if (isProcessingContract) return;
@@ -2538,6 +2555,92 @@ function EventoInterna() {
                             </>
                           )}
                         </div>
+                      </div>
+
+                      <div className="mt-4 rounded-2xl border border-border bg-surface p-5">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <div className="flex items-center gap-2 font-bold">
+                              <FileSignature className="h-5 w-5 text-primary" />
+                              Acompanhamento da assinatura
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Consulte aqui o envio, a entrega do convite e a conclusão do contrato.
+                            </p>
+                          </div>
+                          <GhostButton
+                            onClick={refreshSignatureStatus}
+                            disabled={isRefreshingSignature}
+                            className="h-9 px-4 text-xs font-bold"
+                          >
+                            <RefreshCw
+                              className={`mr-2 h-4 w-4 ${isRefreshingSignature ? "animate-spin" : ""}`}
+                            />
+                            ATUALIZAR STATUS
+                          </GhostButton>
+                        </div>
+
+                        <div className="mt-5 grid gap-3 md:grid-cols-3">
+                          {[
+                            {
+                              label: "Enviado à Assinafy",
+                              done: ["active", "completed"].includes(integrationState),
+                              detail: providerDetails?.sent_at
+                                ? new Date(providerDetails.sent_at).toLocaleString("pt-BR")
+                                : integrationState === "sending"
+                                  ? "Envio em andamento"
+                                  : "Ainda não enviado",
+                            },
+                            {
+                              label: "Convite por e-mail",
+                              done: providerDetails?.signers?.some(
+                                (s: any) => s.notification_status === "sent",
+                              ),
+                              detail:
+                                providerDetails?.signers?.[0]?.email ||
+                                realClientData?.email ||
+                                "E-mail não informado",
+                            },
+                            {
+                              label: "Contrato assinado",
+                              done: integrationState === "completed",
+                              detail:
+                                integrationState === "completed"
+                                  ? "Assinatura concluída"
+                                  : "Aguardando assinatura",
+                            },
+                          ].map((step) => (
+                            <div
+                              key={step.label}
+                              className="rounded-xl border border-border/70 bg-background/40 p-4"
+                            >
+                              <div className="flex items-center gap-2 text-sm font-bold">
+                                {step.done ? (
+                                  <CheckCircle2 className="h-5 w-5 text-success" />
+                                ) : (
+                                  <Clock className="h-5 w-5 text-muted-foreground" />
+                                )}
+                                {step.label}
+                              </div>
+                              <p className="mt-2 text-xs text-muted-foreground">{step.detail}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {providerDetails?.signature_url && integrationState === "active" && (
+                          <div className="mt-4 flex flex-col gap-2 rounded-xl bg-primary/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-xs">
+                              O link abaixo pode ser enviado manualmente ao contratante caso o
+                              e-mail não chegue.
+                            </p>
+                            <GhostButton
+                              onClick={() => window.open(providerDetails.signature_url, "_blank")}
+                              className="h-9 shrink-0 px-4 text-xs font-bold"
+                            >
+                              <LinkIcon className="mr-2 h-4 w-4" /> ABRIR LINK DE ASSINATURA
+                            </GhostButton>
+                          </div>
+                        )}
                       </div>
 
                       {integrationState === "send_failed" && (
