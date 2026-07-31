@@ -9,7 +9,7 @@ import {
 
 export interface SignatureProvider {
   name: string;
-  createRequest(payload: { contractId: string; pdfBase64?: string; pdfUrl?: string }): Promise<{
+  createRequest(payload: { contractId: string; pdfBase64?: string; pdfUrl?: string; pdfHash?: string }): Promise<{
     success: boolean;
     externalDocumentId?: string;
     externalAssignmentId?: string;
@@ -106,6 +106,7 @@ export const assinafySignatureProvider: SignatureProvider = {
       payload.contractId,
       payload.pdfBase64,
       payload.pdfUrl,
+      payload.pdfHash,
     );
     return {
       success: res.success,

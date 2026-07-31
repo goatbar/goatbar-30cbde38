@@ -44,3 +44,30 @@ describe('Assinafy Integration Tests', () => {
         expect(defaultProvider.name).toBe('assinafy');
     });
 });
+
+import { decideDispatch } from '../supabase/functions/assinafy-create-doc/logic';
+import { StatusHttpError, normalizeAssinafyStatus, validateStatusPayload } from '../supabase/functions/assinafy-status/logic';
+
+describe('Assinafy dispatch state machine', () => {
+  const hash = 'a'.repeat(64);
+  it('primeiro envio cria uma única solicitação', () => expect(decideDispatch(null, hash).action).toBe('create'));
+  it('clique duplo e solicitação existente reutilizam o documento', () => {
+    const request = { id: 'req-1', dispatch_status: 'pending_signature', original_file_hash: hash, external_document_id: 'doc-1' };
+    expect(decideDispatch(request, hash)).toEqual({ action: 'reuse', request });
+    expect(decideDispatch(request, hash).action).toBe('reuse');
+  });
+  it('nova tentativa reutiliza a solicitação falha', () => expect(decideDispatch({ id: 'req-1', dispatch_status: 'failed', original_file_hash: hash }, hash).action).toBe('retry'));
+  it('bloqueia PDF com hash divergente', () => expect(decideDispatch({ id: 'req-1', dispatch_status: 'pending_signature', original_file_hash: 'b'.repeat(64) }, hash).action).toBe('hash_conflict'));
+  it('impede duplicação durante processamento', () => expect(decideDispatch({ id: 'req-1', dispatch_status: 'processing', original_file_hash: hash }, hash).action).toBe('processing'));
+});
+
+describe('Assinafy status contract', () => {
+  it('exige signature_request_id no sync', () => {
+    expect(() => validateStatusPayload({ action: 'sync' })).toThrow(StatusHttpError);
+    try { validateStatusPayload({ action: 'sync' }); } catch (error) { expect((error as StatusHttpError).status).toBe(400); expect((error as StatusHttpError).code).toBe('signature_request_id_required'); }
+  });
+  it('normaliza status posterior ao envio', () => {
+    expect(normalizeAssinafyStatus('completed')).toBe('signed');
+    expect(normalizeAssinafyStatus('sent')).toBe('pending_signature');
+  });
+});

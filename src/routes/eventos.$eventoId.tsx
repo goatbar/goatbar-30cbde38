@@ -772,6 +772,7 @@ function EventoInterna() {
       const result = await provider.createRequest({
         contractId: realContract.id,
         pdfBase64: base64,
+        pdfHash: hash,
       });
 
       if (result.success && result.externalDocumentId) {

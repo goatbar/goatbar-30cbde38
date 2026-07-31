@@ -6,6 +6,12 @@ export const ASSINAFY_BASE_URL =
 export const ASSINAFY_API_KEY = Deno.env.get("ASSINAFY_API_KEY");
 export const ASSINAFY_ACCOUNT_ID = Deno.env.get("ASSINAFY_ACCOUNT_ID");
 
+export class AssinafyApiError extends Error {
+  constructor(public providerStatus: number) {
+    super(`Assinafy API Error (${providerStatus})`);
+  }
+}
+
 if (!ASSINAFY_API_KEY || !ASSINAFY_ACCOUNT_ID) {
   console.warn("ASSINAFY_API_KEY ou ASSINAFY_ACCOUNT_ID não configurados no ambiente!");
 }
@@ -28,13 +34,8 @@ export async function assinafyFetch(url: string, options: RequestInit = {}) {
     const res = await fetch(url, { ...options, signal: controller.signal });
 
     if (!res.ok) {
-      let errText = "Erro desconhecido";
-      try {
-        errText = await res.text();
-      } catch (e) {}
-      // Limpa chave de API caso ela esteja no erro
-      const sanitizedErr = errText.replace(new RegExp(ASSINAFY_API_KEY || "N/A", "g"), "***");
-      throw new Error(`Assinafy API Error (${res.status}): ${sanitizedErr}`);
+      // Provider responses may echo signer PII. Keep only the HTTP status in logs/errors.
+      throw new AssinafyApiError(res.status);
     }
 
     if (res.status === 204) {
