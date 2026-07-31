@@ -7,6 +7,7 @@ import {
   createAssignment,
 } from "../_shared/assinafy-client.ts";
 import { requireContractSignatureAccess } from "../_shared/auth-helper.ts";
+import { decideDispatch } from "./logic.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,9 +19,11 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  let requestContractId: string | undefined;
   try {
+    if (req.method !== "POST") throw Object.assign(new Error("Método não permitido."), { status: 405, code: "method_not_allowed" });
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("Não autorizado. Missing Auth Header");
+    if (!authHeader) throw Object.assign(new Error("Usuário não autenticado."), { status: 401, code: "unauthenticated" });
 
     const supabaseAuthClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -33,8 +36,10 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    const { contractId, pdfBase64, pdfUrl } = await req.json();
-    if (!contractId) throw new Error("contractId obrigatório");
+    const { contractId, pdfBase64, pdfUrl, pdfHash } = await req.json();
+    requestContractId = contractId;
+    if (!contractId) throw Object.assign(new Error("contractId obrigatório"), { status: 400, code: "contract_id_required" });
+    if (!pdfHash || !/^[a-f0-9]{64}$/i.test(pdfHash)) throw Object.assign(new Error("Hash SHA-256 do PDF é obrigatório."), { status: 400, code: "pdf_hash_required" });
 
     await requireContractSignatureAccess(supabaseAuthClient, "create", contractId);
 
@@ -55,10 +60,16 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    if (sigReq && ["pending_signature", "signed", "completed"].includes(sigReq.dispatch_status)) {
+    const dispatchDecision = decideDispatch(sigReq, pdfHash);
+    if (dispatchDecision.action === "hash_conflict") {
+      throw Object.assign(new Error("O PDF atual diverge do documento associado à solicitação existente."), { status: 409, code: "pdf_hash_mismatch" });
+    }
+
+    if (sigReq && dispatchDecision.action === "reuse") {
       return new Response(
         JSON.stringify({
           success: true,
+          signatureRequestId: sigReq.id,
           externalDocumentId: sigReq.external_document_id,
           externalAssignmentId: sigReq.external_assignment_id,
           signatureUrl: sigReq.signature_url,
@@ -93,7 +104,7 @@ serve(async (req) => {
       );
     }
 
-    if (!sigReq || sigReq.dispatch_status === "failed") {
+    if (!sigReq) {
       const { data: newReq } = await supabaseAdmin
         .from("contract_signature_requests")
         .insert({
@@ -103,10 +114,21 @@ serve(async (req) => {
           signature_provider: "assinafy",
           dispatch_status: "idle",
           internal_status: "pending_signature",
+          original_file_hash: pdfHash,
         })
         .select()
         .single();
       sigReq = newReq;
+    } else if (sigReq.dispatch_status === "failed") {
+      const { data: retryReq, error: retryError } = await supabaseAdmin
+        .from("contract_signature_requests")
+        .update({ dispatch_status: "idle", last_error: null, original_file_hash: pdfHash })
+        .eq("id", sigReq.id)
+        .eq("dispatch_status", "failed")
+        .select()
+        .single();
+      if (retryError || !retryReq) throw Object.assign(new Error("Não foi possível preparar a nova tentativa."), { status: 409, code: "retry_conflict" });
+      sigReq = retryReq;
     }
 
     const { data: lockedReq, error: lockErr } = await supabaseAdmin
@@ -143,6 +165,10 @@ serve(async (req) => {
         } else {
           throw new Error("Nenhum PDF fornecido");
         }
+
+        const actualHash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", buffer)))
+          .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+        if (actualHash !== pdfHash.toLowerCase()) throw Object.assign(new Error("Hash do PDF recebido não confere com o conteúdo."), { status: 409, code: "pdf_hash_mismatch" });
 
         const fileName = `Contrato_${contract.event_id}.pdf`;
         const docResult = await uploadDocument(fileName, buffer);
@@ -240,6 +266,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
+          signatureRequestId: lockedReq.id,
           externalDocumentId: externalDocId,
           externalAssignmentId: externalAssignId,
           signatureUrl: (
@@ -268,8 +295,11 @@ serve(async (req) => {
       throw e;
     }
   } catch (error: any) {
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
-      status: 400,
+    const status = Number(error?.status) || (String(error?.message).includes("não autenticado") ? 401 : String(error?.message).includes("acesso negado") || String(error?.message).includes("acesso ao contrato") ? 403 : String(error?.message).includes("Assinafy API Error") ? 502 : 400);
+    const code = error?.code || (status === 502 ? "assinafy_upstream_error" : "invalid_request_state");
+    console.error("[assinafy-create-doc] error", { status, code, contractId: requestContractId });
+    return new Response(JSON.stringify({ success: false, error: error.message, code }), {
+      status,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

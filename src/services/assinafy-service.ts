@@ -15,9 +15,10 @@ export async function dispatchContractToAssinafy(
   contractId: string,
   pdfBase64?: string,
   pdfUrl?: string,
+  pdfHash?: string,
 ): Promise<AssinafyRequestResponse> {
   const { data, error } = await supabase.functions.invoke("assinafy-create-doc", {
-    body: { contractId, pdfBase64, pdfUrl },
+    body: { contractId, pdfBase64, pdfUrl, pdfHash },
   });
 
   if (error) {
@@ -32,9 +33,21 @@ export async function dispatchContractToAssinafy(
 }
 
 export async function syncAssinafyStatus(contractId: string): Promise<Record<string, unknown>> {
+  const { data: request, error: requestError } = await (supabase as any)
+    .from("contract_signature_requests")
+    .select("id")
+    .eq("contract_id", contractId)
+    .eq("signature_provider", "assinafy")
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (requestError) throw new Error(`Falha ao localizar solicitação: ${requestError.message}`);
+  if (!request) return { status: "not_sent", dispatch_status: "idle" };
+
   const { data, error } = await supabase.functions.invoke(`assinafy-status`, {
     method: "POST",
-    body: { action: "sync", contractId },
+    body: { action: "sync", signatureRequestId: request.id },
   });
 
   if (error) {
@@ -85,4 +98,3 @@ export async function cancelAssinafySignature(contractId: string): Promise<boole
   }
   return true;
 }
-
