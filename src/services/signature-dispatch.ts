@@ -8,6 +8,13 @@ export interface SignatureDispatchProvider<Result> {
   }): Promise<Result>;
 }
 
+export function getSignatureDispatchIdentifiers(
+  eventId: string,
+  contract: { id: string },
+): { eventId: string; contractId: string; contractRecordId: string } {
+  return { eventId, contractId: contract.id, contractRecordId: contract.id };
+}
+
 /** Converts first and never contacts the signature provider when PDF generation fails. */
 export async function convertAndDispatchSignature<Result>(options: {
   html: string;

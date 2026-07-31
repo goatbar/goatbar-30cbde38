@@ -7,7 +7,17 @@ import {
   createAssignment,
 } from "../_shared/assinafy-client.ts";
 import { requireContractSignatureAccess } from "../_shared/auth-helper.ts";
-import { decideDispatch } from "./logic.ts";
+import { resolveContractAccess } from "./contract-access.ts";
+import {
+  CreateDocHttpError,
+  decodePdfBase64,
+  decideDispatch,
+  validateCreateDocPayload,
+  validatePdfHash,
+  validateSigner,
+  authenticatedClientOptions,
+} from "./logic.ts";
+import { ASSINAFY_ACCOUNT_ID, ASSINAFY_API_KEY } from "../_shared/assinafy-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,16 +29,28 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const correlationId = req.headers.get("x-request-id") || crypto.randomUUID();
   let requestContractId: string | undefined;
+  let requestId: string | undefined;
+  let stage = "01_auth";
+  console.info("[assinafy-create-doc] request received", { method: req.method, correlationId });
   try {
-    if (req.method !== "POST") throw Object.assign(new Error("Método não permitido."), { status: 405, code: "method_not_allowed" });
+    if (req.method !== "POST")
+      throw Object.assign(new Error("Método não permitido."), {
+        status: 405,
+        code: "method_not_allowed",
+      });
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw Object.assign(new Error("Usuário não autenticado."), { status: 401, code: "unauthenticated" });
+    if (!authHeader)
+      throw Object.assign(new Error("Usuário não autenticado."), {
+        status: 401,
+        code: "unauthenticated",
+      });
 
     const supabaseAuthClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } },
+      authenticatedClientOptions(authHeader),
     );
 
     const supabaseAdmin = createClient(
@@ -36,21 +58,80 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    const { contractId, pdfBase64, pdfUrl, pdfHash } = await req.json();
+    stage = "02_parse_payload";
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      throw new CreateDocHttpError(400, "invalid_json", "JSON malformado.");
+    }
+    const fieldNames =
+      rawBody && typeof rawBody === "object" && !Array.isArray(rawBody)
+        ? Object.keys(rawBody as object)
+        : [];
+    stage = "03_validate_payload";
+    const { contractId, pdfBase64, pdfUrl, pdfHash } = validateCreateDocPayload(rawBody);
     requestContractId = contractId;
-    if (!contractId) throw Object.assign(new Error("contractId obrigatório"), { status: 400, code: "contract_id_required" });
-    if (!pdfHash || !/^[a-f0-9]{64}$/i.test(pdfHash)) throw Object.assign(new Error("Hash SHA-256 do PDF é obrigatório."), { status: 400, code: "pdf_hash_required" });
+    console.info("[assinafy-create-doc] payload", {
+      fieldNames,
+      contractId,
+      pdfBase64Present: Boolean(pdfBase64),
+      pdfBase64Length: pdfBase64?.length || 0,
+      originalFileHash: pdfHash,
+      correlationId,
+    });
 
-    await requireContractSignatureAccess(supabaseAuthClient, "create", contractId);
+    const access = await requireContractSignatureAccess(supabaseAuthClient, "create");
+    console.info("[assinafy-create-doc] authenticated", {
+      userId: access.user.id,
+      contractId,
+      correlationId,
+    });
+    stage = "04_load_contract";
 
-    const { data: contract } = await supabaseAuthClient
-      .from("event_contracts")
-      .select("*, event:events(client_name, email)")
-      .eq("id", contractId)
-      .single();
+    const existenceLookup = async () => {
+      const result = await supabaseAdmin
+        .from("event_contracts")
+        .select("id")
+        .eq("id", contractId)
+        .maybeSingle();
+      console.info("[assinafy-create-doc] contract existence", {
+        stage,
+        userId: access.user.id,
+        contractId,
+        queryTable: "event_contracts",
+        queryErrorCode: result.error?.code || null,
+        contractExists: Boolean(result.data),
+        correlationId,
+      });
+      return result;
+    };
+    const authorizedLookup = async () => {
+      const result = await supabaseAuthClient
+        .from("event_contracts")
+        .select("*, event:events(client_name, email)")
+        .eq("id", contractId)
+        .maybeSingle();
+      console.info("[assinafy-create-doc] contract access", {
+        stage: "05_authorize_event",
+        userId: access.user.id,
+        contractId,
+        queryTable: "event_contracts",
+        queryErrorCode: result.error?.code || null,
+        rowFound: Boolean(result.data),
+        accessGranted: Boolean(result.data),
+        eventId: result.data?.event_id || null,
+        correlationId,
+      });
+      return result;
+    };
+    stage = "05_authorize_event";
+    const contract = await resolveContractAccess(existenceLookup, authorizedLookup);
+    const signer = validateSigner(contract.event?.client_name, contract.event?.email);
 
     // A partir daqui, sabemos que o usuário logado tem acesso ao contrato.
     // Usamos o supabaseAdmin para garantir inserts independentes de políticas parciais.
+    stage = "06_find_or_create_request";
     let { data: sigReq } = await supabaseAdmin
       .from("contract_signature_requests")
       .select("*")
@@ -60,12 +141,24 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
+    console.info("[assinafy-create-doc] local request", {
+      exists: Boolean(sigReq),
+      requestId: sigReq?.id,
+      localStatus: sigReq?.dispatch_status,
+      contractId,
+      correlationId,
+    });
     const dispatchDecision = decideDispatch(sigReq, pdfHash);
     if (dispatchDecision.action === "hash_conflict") {
-      throw Object.assign(new Error("O PDF atual diverge do documento associado à solicitação existente."), { status: 409, code: "pdf_hash_mismatch" });
+      throw new CreateDocHttpError(
+        409,
+        "pdf_hash_mismatch",
+        "O PDF atual diverge do documento associado à solicitação existente.",
+      );
     }
 
     if (sigReq && dispatchDecision.action === "reuse") {
+      stage = "14_complete";
       return new Response(
         JSON.stringify({
           success: true,
@@ -75,7 +168,13 @@ serve(async (req) => {
           signatureUrl: sigReq.signature_url,
           status: sigReq.dispatch_status,
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "x-request-id": correlationId,
+          },
+        },
       );
     }
 
@@ -118,6 +217,12 @@ serve(async (req) => {
         })
         .select()
         .single();
+      if (!newReq)
+        throw new CreateDocHttpError(
+          500,
+          "request_persist_failed",
+          "Não foi possível criar a solicitação de assinatura.",
+        );
       sigReq = newReq;
     } else if (sigReq.dispatch_status === "failed") {
       const { data: retryReq, error: retryError } = await supabaseAdmin
@@ -127,10 +232,15 @@ serve(async (req) => {
         .eq("dispatch_status", "failed")
         .select()
         .single();
-      if (retryError || !retryReq) throw Object.assign(new Error("Não foi possível preparar a nova tentativa."), { status: 409, code: "retry_conflict" });
+      if (retryError || !retryReq)
+        throw Object.assign(new Error("Não foi possível preparar a nova tentativa."), {
+          status: 409,
+          code: "retry_conflict",
+        });
       sigReq = retryReq;
     }
 
+    requestId = sigReq.id;
     const { data: lockedReq, error: lockErr } = await supabaseAdmin
       .from("contract_signature_requests")
       .update({ dispatch_status: "processing", updated_at: new Date().toISOString() })
@@ -143,34 +253,50 @@ serve(async (req) => {
       throw new Error("Falha ao adquirir lock no request. Concorrência evitada.");
     }
 
+    requestId = lockedReq.id;
     let externalDocId = lockedReq.external_document_id;
     let externalAssignId = lockedReq.external_assignment_id;
 
     try {
-      const clientEmail = contract.event?.email;
-      const clientName = contract.event?.client_name || "Cliente";
-
-      if (!clientEmail) throw new Error("E-mail do cliente não informado no evento.");
+      const clientEmail = signer.email;
+      const clientName = signer.name;
 
       if (!externalDocId) {
+        stage = "07_validate_hash";
         let buffer: Uint8Array;
         if (pdfBase64) {
-          const bstr = atob(pdfBase64);
-          buffer = new Uint8Array(bstr.length);
-          for (let i = 0; i < bstr.length; i++) buffer[i] = bstr.charCodeAt(i);
-        } else if (pdfUrl) {
-          const fileRes = await fetch(pdfUrl);
-          if (!fileRes.ok) throw new Error("Falha ao baixar PDF do URL");
-          buffer = new Uint8Array(await fileRes.arrayBuffer());
+          stage = "08_decode_pdf";
+          buffer = decodePdfBase64(pdfBase64);
         } else {
-          throw new Error("Nenhum PDF fornecido");
+          const fileRes = await fetch(pdfUrl!);
+          if (!fileRes.ok)
+            throw new CreateDocHttpError(
+              422,
+              "pdf_url_unreadable",
+              "Não foi possível baixar o PDF informado.",
+            );
+          buffer = new Uint8Array(await fileRes.arrayBuffer());
+          if (new TextDecoder().decode(buffer.slice(0, 5)) !== "%PDF-")
+            throw new CreateDocHttpError(
+              422,
+              "pdf_signature_invalid",
+              "O arquivo recebido não possui assinatura PDF válida.",
+            );
         }
-
-        const actualHash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", buffer)))
-          .map((byte) => byte.toString(16).padStart(2, "0")).join("");
-        if (actualHash !== pdfHash.toLowerCase()) throw Object.assign(new Error("Hash do PDF recebido não confere com o conteúdo."), { status: 409, code: "pdf_hash_mismatch" });
-
+        await validatePdfHash(buffer, pdfHash);
+        if (!ASSINAFY_API_KEY || !ASSINAFY_ACCOUNT_ID)
+          throw new CreateDocHttpError(
+            503,
+            "assinafy_not_configured",
+            "Serviço de assinatura indisponível.",
+          );
+        console.info("[assinafy-create-doc] provider configuration", {
+          configured: true,
+          correlationId,
+        });
+        stage = "09_provider_document";
         const fileName = `Contrato_${contract.event_id}.pdf`;
+        stage = "10_provider_upload";
         const docResult = await uploadDocument(fileName, buffer);
         externalDocId = docResult?.data?.id || docResult?.id;
 
@@ -193,6 +319,7 @@ serve(async (req) => {
       if (existingSigner?.external_signer_id) {
         extSignerId = existingSigner.external_signer_id;
       } else {
+        stage = "11_provider_signer";
         const found = await findSigner(clientEmail);
         if (found && found.id) {
           extSignerId = found.id;
@@ -215,6 +342,7 @@ serve(async (req) => {
       if (!extSignerId) throw new Error("Não foi possível criar/recuperar Signer.");
 
       if (!externalAssignId) {
+        stage = "12_provider_assignment";
         const assignRes = await createAssignment(externalDocId, [{ id: extSignerId }]);
         externalAssignId = assignRes?.data?.id || assignRes?.id;
         const assignment = assignRes?.data || assignRes;
@@ -247,6 +375,7 @@ serve(async (req) => {
           .eq("external_signer_id", extSignerId);
       }
 
+      stage = "13_persist";
       await supabaseAdmin
         .from("contract_signature_requests")
         .update({
@@ -263,6 +392,7 @@ serve(async (req) => {
         })
         .eq("id", contractId);
 
+      stage = "14_complete";
       return new Response(
         JSON.stringify({
           success: true,
@@ -278,7 +408,13 @@ serve(async (req) => {
           ).data?.signature_url,
           status: "pending_signature",
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "x-request-id": correlationId,
+          },
+        },
       );
     } catch (e: any) {
       // Se houve erro antes de salvar doc id, bloqueia pra reconciliação.
@@ -295,12 +431,67 @@ serve(async (req) => {
       throw e;
     }
   } catch (error: any) {
-    const status = Number(error?.status) || (String(error?.message).includes("não autenticado") ? 401 : String(error?.message).includes("acesso negado") || String(error?.message).includes("acesso ao contrato") ? 403 : String(error?.message).includes("Assinafy API Error") ? 502 : 400);
-    const code = error?.code || (status === 502 ? "assinafy_upstream_error" : "invalid_request_state");
-    console.error("[assinafy-create-doc] error", { status, code, contractId: requestContractId });
-    return new Response(JSON.stringify({ success: false, error: error.message, code }), {
+    const message = String(error?.message || "Falha interna ao enviar para assinatura.");
+    const isProviderError =
+      error?.name === "AssinafyApiError" || message.includes("Assinafy API Error");
+    const status =
+      Number(error?.status) ||
+      (message.includes("não autenticado")
+        ? 401
+        : message.includes("não encontrado")
+          ? 404
+          : message.includes("acesso negado") || message.includes("acesso ao contrato")
+            ? 403
+            : isProviderError
+              ? 502
+              : 500);
+    const code =
+      error?.code ||
+      (isProviderError
+        ? "assinafy_upstream_error"
+        : status === 401
+          ? "unauthenticated"
+          : status === 403
+            ? "forbidden"
+            : status === 404
+              ? "contract_not_found"
+              : "internal_error");
+    const safeMessage = isProviderError
+      ? "A Assinafy rejeitou a operação."
+      : status >= 500 && !(error instanceof CreateDocHttpError)
+        ? "Falha interna ao enviar para assinatura."
+        : message;
+    console.error("[assinafy-create-doc] failure", {
+      stage,
       status,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      code,
+      safeMessage,
+      contractId: requestContractId,
+      requestId,
+      providerCalled:
+        stage.startsWith("09_") ||
+        stage.startsWith("10_") ||
+        stage.startsWith("11_") ||
+        stage.startsWith("12_"),
+      providerStatus: isProviderError ? error?.providerStatus : undefined,
+      correlationId,
     });
+    return new Response(
+      JSON.stringify({
+        success: false,
+        message: safeMessage,
+        error: safeMessage,
+        code,
+        requestId: correlationId,
+      }),
+      {
+        status,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+          "x-request-id": correlationId,
+        },
+      },
+    );
   }
 });
