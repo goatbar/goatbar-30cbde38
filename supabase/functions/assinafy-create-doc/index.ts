@@ -129,6 +129,11 @@ serve(async (req) => {
     const contract = await resolveContractAccess(existenceLookup, authorizedLookup);
     const signer = validateSigner(contract.event?.client_name, contract.event?.email);
 
+    if (!contract)
+      throw new CreateDocHttpError(404, "contract_not_found", "Contrato não encontrado.");
+    stage = "05_authorize_event";
+    const signer = validateSigner(contract.event?.client_name, contract.event?.email);
+
     // A partir daqui, sabemos que o usuário logado tem acesso ao contrato.
     // Usamos o supabaseAdmin para garantir inserts independentes de políticas parciais.
     stage = "06_find_or_create_request";
