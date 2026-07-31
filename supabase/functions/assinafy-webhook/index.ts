@@ -21,6 +21,10 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  if (req.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405 });
+  }
+
   try {
     const expectedToken = Deno.env.get("ASSINAFY_WEBHOOK_TOKEN");
     
@@ -67,14 +71,27 @@ serve(async (req) => {
         }
     }
 
-    // Insert idempotente. O payload bruto fica salvo para auditoria
+    // Sanitiza payload antes de inserir
+    const safePayload = JSON.parse(JSON.stringify(payload));
+    const removeSensitive = (obj: any) => {
+      if (!obj || typeof obj !== 'object') return;
+      ['cpf', 'email', 'telefone', 'phone', 'authorization', 'token', 'secret'].forEach(key => {
+        if (key in obj) obj[key] = '[REDACTED]';
+      });
+      for (const k in obj) {
+        if (typeof obj[k] === 'object') removeSensitive(obj[k]);
+      }
+    };
+    removeSensitive(safePayload);
+
+    // Insert idempotente. O payload sanitizado fica salvo para auditoria
     const { error: insertErr } = await supabaseAdmin
         .from("contract_signature_events")
         .insert({
             external_event_id: externalEventId,
             contract_id: contractId,
             event_type: eventType || "unknown",
-            payload: payload
+            payload: safePayload
         });
     
     if (insertErr && insertErr.code === '23505') { 
