@@ -32,7 +32,7 @@ import {
   X,
   Sparkles,
 } from "lucide-react";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAppStore } from "@/lib/app-store";
 import { DrinkImage } from "@/components/DrinkImage";
 import {
@@ -49,6 +49,7 @@ import {
   type ContractTemplate,
 } from "@/services/contract-service";
 import { convertHtmlToPdf } from "@/services/pdf-service";
+import { convertAndDispatchSignature } from "@/services/signature-dispatch";
 import { getSignatureProvider } from "@/services/signature-provider";
 import { ContractReviewModal } from "@/components/contract-editor/ContractReviewModal";
 import {
@@ -704,6 +705,7 @@ function EventoInterna() {
   };
 
   const [isDispatchingSignature, setIsDispatchingSignature] = useState(false);
+  const isSignatureDispatchLocked = useRef(false);
   const [isRefreshingSignature, setIsRefreshingSignature] = useState(false);
   const [providerDetails, setProviderDetails] = useState<any>(null);
 
@@ -720,6 +722,8 @@ function EventoInterna() {
       return;
     }
 
+    if (isSignatureDispatchLocked.current) return;
+    isSignatureDispatchLocked.current = true;
     setIsDispatchingSignature(true);
     try {
       let compiledHtml = overrideHtml;
@@ -758,22 +762,20 @@ function EventoInterna() {
       }
 
       // 2. Converte o resultado compilado existente para PDF imutável (etapa adicional única)
-      const { base64, hash } = await convertHtmlToPdf(
-        compiledHtml,
-        `Contrato_${realClientData.client_name || "Evento"}`,
-      );
-
-      console.log("🔹 [Signature Dispatch] Hash SHA-256 do PDF imutável:", hash);
-
-      // 3. Dispara para o Provedor Ativo
+      // 3. Dispara para o Provedor Ativo somente depois que o PDF estiver pronto
       const provider = getSignatureProvider(
         realContract.signature_provider || realContract.provider,
       );
-      const result = await provider.createRequest({
+      const { pdf, result } = await convertAndDispatchSignature({
+        html: compiledHtml,
+        title: `Contrato_${realClientData.client_name || "Evento"}`,
         contractId: realContract.id,
-        pdfBase64: base64,
-        pdfHash: hash,
+        convert: convertHtmlToPdf,
+        provider,
       });
+      const { hash } = pdf;
+
+      console.log("🔹 [Signature Dispatch] Hash SHA-256 do PDF imutável:", hash);
 
       if (result.success && result.externalDocumentId) {
         await handleStatusChange(
@@ -792,6 +794,7 @@ function EventoInterna() {
       console.error("Erro no disparo de assinatura:", err);
       toast.error(`Erro ao enviar: ${err.message || "Erro inesperado"}`);
     } finally {
+      isSignatureDispatchLocked.current = false;
       setIsDispatchingSignature(false);
     }
   };

@@ -1,5 +1,12 @@
 import { prepareContractExportHtml } from "@/utils/prepare-contract-export-html";
 import { CONTRACT_DOCUMENT_CSS } from "@/lib/contract-document-styles";
+import html2pdf from "html2pdf.js";
+
+export interface PdfArtifacts {
+  blob: Blob;
+  base64: string;
+  hash: string;
+}
 
 export async function calculateSha256(data: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", data);
@@ -10,8 +17,9 @@ export async function calculateSha256(data: ArrayBuffer): Promise<string> {
 
 export async function convertHtmlToPdf(
   htmlContent: string,
-  title: string = "Contrato_GOAT_Bar"
-): Promise<{ blob: Blob; base64: string; hash: string }> {
+  title: string = "Contrato_GOAT_Bar",
+  pdfRenderer: typeof html2pdf = html2pdf,
+): Promise<PdfArtifacts> {
   const cleanHtml = prepareContractExportHtml(htmlContent);
 
   const iframe = document.createElement("iframe");
@@ -55,7 +63,6 @@ export async function convertHtmlToPdf(
   iframeDoc.close();
 
   try {
-    const html2pdf = (await import("html2pdf.js")).default;
     const opt = {
       margin: [15, 15, 15, 15] as [number, number, number, number],
       filename: `${title}.pdf`,
@@ -66,29 +73,36 @@ export async function convertHtmlToPdf(
     };
 
     const targetElement = iframeDoc.body;
-    const pdfArrayBuffer: ArrayBuffer = await html2pdf()
+    const pdfArrayBuffer: ArrayBuffer = await pdfRenderer()
       .set(opt)
       .from(targetElement)
       .outputPdf("arraybuffer");
 
     document.body.removeChild(iframe);
 
-    const hash = await calculateSha256(pdfArrayBuffer);
-    const pdfBlob = new Blob([pdfArrayBuffer], { type: "application/pdf" });
-
-    let binary = "";
-    const bytes = new Uint8Array(pdfArrayBuffer);
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    const base64 = btoa(binary);
-
-    return { blob: pdfBlob, base64, hash };
+    return createPdfArtifacts(pdfArrayBuffer);
   } catch (err: any) {
     if (document.body.contains(iframe)) {
       document.body.removeChild(iframe);
     }
     console.error("Erro ao converter HTML para PDF:", err);
-    throw new Error(`Não foi possível converter a minuta compilada para formato PDF: ${err?.message || String(err)}`);
+    throw new Error(
+      `Não foi possível converter a minuta compilada para formato PDF: ${err?.message || String(err)}`,
+    );
   }
+}
+
+/** Builds every representation from one immutable buffer, so hash and upload cannot diverge. */
+export async function createPdfArtifacts(pdfArrayBuffer: ArrayBuffer): Promise<PdfArtifacts> {
+  const bytes = new Uint8Array(pdfArrayBuffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+
+  return {
+    blob: new Blob([pdfArrayBuffer], { type: "application/pdf" }),
+    base64: btoa(binary),
+    hash: await calculateSha256(pdfArrayBuffer),
+  };
 }

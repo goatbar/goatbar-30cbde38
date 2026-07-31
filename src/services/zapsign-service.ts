@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { normalizeEditorHtml } from "@/utils/normalize-editor-html";
 import { prepareContractExportHtml } from "@/utils/prepare-contract-export-html";
 import { CONTRACT_DOCUMENT_CSS, CONTRACT_PRINT_HTML_SHELL } from "@/lib/contract-document-styles";
+import html2pdf from "html2pdf.js";
 
 
 export interface ZapSignSigner {
@@ -84,8 +85,6 @@ export async function convertHtmlToPdf(
   iframeDoc.close();
 
   try {
-    // Importa html2pdf dinamicamente
-    const html2pdf = (await import("html2pdf.js")).default;
     const opt = {
       margin: [15, 15, 15, 15] as [number, number, number, number],
       filename: `${title}.pdf`,
