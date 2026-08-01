@@ -43,7 +43,22 @@ export class AssinafyDiagnosticError extends Error {
   }
 }
 
-export async function formatAssinafyInvokeError(error: unknown): Promise<string> {
+type AssinafyErrorBody = {
+  code?: string;
+  message?: string;
+  error?: string;
+  requestId?: string;
+  diagnostic?: AssinafyDiagnostic;
+};
+
+type ParsedInvokeError = {
+  status?: number;
+  body: AssinafyErrorBody;
+  requestId?: string | null;
+  message?: string;
+};
+
+async function parseInvokeError(error: unknown): Promise<ParsedInvokeError> {
   const candidate = error as {
     message?: string;
     context?: Response | { status?: number; json?: () => Promise<unknown>; headers?: Headers };
@@ -51,13 +66,7 @@ export async function formatAssinafyInvokeError(error: unknown): Promise<string>
   const response = candidate?.context;
   const status =
     response && typeof response === "object" && "status" in response ? response.status : undefined;
-  let body: {
-    code?: string;
-    message?: string;
-    error?: string;
-    requestId?: string;
-    diagnostic?: AssinafyDiagnostic;
-  } = {};
+  let body: AssinafyErrorBody = {};
   if (
     response &&
     typeof response === "object" &&
@@ -70,22 +79,80 @@ export async function formatAssinafyInvokeError(error: unknown): Promise<string>
       /* A resposta pode não ser JSON. */
     }
   }
+  const headers =
+    response && typeof response === "object" && "headers" in response
+      ? response.headers
+      : undefined;
   const headerRequestId =
-    response &&
-    typeof response === "object" &&
-    "headers" in response &&
-    response.headers instanceof Headers
-      ? response.headers.get("x-request-id")
-      : null;
+    headers && typeof headers.get === "function" ? headers.get("x-request-id") : null;
+  return {
+    status,
+    body,
+    requestId: body.requestId || headerRequestId,
+    message: candidate?.message,
+  };
+}
+
+function formatParsedInvokeError(parsed: ParsedInvokeError): string {
   const details = [
-    status ? `HTTP ${status}` : undefined,
-    body.code ? `code: ${body.code}` : undefined,
-    `message: ${body.message || body.error || candidate?.message || "Falha desconhecida"}`,
-    body.requestId || headerRequestId
-      ? `requestId: ${body.requestId || headerRequestId}`
-      : undefined,
+    parsed.status ? `HTTP ${parsed.status}` : undefined,
+    parsed.body.code ? `code: ${parsed.body.code}` : undefined,
+    `message: ${parsed.body.message || parsed.body.error || parsed.message || "Falha desconhecida"}`,
+    parsed.requestId ? `requestId: ${parsed.requestId}` : undefined,
   ].filter(Boolean);
   return `assinafy-create-doc failed:\n${details.join("\n")}`;
+}
+
+export async function formatAssinafyInvokeError(error: unknown): Promise<string> {
+  return formatParsedInvokeError(await parseInvokeError(error));
+}
+
+/** Distinguishes an HTTP response from the Edge Function from a transport failure. */
+export async function normalizeAssinafyInvokeError(
+  error: unknown,
+  contractId: string,
+): Promise<{ message: string; diagnostic: AssinafyDiagnostic }> {
+  const parsed = await parseInvokeError(error);
+  const backendReached = typeof parsed.status === "number";
+  const backendDiagnostic = parsed.body.diagnostic;
+  return {
+    message: formatParsedInvokeError(parsed),
+    diagnostic: backendReached
+      ? {
+          requestStarted: true,
+          backendReached: true,
+          assinafyRequestSent: Boolean(backendDiagnostic?.assinafyRequestSent),
+          httpStatus: parsed.status!,
+          assinafyResponse: parsed.body,
+          errorMessage:
+            parsed.body.message ||
+            parsed.body.error ||
+            parsed.message ||
+            "Edge Function rejeitou a solicitação",
+          internalContractId: backendDiagnostic?.internalContractId || contractId,
+          internalDocumentId: backendDiagnostic?.internalDocumentId,
+          assinafyDocumentId: backendDiagnostic?.assinafyDocumentId ?? null,
+          databaseUpdated: Boolean(backendDiagnostic?.databaseUpdated),
+          timestamp: backendDiagnostic?.timestamp || new Date().toISOString(),
+          timedOut: Boolean(backendDiagnostic?.timedOut),
+          authenticationRejected:
+            parsed.status === 401 || Boolean(backendDiagnostic?.authenticationRejected),
+        }
+      : {
+          requestStarted: true,
+          backendReached: false,
+          assinafyRequestSent: false,
+          httpStatus: null,
+          assinafyResponse: null,
+          errorMessage: parsed.message || "Edge Function indisponível",
+          internalContractId: contractId,
+          assinafyDocumentId: null,
+          databaseUpdated: false,
+          timestamp: new Date().toISOString(),
+          timedOut: false,
+          authenticationRejected: false,
+        },
+  };
 }
 
 export async function dispatchContractToAssinafy(
@@ -99,30 +166,8 @@ export async function dispatchContractToAssinafy(
   });
 
   if (error) {
-    let diagnostic: AssinafyDiagnostic | undefined;
-    const response = (error as { context?: Response }).context;
-    if (response?.clone) {
-      try {
-        diagnostic = (await response.clone().json())?.diagnostic;
-      } catch {
-        // A mensagem formatada abaixo preserva respostas não JSON.
-      }
-    }
-    diagnostic ??= {
-      requestStarted: true,
-      backendReached: false,
-      assinafyRequestSent: false,
-      httpStatus: null,
-      assinafyResponse: null,
-      errorMessage: (error as { message?: string })?.message || "Edge Function indisponível",
-      internalContractId: contractId,
-      assinafyDocumentId: null,
-      databaseUpdated: false,
-      timestamp: new Date().toISOString(),
-      timedOut: false,
-      authenticationRejected: false,
-    };
-    throw new AssinafyDiagnosticError(await formatAssinafyInvokeError(error), diagnostic);
+    const normalized = await normalizeAssinafyInvokeError(error, contractId);
+    throw new AssinafyDiagnosticError(normalized.message, normalized.diagnostic);
   }
 
   if (!data?.success) {
