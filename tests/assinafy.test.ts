@@ -108,7 +108,10 @@ import {
   validatePdfHash,
   validateSigner,
 } from "../supabase/functions/assinafy-create-doc/logic";
-import { formatAssinafyInvokeError } from "../src/services/assinafy-service";
+import {
+  formatAssinafyInvokeError,
+  normalizeAssinafyInvokeError,
+} from "../src/services/assinafy-service";
 
 const pdfBytes = new TextEncoder().encode("%PDF-1.4\nminimal");
 const pdfBase64 = btoa(String.fromCharCode(...pdfBytes));
@@ -179,6 +182,49 @@ describe("assinafy-create-doc request validation", () => {
     ).resolves.toBe(
       "assinafy-create-doc failed:\nHTTP 422\ncode: pdf_required\nmessage: PDF é obrigatório\nrequestId: corr-1",
     );
+  });
+
+  it.each([400, 403, 404, 500])(
+    "marks an Edge Function HTTP %s response as backend reached",
+    async (status) => {
+      const body = {
+        code: "contract_error",
+        message: "Contrato rejeitado",
+        diagnostic: { assinafyRequestSent: false, databaseUpdated: false },
+      };
+      const normalized = await normalizeAssinafyInvokeError(
+        {
+          name: "FunctionsHttpError",
+          message: "Edge Function returned a non-2xx status code",
+          context: new Response(JSON.stringify(body), {
+            status,
+            headers: { "content-type": "application/json" },
+          }),
+        },
+        "contract-1",
+      );
+
+      expect(normalized.diagnostic).toMatchObject({
+        backendReached: true,
+        httpStatus: status,
+        assinafyRequestSent: false,
+        internalContractId: "contract-1",
+      });
+      expect(normalized.diagnostic.assinafyResponse).toMatchObject(body);
+    },
+  );
+
+  it("keeps FunctionsFetchError reserved for a backend that was not reached", async () => {
+    const normalized = await normalizeAssinafyInvokeError(
+      { name: "FunctionsFetchError", message: "Failed to send a request to the Edge Function" },
+      "contract-1",
+    );
+    expect(normalized.diagnostic).toMatchObject({
+      backendReached: false,
+      httpStatus: null,
+      assinafyRequestSent: false,
+      assinafyResponse: null,
+    });
   });
 });
 
