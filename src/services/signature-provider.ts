@@ -5,16 +5,23 @@ import {
   syncAssinafyStatus,
   downloadAssinafyArtifact,
   resendAssinafySignature,
+  type AssinafyDiagnostic,
 } from "./assinafy-service";
 
 export interface SignatureProvider {
   name: string;
-  createRequest(payload: { contractId: string; pdfBase64?: string; pdfUrl?: string; pdfHash?: string }): Promise<{
+  createRequest(payload: {
+    contractId: string;
+    pdfBase64?: string;
+    pdfUrl?: string;
+    pdfHash?: string;
+  }): Promise<{
     success: boolean;
     externalDocumentId?: string;
     externalAssignmentId?: string;
     status: string;
     signatureUrl?: string;
+    diagnostic?: AssinafyDiagnostic;
   }>;
 
   getSignatureLink(providerDocumentId: string, signerEmail: string): Promise<string>;
@@ -114,6 +121,7 @@ export const assinafySignatureProvider: SignatureProvider = {
       externalAssignmentId: res.externalAssignmentId,
       status: res.status || "pending",
       signatureUrl: res.signatureUrl,
+      diagnostic: res.diagnostic,
     };
   },
 

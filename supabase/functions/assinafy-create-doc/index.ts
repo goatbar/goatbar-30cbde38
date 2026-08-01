@@ -127,8 +127,6 @@ serve(async (req) => {
     };
     stage = "05_authorize_event";
     const contract = await resolveContractAccess(existenceLookup, authorizedLookup);
-    const signer = validateSigner(contract.event?.client_name, contract.event?.email);
-
     if (!contract)
       throw new CreateDocHttpError(404, "contract_not_found", "Contrato não encontrado.");
     stage = "05_authorize_event";
@@ -172,6 +170,20 @@ serve(async (req) => {
           externalAssignmentId: sigReq.external_assignment_id,
           signatureUrl: sigReq.signature_url,
           status: sigReq.dispatch_status,
+          diagnostic: {
+            requestStarted: true,
+            backendReached: true,
+            assinafyRequestSent: false,
+            httpStatus: null,
+            assinafyResponse: "Existing active request reused; no new provider request was sent.",
+            internalContractId: contractId,
+            internalDocumentId: sigReq.id,
+            assinafyDocumentId: sigReq.external_document_id,
+            databaseUpdated: false,
+            timestamp: new Date().toISOString(),
+            timedOut: false,
+            authenticationRejected: false,
+          },
         }),
         {
           headers: {
@@ -261,6 +273,7 @@ serve(async (req) => {
     requestId = lockedReq.id;
     let externalDocId = lockedReq.external_document_id;
     let externalAssignId = lockedReq.external_assignment_id;
+    let lastProviderDiagnostic: Record<string, unknown> | undefined;
 
     try {
       const clientEmail = signer.email;
@@ -297,12 +310,19 @@ serve(async (req) => {
           );
         console.info("[assinafy-create-doc] provider configuration", {
           configured: true,
+          environment: Deno.env.get("ASSINAFY_ENVIRONMENT") || "sandbox",
+          apiKeyEnvironmentVariable: "ASSINAFY_API_KEY",
+          apiKeyPresent: Boolean(ASSINAFY_API_KEY),
+          accountIdEnvironmentVariable: "ASSINAFY_ACCOUNT_ID",
+          accountIdPresent: Boolean(ASSINAFY_ACCOUNT_ID),
+          authenticationHeader: "X-Api-Key",
           correlationId,
         });
         stage = "09_provider_document";
         const fileName = `Contrato_${contract.event_id}.pdf`;
         stage = "10_provider_upload";
         const docResult = await uploadDocument(fileName, buffer);
+        lastProviderDiagnostic = docResult?.diagnostic;
         externalDocId = docResult?.data?.id || docResult?.id;
 
         if (!externalDocId) throw new Error("API não retornou o ID do documento");
@@ -326,10 +346,12 @@ serve(async (req) => {
       } else {
         stage = "11_provider_signer";
         const found = await findSigner(clientEmail);
+        lastProviderDiagnostic = found?.diagnostic || lastProviderDiagnostic;
         if (found && found.id) {
           extSignerId = found.id;
         } else {
           const created = await createSigner(clientName, clientEmail);
+          lastProviderDiagnostic = created?.diagnostic || lastProviderDiagnostic;
           extSignerId = created?.data?.id || created?.id;
         }
 
@@ -349,6 +371,7 @@ serve(async (req) => {
       if (!externalAssignId) {
         stage = "12_provider_assignment";
         const assignRes = await createAssignment(externalDocId, [{ id: extSignerId }]);
+        lastProviderDiagnostic = assignRes?.diagnostic || lastProviderDiagnostic;
         externalAssignId = assignRes?.data?.id || assignRes?.id;
         const assignment = assignRes?.data || assignRes;
         const signingEntry = assignment?.signing_urls?.find(
@@ -381,21 +404,23 @@ serve(async (req) => {
       }
 
       stage = "13_persist";
-      await supabaseAdmin
+      const { error: requestUpdateError } = await supabaseAdmin
         .from("contract_signature_requests")
         .update({
           dispatch_status: "pending_signature",
           sent_at: new Date().toISOString(),
         })
         .eq("id", lockedReq.id);
+      if (requestUpdateError) throw requestUpdateError;
 
-      await supabaseAdmin
+      const { error: contractUpdateError } = await supabaseAdmin
         .from("event_contracts")
         .update({
           status: "sent",
           sent_for_signature_at: new Date().toISOString(),
         })
         .eq("id", contractId);
+      if (contractUpdateError) throw contractUpdateError;
 
       stage = "14_complete";
       return new Response(
@@ -412,6 +437,22 @@ serve(async (req) => {
               .single()
           ).data?.signature_url,
           status: "pending_signature",
+          diagnostic: {
+            requestStarted: true,
+            backendReached: true,
+            assinafyRequestSent: Boolean(lastProviderDiagnostic?.assinafyRequestSent),
+            httpStatus: lastProviderDiagnostic?.httpStatus ?? null,
+            assinafyResponse: lastProviderDiagnostic?.responseBody ?? null,
+            internalContractId: contractId,
+            internalDocumentId: lockedReq.id,
+            assinafyDocumentId: externalDocId,
+            databaseUpdated: true,
+            endpoint: lastProviderDiagnostic?.endpoint,
+            method: lastProviderDiagnostic?.method,
+            timestamp: lastProviderDiagnostic?.timestamp,
+            timedOut: false,
+            authenticationRejected: false,
+          },
         }),
         {
           headers: {
@@ -480,6 +521,7 @@ serve(async (req) => {
         stage.startsWith("12_"),
       providerStatus: isProviderError ? error?.providerStatus : undefined,
       correlationId,
+      providerDiagnostic: error?.diagnostic,
     });
     return new Response(
       JSON.stringify({
@@ -488,6 +530,23 @@ serve(async (req) => {
         error: safeMessage,
         code,
         requestId: correlationId,
+        diagnostic: {
+          requestStarted: true,
+          backendReached: true,
+          assinafyRequestSent: Boolean(error?.diagnostic?.assinafyRequestSent),
+          httpStatus: error?.diagnostic?.httpStatus ?? null,
+          assinafyResponse: error?.diagnostic?.responseBody ?? null,
+          errorMessage: error?.diagnostic?.errorMessage || message,
+          internalContractId: requestContractId,
+          internalDocumentId: requestId,
+          assinafyDocumentId: null,
+          databaseUpdated: Boolean(requestId),
+          endpoint: error?.diagnostic?.endpoint,
+          method: error?.diagnostic?.method,
+          timestamp: error?.diagnostic?.timestamp || new Date().toISOString(),
+          timedOut: Boolean(error?.diagnostic?.timedOut),
+          authenticationRejected: Boolean(error?.diagnostic?.authenticationRejected),
+        },
       }),
       {
         status,

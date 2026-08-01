@@ -83,12 +83,28 @@ import {
   canDeleteOrRegenerateContract,
   canCancelContract,
 } from "@/lib/contract-state";
-import { cancelAssinafySignature } from "@/services/assinafy-service";
+import { cancelAssinafySignature, type AssinafyDiagnostic } from "@/services/assinafy-service";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
   component: EventoInterna,
 });
+
+const formatAssinafyDiagnostic = (diagnostic: AssinafyDiagnostic) =>
+  [
+    "Assinafy diagnostic",
+    `Request started: ${diagnostic.requestStarted ? "yes" : "no"}`,
+    `Backend reached: ${diagnostic.backendReached ? "yes" : "no"}`,
+    `Assinafy request sent: ${diagnostic.assinafyRequestSent ? "yes" : "no"}`,
+    `HTTP status: ${diagnostic.httpStatus ?? "no response"}`,
+    `Assinafy response: ${JSON.stringify(diagnostic.assinafyResponse)}`,
+    `Internal contract ID: ${diagnostic.internalContractId ?? "none"}`,
+    `Internal document ID: ${diagnostic.internalDocumentId ?? "none"}`,
+    `Assinafy document ID: ${diagnostic.assinafyDocumentId ?? "none"}`,
+    `Database updated: ${diagnostic.databaseUpdated ? "yes" : "no"}`,
+    `Timed out: ${diagnostic.timedOut ? "yes" : "no"}`,
+    `Authentication rejected: ${diagnostic.authenticationRejected ? "yes" : "no"}`,
+  ].join("\n");
 
 const parseDiscountsFromDescription = (
   discountValue: number,
@@ -789,7 +805,7 @@ function EventoInterna() {
           `Contrato enviado para assinatura digital via ${provider.name}.`,
         );
         alert(
-          `Contrato enviado para ${provider.name} com sucesso!\n\nID do Documento: ${result.externalDocumentId}\nHash SHA-256: ${hash.substring(0, 16)}...`,
+          `Contrato enviado para ${provider.name} com sucesso!\n\nID do Documento: ${result.externalDocumentId}\nHash SHA-256: ${hash.substring(0, 16)}...${result.diagnostic ? `\n\n${formatAssinafyDiagnostic(result.diagnostic)}` : ""}`,
         );
         await loadContractModule();
       } else {
@@ -797,7 +813,8 @@ function EventoInterna() {
       }
     } catch (err: any) {
       console.error("Erro no disparo de assinatura:", err);
-      toast.error(`Erro ao enviar: ${err.message || "Erro inesperado"}`);
+      const diagnostic = err?.diagnostic ? `\n\n${formatAssinafyDiagnostic(err.diagnostic)}` : "";
+      alert(`Erro ao enviar: ${err.message || "Erro inesperado"}${diagnostic}`);
     } finally {
       isSignatureDispatchLocked.current = false;
       setIsDispatchingSignature(false);
