@@ -12,6 +12,35 @@ export interface AssinafyRequestResponse {
   code?: string;
   message?: string;
   requestId?: string;
+  diagnostic?: AssinafyDiagnostic;
+}
+
+export interface AssinafyDiagnostic {
+  requestStarted: boolean;
+  backendReached: boolean;
+  assinafyRequestSent: boolean;
+  httpStatus: number | null;
+  assinafyResponse: unknown;
+  errorMessage?: string | null;
+  internalContractId?: string;
+  internalDocumentId?: string;
+  assinafyDocumentId?: string | null;
+  databaseUpdated: boolean;
+  endpoint?: string;
+  method?: string;
+  timestamp?: string;
+  timedOut?: boolean;
+  authenticationRejected?: boolean;
+}
+
+export class AssinafyDiagnosticError extends Error {
+  constructor(
+    message: string,
+    public diagnostic?: AssinafyDiagnostic,
+  ) {
+    super(message);
+    this.name = "AssinafyDiagnosticError";
+  }
 }
 
 export async function formatAssinafyInvokeError(error: unknown): Promise<string> {
@@ -22,7 +51,13 @@ export async function formatAssinafyInvokeError(error: unknown): Promise<string>
   const response = candidate?.context;
   const status =
     response && typeof response === "object" && "status" in response ? response.status : undefined;
-  let body: { code?: string; message?: string; error?: string; requestId?: string } = {};
+  let body: {
+    code?: string;
+    message?: string;
+    error?: string;
+    requestId?: string;
+    diagnostic?: AssinafyDiagnostic;
+  } = {};
   if (
     response &&
     typeof response === "object" &&
@@ -64,11 +99,37 @@ export async function dispatchContractToAssinafy(
   });
 
   if (error) {
-    throw new Error(await formatAssinafyInvokeError(error));
+    let diagnostic: AssinafyDiagnostic | undefined;
+    const response = (error as { context?: Response }).context;
+    if (response?.clone) {
+      try {
+        diagnostic = (await response.clone().json())?.diagnostic;
+      } catch {
+        // A mensagem formatada abaixo preserva respostas não JSON.
+      }
+    }
+    diagnostic ??= {
+      requestStarted: true,
+      backendReached: false,
+      assinafyRequestSent: false,
+      httpStatus: null,
+      assinafyResponse: null,
+      errorMessage: (error as { message?: string })?.message || "Edge Function indisponível",
+      internalContractId: contractId,
+      assinafyDocumentId: null,
+      databaseUpdated: false,
+      timestamp: new Date().toISOString(),
+      timedOut: false,
+      authenticationRejected: false,
+    };
+    throw new AssinafyDiagnosticError(await formatAssinafyInvokeError(error), diagnostic);
   }
 
   if (!data?.success) {
-    throw new Error(data?.error || "Erro desconhecido na criação do documento Assinafy");
+    throw new AssinafyDiagnosticError(
+      data?.error || "Erro desconhecido na criação do documento Assinafy",
+      data?.diagnostic,
+    );
   }
 
   return data as AssinafyRequestResponse;
