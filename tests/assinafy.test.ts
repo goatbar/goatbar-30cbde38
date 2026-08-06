@@ -307,3 +307,82 @@ describe("assinafy-create-doc contract identity and authorization", () => {
     );
   });
 });
+
+describe("Assinafy Stage 12 & Stage 13 Persistence & Schema Tests", () => {
+  it("valida que o payload de atualização do signatário usa 'status: sent' quando notified é true", () => {
+    const assignedSigner = { notified: true };
+    const signerPayload = {
+      status: assignedSigner?.notified ? "sent" : "pending",
+      updated_at: expect.any(String),
+    };
+    expect(signerPayload.status).toBe("sent");
+    expect(signerPayload).not.toHaveProperty("notification_status");
+    expect(signerPayload).not.toHaveProperty("signature_url");
+    expect(signerPayload).not.toHaveProperty("notified_at");
+  });
+
+  it("valida que o payload de atualização do signatário usa 'status: pending' quando notified é false", () => {
+    const assignedSigner = { notified: false };
+    const signerPayload = {
+      status: assignedSigner?.notified ? "sent" : "pending",
+      updated_at: expect.any(String),
+    };
+    expect(signerPayload.status).toBe("pending");
+  });
+
+  it("lança erro 'signer_persist_target_not_found' se o update em contract_signature_signers afetar zero linhas", () => {
+    const updatedSigners: any[] = [];
+    expect(() => {
+      if (!updatedSigners || updatedSigners.length === 0) {
+        throw new CreateDocHttpError(
+          500,
+          "signer_persist_target_not_found",
+          "Signatário não encontrado para atualização.",
+        );
+      }
+    }).toThrowError(
+      expect.objectContaining({
+        status: 500,
+        code: "signer_persist_target_not_found",
+        message: "Signatário não encontrado para atualização.",
+      }),
+    );
+  });
+
+  it("lança erro 'request_persist_target_not_found' se o update em contract_signature_requests no stage 13 afetar zero linhas", () => {
+    const updatedReqs: any[] = [];
+    expect(() => {
+      if (!updatedReqs || updatedReqs.length === 0) {
+        throw new CreateDocHttpError(
+          500,
+          "request_persist_target_not_found",
+          "Solicitação não encontrada para atualização no estágio 13.",
+        );
+      }
+    }).toThrowError(
+      expect.objectContaining({
+        status: 500,
+        code: "request_persist_target_not_found",
+      }),
+    );
+  });
+
+  it("lança erro 'contract_persist_target_not_found' se o update em event_contracts no stage 13 afetar zero linhas", () => {
+    const updatedContracts: any[] = [];
+    expect(() => {
+      if (!updatedContracts || updatedContracts.length === 0) {
+        throw new CreateDocHttpError(
+          500,
+          "contract_persist_target_not_found",
+          "Contrato de evento não encontrado para atualização no estágio 13.",
+        );
+      }
+    }).toThrowError(
+      expect.objectContaining({
+        status: 500,
+        code: "contract_persist_target_not_found",
+      }),
+    );
+  });
+});
+

@@ -444,43 +444,159 @@ serve(async (req) => {
 
         if (!externalAssignId) throw new Error("API não retornou o ID do Assignment");
 
-        await supabaseAdmin
+        const { data: updatedRequests, error: reqStage12Error } = await supabaseAdmin
           .from("contract_signature_requests")
           .update({
             external_assignment_id: externalAssignId,
             signature_url: sigUrl,
           })
-          .eq("id", lockedReq.id);
+          .eq("id", lockedReq.id)
+          .select("id");
+        if (reqStage12Error) {
+          console.error("[12_provider_assignment]", {
+            code: reqStage12Error.code,
+            message: reqStage12Error.message,
+            details: reqStage12Error.details,
+            hint: reqStage12Error.hint,
+            table: "contract_signature_requests",
+            operation: "update",
+            payload: { external_assignment_id: externalAssignId, signature_url: sigUrl },
+          });
+          throw reqStage12Error;
+        }
 
-        await supabaseAdmin
+        if (!updatedRequests || updatedRequests.length === 0) {
+          console.error("[12_provider_assignment]", {
+            code: "request_persist_target_not_found",
+            message: "Nenhuma linha encontrada para atualizar a solicitação no estágio 12.",
+            table: "contract_signature_requests",
+            operation: "update",
+            signatureRequestId: lockedReq.id,
+          });
+          throw new CreateDocHttpError(
+            500,
+            "request_persist_target_not_found",
+            "Solicitação não encontrada para atualização no estágio 12.",
+          );
+        }
+
+        const signerPayload = {
+          status: assignedSigner?.notified ? "sent" : "pending",
+          updated_at: new Date().toISOString(),
+        };
+        const { data: updatedSigners, error: signerUpdateError } = await supabaseAdmin
           .from("contract_signature_signers")
-          .update({
-            signature_url: sigUrl,
-            notification_status: assignedSigner?.notified ? "sent" : "pending",
-            notified_at: assignedSigner?.notified ? new Date().toISOString() : null,
-          })
+          .update(signerPayload)
           .eq("signature_request_id", lockedReq.id)
-          .eq("external_signer_id", extSignerId);
+          .eq("external_signer_id", extSignerId)
+          .select("id");
+
+        if (signerUpdateError) {
+          console.error("[12_provider_assignment]", {
+            code: signerUpdateError.code,
+            message: signerUpdateError.message,
+            details: signerUpdateError.details,
+            hint: signerUpdateError.hint,
+            table: "contract_signature_signers",
+            operation: "update",
+            payload: signerPayload,
+          });
+          throw signerUpdateError;
+        }
+
+        if (!updatedSigners || updatedSigners.length === 0) {
+          console.error("[12_provider_assignment]", {
+            code: "signer_persist_target_not_found",
+            message: "Nenhuma linha encontrada para atualizar o signatário.",
+            table: "contract_signature_signers",
+            operation: "update",
+            signatureRequestId: lockedReq.id,
+            externalSignerId: extSignerId,
+          });
+          throw new CreateDocHttpError(
+            500,
+            "signer_persist_target_not_found",
+            "Signatário não encontrado para atualização.",
+          );
+        }
       }
 
       stage = "13_persist";
-      const { error: requestUpdateError } = await supabaseAdmin
+      const requestPayload = {
+        dispatch_status: "pending_signature",
+        sent_at: new Date().toISOString(),
+      };
+      const { data: updatedReqsStage13, error: requestUpdateError } = await supabaseAdmin
         .from("contract_signature_requests")
-        .update({
-          dispatch_status: "pending_signature",
-          sent_at: new Date().toISOString(),
-        })
-        .eq("id", lockedReq.id);
-      if (requestUpdateError) throw requestUpdateError;
+        .update(requestPayload)
+        .eq("id", lockedReq.id)
+        .select("id");
 
-      const { error: contractUpdateError } = await supabaseAdmin
+      if (requestUpdateError) {
+        console.error("[13_persist]", {
+          code: requestUpdateError.code,
+          message: requestUpdateError.message,
+          details: requestUpdateError.details,
+          hint: requestUpdateError.hint,
+          table: "contract_signature_requests",
+          operation: "update",
+          payload: requestPayload,
+        });
+        throw requestUpdateError;
+      }
+
+      if (!updatedReqsStage13 || updatedReqsStage13.length === 0) {
+        console.error("[13_persist]", {
+          code: "request_persist_target_not_found",
+          message: "Nenhuma linha encontrada para atualizar a solicitação no estágio 13.",
+          table: "contract_signature_requests",
+          operation: "update",
+          signatureRequestId: lockedReq.id,
+        });
+        throw new CreateDocHttpError(
+          500,
+          "request_persist_target_not_found",
+          "Solicitação não encontrada para atualização no estágio 13.",
+        );
+      }
+
+      const contractPayload = {
+        status: "sent",
+        sent_for_signature_at: new Date().toISOString(),
+      };
+      const { data: updatedContractsStage13, error: contractUpdateError } = await supabaseAdmin
         .from("event_contracts")
-        .update({
-          status: "sent",
-          sent_for_signature_at: new Date().toISOString(),
-        })
-        .eq("id", contractId);
-      if (contractUpdateError) throw contractUpdateError;
+        .update(contractPayload)
+        .eq("id", contractId)
+        .select("id");
+
+      if (contractUpdateError) {
+        console.error("[13_persist]", {
+          code: contractUpdateError.code,
+          message: contractUpdateError.message,
+          details: contractUpdateError.details,
+          hint: contractUpdateError.hint,
+          table: "event_contracts",
+          operation: "update",
+          payload: contractPayload,
+        });
+        throw contractUpdateError;
+      }
+
+      if (!updatedContractsStage13 || updatedContractsStage13.length === 0) {
+        console.error("[13_persist]", {
+          code: "contract_persist_target_not_found",
+          message: "Nenhuma linha encontrada para atualizar o contrato no estágio 13.",
+          table: "event_contracts",
+          operation: "update",
+          contractId,
+        });
+        throw new CreateDocHttpError(
+          500,
+          "contract_persist_target_not_found",
+          "Contrato de evento não encontrado para atualização no estágio 13.",
+        );
+      }
 
       stage = "14_complete";
       return new Response(
