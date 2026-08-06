@@ -786,7 +786,18 @@ function EventoInterna() {
         realContract.signature_provider || realContract.provider,
       );
       const identifiers = getSignatureDispatchIdentifiers(eventoId, realContract);
-      console.log("[Signature Dispatch] identifiers", identifiers);
+      const routeId = eventoId;
+      const contractRecordId = realContract?.id;
+      const contractEventId = realContract?.event_id;
+      const contractStatus = realContract?.status;
+      console.info("[assinafy-send] resolved identifiers", {
+        routeId,
+        eventId: eventoId,
+        contractId: identifiers.contractId,
+        contractRecordId,
+        contractEventId,
+        contractStatus,
+      });
       const { pdf, result } = await convertAndDispatchSignature({
         html: compiledHtml,
         title: `Contrato_${realClientData.client_name || "Evento"}`,

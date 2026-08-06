@@ -16,7 +16,7 @@ export async function resolveContractAccess<T>(
 ): Promise<T> {
   const existence = await lookupAsAdmin();
   if (existence.error)
-    throw new CreateDocHttpError(500, "contract_lookup_failed", "Falha ao consultar contrato.");
+    throw new CreateDocHttpError(500, "contract_query_failed", "Falha ao consultar o contrato.");
   if (!existence.data)
     throw new CreateDocHttpError(404, "contract_not_found", "Contrato não encontrado.");
 
@@ -24,10 +24,11 @@ export async function resolveContractAccess<T>(
   if (authorized.error)
     throw new CreateDocHttpError(
       500,
-      "contract_access_check_failed",
-      "Falha ao validar acesso ao contrato.",
+      "contract_query_failed",
+      "Falha ao consultar o contrato.",
     );
   if (!authorized.data)
     throw new CreateDocHttpError(403, "contract_access_denied", "Usuário sem acesso ao contrato.");
   return authorized.data;
 }
+

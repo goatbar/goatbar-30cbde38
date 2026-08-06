@@ -40,12 +40,10 @@ serve(async (req) => {
         status: 405,
         code: "method_not_allowed",
       });
+    stage = "01_auth";
     const authHeader = req.headers.get("Authorization");
     if (!authHeader)
-      throw Object.assign(new Error("Usuário não autenticado."), {
-        status: 401,
-        code: "unauthenticated",
-      });
+      throw new CreateDocHttpError(401, "authentication_required", "Usuário não autenticado");
 
     const supabaseAuthClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -57,6 +55,12 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
+
+    const access = await requireContractSignatureAccess(supabaseAuthClient, "create");
+    console.info("[assinafy-create-doc] authenticated", {
+      userId: access.user.id,
+      correlationId,
+    });
 
     stage = "02_parse_payload";
     let rawBody: unknown;
@@ -80,13 +84,6 @@ serve(async (req) => {
       originalFileHash: pdfHash,
       correlationId,
     });
-
-    const access = await requireContractSignatureAccess(supabaseAuthClient, "create");
-    console.info("[assinafy-create-doc] authenticated", {
-      userId: access.user.id,
-      contractId,
-      correlationId,
-    });
     stage = "04_load_contract";
 
     const existenceLookup = async () => {
@@ -95,35 +92,98 @@ serve(async (req) => {
         .select("id")
         .eq("id", contractId)
         .maybeSingle();
-      console.info("[assinafy-create-doc] contract existence", {
-        stage,
-        userId: access.user.id,
-        contractId,
-        queryTable: "event_contracts",
-        queryErrorCode: result.error?.code || null,
-        contractExists: Boolean(result.data),
-        correlationId,
-      });
+      if (result.error) {
+        console.error("[assinafy-create-doc]", {
+          stage: "contract_existence_lookup",
+          contractId,
+          code: result.error.code,
+          message: result.error.message,
+          correlationId,
+        });
+      } else {
+        console.info("[assinafy-create-doc] contract existence", {
+          stage,
+          userId: access.user.id,
+          contractId,
+          queryTable: "event_contracts",
+          queryErrorCode: null,
+          contractExists: Boolean(result.data),
+          correlationId,
+        });
+      }
       return result;
     };
+
     const authorizedLookup = async () => {
-      const result = await supabaseAuthClient
+      const contractResult = await supabaseAuthClient
         .from("event_contracts")
-        .select("*, event:events(client_name, email)")
+        .select("*")
         .eq("id", contractId)
         .maybeSingle();
+
+      if (contractResult.error) {
+        console.error("[assinafy-create-doc]", {
+          stage: "authorized_contract_lookup",
+          contractId,
+          code: contractResult.error.code,
+          message: contractResult.error.message,
+          correlationId,
+        });
+        return { data: null, error: contractResult.error };
+      }
+
+      if (!contractResult.data) {
+        console.info("[assinafy-create-doc] contract access", {
+          stage: "05_authorize_event",
+          userId: access.user.id,
+          contractId,
+          queryTable: "event_contracts",
+          queryErrorCode: null,
+          rowFound: false,
+          accessGranted: false,
+          eventId: null,
+          correlationId,
+        });
+        return { data: null, error: null };
+      }
+
+      const eventResult = await supabaseAuthClient
+        .from("events")
+        .select("client_name, email")
+        .eq("id", contractResult.data.event_id)
+        .maybeSingle();
+
+      if (eventResult.error) {
+        console.error("[assinafy-create-doc]", {
+          stage: "authorized_event_lookup",
+          contractId,
+          eventId: contractResult.data.event_id,
+          code: eventResult.error.code,
+          message: eventResult.error.message,
+          correlationId,
+        });
+        return { data: null, error: eventResult.error };
+      }
+
       console.info("[assinafy-create-doc] contract access", {
         stage: "05_authorize_event",
         userId: access.user.id,
         contractId,
         queryTable: "event_contracts",
-        queryErrorCode: result.error?.code || null,
-        rowFound: Boolean(result.data),
-        accessGranted: Boolean(result.data),
-        eventId: result.data?.event_id || null,
+        queryErrorCode: null,
+        rowFound: true,
+        accessGranted: true,
+        eventId: contractResult.data.event_id,
         correlationId,
       });
-      return result;
+
+      return {
+        data: {
+          ...contractResult.data,
+          event: eventResult.data || null,
+        },
+        error: null,
+      };
     };
     stage = "05_authorize_event";
     const contract = await resolveContractAccess(existenceLookup, authorizedLookup);
@@ -496,7 +556,7 @@ serve(async (req) => {
       (isProviderError
         ? "assinafy_upstream_error"
         : status === 401
-          ? "unauthenticated"
+          ? "authentication_required"
           : status === 403
             ? "forbidden"
             : status === 404
@@ -523,6 +583,11 @@ serve(async (req) => {
       correlationId,
       providerDiagnostic: error?.diagnostic,
     });
+    const authenticationRejected =
+      status === 401 ||
+      code === "authentication_required" ||
+      Boolean(error?.diagnostic?.authenticationRejected);
+
     return new Response(
       JSON.stringify({
         success: false,
@@ -545,7 +610,7 @@ serve(async (req) => {
           method: error?.diagnostic?.method,
           timestamp: error?.diagnostic?.timestamp || new Date().toISOString(),
           timedOut: Boolean(error?.diagnostic?.timedOut),
-          authenticationRejected: Boolean(error?.diagnostic?.authenticationRejected),
+          authenticationRejected,
         },
       }),
       {

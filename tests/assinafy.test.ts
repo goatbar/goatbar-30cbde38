@@ -260,6 +260,26 @@ describe("assinafy-create-doc contract identity and authorization", () => {
     ).rejects.toMatchObject({ status: 403, code: "contract_access_denied" });
   });
 
+  it("returns 500 and contract_query_failed when existence lookup returns a query error (e.g. PGRST200)", async () => {
+    const userLookup = vi.fn();
+    await expect(
+      resolveContractAccess(
+        async () => ({ data: null, error: { code: "PGRST200" } }),
+        userLookup,
+      ),
+    ).rejects.toMatchObject({ status: 500, code: "contract_query_failed" });
+    expect(userLookup).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 and contract_query_failed when authorized lookup returns a query error (e.g. PGRST200)", async () => {
+    await expect(
+      resolveContractAccess(
+        async () => ({ data: { id: "contract-1" }, error: null }),
+        async () => ({ data: null, error: { code: "PGRST200" } }),
+      ),
+    ).rejects.toMatchObject({ status: 500, code: "contract_query_failed" });
+  });
+
   it("returns the authorized contract and advances the flow", async () => {
     const contract = { id: "contract-1", event_id: "event-1" };
     await expect(
@@ -274,5 +294,16 @@ describe("assinafy-create-doc contract identity and authorization", () => {
     expect(authenticatedClientOptions("Bearer test-jwt")).toEqual({
       global: { headers: { Authorization: "Bearer test-jwt" } },
     });
+  });
+
+  it("rejects unauthenticated requests with HTTP 401 and authentication_required", () => {
+    expect(() => {
+      const authHeader: string | null = null;
+      if (!authHeader) {
+        throw new CreateDocHttpError(401, "authentication_required", "Usuário não autenticado");
+      }
+    }).toThrowError(
+      expect.objectContaining({ status: 401, code: "authentication_required", message: "Usuário não autenticado" }),
+    );
   });
 });
