@@ -79,13 +79,13 @@ describe("Assinafy dispatch state machine", () => {
         hash,
       ).action,
     ).toBe("reconcile_local_persistence"));
-  it("bloqueia PDF com hash divergente", () =>
+  it("solicitação ativa em pending_signature reutiliza solicitação independente de timestamps do PDF", () =>
     expect(
       decideDispatch(
         { id: "req-1", dispatch_status: "pending_signature", original_file_hash: "b".repeat(64) },
         hash,
       ).action,
-    ).toBe("hash_conflict"));
+    ).toBe("reuse"));
   it("impede duplicação durante processamento", () =>
     expect(
       decideDispatch({ id: "req-1", dispatch_status: "processing", original_file_hash: hash }, hash)
@@ -417,7 +417,7 @@ describe("Assinafy Stage 12 & Stage 13 Persistence & Schema Tests", () => {
     expect(decision.action).toBe("obsolete_failed_without_external_ids");
   });
 
-  it("decideDispatch: solicitação ativa em 'pending_signature' com hash diferente retorna 'hash_conflict'", () => {
+  it("decideDispatch: solicitação ativa em 'pending_signature' com novo hash de renderização retorna 'reuse'", () => {
     const record = {
       id: "req-1",
       dispatch_status: "pending_signature",
@@ -426,7 +426,7 @@ describe("Assinafy Stage 12 & Stage 13 Persistence & Schema Tests", () => {
       external_assignment_id: "assign-ext-456",
     };
     const decision = decideDispatch(record, "hash-new");
-    expect(decision.action).toBe("hash_conflict");
+    expect(decision.action).toBe("reuse");
   });
 
   it("decideDispatch: solicitação ativa em 'pending_signature' com mesmo hash retorna 'reuse'", () => {

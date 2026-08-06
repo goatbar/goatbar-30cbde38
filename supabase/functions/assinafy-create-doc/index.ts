@@ -224,6 +224,17 @@ serve(async (req) => {
 
     const dispatchDecision = decideDispatch(sigReq, pdfHash);
 
+    console.info("[dispatch-decision]", {
+      requestId: sigReq?.id,
+      dispatchStatus: sigReq?.dispatch_status,
+      originalFileHash: sigReq?.original_file_hash,
+      incomingPdfHash: pdfHash,
+      externalDocumentId: sigReq?.external_document_id,
+      externalAssignmentId: sigReq?.external_assignment_id,
+      decision: dispatchDecision.action,
+      correlationId,
+    });
+
     if (dispatchDecision.action === "obsolete_failed_without_external_ids") {
       console.info("[assinafy-create-doc] obsoleting failed request without external IDs", {
         oldRequestId: sigReq?.id,

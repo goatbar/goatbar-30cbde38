@@ -113,9 +113,6 @@ export function decideDispatch(existing: DispatchRecord | null, pdfHash: string)
   const hasExternalOperationSucceeded = hasExternalDoc && hasExternalAssign;
 
   if (["pending_signature", "signed", "completed"].includes(existing.dispatch_status)) {
-    if (existing.original_file_hash && existing.original_file_hash !== pdfHash) {
-      return { action: "hash_conflict" as const, request: existing };
-    }
     return { action: "reuse" as const, request: existing };
   }
 
