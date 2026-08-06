@@ -3,6 +3,7 @@ export type DispatchRecord = {
   dispatch_status: string;
   original_file_hash?: string | null;
   external_document_id?: string | null;
+  external_assignment_id?: string | null;
 };
 
 export class CreateDocHttpError extends Error {
@@ -105,17 +106,37 @@ export function validateSigner(name: unknown, email: unknown): { name: string; e
 }
 
 export function decideDispatch(existing: DispatchRecord | null, pdfHash: string) {
-  if (existing?.original_file_hash && existing.original_file_hash !== pdfHash)
-    return { action: "hash_conflict" as const, request: existing };
-  if (existing && ["pending_signature", "signed", "completed"].includes(existing.dispatch_status))
+  if (!existing) return { action: "create" as const, request: null };
+
+  const hasExternalDoc = Boolean(existing.external_document_id);
+  const hasExternalAssign = Boolean(existing.external_assignment_id);
+  const hasExternalOperationSucceeded = hasExternalDoc && hasExternalAssign;
+
+  if (["pending_signature", "signed", "completed"].includes(existing.dispatch_status)) {
+    if (existing.original_file_hash && existing.original_file_hash !== pdfHash) {
+      return { action: "hash_conflict" as const, request: existing };
+    }
     return { action: "reuse" as const, request: existing };
-  if (existing?.dispatch_status === "processing")
+  }
+
+  if (existing.dispatch_status === "failed") {
+    if (hasExternalOperationSucceeded) {
+      return { action: "reconcile_local_persistence" as const, request: existing };
+    }
+    if (!hasExternalDoc && !hasExternalAssign) {
+      return { action: "obsolete_failed_without_external_ids" as const, request: existing };
+    }
+    return { action: "hash_conflict" as const, request: existing };
+  }
+
+  if (existing.dispatch_status === "processing")
     return { action: "processing" as const, request: existing };
-  if (existing?.dispatch_status === "reconciliation_required")
+  if (existing.dispatch_status === "reconciliation_required")
     return { action: "reconcile" as const, request: existing };
-  if (existing?.dispatch_status === "failed")
-    return { action: "retry" as const, request: existing };
-  return existing
-    ? { action: "continue" as const, request: existing }
-    : { action: "create" as const, request: null };
+
+  if (existing.original_file_hash && existing.original_file_hash !== pdfHash) {
+    return { action: "hash_conflict" as const, request: existing };
+  }
+
+  return { action: "continue" as const, request: existing };
 }

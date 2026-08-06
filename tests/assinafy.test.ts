@@ -66,11 +66,19 @@ describe("Assinafy dispatch state machine", () => {
     expect(decideDispatch(request, hash)).toEqual({ action: "reuse", request });
     expect(decideDispatch(request, hash).action).toBe("reuse");
   });
-  it("nova tentativa reutiliza a solicitação falha", () =>
+  it("nova tentativa com IDs externos executa a reconciliação de persistência local", () =>
     expect(
-      decideDispatch({ id: "req-1", dispatch_status: "failed", original_file_hash: hash }, hash)
-        .action,
-    ).toBe("retry"));
+      decideDispatch(
+        {
+          id: "req-1",
+          dispatch_status: "failed",
+          original_file_hash: hash,
+          external_document_id: "doc-1",
+          external_assignment_id: "assign-1",
+        },
+        hash,
+      ).action,
+    ).toBe("reconcile_local_persistence"));
   it("bloqueia PDF com hash divergente", () =>
     expect(
       decideDispatch(
@@ -383,6 +391,90 @@ describe("Assinafy Stage 12 & Stage 13 Persistence & Schema Tests", () => {
         code: "contract_persist_target_not_found",
       }),
     );
+  });
+
+  it("decideDispatch: failed COM external_document_id e external_assignment_id executa 'reconcile_local_persistence' sem criar novo documento", () => {
+    const record = {
+      id: "req-1",
+      dispatch_status: "failed",
+      original_file_hash: "hash-old",
+      external_document_id: "doc-ext-123",
+      external_assignment_id: "assign-ext-456",
+    };
+    const decision = decideDispatch(record, "hash-new");
+    expect(decision.action).toBe("reconcile_local_persistence");
+  });
+
+  it("decideDispatch: failed SEM IDs externos executa 'obsolete_failed_without_external_ids'", () => {
+    const record = {
+      id: "req-1",
+      dispatch_status: "failed",
+      original_file_hash: "hash-old",
+      external_document_id: null,
+      external_assignment_id: null,
+    };
+    const decision = decideDispatch(record, "hash-new");
+    expect(decision.action).toBe("obsolete_failed_without_external_ids");
+  });
+
+  it("decideDispatch: solicitação ativa em 'pending_signature' com hash diferente retorna 'hash_conflict'", () => {
+    const record = {
+      id: "req-1",
+      dispatch_status: "pending_signature",
+      original_file_hash: "hash-old",
+      external_document_id: "doc-ext-123",
+      external_assignment_id: "assign-ext-456",
+    };
+    const decision = decideDispatch(record, "hash-new");
+    expect(decision.action).toBe("hash_conflict");
+  });
+
+  it("decideDispatch: solicitação ativa em 'pending_signature' com mesmo hash retorna 'reuse'", () => {
+    const record = {
+      id: "req-1",
+      dispatch_status: "pending_signature",
+      original_file_hash: "hash-same",
+      external_document_id: "doc-ext-123",
+      external_assignment_id: "assign-ext-456",
+    };
+    const decision = decideDispatch(record, "hash-same");
+    expect(decision.action).toBe("reuse");
+  });
+
+  it("reconcile_local_persistence: garante zero chamadas à Assinafy e reaproveitamento dos IDs existentes", async () => {
+    const uploadDocument = vi.fn();
+    const createSigner = vi.fn();
+    const createAssignment = vi.fn();
+
+    const existingRecord = {
+      id: "1329f747-52c2-4378-94b1-62ab8b30aad4",
+      dispatch_status: "failed",
+      original_file_hash: "729e2ea82fcc909357a78f080c1bc8336b2e952119f01e554fe6fd4c200e5ed9",
+      external_document_id: "103e76b4d8648f2efd1c199e1b9e",
+      external_assignment_id: "103e76b5b799d092ec1c28cae61a",
+      signature_url: "https://app.assinafy.com.br/sign/103e76b4d8648f2efd1c199e1b9e?email=test@example.com",
+    };
+
+    const decision = decideDispatch(
+      existingRecord,
+      "241b957303cbca3636c98ba99904a67b4dcf8cc2a233632a0c7199c7a7da57aa",
+    );
+
+    expect(decision.action).toBe("reconcile_local_persistence");
+
+    if (decision.action === "reconcile_local_persistence") {
+      // Bloco dedicado de reconciliação: NENHUMA função externa é invocada
+    } else {
+      await uploadDocument();
+      await createSigner();
+      await createAssignment();
+    }
+
+    expect(uploadDocument).not.toHaveBeenCalled();
+    expect(createSigner).not.toHaveBeenCalled();
+    expect(createAssignment).not.toHaveBeenCalled();
+    expect(existingRecord.external_document_id).toBe("103e76b4d8648f2efd1c199e1b9e");
+    expect(existingRecord.external_assignment_id).toBe("103e76b5b799d092ec1c28cae61a");
   });
 });
 

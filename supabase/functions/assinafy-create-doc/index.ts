@@ -211,12 +211,228 @@ serve(async (req) => {
       contractId,
       correlationId,
     });
+
+    console.info("[assinafy-create-doc] pdf hash comparison", {
+      savedHash: sigReq?.original_file_hash ?? null,
+      calculatedHash: pdfHash,
+      externalDocumentId: sigReq?.external_document_id ?? null,
+      requestId: sigReq?.id ?? null,
+      contractId,
+      match: sigReq?.original_file_hash === pdfHash,
+      correlationId,
+    });
+
     const dispatchDecision = decideDispatch(sigReq, pdfHash);
-    if (dispatchDecision.action === "hash_conflict") {
+
+    if (dispatchDecision.action === "obsolete_failed_without_external_ids") {
+      console.info("[assinafy-create-doc] obsoleting failed request without external IDs", {
+        oldRequestId: sigReq?.id,
+        contractId,
+        correlationId,
+      });
+      const { data: obsData, error: obsErr } = await supabaseAdmin
+        .from("contract_signature_requests")
+        .update({
+          dispatch_status: "obsolete",
+          last_error: "Substituído por nova tentativa limpa.",
+        })
+        .eq("id", sigReq!.id)
+        .eq("dispatch_status", "failed")
+        .select("id");
+
+      if (obsErr || !obsData || obsData.length === 0) {
+        console.error("[assinafy-create-doc] failed to obsolete request", {
+          requestId: sigReq?.id,
+          error: obsErr,
+          correlationId,
+        });
+        throw new CreateDocHttpError(
+          500,
+          "obsolete_update_failed",
+          "Não foi possível atualizar a solicitação anterior para obsoleta.",
+        );
+      }
+      sigReq = null;
+    } else if (dispatchDecision.action === "hash_conflict") {
       throw new CreateDocHttpError(
         409,
         "pdf_hash_mismatch",
         "O PDF atual diverge do documento associado à solicitação existente.",
+      );
+    }
+
+    if (sigReq && dispatchDecision.action === "reconcile_local_persistence") {
+      stage = "13_persist";
+      console.info("[assinafy-create-doc] executing reconcile_local_persistence", {
+        requestId: sigReq.id,
+        contractId,
+        externalDocumentId: sigReq.external_document_id,
+        externalAssignmentId: sigReq.external_assignment_id,
+        correlationId,
+      });
+
+      const { data: updatedSigners, error: signerErr } = await supabaseAdmin
+        .from("contract_signature_signers")
+        .update({
+          status: "pending",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("signature_request_id", sigReq.id)
+        .select("id");
+
+      if (signerErr) {
+        console.error("[assinafy-create-doc]", {
+          stage: "reconcile_local_persistence",
+          table: "contract_signature_signers",
+          operation: "update",
+          requestId: sigReq.id,
+          contractId,
+          correlationId,
+          code: signerErr.code,
+          message: signerErr.message,
+          details: signerErr.details,
+          hint: signerErr.hint,
+        });
+        throw signerErr;
+      }
+
+      if (!updatedSigners || updatedSigners.length === 0) {
+        console.error("[assinafy-create-doc]", {
+          stage: "reconcile_local_persistence",
+          table: "contract_signature_signers",
+          operation: "update",
+          requestId: sigReq.id,
+          contractId,
+          correlationId,
+          code: "signer_persist_target_not_found",
+          message: "Nenhuma linha encontrada para reconciliar contract_signature_signers.",
+        });
+        throw new CreateDocHttpError(
+          500,
+          "signer_persist_target_not_found",
+          "Signatário não encontrado para reconciliação local.",
+        );
+      }
+
+      const { data: updatedReqs, error: reqErr } = await supabaseAdmin
+        .from("contract_signature_requests")
+        .update({
+          dispatch_status: "pending_signature",
+          sent_at: new Date().toISOString(),
+          last_error: null,
+        })
+        .eq("id", sigReq.id)
+        .select("id");
+
+      if (reqErr) {
+        console.error("[assinafy-create-doc]", {
+          stage: "reconcile_local_persistence",
+          table: "contract_signature_requests",
+          operation: "update",
+          requestId: sigReq.id,
+          contractId,
+          correlationId,
+          code: reqErr.code,
+          message: reqErr.message,
+          details: reqErr.details,
+          hint: reqErr.hint,
+        });
+        throw reqErr;
+      }
+
+      if (!updatedReqs || updatedReqs.length === 0) {
+        console.error("[assinafy-create-doc]", {
+          stage: "reconcile_local_persistence",
+          table: "contract_signature_requests",
+          operation: "update",
+          requestId: sigReq.id,
+          contractId,
+          correlationId,
+          code: "request_persist_target_not_found",
+          message: "Nenhuma linha encontrada para reconciliar contract_signature_requests.",
+        });
+        throw new CreateDocHttpError(
+          500,
+          "request_persist_target_not_found",
+          "Solicitação não encontrada para reconciliação local.",
+        );
+      }
+
+      const { data: updatedContracts, error: contractErr } = await supabaseAdmin
+        .from("event_contracts")
+        .update({
+          status: "sent",
+          sent_for_signature_at: new Date().toISOString(),
+        })
+        .eq("id", contractId)
+        .select("id");
+
+      if (contractErr) {
+        console.error("[assinafy-create-doc]", {
+          stage: "reconcile_local_persistence",
+          table: "event_contracts",
+          operation: "update",
+          requestId: sigReq.id,
+          contractId,
+          correlationId,
+          code: contractErr.code,
+          message: contractErr.message,
+          details: contractErr.details,
+          hint: contractErr.hint,
+        });
+        throw contractErr;
+      }
+
+      if (!updatedContracts || updatedContracts.length === 0) {
+        console.error("[assinafy-create-doc]", {
+          stage: "reconcile_local_persistence",
+          table: "event_contracts",
+          operation: "update",
+          requestId: sigReq.id,
+          contractId,
+          correlationId,
+          code: "contract_persist_target_not_found",
+          message: "Nenhuma linha encontrada para reconciliar event_contracts.",
+        });
+        throw new CreateDocHttpError(
+          500,
+          "contract_persist_target_not_found",
+          "Contrato de evento não encontrado para reconciliação local.",
+        );
+      }
+
+      stage = "14_complete";
+      return new Response(
+        JSON.stringify({
+          success: true,
+          signatureRequestId: sigReq.id,
+          externalDocumentId: sigReq.external_document_id,
+          externalAssignmentId: sigReq.external_assignment_id,
+          signatureUrl: sigReq.signature_url,
+          status: "pending_signature",
+          diagnostic: {
+            requestStarted: true,
+            backendReached: true,
+            assinafyRequestSent: false,
+            httpStatus: null,
+            assinafyResponse:
+              "Local persistence reconciled successfully; no new provider request was sent.",
+            internalContractId: contractId,
+            internalDocumentId: sigReq.id,
+            assinafyDocumentId: sigReq.external_document_id,
+            databaseUpdated: true,
+            timestamp: new Date().toISOString(),
+            timedOut: false,
+            authenticationRejected: false,
+          },
+        }),
+        {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "x-request-id": correlationId,
+          },
+        },
       );
     }
 
@@ -304,7 +520,7 @@ serve(async (req) => {
     } else if (sigReq.dispatch_status === "failed") {
       const { data: retryReq, error: retryError } = await supabaseAdmin
         .from("contract_signature_requests")
-        .update({ dispatch_status: "idle", last_error: null, original_file_hash: pdfHash })
+        .update({ dispatch_status: "idle", last_error: null })
         .eq("id", sigReq.id)
         .eq("dispatch_status", "failed")
         .select()
