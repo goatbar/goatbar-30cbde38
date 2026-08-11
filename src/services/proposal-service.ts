@@ -48,6 +48,10 @@ export interface ProposalData {
   paymentTerms: string;
   includedServices: string[];
   observations?: string;
+  welcomeDrinks?: string[];
+  welcomeDrinksTotal?: number;
+  shots?: string[];
+  shotsTotal?: number;
 
   // Custom visual configurations
   coverColor?: string; // 'dark' | 'light' - defaults to dark for goat bar
@@ -314,6 +318,10 @@ function resolveFieldValue(fieldKey: string, data: ProposalData): string | strin
     case "data_evento":    return data.eventDate;
     case "lista_drinks":   return data.selectedDrinks;
     case "lista_bebidas":  return data.includedBeverages;
+    case "welcome_drinks": return data.welcomeDrinks || [];
+    case "valor_welcome_drinks": return data.welcomeDrinksTotal ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(data.welcomeDrinksTotal) : "";
+    case "rodada_shots": return data.shots || [];
+    case "valor_rodada_shots": return data.shotsTotal ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(data.shotsTotal) : "";
     case "numero_convidados":    return `${data.guests} convidados`;
     case "quantidade_bartenders": return `${data.bartenders} Bartender${data.bartenders !== 1 ? 's' : ''}`;
     case "quantidade_bar_keeper": return `${data.keepers} Bar Keeper${data.keepers !== 1 ? 's' : ''}`;

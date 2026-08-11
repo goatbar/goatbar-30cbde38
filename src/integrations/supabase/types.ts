@@ -302,6 +302,15 @@ export type Database = {
           drinks_final_value: number | null
           drinks_markup_percentage: number | null
           drinks_per_person: number | null
+          has_welcome_drinks: boolean | null
+          welcome_drinks_per_person: number | null
+          welcome_drinks_profit_percentage: number | null
+          welcome_drinks_selected: Json | null
+          welcome_drinks_cost: number | null
+          welcome_drinks_final_value: number | null
+          has_shots: boolean | null
+          shots_items: Json | null
+          shots_total_value: number | null
           event_id: string
           final_budget_value: number | null
           fuel_value: number | null
@@ -344,6 +353,15 @@ export type Database = {
           drinks_final_value?: number | null
           drinks_markup_percentage?: number | null
           drinks_per_person?: number | null
+          has_welcome_drinks?: boolean | null
+          welcome_drinks_per_person?: number | null
+          welcome_drinks_profit_percentage?: number | null
+          welcome_drinks_selected?: Json | null
+          welcome_drinks_cost?: number | null
+          welcome_drinks_final_value?: number | null
+          has_shots?: boolean | null
+          shots_items?: Json | null
+          shots_total_value?: number | null
           event_id: string
           final_budget_value?: number | null
           fuel_value?: number | null
@@ -386,6 +404,15 @@ export type Database = {
           drinks_final_value?: number | null
           drinks_markup_percentage?: number | null
           drinks_per_person?: number | null
+          has_welcome_drinks?: boolean | null
+          welcome_drinks_per_person?: number | null
+          welcome_drinks_profit_percentage?: number | null
+          welcome_drinks_selected?: Json | null
+          welcome_drinks_cost?: number | null
+          welcome_drinks_final_value?: number | null
+          has_shots?: boolean | null
+          shots_items?: Json | null
+          shots_total_value?: number | null
           event_id?: string
           final_budget_value?: number | null
           fuel_value?: number | null

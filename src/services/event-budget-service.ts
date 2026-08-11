@@ -41,6 +41,15 @@ export interface BudgetVersion {
   average_drink_cost: number;
   drinks_base_cost: number;
   drinks_final_value: number;
+  has_welcome_drinks: boolean;
+  welcome_drinks_per_person: number;
+  welcome_drinks_profit_percentage: number;
+  welcome_drinks_selected: any;
+  welcome_drinks_cost: number;
+  welcome_drinks_final_value: number;
+  has_shots: boolean;
+  shots_items: any;
+  shots_total_value: number;
 
   // Staff
   bartender_quantity: number;
@@ -174,7 +183,7 @@ export const eventBudgetService = {
 
     if (budgetError) {
       console.warn(
-        "Falha ao carregar versÃµes atuais de orÃ§amento. Usando dados base de events.",
+        "Falha ao carregar versões atuais de orçamento. Usando dados base de events.",
         budgetError,
       );
       return events;

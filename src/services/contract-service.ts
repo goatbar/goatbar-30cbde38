@@ -1,4 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
+import {
+  calcularWelcomeDrinks,
+  calcularTotalShots,
+  type ShotBudgetItem,
+  type WelcomeDrinkSelection,
+} from "@/lib/additional-budget-items";
 import { Json } from "@/integrations/supabase/types";
 import { numberToWordsBRL } from "@/lib/number-to-words-brl";
 import {
@@ -661,6 +667,33 @@ export const eventContractsService = {
     const fmt = (v: number) =>
       new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 
+    const welcome = currentBudget?.has_welcome_drinks
+      ? calcularWelcomeDrinks(
+          evento.guests,
+          currentBudget.welcome_drinks_per_person,
+          currentBudget.welcome_drinks_selected as unknown as WelcomeDrinkSelection[],
+          currentBudget.welcome_drinks_profit_percentage,
+        )
+      : null;
+    const welcomeDetails = welcome
+      ? welcome.distribuicao
+          .map(
+            (item) =>
+              `${item.nameSnapshot}: ${item.quantidade} × ${fmt(item.unitCostSnapshot)} = ${fmt(item.subtotal)}`,
+          )
+          .join("\n")
+      : "";
+    const shots =
+      currentBudget?.has_shots && Array.isArray(currentBudget.shots_items)
+        ? (currentBudget.shots_items as unknown as ShotBudgetItem[])
+        : [];
+    const shotsDetails = shots
+      .map(
+        (item) =>
+          `${item.nome}: ${item.quantidade} × ${fmt(item.valorUnitario)} = ${fmt(Math.max(0, item.quantidade) * Math.max(0, item.valorUnitario))}`,
+      )
+      .join("\n");
+
     const drinksArray = Array.isArray(evento.drinks) ? evento.drinks : [];
 
     const tabelaReposicaoLines =
@@ -826,6 +859,10 @@ export const eventContractsService = {
       "cardapio.drinks": drinksArray.length > 0 ? drinksArray.join(", ") : "",
       "cardapio.descricao": descricaoBebidas || "",
       "cardapio.tabela_reposicao": tabelaReposicaoLines,
+      "adicionais.welcome_drinks": welcomeDetails,
+      "adicionais.welcome_drinks_total": welcome ? fmt(welcome.valorFinal) : "",
+      "adicionais.shots": shotsDetails,
+      "adicionais.shots_total": shots.length ? fmt(calcularTotalShots(shots)) : "",
 
       // ðŸ—“ï¸ Geral
       "geral.data_emissao": new Date().toLocaleDateString("pt-BR"),
