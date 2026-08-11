@@ -175,7 +175,8 @@ export const CONTRACT_PDF_DOCUMENT_CSS = `
   html, body { margin: 0 !important; padding: 0 !important; background: #ffffff !important; color: #000000 !important; color-scheme: light only; }
   #contract-pdf-document { box-sizing: border-box; width: 180mm; min-height: 267mm; margin: 0; padding: 0; overflow-wrap: break-word; background: #ffffff !important; color: #000000 !important; font-family: Arial, Helvetica, sans-serif; font-size: 13px; line-height: 1.6; }
   #contract-pdf-document, #contract-pdf-document * { color-scheme: light only; }
-  #contract-pdf-document * { color: #000000 !important; background-color: transparent !important; }
+  #contract-pdf-document * { color: #000000 !important; }
+  #contract-pdf-document p, #contract-pdf-document div, #contract-pdf-document span, #contract-pdf-document li { background-color: transparent !important; }
   #contract-pdf-document p { margin: 0 0 0.75rem; line-height: 1.6; }
   #contract-pdf-document h1, #contract-pdf-document h2, #contract-pdf-document h3, #contract-pdf-document h4, #contract-pdf-document h5, #contract-pdf-document h6 { color: #000000 !important; font-weight: 700; line-height: 1.3; margin: 1.25rem 0 0.5rem; break-after: avoid; page-break-after: avoid; }
   #contract-pdf-document h1 { font-size: 20px; } #contract-pdf-document h2 { font-size: 16px; } #contract-pdf-document h3 { font-size: 14px; } #contract-pdf-document h4 { font-size: 13px; }
