@@ -27,7 +27,7 @@ export function buildContractPdfDocument(htmlContent: string, title: string): st
   return `<!DOCTYPE html>
 <html lang="pt-BR" style="background:#ffffff;color:#000000;color-scheme:light">
 <head><meta charset="UTF-8"><meta name="color-scheme" content="light only"><title>${escapeHtmlText(title)}</title><style>${CONTRACT_PDF_DOCUMENT_CSS}</style></head>
-<body style="background:#ffffff;color:#000000"><main id="contract-pdf-document">${cleanHtml}</main></body>
+<body style="margin:0;background:#ffffff!important;color:#000000!important"><main id="contract-pdf-document" style="box-sizing:border-box;width:180mm;min-height:267mm;background:#ffffff!important;color:#000000!important;isolation:isolate">${cleanHtml}</main></body>
 </html>`;
 }
 
@@ -49,8 +49,10 @@ export async function convertHtmlToPdf(
   iframe.style.position = "absolute";
   iframe.style.left = "-9999px";
   iframe.style.top = "0";
-  iframe.style.width = "800px";
-  iframe.style.height = "1100px";
+  // 210 × 297 mm at CSS' canonical 96 dpi. The captured root itself is the
+  // printable 180 × 267 mm area after 15 mm margins.
+  iframe.style.width = "794px";
+  iframe.style.height = "1123px";
   iframe.style.border = "none";
   document.body.appendChild(iframe);
 
@@ -76,6 +78,7 @@ export async function convertHtmlToPdf(
 
     const targetElement = iframeDoc.getElementById("contract-pdf-document");
     if (!targetElement) throw new Error("Documento isolado de exportação não foi criado.");
+    await iframeDoc.fonts?.ready;
     const pdfArrayBuffer: ArrayBuffer = await pdfRenderer()
       .set(opt)
       .from(targetElement)
@@ -84,13 +87,13 @@ export async function convertHtmlToPdf(
     document.body.removeChild(iframe);
 
     return createPdfArtifacts(pdfArrayBuffer);
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (document.body.contains(iframe)) {
       document.body.removeChild(iframe);
     }
     console.error("Erro ao converter HTML para PDF:", err);
     throw new Error(
-      `Não foi possível converter a minuta compilada para formato PDF: ${err?.message || String(err)}`,
+      `Não foi possível converter a minuta compilada para formato PDF: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }

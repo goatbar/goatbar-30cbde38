@@ -5,197 +5,121 @@ import {
   findSigner,
   createSigner,
   createAssignment,
+  ASSINAFY_ACCOUNT_ID,
+  ASSINAFY_API_KEY,
 } from "../_shared/assinafy-client.ts";
 import { requireContractSignatureAccess } from "../_shared/auth-helper.ts";
 import { resolveContractAccess } from "./contract-access.ts";
 import {
   CreateDocHttpError,
+  authenticatedClientOptions,
+  buildRequiredAssignment,
   decodePdfBase64,
   decideDispatch,
   validateCreateDocPayload,
   validatePdfHash,
-  validateSigner,
-  authenticatedClientOptions,
+  validateRequiredSigners,
+  type RequiredSigner,
 } from "./logic.ts";
-import { ASSINAFY_ACCOUNT_ID, ASSINAFY_API_KEY } from "../_shared/assinafy-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-request-id",
+};
+const json = (body: unknown, status: number, correlationId: string) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json", "x-request-id": correlationId },
+  });
+
+type ProviderState = {
+  called: boolean;
+  documentId: string | null;
+  assignmentId: string | null;
+  diagnostic?: Record<string, unknown>;
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
-
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const correlationId = req.headers.get("x-request-id") || crypto.randomUUID();
-  let requestContractId: string | undefined;
-  let requestId: string | undefined;
-  let stage = "01_auth";
-  console.info("[assinafy-create-doc] request received", { method: req.method, correlationId });
+  let stage = "received";
+  let contractId: string | undefined;
+  let signatureRequestId: string | undefined;
+  const provider: ProviderState = { called: false, documentId: null, assignmentId: null };
+
   try {
     if (req.method !== "POST")
-      throw Object.assign(new Error("Método não permitido."), {
-        status: 405,
-        code: "method_not_allowed",
-      });
-    stage = "01_auth";
+      throw new CreateDocHttpError(405, "method_not_allowed", "Método não permitido.");
+    stage = "authenticating";
     const authHeader = req.headers.get("Authorization");
     if (!authHeader)
-      throw new CreateDocHttpError(401, "authentication_required", "Usuário não autenticado");
-
-    const supabaseAuthClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
+      throw new CreateDocHttpError(401, "authentication_required", "Usuário não autenticado.");
+    const url = Deno.env.get("SUPABASE_URL") ?? "";
+    const auth = createClient(
+      url,
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
       authenticatedClientOptions(authHeader),
     );
+    const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "");
+    const access = await requireContractSignatureAccess(auth, "create");
 
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    );
-
-    const access = await requireContractSignatureAccess(supabaseAuthClient, "create");
-    console.info("[assinafy-create-doc] authenticated", {
-      userId: access.user.id,
-      correlationId,
-    });
-
-    stage = "02_parse_payload";
-    let rawBody: unknown;
+    stage = "validating_payload";
+    let body: unknown;
     try {
-      rawBody = await req.json();
+      body = await req.json();
     } catch {
       throw new CreateDocHttpError(400, "invalid_json", "JSON malformado.");
     }
-    const fieldNames =
-      rawBody && typeof rawBody === "object" && !Array.isArray(rawBody)
-        ? Object.keys(rawBody as object)
-        : [];
-    stage = "03_validate_payload";
-    const { contractId, pdfBase64, pdfUrl, pdfHash } = validateCreateDocPayload(rawBody);
-    requestContractId = contractId;
-    console.info("[assinafy-create-doc] payload", {
-      fieldNames,
-      contractId,
-      pdfBase64Present: Boolean(pdfBase64),
-      pdfBase64Length: pdfBase64?.length || 0,
-      originalFileHash: pdfHash,
-      correlationId,
-    });
-    stage = "04_load_contract";
+    const payload = validateCreateDocPayload(body);
+    contractId = payload.contractId;
 
-    const existenceLookup = async () => {
-      const result = await supabaseAdmin
-        .from("event_contracts")
-        .select("id")
-        .eq("id", contractId)
-        .maybeSingle();
-      if (result.error) {
-        console.error("[assinafy-create-doc]", {
-          stage: "contract_existence_lookup",
-          contractId,
-          code: result.error.code,
-          message: result.error.message,
-          correlationId,
-        });
-      } else {
-        console.info("[assinafy-create-doc] contract existence", {
-          stage,
-          userId: access.user.id,
-          contractId,
-          queryTable: "event_contracts",
-          queryErrorCode: null,
-          contractExists: Boolean(result.data),
-          correlationId,
-        });
-      }
-      return result;
-    };
-
+    stage = "loading_contract";
+    const existenceLookup = () =>
+      admin.from("event_contracts").select("id").eq("id", contractId!).maybeSingle();
     const authorizedLookup = async () => {
-      const contractResult = await supabaseAuthClient
+      const result = await auth
         .from("event_contracts")
         .select("*")
-        .eq("id", contractId)
+        .eq("id", contractId!)
         .maybeSingle();
-
-      if (contractResult.error) {
-        console.error("[assinafy-create-doc]", {
-          stage: "authorized_contract_lookup",
-          contractId,
-          code: contractResult.error.code,
-          message: contractResult.error.message,
-          correlationId,
-        });
-        return { data: null, error: contractResult.error };
-      }
-
-      if (!contractResult.data) {
-        console.info("[assinafy-create-doc] contract access", {
-          stage: "05_authorize_event",
-          userId: access.user.id,
-          contractId,
-          queryTable: "event_contracts",
-          queryErrorCode: null,
-          rowFound: false,
-          accessGranted: false,
-          eventId: null,
-          correlationId,
-        });
-        return { data: null, error: null };
-      }
-
-      const eventResult = await supabaseAuthClient
+      if (result.error || !result.data) return result;
+      const event = await auth
         .from("events")
-        .select("client_name, email")
-        .eq("id", contractResult.data.event_id)
+        .select("client_name,email")
+        .eq("id", result.data.event_id)
         .maybeSingle();
-
-      if (eventResult.error) {
-        console.error("[assinafy-create-doc]", {
-          stage: "authorized_event_lookup",
-          contractId,
-          eventId: contractResult.data.event_id,
-          code: eventResult.error.code,
-          message: eventResult.error.message,
-          correlationId,
-        });
-        return { data: null, error: eventResult.error };
+      if (event.error) return { data: null, error: event.error };
+      let companySigner = null;
+      if (result.data.signer_id) {
+        const company = await auth
+          .from("contract_signers")
+          .select("name,email")
+          .eq("id", result.data.signer_id)
+          .eq("is_active", true)
+          .maybeSingle();
+        if (company.error) return { data: null, error: company.error };
+        companySigner = company.data;
       }
-
-      console.info("[assinafy-create-doc] contract access", {
-        stage: "05_authorize_event",
-        userId: access.user.id,
-        contractId,
-        queryTable: "event_contracts",
-        queryErrorCode: null,
-        rowFound: true,
-        accessGranted: true,
-        eventId: contractResult.data.event_id,
-        correlationId,
-      });
-
-      return {
-        data: {
-          ...contractResult.data,
-          event: eventResult.data || null,
-        },
-        error: null,
-      };
+      return { data: { ...result.data, event: event.data, companySigner }, error: null };
     };
-    stage = "05_authorize_event";
     const contract = await resolveContractAccess(existenceLookup, authorizedLookup);
     if (!contract)
       throw new CreateDocHttpError(404, "contract_not_found", "Contrato não encontrado.");
-    stage = "05_authorize_event";
-    const signer = validateSigner(contract.event?.client_name, contract.event?.email);
+    const requiredSigners = validateRequiredSigners(
+      { name: contract.event?.client_name, email: contract.event?.email },
+      contract.companySigner,
+    );
+    console.info("[assinafy-create-doc] validated", {
+      stage,
+      correlationId,
+      contractId,
+      userId: access.user.id,
+      signerRoles: requiredSigners.map((s) => s.role),
+    });
 
-    // A partir daqui, sabemos que o usuário logado tem acesso ao contrato.
-    // Usamos o supabaseAdmin para garantir inserts independentes de políticas parciais.
-    stage = "06_find_or_create_request";
-    let { data: sigReq } = await supabaseAdmin
+    stage = "resolving_idempotency";
+    const { data: foundRequest, error: lookupError } = await admin
       .from("contract_signature_requests")
       .select("*")
       .eq("contract_id", contractId)
@@ -203,312 +127,60 @@ serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-
-    console.info("[assinafy-create-doc] local request", {
-      exists: Boolean(sigReq),
-      requestId: sigReq?.id,
-      localStatus: sigReq?.dispatch_status,
-      contractId,
-      correlationId,
-    });
-
-    console.info("[assinafy-create-doc] pdf hash comparison", {
-      savedHash: sigReq?.original_file_hash ?? null,
-      calculatedHash: pdfHash,
-      externalDocumentId: sigReq?.external_document_id ?? null,
-      requestId: sigReq?.id ?? null,
-      contractId,
-      match: sigReq?.original_file_hash === pdfHash,
-      correlationId,
-    });
-
-    const dispatchDecision = decideDispatch(sigReq, pdfHash);
-
-    console.info("[dispatch-decision]", {
-      requestId: sigReq?.id,
-      dispatchStatus: sigReq?.dispatch_status,
-      originalFileHash: sigReq?.original_file_hash,
-      incomingPdfHash: pdfHash,
-      externalDocumentId: sigReq?.external_document_id,
-      externalAssignmentId: sigReq?.external_assignment_id,
-      decision: dispatchDecision.action,
-      correlationId,
-    });
-
-    if (dispatchDecision.action === "obsolete_failed_without_external_ids") {
-      console.info("[assinafy-create-doc] obsoleting failed request without external IDs", {
-        oldRequestId: sigReq?.id,
-        contractId,
+    if (lookupError) throw lookupError;
+    let sigReq = foundRequest;
+    const decision = decideDispatch(sigReq, payload.pdfHash);
+    if (
+      decision.action === "reuse" ||
+      decision.action === "reconcile_local_persistence" ||
+      decision.action === "reconcile"
+    ) {
+      const needsReconciliation = decision.action !== "reuse";
+      return json(
+        {
+          success: true,
+          remoteCreated: Boolean(sigReq.external_document_id),
+          reconciliationRequired: needsReconciliation,
+          signatureRequestId: sigReq.id,
+          externalDocumentId: sigReq.external_document_id,
+          externalAssignmentId: sigReq.external_assignment_id,
+          status: sigReq.dispatch_status,
+          diagnostic: {
+            stage: needsReconciliation
+              ? "remote_created_local_reconciliation_required"
+              : "idempotent_reuse",
+            correlationId,
+            assinafyRequestSent: false,
+            assinafyDocumentId: sigReq.external_document_id,
+            databaseUpdated: false,
+          },
+        },
+        needsReconciliation ? 202 : 200,
         correlationId,
-      });
-      const { data: obsData, error: obsErr } = await supabaseAdmin
+      );
+    }
+    if (["processing", "hash_conflict"].includes(decision.action))
+      throw new CreateDocHttpError(
+        409,
+        decision.action,
+        decision.action === "processing"
+          ? "Contrato já está sendo processado."
+          : "Já existe envio com conteúdo ou estado incompatível; reconcilie antes de reenviar.",
+      );
+    if (decision.action === "obsolete_failed_without_external_ids") {
+      const obsolete = await admin
         .from("contract_signature_requests")
         .update({
           dispatch_status: "obsolete",
           last_error: "Substituído por nova tentativa limpa.",
         })
-        .eq("id", sigReq!.id)
-        .eq("dispatch_status", "failed")
-        .select("id");
-
-      if (obsErr || !obsData || obsData.length === 0) {
-        console.error("[assinafy-create-doc] failed to obsolete request", {
-          requestId: sigReq?.id,
-          error: obsErr,
-          correlationId,
-        });
-        throw new CreateDocHttpError(
-          500,
-          "obsolete_update_failed",
-          "Não foi possível atualizar a solicitação anterior para obsoleta.",
-        );
-      }
-      sigReq = null;
-    } else if (dispatchDecision.action === "hash_conflict") {
-      throw new CreateDocHttpError(
-        409,
-        "pdf_hash_mismatch",
-        "O PDF atual diverge do documento associado à solicitação existente.",
-      );
-    }
-
-    if (sigReq && dispatchDecision.action === "reconcile_local_persistence") {
-      stage = "13_persist";
-      console.info("[assinafy-create-doc] executing reconcile_local_persistence", {
-        requestId: sigReq.id,
-        contractId,
-        externalDocumentId: sigReq.external_document_id,
-        externalAssignmentId: sigReq.external_assignment_id,
-        correlationId,
-      });
-
-      const { data: updatedSigners, error: signerErr } = await supabaseAdmin
-        .from("contract_signature_signers")
-        .update({
-          status: "pending",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("signature_request_id", sigReq.id)
-        .select("id");
-
-      if (signerErr) {
-        console.error("[assinafy-create-doc]", {
-          stage: "reconcile_local_persistence",
-          table: "contract_signature_signers",
-          operation: "update",
-          requestId: sigReq.id,
-          contractId,
-          correlationId,
-          code: signerErr.code,
-          message: signerErr.message,
-          details: signerErr.details,
-          hint: signerErr.hint,
-        });
-        throw signerErr;
-      }
-
-      if (!updatedSigners || updatedSigners.length === 0) {
-        console.error("[assinafy-create-doc]", {
-          stage: "reconcile_local_persistence",
-          table: "contract_signature_signers",
-          operation: "update",
-          requestId: sigReq.id,
-          contractId,
-          correlationId,
-          code: "signer_persist_target_not_found",
-          message: "Nenhuma linha encontrada para reconciliar contract_signature_signers.",
-        });
-        throw new CreateDocHttpError(
-          500,
-          "signer_persist_target_not_found",
-          "Signatário não encontrado para reconciliação local.",
-        );
-      }
-
-      const { data: updatedReqs, error: reqErr } = await supabaseAdmin
-        .from("contract_signature_requests")
-        .update({
-          dispatch_status: "pending_signature",
-          sent_at: new Date().toISOString(),
-          last_error: null,
-        })
         .eq("id", sigReq.id)
-        .select("id");
-
-      if (reqErr) {
-        console.error("[assinafy-create-doc]", {
-          stage: "reconcile_local_persistence",
-          table: "contract_signature_requests",
-          operation: "update",
-          requestId: sigReq.id,
-          contractId,
-          correlationId,
-          code: reqErr.code,
-          message: reqErr.message,
-          details: reqErr.details,
-          hint: reqErr.hint,
-        });
-        throw reqErr;
-      }
-
-      if (!updatedReqs || updatedReqs.length === 0) {
-        console.error("[assinafy-create-doc]", {
-          stage: "reconcile_local_persistence",
-          table: "contract_signature_requests",
-          operation: "update",
-          requestId: sigReq.id,
-          contractId,
-          correlationId,
-          code: "request_persist_target_not_found",
-          message: "Nenhuma linha encontrada para reconciliar contract_signature_requests.",
-        });
-        throw new CreateDocHttpError(
-          500,
-          "request_persist_target_not_found",
-          "Solicitação não encontrada para reconciliação local.",
-        );
-      }
-
-      const { data: updatedContracts, error: contractErr } = await supabaseAdmin
-        .from("event_contracts")
-        .update({
-          status: "sent",
-          sent_for_signature_at: new Date().toISOString(),
-        })
-        .eq("id", contractId)
-        .select("id");
-
-      if (contractErr) {
-        console.error("[assinafy-create-doc]", {
-          stage: "reconcile_local_persistence",
-          table: "event_contracts",
-          operation: "update",
-          requestId: sigReq.id,
-          contractId,
-          correlationId,
-          code: contractErr.code,
-          message: contractErr.message,
-          details: contractErr.details,
-          hint: contractErr.hint,
-        });
-        throw contractErr;
-      }
-
-      if (!updatedContracts || updatedContracts.length === 0) {
-        console.error("[assinafy-create-doc]", {
-          stage: "reconcile_local_persistence",
-          table: "event_contracts",
-          operation: "update",
-          requestId: sigReq.id,
-          contractId,
-          correlationId,
-          code: "contract_persist_target_not_found",
-          message: "Nenhuma linha encontrada para reconciliar event_contracts.",
-        });
-        throw new CreateDocHttpError(
-          500,
-          "contract_persist_target_not_found",
-          "Contrato de evento não encontrado para reconciliação local.",
-        );
-      }
-
-      stage = "14_complete";
-      return new Response(
-        JSON.stringify({
-          success: true,
-          signatureRequestId: sigReq.id,
-          externalDocumentId: sigReq.external_document_id,
-          externalAssignmentId: sigReq.external_assignment_id,
-          signatureUrl: sigReq.signature_url,
-          status: "pending_signature",
-          diagnostic: {
-            requestStarted: true,
-            backendReached: true,
-            assinafyRequestSent: false,
-            httpStatus: null,
-            assinafyResponse:
-              "Local persistence reconciled successfully; no new provider request was sent.",
-            internalContractId: contractId,
-            internalDocumentId: sigReq.id,
-            assinafyDocumentId: sigReq.external_document_id,
-            databaseUpdated: true,
-            timestamp: new Date().toISOString(),
-            timedOut: false,
-            authenticationRejected: false,
-          },
-        }),
-        {
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-            "x-request-id": correlationId,
-          },
-        },
-      );
+        .eq("dispatch_status", "failed");
+      if (obsolete.error) throw obsolete.error;
+      sigReq = null;
     }
-
-    if (sigReq && dispatchDecision.action === "reuse") {
-      stage = "14_complete";
-      return new Response(
-        JSON.stringify({
-          success: true,
-          signatureRequestId: sigReq.id,
-          externalDocumentId: sigReq.external_document_id,
-          externalAssignmentId: sigReq.external_assignment_id,
-          signatureUrl: sigReq.signature_url,
-          status: sigReq.dispatch_status,
-          diagnostic: {
-            requestStarted: true,
-            backendReached: true,
-            assinafyRequestSent: false,
-            httpStatus: null,
-            assinafyResponse: "Existing active request reused; no new provider request was sent.",
-            internalContractId: contractId,
-            internalDocumentId: sigReq.id,
-            assinafyDocumentId: sigReq.external_document_id,
-            databaseUpdated: false,
-            timestamp: new Date().toISOString(),
-            timedOut: false,
-            authenticationRejected: false,
-          },
-        }),
-        {
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-            "x-request-id": correlationId,
-          },
-        },
-      );
-    }
-
-    if (sigReq && sigReq.dispatch_status === "processing") {
-      const diffMs = new Date().getTime() - new Date(sigReq.updated_at).getTime();
-      // Se travado há mais de 10 min, pode ter sido crash
-      if (diffMs > 10 * 60 * 1000) {
-        await supabaseAdmin
-          .from("contract_signature_requests")
-          .update({
-            dispatch_status: "reconciliation_required",
-            last_error: "Timeout na tentativa anterior. Reconciliação manual necessária.",
-          })
-          .eq("id", sigReq.id);
-        throw new Error(
-          "Falha opaca no envio anterior. Por segurança o envio automático foi bloqueado (reconciliation_required).",
-        );
-      } else {
-        throw new Error("Contrato já está sendo processado. Aguarde.");
-      }
-    }
-
-    if (sigReq && sigReq.dispatch_status === "reconciliation_required") {
-      throw new Error(
-        "Envio bloqueado por segurança devido a falha opaca anterior. Reconciliação manual necessária.",
-      );
-    }
-
     if (!sigReq) {
-      const { data: newReq } = await supabaseAdmin
+      const inserted = await admin
         .from("contract_signature_requests")
         .insert({
           event_id: contract.event_id,
@@ -517,453 +189,277 @@ serve(async (req) => {
           signature_provider: "assinafy",
           dispatch_status: "idle",
           internal_status: "pending_signature",
-          original_file_hash: pdfHash,
+          original_file_hash: payload.pdfHash,
         })
         .select()
         .single();
-      if (!newReq)
-        throw new CreateDocHttpError(
-          500,
-          "request_persist_failed",
-          "Não foi possível criar a solicitação de assinatura.",
-        );
-      sigReq = newReq;
+      if (inserted.error || !inserted.data)
+        throw inserted.error || new Error("Falha ao criar solicitação local.");
+      sigReq = inserted.data;
     } else if (sigReq.dispatch_status === "failed") {
-      const { data: retryReq, error: retryError } = await supabaseAdmin
+      const retried = await admin
         .from("contract_signature_requests")
         .update({ dispatch_status: "idle", last_error: null })
         .eq("id", sigReq.id)
         .eq("dispatch_status", "failed")
         .select()
         .single();
-      if (retryError || !retryReq)
-        throw Object.assign(new Error("Não foi possível preparar a nova tentativa."), {
-          status: 409,
-          code: "retry_conflict",
-        });
-      sigReq = retryReq;
+      if (retried.error || !retried.data)
+        throw new CreateDocHttpError(
+          409,
+          "retry_conflict",
+          "Não foi possível preparar nova tentativa.",
+        );
+      sigReq = retried.data;
     }
-
-    requestId = sigReq.id;
-    const { data: lockedReq, error: lockErr } = await supabaseAdmin
+    signatureRequestId = sigReq.id;
+    const locked = await admin
       .from("contract_signature_requests")
       .update({ dispatch_status: "processing", updated_at: new Date().toISOString() })
       .eq("id", sigReq.id)
-      .in("dispatch_status", ["idle"])
+      .eq("dispatch_status", "idle")
       .select()
       .single();
-
-    if (lockErr || !lockedReq) {
-      throw new Error("Falha ao adquirir lock no request. Concorrência evitada.");
-    }
-
-    requestId = lockedReq.id;
-    let externalDocId = lockedReq.external_document_id;
-    let externalAssignId = lockedReq.external_assignment_id;
-    let lastProviderDiagnostic: Record<string, unknown> | undefined;
+    if (locked.error || !locked.data)
+      throw new CreateDocHttpError(
+        409,
+        "dispatch_lock_conflict",
+        "Outro envio já está em andamento.",
+      );
+    provider.documentId = locked.data.external_document_id;
+    provider.assignmentId = locked.data.external_assignment_id;
 
     try {
-      const clientEmail = signer.email;
-      const clientName = signer.name;
-
-      if (!externalDocId) {
-        stage = "07_validate_hash";
-        let buffer: Uint8Array;
-        if (pdfBase64) {
-          stage = "08_decode_pdf";
-          buffer = decodePdfBase64(pdfBase64);
-        } else {
-          const fileRes = await fetch(pdfUrl!);
-          if (!fileRes.ok)
+      if (!provider.documentId) {
+        stage = "validating_pdf";
+        let bytes: Uint8Array;
+        if (payload.pdfBase64) bytes = decodePdfBase64(payload.pdfBase64);
+        else {
+          const fetched = await fetch(payload.pdfUrl!);
+          if (!fetched.ok)
             throw new CreateDocHttpError(
               422,
               "pdf_url_unreadable",
-              "Não foi possível baixar o PDF informado.",
+              "Não foi possível baixar o PDF.",
             );
-          buffer = new Uint8Array(await fileRes.arrayBuffer());
-          if (new TextDecoder().decode(buffer.slice(0, 5)) !== "%PDF-")
-            throw new CreateDocHttpError(
-              422,
-              "pdf_signature_invalid",
-              "O arquivo recebido não possui assinatura PDF válida.",
-            );
+          bytes = new Uint8Array(await fetched.arrayBuffer());
         }
-        await validatePdfHash(buffer, pdfHash);
+        await validatePdfHash(bytes, payload.pdfHash);
         if (!ASSINAFY_API_KEY || !ASSINAFY_ACCOUNT_ID)
           throw new CreateDocHttpError(
             503,
             "assinafy_not_configured",
             "Serviço de assinatura indisponível.",
           );
-        console.info("[assinafy-create-doc] provider configuration", {
-          configured: true,
-          environment: Deno.env.get("ASSINAFY_ENVIRONMENT") || "sandbox",
-          apiKeyEnvironmentVariable: "ASSINAFY_API_KEY",
-          apiKeyPresent: Boolean(ASSINAFY_API_KEY),
-          accountIdEnvironmentVariable: "ASSINAFY_ACCOUNT_ID",
-          accountIdPresent: Boolean(ASSINAFY_ACCOUNT_ID),
-          authenticationHeader: "X-Api-Key",
-          correlationId,
-        });
-        stage = "09_provider_document";
-        const fileName = `Contrato_${contract.event_id}.pdf`;
-        stage = "10_provider_upload";
-        const docResult = await uploadDocument(fileName, buffer);
-        lastProviderDiagnostic = docResult?.diagnostic;
-        externalDocId = docResult?.data?.id || docResult?.id;
+        stage = "creating_remote_document";
+        provider.called = true;
+        const uploaded = await uploadDocument(`Contrato_${contract.event_id}.pdf`, bytes);
+        provider.diagnostic = uploaded.diagnostic;
+        provider.documentId = uploaded?.data?.id || uploaded?.id || null;
+        if (!provider.documentId) throw new Error("API não retornou o ID do documento.");
 
-        if (!externalDocId) throw new Error("API não retornou o ID do documento");
-
-        await supabaseAdmin
-          .from("contract_signature_requests")
-          .update({ external_document_id: externalDocId })
-          .eq("id", lockedReq.id);
-      }
-
-      let extSignerId: string | null = null;
-      const { data: existingSigner } = await supabaseAdmin
-        .from("contract_signature_signers")
-        .select("external_signer_id")
-        .eq("signature_request_id", lockedReq.id)
-        .eq("email", clientEmail)
-        .maybeSingle();
-
-      if (existingSigner?.external_signer_id) {
-        extSignerId = existingSigner.external_signer_id;
-      } else {
-        stage = "11_provider_signer";
-        const found = await findSigner(clientEmail);
-        lastProviderDiagnostic = found?.diagnostic || lastProviderDiagnostic;
-        if (found && found.id) {
-          extSignerId = found.id;
-        } else {
-          const created = await createSigner(clientName, clientEmail);
-          lastProviderDiagnostic = created?.diagnostic || lastProviderDiagnostic;
-          extSignerId = created?.data?.id || created?.id;
-        }
-
-        if (extSignerId) {
-          await supabaseAdmin.from("contract_signature_signers").insert({
-            signature_request_id: lockedReq.id,
-            role: "client",
-            full_name: clientName,
-            email: clientEmail,
-            external_signer_id: extSignerId,
-          });
-        }
-      }
-
-      if (!extSignerId) throw new Error("Não foi possível criar/recuperar Signer.");
-
-      if (!externalAssignId) {
-        stage = "12_provider_assignment";
-        const assignRes = await createAssignment(externalDocId, [{ id: extSignerId }]);
-        lastProviderDiagnostic = assignRes?.diagnostic || lastProviderDiagnostic;
-        externalAssignId = assignRes?.data?.id || assignRes?.id;
-        const assignment = assignRes?.data || assignRes;
-        const signingEntry = assignment?.signing_urls?.find(
-          (entry: any) => entry.signer_id === extSignerId,
-        );
-        const assignedSigner = assignment?.signers?.find(
-          (signer: any) => signer.id === extSignerId,
-        );
-        const sigUrl = signingEntry?.url || assignment?.signature_url;
-
-        if (!externalAssignId) throw new Error("API não retornou o ID do Assignment");
-
-        const { data: updatedRequests, error: reqStage12Error } = await supabaseAdmin
+        stage = "persisting_remote_document_id";
+        const persisted = await admin
           .from("contract_signature_requests")
           .update({
-            external_assignment_id: externalAssignId,
-            signature_url: sigUrl,
+            external_document_id: provider.documentId,
+            dispatch_status: "processing",
+            updated_at: new Date().toISOString(),
           })
-          .eq("id", lockedReq.id)
-          .select("id");
-        if (reqStage12Error) {
-          console.error("[12_provider_assignment]", {
-            code: reqStage12Error.code,
-            message: reqStage12Error.message,
-            details: reqStage12Error.details,
-            hint: reqStage12Error.hint,
-            table: "contract_signature_requests",
-            operation: "update",
-            payload: { external_assignment_id: externalAssignId, signature_url: sigUrl },
-          });
-          throw reqStage12Error;
-        }
+          .eq("id", sigReq.id)
+          .select("id")
+          .single();
+        if (persisted.error || !persisted.data)
+          throw persisted.error || new Error("ID remoto não pôde ser persistido.");
+      }
 
-        if (!updatedRequests || updatedRequests.length === 0) {
-          console.error("[12_provider_assignment]", {
-            code: "request_persist_target_not_found",
-            message: "Nenhuma linha encontrada para atualizar a solicitação no estágio 12.",
-            table: "contract_signature_requests",
-            operation: "update",
-            signatureRequestId: lockedReq.id,
-          });
-          throw new CreateDocHttpError(
-            500,
-            "request_persist_target_not_found",
-            "Solicitação não encontrada para atualização no estágio 12.",
-          );
-        }
-
-        const signerPayload = {
-          status: assignedSigner?.notified ? "sent" : "pending",
-          updated_at: new Date().toISOString(),
-        };
-        const { data: updatedSigners, error: signerUpdateError } = await supabaseAdmin
+      const externalSignerIds: Array<{
+        role: RequiredSigner["role"];
+        externalSignerId: string;
+      }> = [];
+      for (const party of requiredSigners) {
+        stage = `resolving_${party.role}_signer`;
+        const local = await admin
           .from("contract_signature_signers")
-          .update(signerPayload)
-          .eq("signature_request_id", lockedReq.id)
-          .eq("external_signer_id", extSignerId)
-          .select("id");
-
-        if (signerUpdateError) {
-          console.error("[12_provider_assignment]", {
-            code: signerUpdateError.code,
-            message: signerUpdateError.message,
-            details: signerUpdateError.details,
-            hint: signerUpdateError.hint,
-            table: "contract_signature_signers",
-            operation: "update",
-            payload: signerPayload,
-          });
-          throw signerUpdateError;
+          .select("id,external_signer_id")
+          .eq("signature_request_id", sigReq.id)
+          .eq("role", party.role)
+          .maybeSingle();
+        if (local.error) throw local.error;
+        let externalSignerId = local.data?.external_signer_id || null;
+        if (!externalSignerId) {
+          provider.called = true;
+          const found = await findSigner(party.email);
+          const created = found?.id ? found : await createSigner(party.name, party.email);
+          provider.diagnostic = created?.diagnostic || provider.diagnostic;
+          externalSignerId = created?.data?.id || created?.id || null;
+          if (!externalSignerId)
+            throw new Error(`Assinafy não retornou o signatário ${party.role}.`);
+          const signerRow = {
+            role: party.role,
+            full_name: party.name,
+            email: party.email,
+            external_signer_id: externalSignerId,
+          };
+          const saved = local.data
+            ? await admin
+                .from("contract_signature_signers")
+                .update(signerRow)
+                .eq("id", local.data.id)
+            : await admin
+                .from("contract_signature_signers")
+                .insert({ signature_request_id: sigReq.id, ...signerRow });
+          if (saved.error) throw saved.error;
         }
+        externalSignerIds.push({ role: party.role, externalSignerId });
+      }
+      const assignmentSigners = buildRequiredAssignment(externalSignerIds);
 
-        if (!updatedSigners || updatedSigners.length === 0) {
-          console.error("[12_provider_assignment]", {
-            code: "signer_persist_target_not_found",
-            message: "Nenhuma linha encontrada para atualizar o signatário.",
-            table: "contract_signature_signers",
-            operation: "update",
-            signatureRequestId: lockedReq.id,
-            externalSignerId: extSignerId,
-          });
-          throw new CreateDocHttpError(
-            500,
-            "signer_persist_target_not_found",
-            "Signatário não encontrado para atualização.",
-          );
-        }
+      if (!provider.assignmentId) {
+        stage = "creating_remote_assignment";
+        provider.called = true;
+        const assigned = await createAssignment(provider.documentId!, assignmentSigners);
+        provider.diagnostic = assigned?.diagnostic || provider.diagnostic;
+        const assignment = assigned?.data || assigned;
+        provider.assignmentId = assignment?.id || null;
+        if (!provider.assignmentId) throw new Error("API não retornou o ID do Assignment.");
+        stage = "persisting_remote_assignment";
+        const saved = await admin
+          .from("contract_signature_requests")
+          .update({
+            external_assignment_id: provider.assignmentId,
+            signature_url: assignment?.signature_url || assignment?.signing_urls?.[0]?.url,
+            dispatch_status: "pending_signature",
+            sent_at: new Date().toISOString(),
+          })
+          .eq("id", sigReq.id)
+          .select("id")
+          .single();
+        if (saved.error || !saved.data)
+          throw saved.error || new Error("Assignment remoto não pôde ser persistido.");
       }
 
-      stage = "13_persist";
-      const requestPayload = {
-        dispatch_status: "pending_signature",
-        sent_at: new Date().toISOString(),
-      };
-      const { data: updatedReqsStage13, error: requestUpdateError } = await supabaseAdmin
-        .from("contract_signature_requests")
-        .update(requestPayload)
-        .eq("id", lockedReq.id)
-        .select("id");
-
-      if (requestUpdateError) {
-        console.error("[13_persist]", {
-          code: requestUpdateError.code,
-          message: requestUpdateError.message,
-          details: requestUpdateError.details,
-          hint: requestUpdateError.hint,
-          table: "contract_signature_requests",
-          operation: "update",
-          payload: requestPayload,
-        });
-        throw requestUpdateError;
-      }
-
-      if (!updatedReqsStage13 || updatedReqsStage13.length === 0) {
-        console.error("[13_persist]", {
-          code: "request_persist_target_not_found",
-          message: "Nenhuma linha encontrada para atualizar a solicitação no estágio 13.",
-          table: "contract_signature_requests",
-          operation: "update",
-          signatureRequestId: lockedReq.id,
-        });
-        throw new CreateDocHttpError(
-          500,
-          "request_persist_target_not_found",
-          "Solicitação não encontrada para atualização no estágio 13.",
-        );
-      }
-
-      const contractPayload = {
-        status: "sent",
-        sent_for_signature_at: new Date().toISOString(),
-      };
-      const { data: updatedContractsStage13, error: contractUpdateError } = await supabaseAdmin
+      stage = "persisting_contract_status";
+      const contractSaved = await admin
         .from("event_contracts")
-        .update(contractPayload)
+        .update({ status: "sent", sent_for_signature_at: new Date().toISOString() })
         .eq("id", contractId)
-        .select("id");
-
-      if (contractUpdateError) {
-        console.error("[13_persist]", {
-          code: contractUpdateError.code,
-          message: contractUpdateError.message,
-          details: contractUpdateError.details,
-          hint: contractUpdateError.hint,
-          table: "event_contracts",
-          operation: "update",
-          payload: contractPayload,
-        });
-        throw contractUpdateError;
-      }
-
-      if (!updatedContractsStage13 || updatedContractsStage13.length === 0) {
-        console.error("[13_persist]", {
-          code: "contract_persist_target_not_found",
-          message: "Nenhuma linha encontrada para atualizar o contrato no estágio 13.",
-          table: "event_contracts",
-          operation: "update",
-          contractId,
-        });
-        throw new CreateDocHttpError(
-          500,
-          "contract_persist_target_not_found",
-          "Contrato de evento não encontrado para atualização no estágio 13.",
-        );
-      }
-
-      stage = "14_complete";
-      return new Response(
-        JSON.stringify({
+        .select("id")
+        .single();
+      if (contractSaved.error || !contractSaved.data)
+        throw contractSaved.error || new Error("Status do contrato não pôde ser persistido.");
+      stage = "complete";
+      return json(
+        {
           success: true,
-          signatureRequestId: lockedReq.id,
-          externalDocumentId: externalDocId,
-          externalAssignmentId: externalAssignId,
-          signatureUrl: (
-            await supabaseAdmin
-              .from("contract_signature_requests")
-              .select("signature_url")
-              .eq("id", lockedReq.id)
-              .single()
-          ).data?.signature_url,
+          remoteCreated: true,
+          reconciliationRequired: false,
+          signatureRequestId: sigReq.id,
+          externalDocumentId: provider.documentId,
+          externalAssignmentId: provider.assignmentId,
           status: "pending_signature",
           diagnostic: {
-            requestStarted: true,
-            backendReached: true,
-            assinafyRequestSent: Boolean(lastProviderDiagnostic?.assinafyRequestSent),
-            httpStatus: lastProviderDiagnostic?.httpStatus ?? null,
-            assinafyResponse: lastProviderDiagnostic?.responseBody ?? null,
-            internalContractId: contractId,
-            internalDocumentId: lockedReq.id,
-            assinafyDocumentId: externalDocId,
+            stage,
+            correlationId,
+            assinafyRequestSent: provider.called,
+            assinafyDocumentId: provider.documentId,
             databaseUpdated: true,
-            endpoint: lastProviderDiagnostic?.endpoint,
-            method: lastProviderDiagnostic?.method,
-            timestamp: lastProviderDiagnostic?.timestamp,
-            timedOut: false,
-            authenticationRejected: false,
-          },
-        }),
-        {
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-            "x-request-id": correlationId,
+            httpStatus: provider.diagnostic?.httpStatus ?? null,
           },
         },
+        200,
+        correlationId,
       );
-    } catch (e: any) {
-      // Se houve erro antes de salvar doc id, bloqueia pra reconciliação.
-      // Se salvou o doc id, apenas falha pra tentar novamente o assignment
-      const failState = externalDocId ? "failed" : "reconciliation_required";
-      await supabaseAdmin
+    } catch (caught: unknown) {
+      const error = caught as { message?: string };
+      const remoteCreated = Boolean(provider.documentId);
+      const state = remoteCreated
+        ? "reconciliation_required"
+        : provider.called
+          ? "reconciliation_required"
+          : "failed";
+      await admin
         .from("contract_signature_requests")
-        .update({
-          dispatch_status: failState,
-          last_error: e.message,
-        })
-        .eq("id", lockedReq.id);
-
-      throw e;
+        .update({ dispatch_status: state, last_error: String(error?.message || "Falha no envio.") })
+        .eq("id", sigReq.id);
+      if (remoteCreated) {
+        return json(
+          {
+            success: true,
+            remoteCreated: true,
+            reconciliationRequired: true,
+            message:
+              "Documento criado na Assinafy; a persistência local requer reconciliação. Não reenvie.",
+            signatureRequestId: sigReq.id,
+            externalDocumentId: provider.documentId,
+            externalAssignmentId: provider.assignmentId,
+            status: "reconciliation_required",
+            diagnostic: {
+              stage: "remote_created_local_reconciliation_required",
+              failedStage: stage,
+              correlationId,
+              assinafyRequestSent: provider.called,
+              assinafyDocumentId: provider.documentId,
+              databaseUpdated: false,
+              errorMessage: String(error?.message || error),
+            },
+          },
+          202,
+          correlationId,
+        );
+      }
+      throw error;
     }
-  } catch (error: any) {
-    const message = String(error?.message || "Falha interna ao enviar para assinatura.");
-    const isProviderError =
-      error?.name === "AssinafyApiError" || message.includes("Assinafy API Error");
-    const status =
-      Number(error?.status) ||
-      (message.includes("não autenticado")
-        ? 401
-        : message.includes("não encontrado")
-          ? 404
-          : message.includes("acesso negado") || message.includes("acesso ao contrato")
-            ? 403
-            : isProviderError
-              ? 502
-              : 500);
-    const code =
-      error?.code ||
-      (isProviderError
-        ? "assinafy_upstream_error"
-        : status === 401
-          ? "authentication_required"
-          : status === 403
-            ? "forbidden"
-            : status === 404
-              ? "contract_not_found"
-              : "internal_error");
-    const safeMessage = isProviderError
-      ? "A Assinafy rejeitou a operação."
-      : status >= 500 && !(error instanceof CreateDocHttpError)
-        ? "Falha interna ao enviar para assinatura."
-        : message;
+  } catch (caught: unknown) {
+    const error = caught as {
+      status?: number;
+      name?: string;
+      message?: string;
+      code?: string;
+      diagnostic?: Record<string, unknown>;
+    };
+    const status = Number(error?.status) || (error?.name === "AssinafyApiError" ? 502 : 500);
+    const safeMessage =
+      status >= 500
+        ? error?.name === "AssinafyApiError"
+          ? "A Assinafy rejeitou a operação."
+          : "Falha interna antes da confirmação de criação remota."
+        : error.message;
     console.error("[assinafy-create-doc] failure", {
       stage,
-      status,
-      code,
-      safeMessage,
-      contractId: requestContractId,
-      requestId,
-      providerCalled:
-        stage.startsWith("09_") ||
-        stage.startsWith("10_") ||
-        stage.startsWith("11_") ||
-        stage.startsWith("12_"),
-      providerStatus: isProviderError ? error?.providerStatus : undefined,
       correlationId,
-      providerDiagnostic: error?.diagnostic,
+      contractId,
+      signatureRequestId,
+      status,
+      code: error?.code || "internal_error",
+      providerCalled: provider.called,
+      remoteCreated: Boolean(provider.documentId),
     });
-    const authenticationRejected =
-      status === 401 ||
-      code === "authentication_required" ||
-      Boolean(error?.diagnostic?.authenticationRejected);
-
-    return new Response(
-      JSON.stringify({
+    return json(
+      {
         success: false,
+        remoteCreated: false,
+        reconciliationRequired: provider.called,
         message: safeMessage,
         error: safeMessage,
-        code,
+        code:
+          error?.code ||
+          (error?.name === "AssinafyApiError" ? "assinafy_upstream_error" : "internal_error"),
         requestId: correlationId,
         diagnostic: {
-          requestStarted: true,
-          backendReached: true,
-          assinafyRequestSent: Boolean(error?.diagnostic?.assinafyRequestSent),
+          stage,
+          correlationId,
+          assinafyRequestSent: provider.called || Boolean(error?.diagnostic?.assinafyRequestSent),
+          assinafyDocumentId: provider.documentId,
+          internalContractId: contractId,
+          internalDocumentId: signatureRequestId,
+          databaseUpdated: Boolean(signatureRequestId),
           httpStatus: error?.diagnostic?.httpStatus ?? null,
-          assinafyResponse: error?.diagnostic?.responseBody ?? null,
-          errorMessage: error?.diagnostic?.errorMessage || message,
-          internalContractId: requestContractId,
-          internalDocumentId: requestId,
-          assinafyDocumentId: null,
-          databaseUpdated: Boolean(requestId),
-          endpoint: error?.diagnostic?.endpoint,
-          method: error?.diagnostic?.method,
-          timestamp: error?.diagnostic?.timestamp || new Date().toISOString(),
           timedOut: Boolean(error?.diagnostic?.timedOut),
-          authenticationRejected,
-        },
-      }),
-      {
-        status,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-          "x-request-id": correlationId,
         },
       },
+      status,
+      correlationId,
     );
   }
 });
