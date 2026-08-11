@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { calcularOrcamentoEvento, type Evento, type EventoStatus } from "@/lib/mock-data";
+import { ADDITIONAL_COST_LABEL, calcularTotalShots } from "@/lib/additional-budget-items";
 import { fmtBRL } from "@/lib/format";
 import {
   formatBrazilianDocument,
@@ -348,6 +349,12 @@ function EventoInterna() {
     is_paid_full: (ev.payment_percent_received || 0) >= 100,
     drinksPorPessoa: 4,
     markupAdicionalDrinks: 0,
+    hasWelcomeDrinks: false,
+    welcomeDrinksPerPerson: 0,
+    welcomeDrinksProfitPercentage: 0,
+    welcomeDrinksSelected: [],
+    hasShots: false,
+    shotsItems: [],
     equipe: {
       bartender: { qtd: 0, valorUnitario: 200 },
       keeper: { qtd: 0, valorUnitario: 200 },
@@ -398,6 +405,14 @@ function EventoInterna() {
     is_paid_full: (ev.payment_percent_received || 0) >= 100,
     drinksPorPessoa: b.drinks_per_person,
     markupAdicionalDrinks: b.drinks_markup_percentage,
+    hasWelcomeDrinks: b.has_welcome_drinks ?? false,
+    welcomeDrinksPerPerson: b.welcome_drinks_per_person ?? 0,
+    welcomeDrinksProfitPercentage: b.welcome_drinks_profit_percentage ?? 0,
+    welcomeDrinksSelected: Array.isArray(b.welcome_drinks_selected)
+      ? b.welcome_drinks_selected
+      : [],
+    hasShots: b.has_shots ?? false,
+    shotsItems: Array.isArray(b.shots_items) ? b.shots_items : [],
     equipe: {
       bartender: { qtd: b.bartender_quantity, valorUnitario: b.bartender_unit_value },
       keeper: { qtd: b.keeper_quantity, valorUnitario: b.keeper_unit_value },
@@ -446,6 +461,15 @@ function EventoInterna() {
         average_drink_cost: calc.mediaCustoDrinks,
         drinks_base_cost: calc.mediaCustoDrinks * (draft.convidados * draft.drinksPorPessoa),
         drinks_final_value: calc.valorDrinksEvento,
+        has_welcome_drinks: draft.hasWelcomeDrinks,
+        welcome_drinks_per_person: draft.welcomeDrinksPerPerson,
+        welcome_drinks_profit_percentage: draft.welcomeDrinksProfitPercentage,
+        welcome_drinks_selected: draft.welcomeDrinksSelected,
+        welcome_drinks_cost: calc.welcomeDrinks.custoTotal,
+        welcome_drinks_final_value: calc.welcomeDrinks.valorFinal,
+        has_shots: draft.hasShots,
+        shots_items: draft.shotsItems,
+        shots_total_value: calc.shotsTotal,
         bartender_quantity: draft.equipe.bartender.qtd,
         bartender_unit_value: draft.equipe.bartender.valorUnitario,
         keeper_quantity: draft.equipe.keeper.qtd,
@@ -697,8 +721,6 @@ function EventoInterna() {
       // A minuta deve abrir mesmo quando houver campos pendentes. Esses campos
       // ficam visíveis no painel de validação e só bloqueiam a exportação/envio.
       const text = renderContractPreview(templateContent, vars, mapping);
-      console.debug("[Contract Preview] Conteúdo final após normalização e substituição:", text);
-
       console.log(
         "🔹 [Contract Preview] 5. Documento gerado com sucesso! Tamanho final:",
         text.length,
@@ -1483,7 +1505,7 @@ function EventoInterna() {
                       />
                     </div>
                     <div>
-                      <label className="label-eyebrow block mb-2">Markup adicional (%)</label>
+                      <label className="label-eyebrow block mb-2">{ADDITIONAL_COST_LABEL} (%)</label>
                       <input
                         type="number"
                         value={draft.markupAdicionalDrinks || ""}
@@ -1639,6 +1661,240 @@ function EventoInterna() {
                         {fmtBRL(calc.valorDrinksEvento)}
                       </div>
                     </div>
+                  </div>
+                </div>
+              </SectionCard>
+
+              <SectionCard
+                title="2. Welcome Drinks & Rodada de Shots"
+                subtitle="Adicionais com valores congelados nesta versão"
+              >
+                <div className="space-y-6">
+                  <div className="space-y-4 rounded-xl border border-border p-4">
+                    <label className="flex items-center gap-2 font-bold">
+                      <input
+                        type="checkbox"
+                        checked={draft.hasWelcomeDrinks}
+                        onChange={(e) =>
+                          setDraft((p) => (p ? { ...p, hasWelcomeDrinks: e.target.checked } : null))
+                        }
+                      />{" "}
+                      Welcome Drinks
+                    </label>
+                    {draft.hasWelcomeDrinks && (
+                      <>
+                        <div className="grid grid-cols-2 gap-4">
+                          <label className="text-xs">
+                            Drinks por pessoa
+                            <input
+                              min="0"
+                              type="number"
+                              value={draft.welcomeDrinksPerPerson || ""}
+                              onChange={(e) =>
+                                setDraft((p) =>
+                                  p
+                                    ? {
+                                        ...p,
+                                        welcomeDrinksPerPerson: Math.max(
+                                          0,
+                                          Number(e.target.value) || 0,
+                                        ),
+                                      }
+                                    : null,
+                                )
+                              }
+                              className="mt-1 w-full h-10 px-3 rounded-lg bg-input border border-border"
+                            />
+                          </label>
+                          <label className="text-xs">
+                            Lucro (%)
+                            <input
+                              min="0"
+                              type="number"
+                              value={draft.welcomeDrinksProfitPercentage || ""}
+                              onChange={(e) =>
+                                setDraft((p) =>
+                                  p
+                                    ? {
+                                        ...p,
+                                        welcomeDrinksProfitPercentage: Math.max(
+                                          0,
+                                          Number(e.target.value) || 0,
+                                        ),
+                                      }
+                                    : null,
+                                )
+                              }
+                              className="mt-1 w-full h-10 px-3 rounded-lg bg-input border border-border"
+                            />
+                          </label>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {allDrinks.map((drink) => {
+                            const selected = draft.welcomeDrinksSelected.some(
+                              (item) => item.drinkId === drink.id,
+                            );
+                            return (
+                              <button
+                                type="button"
+                                key={drink.id}
+                                onClick={() =>
+                                  setDraft((p) =>
+                                    p
+                                      ? {
+                                          ...p,
+                                          welcomeDrinksSelected: selected
+                                            ? p.welcomeDrinksSelected.filter(
+                                                (item) => item.drinkId !== drink.id,
+                                              )
+                                            : [
+                                                ...p.welcomeDrinksSelected,
+                                                {
+                                                  drinkId: drink.id,
+                                                  nameSnapshot: drink.nome,
+                                                  unitCostSnapshot: Math.max(
+                                                    0,
+                                                    Number(drink.custoUnitario) || 0,
+                                                  ),
+                                                },
+                                              ],
+                                        }
+                                      : null,
+                                  )
+                                }
+                                className={`text-left p-2 rounded-lg border text-xs ${selected ? "border-primary bg-primary/10" : "border-border"}`}
+                              >
+                                <strong>{drink.nome}</strong>
+                                <br />
+                                {fmtBRL(drink.custoUnitario)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>Custo: {fmtBRL(calc.welcomeDrinks.custoTotal)}</span>
+                          <strong>Valor final: {fmtBRL(calc.welcomeDrinks.valorFinal)}</strong>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <div className="space-y-3 rounded-xl border border-border p-4">
+                    <label className="flex items-center gap-2 font-bold">
+                      <input
+                        type="checkbox"
+                        checked={draft.hasShots}
+                        onChange={(e) =>
+                          setDraft((p) => (p ? { ...p, hasShots: e.target.checked } : null))
+                        }
+                      />{" "}
+                      Rodada de Shots
+                    </label>
+                    {draft.hasShots && (
+                      <>
+                        {draft.shotsItems.map((item, index) => (
+                          <div key={item.id} className="grid grid-cols-[1fr_75px_105px_36px] gap-2">
+                            <input
+                              aria-label="Nome do shot"
+                              value={item.nome}
+                              placeholder="Produto"
+                              onChange={(e) =>
+                                setDraft((p) => {
+                                  if (!p) return null;
+                                  const shotsItems = [...p.shotsItems];
+                                  shotsItems[index] = { ...item, nome: e.target.value };
+                                  return { ...p, shotsItems };
+                                })
+                              }
+                              className="h-9 px-2 rounded bg-input border border-border"
+                            />
+                            <input
+                              aria-label="Quantidade"
+                              min="0"
+                              type="number"
+                              value={item.quantidade || ""}
+                              onChange={(e) =>
+                                setDraft((p) => {
+                                  if (!p) return null;
+                                  const shotsItems = [...p.shotsItems];
+                                  shotsItems[index] = {
+                                    ...item,
+                                    quantidade: Math.max(0, Number(e.target.value) || 0),
+                                  };
+                                  return { ...p, shotsItems };
+                                })
+                              }
+                              className="h-9 px-2 rounded bg-input border border-border"
+                            />
+                            <input
+                              aria-label="Valor unitário"
+                              min="0"
+                              type="number"
+                              value={item.valorUnitario || ""}
+                              onChange={(e) =>
+                                setDraft((p) => {
+                                  if (!p) return null;
+                                  const shotsItems = [...p.shotsItems];
+                                  shotsItems[index] = {
+                                    ...item,
+                                    valorUnitario: Math.max(0, Number(e.target.value) || 0),
+                                  };
+                                  return { ...p, shotsItems };
+                                })
+                              }
+                              className="h-9 px-2 rounded bg-input border border-border"
+                            />
+                            <button
+                              aria-label="Remover shot"
+                              onClick={() =>
+                                setDraft((p) =>
+                                  p
+                                    ? {
+                                        ...p,
+                                        shotsItems: p.shotsItems.filter(
+                                          (shot) => shot.id !== item.id,
+                                        ),
+                                      }
+                                    : null,
+                                )
+                              }
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                            <span className="col-span-4 text-right text-xs">
+                              Subtotal:{" "}
+                              {fmtBRL(
+                                Math.max(0, item.quantidade) * Math.max(0, item.valorUnitario),
+                              )}
+                            </span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between">
+                          <GhostButton
+                            onClick={() =>
+                              setDraft((p) =>
+                                p
+                                  ? {
+                                      ...p,
+                                      shotsItems: [
+                                        ...p.shotsItems,
+                                        {
+                                          id: crypto.randomUUID(),
+                                          nome: "",
+                                          quantidade: 0,
+                                          valorUnitario: 0,
+                                        },
+                                      ],
+                                    }
+                                  : null,
+                              )
+                            }
+                          >
+                            <Plus className="h-3 w-3" /> Adicionar shot
+                          </GhostButton>
+                          <strong>Total: {fmtBRL(calcularTotalShots(draft.shotsItems))}</strong>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </SectionCard>
@@ -2090,6 +2346,30 @@ function EventoInterna() {
                         <span className="text-foreground">{fmtBRL(calc.valorDrinksEvento)}</span>
                       </div>
                     </div>
+
+                    {draft.hasWelcomeDrinks && (
+                      <div className="space-y-1 border-t border-border/40 pt-3 text-xs">
+                        <div className="font-bold text-primary uppercase">Welcome Drinks</div>
+                        <div className="flex justify-between">
+                          <span>Custo</span>
+                          <span>{fmtBRL(calc.welcomeDrinks.custoTotal)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Lucro</span>
+                          <span>{draft.welcomeDrinksProfitPercentage}%</span>
+                        </div>
+                        <div className="flex justify-between font-bold">
+                          <span>Valor final</span>
+                          <span>{fmtBRL(calc.welcomeDrinks.valorFinal)}</span>
+                        </div>
+                      </div>
+                    )}
+                    {draft.hasShots && (
+                      <div className="flex justify-between border-t border-border/40 pt-3 text-xs font-bold">
+                        <span>RODADA DE SHOTS</span>
+                        <span>{fmtBRL(calc.shotsTotal)}</span>
+                      </div>
+                    )}
 
                     {/* EQUIPE section */}
                     <div className="space-y-2">
@@ -3515,6 +3795,18 @@ function ProposalModal({
           includedBeverages: draft?.descricaoBebidas
             ? draft.descricaoBebidas.split("\n").filter((l: string) => l.trim())
             : [],
+          welcomeDrinks: draft?.hasWelcomeDrinks
+            ? (calc?.welcomeDrinks.distribuicao || []).map(
+                (item: import("@/lib/additional-budget-items").WelcomeDrinkDistribution) => `${item.nameSnapshot}: ${item.quantidade} unidades`,
+              )
+            : [],
+          welcomeDrinksTotal: draft?.hasWelcomeDrinks ? calc?.welcomeDrinks.valorFinal || 0 : 0,
+          shots: draft?.hasShots
+            ? (draft.shotsItems || []).map(
+                (item: import("@/lib/additional-budget-items").ShotBudgetItem) => `${item.nome}: ${item.quantidade} × ${fmtBRL(item.valorUnitario)}`,
+              )
+            : [],
+          shotsTotal: draft?.hasShots ? calc?.shotsTotal || 0 : 0,
           guests: draft?.convidados || 0,
           bartenders: draft?.equipe?.bartender?.qtd || 0,
           keepers: draft?.equipe?.keeper?.qtd || 0,

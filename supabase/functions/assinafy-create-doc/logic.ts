@@ -105,6 +105,51 @@ export function validateSigner(name: unknown, email: unknown): { name: string; e
   return { name: name.trim(), email: email.trim().toLowerCase() };
 }
 
+export type RequiredSigner = { role: "client" | "company"; name: string; email: string };
+
+/** Both parties are mandatory; the company party comes from event_contracts.signer_id. */
+export function validateRequiredSigners(
+  client: { name: unknown; email: unknown },
+  company: { name: unknown; email: unknown } | null,
+): RequiredSigner[] {
+  const validatedClient = validateSigner(client.name, client.email);
+  if (!company) {
+    throw new CreateDocHttpError(
+      422,
+      "company_signer_required",
+      "Selecione o responsável legal da Goat Bar no contrato antes do envio.",
+    );
+  }
+  const validatedCompany = validateSigner(company.name, company.email);
+  if (validatedClient.email === validatedCompany.email) {
+    throw new CreateDocHttpError(
+      422,
+      "distinct_signers_required",
+      "Contratante e contratada devem possuir signatários distintos.",
+    );
+  }
+  return [
+    { role: "client", ...validatedClient },
+    { role: "company", ...validatedCompany },
+  ];
+}
+
+export function buildRequiredAssignment(
+  signerIds: Array<{ role: RequiredSigner["role"]; externalSignerId: string }>,
+): Array<{ id: string }> {
+  const byRole = new Map(signerIds.map((signer) => [signer.role, signer.externalSignerId]));
+  const clientId = byRole.get("client");
+  const companyId = byRole.get("company");
+  if (signerIds.length !== 2 || !clientId || !companyId || clientId === companyId) {
+    throw new CreateDocHttpError(
+      422,
+      "two_party_assignment_required",
+      "O assignment exige exatamente contratante e contratada.",
+    );
+  }
+  return [{ id: clientId }, { id: companyId }];
+}
+
 export function decideDispatch(existing: DispatchRecord | null, pdfHash: string) {
   if (!existing) return { action: "create" as const, request: null };
 

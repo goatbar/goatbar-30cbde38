@@ -118,9 +118,15 @@ export interface Evento {
   status: EventoStatus;
   contratoId?: string;
 
-  // Novos campos de orÃ§amento (VersÃ£o Atual)
+  // Novos campos de orçamento (Versão Atual)
   drinksPorPessoa: number;
   markupAdicionalDrinks: number;
+  hasWelcomeDrinks: boolean;
+  welcomeDrinksPerPerson: number;
+  welcomeDrinksProfitPercentage: number;
+  welcomeDrinksSelected: import("./additional-budget-items").WelcomeDrinkSelection[];
+  hasShots: boolean;
+  shotsItems: import("./additional-budget-items").ShotBudgetItem[];
   equipe: {
     bartender: { qtd: number; valorUnitario: number };
     keeper: { qtd: number; valorUnitario: number };
@@ -1218,7 +1224,7 @@ export function calcularOrcamentoEvento(evento: Evento, drinksList: Drink[] = dr
   const pacotesGelo = Number(evento.gelo?.pacotesOverride) || Math.ceil((convidados / 100) * 35);
   const valorGelo = pacotesGelo * (Number(evento.gelo?.valorUnitario) || 6);
 
-  // --- LOGÃSTICA ---
+  // --- LOGÍSTICA ---
   const valorGasolina = evento.viagem?.incluir ? Number(evento.viagem.valor) || 0 : 0;
 
   // --- GASTOS DIVERSOS ---
@@ -1228,10 +1234,29 @@ export function calcularOrcamentoEvento(evento: Evento, drinksList: Drink[] = dr
   );
 
   // --- TOTAIS ---
+  const { calcularWelcomeDrinks, calcularTotalShots } = requireAdditionalBudgetCalculators();
+  const welcomeDrinks = evento.hasWelcomeDrinks
+    ? calcularWelcomeDrinks(
+        convidados,
+        evento.welcomeDrinksPerPerson,
+        evento.welcomeDrinksSelected,
+        evento.welcomeDrinksProfitPercentage,
+      )
+    : { custoTotal: 0, valorFinal: 0, totalDrinks: 0, distribuicao: [] };
+  const shotsTotal = evento.hasShots ? calcularTotalShots(evento.shotsItems) : 0;
   const custoTotalOrcamentoOriginal =
-    valorDrinksEvento + valorEquipe + valorGelo + valorGasolina + valorGastosDiversos;
+    valorDrinksEvento +
+    valorEquipe +
+    valorGelo +
+    valorGasolina +
+    valorGastosDiversos +
+    welcomeDrinks.custoTotal +
+    shotsTotal;
   const lucroDesejado = Number(evento.lucroDesejado) || 0;
-  const valorTotalSemDesconto = custoTotalOrcamentoOriginal + lucroDesejado;
+  const valorTotalSemDesconto =
+    custoTotalOrcamentoOriginal +
+    lucroDesejado +
+    (welcomeDrinks.valorFinal - welcomeDrinks.custoTotal);
 
   const descontosLista = evento.descontos || [];
   const drinkDiscount = descontosLista
@@ -1254,7 +1279,7 @@ export function calcularOrcamentoEvento(evento: Evento, drinksList: Drink[] = dr
   const valorPendente = valorTotalOrcamento - valorPago;
   const percPendente = 100 - percentualPago;
 
-  let statusPagamento = "NÃ£o pago";
+  let statusPagamento = "Não pago";
   if (percentualPago >= 100) statusPagamento = "Pago integralmente";
   else if (percentualPago > 0) statusPagamento = "Parcialmente pago";
 
@@ -1277,8 +1302,19 @@ export function calcularOrcamentoEvento(evento: Evento, drinksList: Drink[] = dr
     valorPendente,
     percPendente,
     statusPagamento,
+    welcomeDrinks,
+    shotsTotal,
   };
 }
+
+import {
+  calcularTotalShots as calculateShots,
+  calcularWelcomeDrinks as calculateWelcome,
+} from "./additional-budget-items";
+const requireAdditionalBudgetCalculators = () => ({
+  calcularTotalShots: calculateShots,
+  calcularWelcomeDrinks: calculateWelcome,
+});
 
 export function vendasResumo(filtroUnidade?: Unidade) {
   const lista = filtroUnidade ? vendas.filter((v) => v.unidade === filtroUnidade) : vendas;
@@ -1306,5 +1342,3 @@ export function rankingDrinks() {
   });
   return Array.from(map.values()).sort((a, b) => b.qtd - a.qtd);
 }
-
-
