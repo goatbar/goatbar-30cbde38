@@ -1,11 +1,34 @@
 import { prepareContractExportHtml } from "@/utils/prepare-contract-export-html";
-import { CONTRACT_DOCUMENT_CSS } from "@/lib/contract-document-styles";
+import { CONTRACT_PDF_DOCUMENT_CSS } from "@/lib/contract-document-styles";
 import html2pdf from "html2pdf.js";
 
 export interface PdfArtifacts {
   blob: Blob;
   base64: string;
   hash: string;
+}
+
+export const CONTRACT_PDF_MIME_TYPE = "application/pdf";
+
+function escapeHtmlText(value: string): string {
+  const entities: Record<string, string> = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  };
+  return value.replace(/[&<>"']/g, (character) => entities[character]);
+}
+
+/** Builds the exact, self-contained UTF-8 document captured for Assinafy. */
+export function buildContractPdfDocument(htmlContent: string, title: string): string {
+  const cleanHtml = prepareContractExportHtml(htmlContent);
+  return `<!DOCTYPE html>
+<html lang="pt-BR" style="background:#ffffff;color:#000000;color-scheme:light">
+<head><meta charset="UTF-8"><meta name="color-scheme" content="light only"><title>${escapeHtmlText(title)}</title><style>${CONTRACT_PDF_DOCUMENT_CSS}</style></head>
+<body style="background:#ffffff;color:#000000"><main id="contract-pdf-document">${cleanHtml}</main></body>
+</html>`;
 }
 
 export async function calculateSha256(data: ArrayBuffer): Promise<string> {
@@ -20,7 +43,7 @@ export async function convertHtmlToPdf(
   title: string = "Contrato_GOAT_Bar",
   pdfRenderer: typeof html2pdf = html2pdf,
 ): Promise<PdfArtifacts> {
-  const cleanHtml = prepareContractExportHtml(htmlContent);
+  const exportDocument = buildContractPdfDocument(htmlContent, title);
 
   const iframe = document.createElement("iframe");
   iframe.style.position = "absolute";
@@ -38,28 +61,7 @@ export async function convertHtmlToPdf(
   }
 
   iframeDoc.open();
-  iframeDoc.write(`
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-      <head>
-        <meta charset="utf-8">
-        <title>${title}</title>
-        <style>
-          ${CONTRACT_DOCUMENT_CSS}
-          body {
-            margin: 0;
-            padding: 24px;
-            background-color: #ffffff !important;
-            color: #0f172a !important;
-            font-family: system-ui, -apple-system, sans-serif;
-          }
-        </style>
-      </head>
-      <body class="docx-canvas-paper">
-        ${cleanHtml}
-      </body>
-    </html>
-  `);
+  iframeDoc.write(exportDocument);
   iframeDoc.close();
 
   try {
@@ -67,12 +69,13 @@ export async function convertHtmlToPdf(
       margin: [15, 15, 15, 15] as [number, number, number, number],
       filename: `${title}.pdf`,
       image: { type: "jpeg" as const, quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
+      html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: "#ffffff" },
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" as const },
       pagebreak: { mode: ["avoid-all", "css", "legacy"] },
     };
 
-    const targetElement = iframeDoc.body;
+    const targetElement = iframeDoc.getElementById("contract-pdf-document");
+    if (!targetElement) throw new Error("Documento isolado de exportação não foi criado.");
     const pdfArrayBuffer: ArrayBuffer = await pdfRenderer()
       .set(opt)
       .from(targetElement)
@@ -95,13 +98,16 @@ export async function convertHtmlToPdf(
 /** Builds every representation from one immutable buffer, so hash and upload cannot diverge. */
 export async function createPdfArtifacts(pdfArrayBuffer: ArrayBuffer): Promise<PdfArtifacts> {
   const bytes = new Uint8Array(pdfArrayBuffer);
+  if (bytes.byteLength < 5 || new TextDecoder().decode(bytes.slice(0, 5)) !== "%PDF-") {
+    throw new Error("O renderizador não produziu um arquivo PDF válido.");
+  }
   let binary = "";
   for (let i = 0; i < bytes.byteLength; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
 
   return {
-    blob: new Blob([pdfArrayBuffer], { type: "application/pdf" }),
+    blob: new Blob([pdfArrayBuffer], { type: CONTRACT_PDF_MIME_TYPE }),
     base64: btoa(binary),
     hash: await calculateSha256(pdfArrayBuffer),
   };

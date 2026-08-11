@@ -721,8 +721,6 @@ function EventoInterna() {
       // A minuta deve abrir mesmo quando houver campos pendentes. Esses campos
       // ficam visíveis no painel de validação e só bloqueiam a exportação/envio.
       const text = renderContractPreview(templateContent, vars, mapping);
-      console.debug("[Contract Preview] Conteúdo final após normalização e substituição:", text);
-
       console.log(
         "🔹 [Contract Preview] 5. Documento gerado com sucesso! Tamanho final:",
         text.length,
