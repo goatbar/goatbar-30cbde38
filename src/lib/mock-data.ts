@@ -1,4 +1,4 @@
-﻿// Mock data store â€” realistic fictional data for the Goat Bar Management System.
+// Mock data store â€” realistic fictional data for the Goat Bar Management System.
 // Designed to be replaced by Lovable Cloud queries in the future.
 
 export type Unidade = "Eventos" | "7Steakhouse" | "Goat Botequim";
