@@ -3966,7 +3966,7 @@ function ProposalModal({
             onClick={onClose}
             className="h-9 w-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/60 transition-colors"
           >
-            âœ•
+            ✕
           </button>
         </div>
 
@@ -4039,7 +4039,7 @@ function ProposalModal({
                       onClick={() => removeArrayItem("selectedDrinks", idx)}
                       className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors border border-border"
                     >
-                      âœ•
+                      ✕
                     </button>
                   </div>
                 ))}
@@ -4068,7 +4068,7 @@ function ProposalModal({
                       onClick={() => removeArrayItem("includedBeverages", idx)}
                       className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors border border-border"
                     >
-                      âœ•
+                      ✕
                     </button>
                   </div>
                 ))}
@@ -4175,7 +4175,7 @@ function ProposalModal({
                       onClick={() => removeArrayItem("includedServices", idx)}
                       className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors border border-border"
                     >
-                      âœ•
+                      ✕
                     </button>
                   </div>
                 ))}
@@ -4214,7 +4214,7 @@ function ProposalModal({
             disabled={savingPdf}
             className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all disabled:opacity-50"
           >
-            {savingPdf ? "Salvando..." : "ðŸ’¾ Salvar & Baixar PDF"}
+            {savingPdf ? "Salvando..." : "💾 Salvar & Baixar PDF"}
           </button>
         </div>
       </div>
@@ -4238,7 +4238,7 @@ function ProposalModal({
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground text-sm">
               <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 text-3xl">
-                ðŸ“„
+                📄
               </div>
               <span className="font-medium">
                 {generatingPreview

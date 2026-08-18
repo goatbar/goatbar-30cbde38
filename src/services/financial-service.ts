@@ -5,7 +5,7 @@ export type FinancialModality = "Evento" | "Steakhouse" | "Goatbotequim" | "Gera
 export type FinancialCategory = "Fornecedor" | "Equipe" | "Insumos" | "Operacional" | "Outros";
 export type FinancialStatus = "Pago" | "Pendente";
 export type FinancialClassification = "Direto" | "Indireto";
-export type PaymentMethod = "PIX" | "Dinheiro" | "CartÃ£o" | "TransferÃªncia" | "Outros";
+export type PaymentMethod = "PIX" | "Dinheiro" | "Cartão" | "Transferência" | "Outros";
 
 export interface FinancialExpense {
   id: string;
@@ -105,7 +105,7 @@ const normalizeModality = (value: string | null | undefined): string => {
 const toDatabaseModality = (value: string | null | undefined): string => {
   const normalized = normalizeModality(value);
   if (normalized === "Goat Botequim" || normalized === "7Steakhouse") return normalized;
-  // fallback seguro: sessÃµes de vendas deste mÃ³dulo sÃ³ aceitam essas duas modalidades
+  // fallback seguro: sessões de vendas deste módulo só aceitam essas duas modalidades
   return "Goat Botequim";
 };
 
@@ -294,9 +294,9 @@ export const financialService = {
         : normalizedText.includes("dinheiro")
           ? "Dinheiro"
           : (normalizedText.includes("cartao") || normalizedText.includes("debito") || normalizedText.includes("credito"))
-            ? "CartÃ£o"
+            ? "Cartão"
             : normalizedText.includes("transfer")
-              ? "TransferÃªncia"
+              ? "Transferência"
               : undefined;
 
       const auto_filled_fields: string[] = [];
@@ -480,13 +480,13 @@ export const financialService = {
         custosRestauranteDetalhes: s.custos_restaurante_detalhes,
         items: (s.items || []).map((i: any) => ({
           ...i,
-          // Map DB column names â†’ app interface names (the root cause of all R$ 0,00)
-          drinkId: i.drink_id, // drink_id â†’ drinkId (needed by resolvePersistedCost)
-          nome: i.drink_name, // drink_name â†’ nome
-          quantidade: i.quantity, // quantity â†’ quantidade (was undefined â†’ NaN â†’ R$0)
-          precoUnitario: i.unit_price, // unit_price â†’ precoUnitario
-          custoUnitario: i.unit_cost, // unit_cost â†’ custoUnitario
-          custoInsumo: i.ingredient_cost, // ingredient_cost â†’ custoInsumo
+          // Map DB column names → app interface names (the root cause of all R$ 0,00)
+          drinkId: i.drink_id, // drink_id → drinkId (needed by resolvePersistedCost)
+          nome: i.drink_name, // drink_name → nome
+          quantidade: i.quantity, // quantity → quantidade (was undefined → NaN → R$0)
+          precoUnitario: i.unit_price, // unit_price → precoUnitario
+          custoUnitario: i.unit_cost, // unit_cost → custoUnitario
+          custoInsumo: i.ingredient_cost, // ingredient_cost → custoInsumo
         })),
       }));
 
@@ -495,7 +495,7 @@ export const financialService = {
         modalidade: normalizeModality(session.modalidade),
       }));
     } catch (e) {
-      console.error("Erro ao buscar sessÃµes do Supabase.", {
+      console.error("Erro ao buscar sessões do Supabase.", {
         table: "financial_sessions",
         query: "select financial_sessions with financial_session_items order by date",
         error: e,
@@ -544,7 +544,7 @@ export const financialService = {
 
       return session;
     } catch (e) {
-      console.warn("Erro ao criar sessÃ£o no Supabase, verifique se a tabela existe.", e);
+      console.warn("Erro ao criar sessão no Supabase, verifique se a tabela existe.", e);
       throw e;
     }
   },
@@ -703,7 +703,7 @@ export const financialService = {
         ),
       0,
     );
-    // Custo Insumos = O que o Goat Bar gasta para fazer (custoInsumo â€” BUG 3 fix: persisted first)
+    // Custo Insumos = O que o Goat Bar gasta para fazer (custoInsumo — BUG 3 fix: persisted first)
     const steakCustoInsumos = steakList.reduce((acc, s) => {
       return (
         acc +
@@ -713,13 +713,13 @@ export const financialService = {
         }, 0)
       );
     }, 0);
-    // Total reposiÃ§Ã£o do restaurante nas sessÃµes da Steakhouse
+    // Total reposição do restaurante nas sessões da Steakhouse
     const steakReposicao = steakList.reduce(
       (acc, s) => acc + toFiniteNumber(s.reposicaoRestaurante),
       0,
     );
     const steakCustoTotal = steakCustoInsumos + steakReposicao;
-    // Lucro Final = (Receita - Custo Total) - MÃ£o de Obra
+    // Lucro Final = (Receita - Custo Total) - Mão de Obra
     const steakLucro =
       steakReceita -
       steakCustoTotal -

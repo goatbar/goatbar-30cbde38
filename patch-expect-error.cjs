@@ -33,7 +33,7 @@ for (const file of Object.keys(fileLinesMap)) {
         const indent = indentMatch ? indentMatch[1] : '';
         // Only insert if it doesn't already have ts-expect-error
         if (idx === 0 || !content[idx - 1].includes('@ts-expect-error')) {
-          content.splice(idx, 0, `${indent}// @ts-expect-error Erro legado prÃ©-existente fora do escopo (Tipagem de BD desatualizada)`);
+          content.splice(idx, 0, `${indent}// @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)`);
           patched = true;
         }
       }

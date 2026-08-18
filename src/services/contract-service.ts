@@ -796,7 +796,7 @@ export const eventContractsService = {
 
     // Monta o dicionário completo de variáveis
     const variables: Record<string, string> = {
-      // ðŸ¥‚ Evento
+      // 🥂 Evento
       // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       "evento.nome": evento.event_name || evento.client_name || "",
       "evento.tipo": evento.event_type || "",
@@ -816,7 +816,7 @@ export const eventContractsService = {
       "evento.valor_por_pessoa": valPerPerson > 0 ? fmt(valPerPerson) : "",
       "evento.valor_por_pessoa_extenso": valPerPerson > 0 ? numberToWordsBRL(valPerPerson) : "",
 
-      // ðŸ‘¤ Cliente (Preenchido pelo Contratante no Link - Fonte Principal)
+      // 👤 Cliente (Preenchido pelo Contratante no Link - Fonte Principal)
       "cliente.nome": clientData?.client_name || evento.client_name || "",
       "cliente.documento": formattedDocument || "",
       "cliente.documento_com_rotulo": documentWithType || "",
@@ -846,7 +846,7 @@ export const eventContractsService = {
       "financeiro.data_pagamento_final": finalPaymentDateStr,
       "financeiro.data_vencimento": finalPaymentDateStr,
 
-      // ðŸ¢ Empresa / GOAT Bar
+      // 🏢 Empresa / GOAT Bar
       "empresa.nome": "GOAT BAR EVENTOS LTDA",
       "empresa.cnpj": "42.123.456/0001-99",
       "empresa.endereco": "Av. Brigadeiro Faria Lima, 2000 - São Paulo/SP",
@@ -864,7 +864,7 @@ export const eventContractsService = {
       "adicionais.shots": shotsDetails,
       "adicionais.shots_total": shots.length ? fmt(calcularTotalShots(shots)) : "",
 
-      // ðŸ—“ï¸ Geral
+      // 🗓️ Geral
       "geral.data_emissao": new Date().toLocaleDateString("pt-BR"),
 
       // Aliases em Underscore

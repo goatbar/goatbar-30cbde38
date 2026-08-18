@@ -23,11 +23,11 @@ export const Route = createFileRoute("/configuracoes")({
 });
 
 const sections = [
-  { id: "diretrizes", label: "Diretrizes de cÃ¡lculo", icon: Sliders, active: true },
+  { id: "diretrizes", label: "Diretrizes de cálculo", icon: Sliders, active: true },
   { id: "tipos", label: "Tipos de evento", icon: Calendar },
   { id: "categorias", label: "Categorias de drinks", icon: Layers },
   { id: "templates", label: "Templates de contrato", icon: FileText },
-  { id: "unidades", label: "Unidades de negÃ³cio", icon: Building2 },
+  { id: "unidades", label: "Unidades de negócio", icon: Building2 },
 ];
 
 function ConfigPage() {
@@ -41,16 +41,16 @@ function ConfigPage() {
     <>
       <PageHeader
         breadcrumb="Sistema"
-        title="ConfiguraÃ§Ãµes"
-        subtitle="Diretrizes editÃ¡veis aplicadas automaticamente em todos os cÃ¡lculos."
+        title="Configurações"
+        subtitle="Diretrizes editáveis aplicadas automaticamente em todos os cálculos."
         action={
           <PrimaryButton
             onClick={() => {
               updateParametros(draft);
-              window.alert("ConfiguraÃ§Ãµes salvas com sucesso.");
+              window.alert("Configurações salvas com sucesso.");
             }}
           >
-            <Save className="h-4 w-4" /> Salvar alteraÃ§Ãµes
+            <Save className="h-4 w-4" /> Salvar alterações
           </PrimaryButton>
         }
       />
@@ -77,9 +77,9 @@ function ConfigPage() {
           })}
           <div className="card-premium p-5 mt-5">
             <SettingsIcon className="h-5 w-5 text-primary mb-3" />
-            <div className="font-display text-sm font-semibold">AplicaÃ§Ã£o automÃ¡tica</div>
+            <div className="font-display text-sm font-semibold">Aplicação automática</div>
             <p className="text-xs text-muted-foreground mt-1.5">
-              Estas diretrizes alimentam o cÃ¡lculo de eventos, vendas e relatÃ³rios.
+              Estas diretrizes alimentam o cálculo de eventos, vendas e relatórios.
             </p>
           </div>
         </aside>
@@ -87,7 +87,7 @@ function ConfigPage() {
         <div className="xl:col-span-9 space-y-5">
           {activeTab === "diretrizes" &&
             grupos.map((g) => (
-              <SectionCard key={g} title={`Diretrizes Â· ${g}`} subtitle="EditÃ¡veis em tempo real">
+              <SectionCard key={g} title={`Diretrizes · ${g}`} subtitle="Editáveis em tempo real">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   {draft
                     // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
@@ -113,7 +113,7 @@ function ConfigPage() {
             ))}
 
           {activeTab === "tipos" && (
-            <SectionCard title="Tipos de evento" subtitle="ParÃ¢metros de consumo por categoria">
+            <SectionCard title="Tipos de evento" subtitle="Parâmetros de consumo por categoria">
               <div className="overflow-x-auto -mx-6">
                 <table className="w-full text-sm">
                   <thead>
@@ -153,7 +153,7 @@ function ConfigPage() {
               subtitle="Em desenvolvimento"
             >
               <div className="py-12 text-center text-muted-foreground text-sm">
-                MÃ³dulo em construÃ§Ã£o. DisponÃ­vel na prÃ³xima versÃ£o.
+                Módulo em construção. Disponível na próxima versão.
               </div>
             </SectionCard>
           )}

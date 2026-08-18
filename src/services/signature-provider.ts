@@ -101,7 +101,7 @@ export const zapSignSignatureProvider: SignatureProvider = {
   },
 
   async resend(documentId, assignmentId, signerId) {
-    throw new Error("Reenvio nÃ£o suportado na API legado da ZapSign.");
+    throw new Error("Reenvio não suportado na API legado da ZapSign.");
   },
 };
 
@@ -133,7 +133,7 @@ export const assinafySignatureProvider: SignatureProvider = {
       .eq("external_signer_id", signerEmail)
       .maybeSingle();
 
-    return ""; // Pode retornar vazio se nÃ£o for necessÃ¡rio
+    return ""; // Pode retornar vazio se não for necessário
   },
 
   async syncStatus(contractId) {

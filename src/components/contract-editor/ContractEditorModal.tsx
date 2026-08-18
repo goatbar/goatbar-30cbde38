@@ -91,21 +91,21 @@ export const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
         const arrayBuffer = await file.arrayBuffer();
         const result = await mammoth.convertToHtml({ arrayBuffer });
         if (result.value) {
-          store.setHtml(result.value, `ImportaÃ§Ã£o ${file.name}`);
+          store.setHtml(result.value, `Importação ${file.name}`);
         }
       } else {
         const text = await file.text();
-        store.setHtml(text, `ImportaÃ§Ã£o ${file.name}`);
+        store.setHtml(text, `Importação ${file.name}`);
       }
     } catch (err) {
       console.error("Erro ao importar arquivo DOCX:", err);
-      alert("NÃ£o foi possÃ­vel ler o arquivo enviado. Certifique-se de que Ã© um arquivo .docx vÃ¡lido.");
+      alert("Não foi possível ler o arquivo enviado. Certifique-se de que é um arquivo .docx válido.");
     }
   };
 
   const handleInsertFieldFromSidebar = (field: EditorFieldDef) => {
     const token = `{{${field.key}}}`;
-    const chipHtml = `<span class="docx-field-chip" data-field-key="${field.key}" contenteditable="false" title="Campo Mapeado: ${field.label}">${token}<button class="docx-chip-del" data-delete-key="${field.key}">Ã—</button></span>&nbsp;`;
+    const chipHtml = `<span class="docx-field-chip" data-field-key="${field.key}" contenteditable="false" title="Campo Mapeado: ${field.label}">${token}<button class="docx-chip-del" data-delete-key="${field.key}">×</button></span>&nbsp;`;
 
     const sel = window.getSelection();
     if (sel && sel.rangeCount > 0 && sel.toString().trim().length > 0) {
@@ -127,7 +127,7 @@ export const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
       return;
     }
 
-    // Se nÃ£o hÃ¡ texto selecionado, insere no final ou posiÃ§Ã£o ativa
+    // Se não há texto selecionado, insere no final ou posição ativa
     const currentHtml = store.html || "";
     store.setHtml(currentHtml + ` ${chipHtml} `, `Inserir ${field.label}`);
   };
@@ -135,7 +135,7 @@ export const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
   const handleSave = async () => {
     if (!templateName) return alert("Informe o nome do modelo de contrato.");
     if (!store.html || store.html.trim().length < 10)
-      return alert("O documento nÃ£o possui conteÃºdo para ser salvo.");
+      return alert("O documento não possui conteúdo para ser salvo.");
 
     setIsSaving(true);
     try {
@@ -195,7 +195,7 @@ export const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
       <div className="w-full h-full max-w-[1600px] bg-surface border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* TOP TOOLBAR */}
         <header className="flex flex-wrap items-center justify-between px-6 py-3 border-b border-border bg-background/60 gap-4 shrink-0">
-          {/* Esquerda: Ãcone + TÃ­tulo */}
+          {/* Esquerda: Ícone + Título */}
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 bg-primary/10 rounded-xl flex items-center justify-center text-primary font-bold shadow-inner">
               <FileCode className="h-5 w-5" />
@@ -206,17 +206,17 @@ export const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
                   type="text"
                   value={templateName}
                   onChange={(e) => setTemplateName(e.target.value)}
-                  placeholder="Nome do Modelo (ex: Contrato PadrÃ£o GOAT Bar)"
+                  placeholder="Nome do Modelo (ex: Contrato Padrão GOAT Bar)"
                   className="font-display font-bold text-base bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none px-1 text-foreground"
                 />
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Editor Profissional de Contratos â€¢ Preserva formataÃ§Ã£o original do Word
+                Editor Profissional de Contratos • Preserva formatação original do Word
               </p>
             </div>
           </div>
 
-          {/* Centro: Controles de HistÃ³rico Undo/Redo & Zoom */}
+          {/* Centro: Controles de Histórico Undo/Redo & Zoom */}
           <div className="flex items-center gap-2 bg-surface px-3 py-1.5 rounded-xl border border-border">
             {/* Undo / Redo */}
             <button
@@ -278,12 +278,12 @@ export const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
               {store.isAutoSaved ? (
                 <>
                   <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
-                  <span>Salvo {store.lastSavedTime ? `Ã s ${store.lastSavedTime}` : ""}</span>
+                  <span>Salvo {store.lastSavedTime ? `às ${store.lastSavedTime}` : ""}</span>
                 </>
               ) : (
                 <>
                   <span className="h-2 w-2 rounded-full bg-warning" />
-                  <span>AlteraÃ§Ãµes pendentes...</span>
+                  <span>Alterações pendentes...</span>
                 </>
               )}
             </div>
@@ -303,7 +303,7 @@ export const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
               />
             </label>
 
-            {/* Checkbox Modelo PadrÃ£o */}
+            {/* Checkbox Modelo Padrão */}
             <div className="flex items-center gap-1.5 bg-surface border border-border px-2.5 py-1.5 rounded-xl text-xs">
               <input
                 type="checkbox"
@@ -313,7 +313,7 @@ export const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
                 className="rounded border-border"
               />
               <label htmlFor="is_default_modal_check" className="cursor-pointer text-muted-foreground font-medium">
-                PadrÃ£o
+                Padrão
               </label>
             </div>
 
@@ -344,7 +344,7 @@ export const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
           onCommand={(cmd, val) => {
             const canvasEl = document.querySelector(".docx-canvas-paper [contenteditable]");
             if (canvasEl) {
-              store.setHtml(canvasEl.innerHTML, `FormataÃ§Ã£o (${cmd})`);
+              store.setHtml(canvasEl.innerHTML, `Formatação (${cmd})`);
             }
           }}
           onInsertTable={() => {
@@ -353,13 +353,13 @@ export const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
                 <thead>
                   <tr style="background:#f8fafc;">
                     <th style="border:1px solid #cbd5e1; padding:8px; text-align:left;">Item</th>
-                    <th style="border:1px solid #cbd5e1; padding:8px; text-align:left;">DescriÃ§Ã£o</th>
+                    <th style="border:1px solid #cbd5e1; padding:8px; text-align:left;">Descrição</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
                     <td style="border:1px solid #cbd5e1; padding:8px;">01</td>
-                    <td style="border:1px solid #cbd5e1; padding:8px;">DescriÃ§Ã£o do serviÃ§o</td>
+                    <td style="border:1px solid #cbd5e1; padding:8px;">Descrição do serviço</td>
                   </tr>
                 </tbody>
               </table>&nbsp;
@@ -371,11 +371,11 @@ export const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
             }
           }}
           onInsertPageBreak={() => {
-            const breakHtml = `<div style="page-break-after:always; break-after:page; border-bottom:2px dashed #6366f1; text-align:center; color:#6366f1; font-size:10px; font-weight:bold; margin:2rem 0; padding:4px;" contenteditable="false">--- QUEBRA DE PÃGINA ---</div><p>&nbsp;</p>`;
+            const breakHtml = `<div style="page-break-after:always; break-after:page; border-bottom:2px dashed #6366f1; text-align:center; color:#6366f1; font-size:10px; font-weight:bold; margin:2rem 0; padding:4px;" contenteditable="false">--- QUEBRA DE PÁGINA ---</div><p>&nbsp;</p>`;
             document.execCommand("insertHTML", false, breakHtml);
             const canvasEl = document.querySelector(".docx-canvas-paper [contenteditable]");
             if (canvasEl) {
-              store.setHtml(canvasEl.innerHTML, "Inserir Quebra de PÃ¡gina");
+              store.setHtml(canvasEl.innerHTML, "Inserir Quebra de Página");
             }
           }}
           canUndo={store.canUndo}
@@ -386,7 +386,7 @@ export const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
 
         {/* CORPO DO EDITOR: Sidebar Fixa (Esquerda) + Folha Canvas A4 (Direita) */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Sidebar Fixa IndestrutÃ­vel */}
+          {/* Sidebar Fixa Indestrutível */}
           <SidebarFields
             onInsertField={handleInsertFieldFromSidebar}
             activeHighlightField={store.activeHighlightField}
@@ -397,7 +397,7 @@ export const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
           {/* Folha A4 Canvas Zoomable */}
           <DocumentCanvas
             html={store.html}
-            onContentChange={(newHtml) => store.setHtml(newHtml, "AlteraÃ§Ã£o no documento")}
+            onContentChange={(newHtml) => store.setHtml(newHtml, "Alteração no documento")}
             zoom={store.zoom}
             activeHighlightField={store.activeHighlightField}
             setActiveHighlightField={store.setActiveHighlightField}

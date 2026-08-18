@@ -210,7 +210,7 @@ function ControladoriaPage() {
         modality: textImportEventId ? "Evento" : "Geral",
         event_id: textImportEventId || "",
         date: parsedDate,
-        description: `Despesa via ImportaÃ§Ã£o - ${extracted.supplier_name || "revisar dados"} - ${parsedDate.split("-").reverse().join("/")}`,
+        description: `Despesa via Importação - ${extracted.supplier_name || "revisar dados"} - ${parsedDate.split("-").reverse().join("/")}`,
         amount: extracted.amount ?? prev.amount ?? 0,
         supplier_name: extracted.supplier_name || prev.supplier_name || "",
         supplier_cnpj: extracted.supplier_cnpj || "",
@@ -231,7 +231,7 @@ function ControladoriaPage() {
 
   const handleSubmit = async () => {
     if (!form.description || !form.amount || !form.responsible) {
-      alert("Preencha os campos obrigatÃ³rios.");
+      alert("Preencha os campos obrigatórios.");
       return;
     }
 
@@ -247,7 +247,7 @@ function ControladoriaPage() {
           is_ocr_generated: true,
           auto_filled_fields: (form as any).auto_filled_fields || [],
           manually_edited_fields: manuallyEdited,
-          reading_error: (form as any).review_status === "Erro na leitura" ? "OCR nÃ£o retornou texto vÃ¡lido" : null,
+          reading_error: (form as any).review_status === "Erro na leitura" ? "OCR não retornou texto válido" : null,
           metadata: (form as any).ocr_metadata || {},
         });
       }
@@ -265,12 +265,12 @@ function ControladoriaPage() {
         classification: "Direto",
       });
     } catch (e) {
-      alert("Erro ao salvar lanÃ§amento.");
+      alert("Erro ao salvar lançamento.");
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Excluir este lanÃ§amento?")) return;
+    if (!confirm("Excluir este lançamento?")) return;
     try {
       await financialService.deleteExpense(id);
       fetchExpenses();
@@ -300,7 +300,7 @@ function ControladoriaPage() {
               <FileText className="h-4 w-4" /> Importar de Texto
             </GhostButton>
             <GhostButton onClick={() => setShowReceiptModal(true)}>
-              <Camera className="h-4 w-4" /> LanÃ§ar por foto da notinha
+              <Camera className="h-4 w-4" /> Lançar por foto da notinha
             </GhostButton>
             <PrimaryButton onClick={() => setShowModal(true)}>
               <Plus className="h-4 w-4" /> Novo Gasto
@@ -315,7 +315,7 @@ function ControladoriaPage() {
           <StatCard
             label="Total de Gastos"
             value={fmtBRL(totals.total)}
-            hint="+12% vs mÃªs anterior"
+            hint="+12% vs mês anterior"
           />
           <StatCard
             label="Realizado (Pago)"
@@ -370,7 +370,7 @@ function ControladoriaPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="DistribuiÃ§Ã£o por Categoria" className="lg:col-span-2">
+          <SectionCard title="Distribuição por Categoria" className="lg:col-span-2">
             <div className="h-[250px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartDataByCategory}>
@@ -402,7 +402,7 @@ function ControladoriaPage() {
         <SectionCard title="Fluxo de Custos">
           <div className="flex flex-wrap gap-4 mb-6 p-4 rounded-xl bg-surface border border-border">
             <div className="flex-1 min-w-[200px]">
-              <label className="label-eyebrow block mb-1.5">PerÃ­odo</label>
+              <label className="label-eyebrow block mb-1.5">Período</label>
               <div className="flex items-center gap-2">
                 <input
                   type="date"
@@ -455,7 +455,7 @@ function ControladoriaPage() {
                     Data
                   </th>
                   <th className="pb-4 font-display text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                    DescriÃ§Ã£o
+                    Descrição
                   </th>
                   <th className="pb-4 font-display text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                     Categoria
@@ -473,7 +473,7 @@ function ControladoriaPage() {
                     Anexos
                   </th>
                   <th className="pb-4 font-display text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right">
-                    AÃ§Ãµes
+                    Ações
                   </th>
                 </tr>
               </thead>
@@ -481,7 +481,7 @@ function ControladoriaPage() {
                 {expenses.length === 0 && !loading && (
                   <tr>
                     <td colSpan={8} className="py-12 text-center text-muted-foreground">
-                      Nenhum gasto encontrado no perÃ­odo.
+                      Nenhum gasto encontrado no período.
                     </td>
                   </tr>
                 )}
@@ -493,7 +493,7 @@ function ControladoriaPage() {
                     <td className="py-4">
                       <div className="text-sm font-semibold">{exp.description}</div>
                       <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                        <User className="h-2.5 w-2.5" /> {exp.responsible} Â· {exp.classification}
+                        <User className="h-2.5 w-2.5" /> {exp.responsible} · {exp.classification}
                       </div>
                     </td>
                     <td className="py-4">
@@ -576,7 +576,7 @@ function ControladoriaPage() {
                   onChange={(e) => setTextImportEventId(e.target.value)}
                   className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none focus:border-primary"
                 >
-                  <option value="">Nenhum (LanÃ§amento Geral)</option>
+                  <option value="">Nenhum (Lançamento Geral)</option>
                   {eventsList.map(ev => (
                     <option key={ev.id} value={ev.id}>{ev.event_name || ev.client_name} - {format(parseISO(ev.date), "dd/MM")}</option>
                   ))}
@@ -606,8 +606,8 @@ function ControladoriaPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-background/80" onClick={() => setShowReceiptModal(false)} />
           <div className="relative w-full max-w-xl bg-surface border border-border rounded-2xl p-6 space-y-4">
-            <h3 className="font-display text-lg font-bold">LanÃ§ar por foto da notinha</h3>
-            <p className="text-sm text-muted-foreground">Envie imagem ou PDF. Vamos prÃ©-preencher e vocÃª revisa antes de salvar.</p>
+            <h3 className="font-display text-lg font-bold">Lançar por foto da notinha</h3>
+            <p className="text-sm text-muted-foreground">Envie imagem ou PDF. Vamos pré-preencher e você revisa antes de salvar.</p>
             <input type="file" accept="image/*,.pdf" capture="environment" onChange={(e)=>{const f=e.target.files?.[0]; if(!f)return; setReceiptFile(f); setReceiptPreview(URL.createObjectURL(f));}} />
             <div className="flex gap-2">
               <PrimaryButton disabled={!receiptFile||ocrLoading} onClick={async ()=>{ if(!receiptFile) return; await handleReceiptExtraction(receiptFile); setShowReceiptModal(false); setShowModal(true);}}>
@@ -628,7 +628,7 @@ function ControladoriaPage() {
           />
           <div className="relative w-full max-w-2xl bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-border flex justify-between items-center bg-primary/5">
-              <h2 className="font-display text-lg font-bold">Novo LanÃ§amento Financeiro</h2>
+              <h2 className="font-display text-lg font-bold">Novo Lançamento Financeiro</h2>
               <button
                 onClick={() => setShowModal(false)}
                 className="h-8 w-8 rounded-full hover:bg-border flex items-center justify-center transition-colors"
@@ -642,17 +642,17 @@ function ControladoriaPage() {
                 <div className="mb-6 bg-primary/5 border border-primary/20 rounded-xl p-4 animate-in fade-in slide-in-from-top-4">
                   <div className="flex items-center gap-2 mb-3">
                     <Sparkles className="h-4 w-4 text-primary" />
-                    <h3 className="font-bold text-sm">Dados extraÃ­dos da notinha</h3>
+                    <h3 className="font-bold text-sm">Dados extraídos da notinha</h3>
                     {(form as any).ocr_metadata?.confidence > 0 && (
                       <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                        ConfianÃ§a: {Math.round((form as any).ocr_metadata.confidence)}%
+                        Confiança: {Math.round((form as any).ocr_metadata.confidence)}%
                       </span>
                     )}
                   </div>
                   
                   {(form as any).review_status === "Erro na leitura" ? (
                     <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
-                      NÃ£o conseguimos ler todos os dados da notinha. Preencha ou revise manualmente.
+                      Não conseguimos ler todos os dados da notinha. Preencha ou revise manualmente.
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -667,7 +667,7 @@ function ControladoriaPage() {
                       </div>
                       
                       <details className="text-xs">
-                        <summary className="cursor-pointer text-primary font-medium hover:underline">Ver texto bruto extraÃ­do</summary>
+                        <summary className="cursor-pointer text-primary font-medium hover:underline">Ver texto bruto extraído</summary>
                         <div className="mt-2 p-3 bg-background border border-border rounded-lg max-h-32 overflow-y-auto whitespace-pre-wrap font-mono text-[10px] text-muted-foreground">
                           {form.ocr_raw_text}
                         </div>
@@ -679,13 +679,13 @@ function ControladoriaPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-4 md:col-span-2">
-                  <label className="label-eyebrow">DescriÃ§Ã£o do Gasto</label>
+                  <label className="label-eyebrow">Descrição do Gasto</label>
                   <input
                     type="text"
                     value={form.description}
                     onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
                     className="w-full h-12 px-4 rounded-xl bg-input border border-border focus:border-primary outline-none font-medium"
-                    placeholder="Ex: Compra de LimÃ£o Cravo (Mercado Municipal)"
+                    placeholder="Ex: Compra de Limão Cravo (Mercado Municipal)"
                   />
                 </div>
 
@@ -772,7 +772,7 @@ function ControladoriaPage() {
                       value={form.supplier_name || ""}
                       onChange={(e) => setForm((p) => ({ ...p, supplier_name: e.target.value }))}
                       className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
-                      placeholder="Ex: AtacadÃ£o S/A"
+                      placeholder="Ex: Atacadão S/A"
                     />
                   </div>
                 )}
@@ -801,7 +801,7 @@ function ControladoriaPage() {
                       />
                     </div>
                     <div className="space-y-4 animate-in slide-in-from-left-2">
-                      <label className="label-eyebrow">FunÃ§Ã£o / Cargo</label>
+                      <label className="label-eyebrow">Função / Cargo</label>
                       <input
                         type="text"
                         value={form.staff_role || ""}
@@ -824,7 +824,7 @@ function ControladoriaPage() {
                 </div>
 
                 <div>
-                  <label className="label-eyebrow">ResponsÃ¡vel pela Compra</label>
+                  <label className="label-eyebrow">Responsável pela Compra</label>
                   <input
                     type="text"
                     value={form.responsible}
@@ -835,7 +835,7 @@ function ControladoriaPage() {
                 </div>
 
                 <div>
-                  <label className="label-eyebrow">MÃ©todo Pagto</label>
+                  <label className="label-eyebrow">Método Pagto</label>
                   <select
                     value={form.payment_method}
                     onChange={(e) =>
@@ -845,8 +845,8 @@ function ControladoriaPage() {
                   >
                     <option value="PIX">PIX</option>
                     <option value="Dinheiro">Dinheiro</option>
-                    <option value="CartÃ£o">CartÃ£o</option>
-                    <option value="TransferÃªncia">TransferÃªncia</option>
+                    <option value="Cartão">Cartão</option>
+                    <option value="Transferência">Transferência</option>
                     <option value="Outros">Outros</option>
                   </select>
                 </div>
@@ -866,7 +866,7 @@ function ControladoriaPage() {
                 </div>
 
                 <div>
-                  <label className="label-eyebrow">ClassificaÃ§Ã£o</label>
+                  <label className="label-eyebrow">Classificação</label>
                   <select
                     value={form.classification}
                     onChange={(e) =>
@@ -986,7 +986,7 @@ function ControladoriaPage() {
                                       <span className="text-[9px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded flex items-center w-fit gap-1 border border-emerald-200" title={`Lido como: ${it.raw_product_name}`}><CheckCircle2 className="w-3 h-3"/> Vinculado ({Math.round((it.matched_confidence || 1)*100)}%)</span>
                                     ) : (
                                       <div className="flex items-center gap-2">
-                                        <span className="text-[9px] text-destructive bg-destructive/10 px-1.5 py-0.5 rounded flex items-center w-fit gap-1 border border-destructive/20" title={`Lido como: ${it.raw_product_name}`}><AlertCircle className="w-3 h-3"/> NÃ£o encontrado</span>
+                                        <span className="text-[9px] text-destructive bg-destructive/10 px-1.5 py-0.5 rounded flex items-center w-fit gap-1 border border-destructive/20" title={`Lido como: ${it.raw_product_name}`}><AlertCircle className="w-3 h-3"/> Não encontrado</span>
                                         <a href="/inventario" target="_blank" className="text-[9px] text-primary hover:underline font-bold bg-primary/10 px-1.5 py-0.5 rounded">Cadastrar novo</a>
                                       </div>
                                     )}
@@ -1039,7 +1039,7 @@ function ControladoriaPage() {
                   </div>
                 ) : (
                   <div className="text-center p-6 border border-dashed border-border rounded-xl text-muted-foreground text-sm">
-                    Nenhum item extraÃ­do ou adicionado.
+                    Nenhum item extraído ou adicionado.
                   </div>
                 )}
                 
@@ -1051,7 +1051,7 @@ function ControladoriaPage() {
                         <div className="mt-3 p-3 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg text-xs flex items-start gap-2">
                           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                           <div>
-                            <strong>AtenÃ§Ã£o:</strong> A soma dos itens (R$ {sum.toFixed(2)}) nÃ£o bate com o valor total da nota (R$ {Number(form.amount).toFixed(2)}). Revise os valores antes de confirmar.
+                            <strong>Atenção:</strong> A soma dos itens (R$ {sum.toFixed(2)}) não bate com o valor total da nota (R$ {Number(form.amount).toFixed(2)}). Revise os valores antes de confirmar.
                           </div>
                         </div>
                       );
@@ -1069,7 +1069,7 @@ function ControladoriaPage() {
                 onClick={handleSubmit}
                 disabled={uploading.invoice || uploading.receipt}
               >
-                Confirmar LanÃ§amento
+                Confirmar Lançamento
               </PrimaryButton>
             </div>
           </div>
