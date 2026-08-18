@@ -1,16 +1,16 @@
 ﻿/**
  * TemplateFieldEditor.tsx
  *
- * Editor visual executivo drag-and-drop para mapeamento de campos dinÃ¢micos (Match de Campos)
- * sobre as pÃ¡ginas PDF de um modelo de proposta comercial.
+ * Editor visual executivo drag-and-drop para mapeamento de campos dinâmicos (Match de Campos)
+ * sobre as páginas PDF de um modelo de proposta comercial.
  *
  * Recursos Executivos:
- *  1. RenderizaÃ§Ã£o fiel de PDF via pdfjs-dist
- *  2. Destaque e sincronizaÃ§Ã£o bidirecional entre Canvas e Sidebar
- *  3. AlternÃ¢ncia instantÃ¢nea em tempo real entre "Placeholders" e "Dados Reais"
- *  4. Auto Save inteligente e tratamento de erros sem [object Object] (CÃ³digo: MATCH_SAVE_001)
- *  5. Painel de DiagnÃ³stico TÃ©cnico e ValidaÃ§Ã£o
- *  6. Controles de Zoom, Alinhamento Inteligente, DuplicaÃ§Ã£o e Bloqueio de Campos
+ *  1. Renderização fiel de PDF via pdfjs-dist
+ *  2. Destaque e sincronização bidirecional entre Canvas e Sidebar
+ *  3. Alternância instantânea em tempo real entre "Placeholders" e "Dados Reais"
+ *  4. Auto Save inteligente e tratamento de erros sem [object Object] (Código: MATCH_SAVE_001)
+ *  5. Painel de Diagnóstico Técnico e Validação
+ *  6. Controles de Zoom, Alinhamento Inteligente, Duplicação e Bloqueio de Campos
  */
 
 import {
@@ -60,11 +60,11 @@ import type {
 } from "@/lib/proposal-template-mapper";
 import { TEMPLATE_FIELD_KEYS } from "@/lib/proposal-template-mapper";
 
-// â”€â”€â”€ PDF.js worker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── PDF.js worker ──────────────────────────────────────────────
 pdfjs.GlobalWorkerOptions.workerSrc =
   "https://unpkg.com/pdfjs-dist@5.7.284/build/pdf.worker.min.mjs";
 
-// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Constants ──────────────────────────────────────────────────
 const BRAND_COLORS = [
   { label: "Vermelho GOAT", value: "#701117" },
   { label: "Creme", value: "#f7f4ef" },
@@ -75,16 +75,16 @@ const BRAND_COLORS = [
 const FIELD_TYPE_LABELS: Record<TemplateFieldType, string> = {
   texto_simples: "Texto Simples",
   texto_multiline: "Texto Multiline",
-  lista_dinamica: "Lista DinÃ¢mica",
+  lista_dinamica: "Lista Dinâmica",
   moeda: "Moeda (R$)",
   data: "Data",
-  numero: "NÃºmero",
+  numero: "Número",
   texto_arco: "Texto em Arco",
-  imagem_dinamica: "Imagem DinÃ¢mica",
+  imagem_dinamica: "Imagem Dinâmica",
 };
 
 const FIELD_KEY_LABELS: Record<string, string> = {
-  data_orcamento: "Data do OrÃ§amento",
+  data_orcamento: "Data do Orçamento",
   tipo_evento: "Tipo de Evento",
   nome_evento: "Nome do Evento",
   nome_cliente: "Nome do Cliente",
@@ -92,7 +92,7 @@ const FIELD_KEY_LABELS: Record<string, string> = {
   data_evento: "Data do Evento",
   lista_drinks: "Lista de Drinks",
   lista_bebidas: "Lista de Bebidas",
-  numero_convidados: "NÂº de Convidados",
+  numero_convidados: "Nº de Convidados",
   quantidade_bartenders: "Qtd. Bartenders",
   quantidade_bar_keeper: "Qtd. Bar Keeper",
   quantidade_copeira: "Qtd. Copeira",
@@ -103,7 +103,7 @@ const FIELD_KEY_LABELS: Record<string, string> = {
   inicial_2: "Inicial do Noivo(a) 2",
 };
 
-// Dados de Exemplo para Testar Preenchimento e AlternÃ¢ncia em Tempo Real
+// Dados de Exemplo para Testar Preenchimento e Alternância em Tempo Real
 const MOCK_DATA: Record<string, string> = {
   data_orcamento: "26/05/2026",
   tipo_evento: "CASAMENTO",
@@ -111,7 +111,7 @@ const MOCK_DATA: Record<string, string> = {
   nome_cliente: "Maria & Lucas",
   nome_casal: "Maria & Lucas",
   data_evento: "14/12/2026",
-  lista_drinks: "Gin TÃ´nica\nAperol Spritz\nMojito\nNegroni",
+  lista_drinks: "Gin Tônica\nAperol Spritz\nMojito\nNegroni",
   lista_bebidas: "Vinho Branco\nCerveja Artesanal\nSucos Naturais",
   numero_convidados: "150 convidados",
   quantidade_bartenders: "3 Bartenders",
@@ -119,7 +119,7 @@ const MOCK_DATA: Record<string, string> = {
   quantidade_copeira: "2 Copeiras",
   quantidade_drinks: "12 variedades de drinks",
   investimento_total: "R$ 18.500,00",
-  forma_pagamento: "30% no ato da assinatura + 70% atÃ© 7 dias antes do evento",
+  forma_pagamento: "30% no ato da assinatura + 70% até 7 dias antes do evento",
   inicial_1: "M",
   inicial_2: "L",
 };
@@ -140,7 +140,7 @@ function makeDefaultField(templateId: string, pageNumber: number): ProposalTempl
     template_id: templateId,
     page_number: pageNumber,
     field_key: "data_orcamento",
-    field_label: "Data do OrÃ§amento",
+    field_label: "Data do Orçamento",
     field_type: "texto_simples",
     x: 0.1,
     y: 0.1,
@@ -160,7 +160,7 @@ function makeDefaultField(templateId: string, pageNumber: number): ProposalTempl
   };
 }
 
-// â”€â”€â”€ ArcPreviewSVG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── ArcPreviewSVG ───────────────────────────────────────────────
 function ArcPreviewSVG({
   field,
   boxW,
@@ -250,7 +250,7 @@ function ArcPreviewSVG({
   );
 }
 
-// â”€â”€â”€ PDFPageCanvas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── PDFPageCanvas ────────────────────────────────────────────────
 function PDFPageCanvas({
   pdfDoc,
   pageIndex,
@@ -315,7 +315,7 @@ function PDFPageCanvas({
   );
 }
 
-// â”€â”€â”€ FieldBox â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── FieldBox ─────────────────────────────────────────────────────
 function FieldBox({
   field,
   canvasW,
@@ -486,7 +486,7 @@ function FieldBox({
           border: "1px solid rgba(247,244,239,0.2)",
         }}
       >
-        {field.field_key} {field.is_locked ? "ðŸ”’" : ""}
+        {field.field_key} {field.is_locked ? "🔒" : ""}
       </span>
 
       {/* Resize handle */}
@@ -509,7 +509,7 @@ function FieldBox({
   );
 }
 
-// â”€â”€â”€ ColorPicker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── ColorPicker ────────────────────────────────────────────────
 function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
@@ -549,7 +549,7 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (c: string)
   );
 }
 
-// â”€â”€â”€ ArcConfig â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── ArcConfig ──────────────────────────────────────────────────
 function ArcConfig({
   config,
   onChange,
@@ -579,9 +579,9 @@ function ArcConfig({
             color: "#f7f4ef", border: `1px solid ${cfg.arcPosition !== "bottom" ? "#8b1a22" : "rgba(247,244,239,0.12)"}`,
           }}
         >
-          <span style={{ fontSize: 18, lineHeight: 1 }}>âŒ¢</span>
+          <span style={{ fontSize: 18, lineHeight: 1 }}>⌢</span>
           <span>Arco Superior</span>
-          <span style={{ marginLeft: "auto", fontSize: 10, opacity: 0.6 }}>200Â° â†’ 340Â°</span>
+          <span style={{ marginLeft: "auto", fontSize: 10, opacity: 0.6 }}>200° → 340°</span>
         </button>
         <button
           type="button"
@@ -593,9 +593,9 @@ function ArcConfig({
             color: "#f7f4ef", border: `1px solid ${cfg.arcPosition === "bottom" ? "#8b1a22" : "rgba(247,244,239,0.12)"}`,
           }}
         >
-          <span style={{ fontSize: 18, lineHeight: 1 }}>âŒ£</span>
+          <span style={{ fontSize: 18, lineHeight: 1 }}>⌣</span>
           <span>Arco Inferior</span>
-          <span style={{ marginLeft: "auto", fontSize: 10, opacity: 0.6 }}>170Â° â†’ 10Â°</span>
+          <span style={{ marginLeft: "auto", fontSize: 10, opacity: 0.6 }}>170° → 10°</span>
         </button>
       </div>
 
@@ -620,7 +620,7 @@ function ArcConfig({
   );
 }
 
-// â”€â”€â”€ FieldPropertiesPanel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── FieldPropertiesPanel ────────────────────────────────────────
 function FieldPropertiesPanel({
   field,
   onUpdate,
@@ -644,7 +644,7 @@ function FieldPropertiesPanel({
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "14px 14px 24px", display: "flex", flexDirection: "column", gap: 6 }}>
-      {/* AÃ§Ãµes de Campo (Bloquear / Duplicar) */}
+      {/* Ações de Campo (Bloquear / Duplicar) */}
       <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
         <button
           onClick={() => onUpdate({ is_locked: !field.is_locked })}
@@ -687,7 +687,7 @@ function FieldPropertiesPanel({
       </label>
 
       <label>
-        <span style={labelStyle}>Tipo de renderizaÃ§Ã£o</span>
+        <span style={labelStyle}>Tipo de renderização</span>
         <select
           value={field.field_type}
           onChange={(e) => onUpdate({ field_type: e.target.value as TemplateFieldType })}
@@ -700,7 +700,7 @@ function FieldPropertiesPanel({
       </label>
 
       <label>
-        <span style={labelStyle}>PÃ¡gina (base 0)</span>
+        <span style={labelStyle}>Página (base 0)</span>
         <input
           type="number" min={0} value={field.page_number}
           onChange={(e) => onUpdate({ page_number: parseInt(e.target.value) })}
@@ -708,11 +708,11 @@ function FieldPropertiesPanel({
         />
       </label>
 
-      <p style={sectionTitle}>PosiÃ§Ã£o & Tamanho</p>
+      <p style={sectionTitle}>Posição & Tamanho</p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
         {(["x", "y", "width", "height"] as const).map((k) => (
           <label key={k}>
-            <span style={labelStyle}>{k.toUpperCase()} (0â€“1)</span>
+            <span style={labelStyle}>{k.toUpperCase()} (0–1)</span>
             <input
               type="number" min={0} max={1} step={0.001} value={field[k]}
               onChange={(e) => onUpdate({ [k]: parseFloat(e.target.value) })}
@@ -776,12 +776,12 @@ function FieldPropertiesPanel({
           onChange={(e) => onUpdate({ config: { ...(field.config as any), uppercase: e.target.checked } })}
           style={{ accentColor: "#701117" }}
         />
-        <span style={{ fontSize: 12, color: "#f7f4ef" }}>Transformar em MAIÃšSCULO</span>
+        <span style={{ fontSize: 12, color: "#f7f4ef" }}>Transformar em MAIÚSCULO</span>
       </label>
 
       {field.field_type === "texto_arco" && (
         <>
-          <p style={sectionTitle}>ConfiguraÃ§Ã£o do Arco</p>
+          <p style={sectionTitle}>Configuração do Arco</p>
           <ArcConfig
             config={field.config as Record<string, unknown>}
             onChange={(cfg) => onUpdate({ config: cfg as any })}
@@ -805,7 +805,7 @@ function FieldPropertiesPanel({
   );
 }
 
-// â”€â”€â”€ TestFillModal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── TestFillModal ───────────────────────────────────────────────
 function TestFillModal({
   fields,
   templateUrl,
@@ -854,7 +854,7 @@ function TestFillModal({
     } catch (e: any) {
       console.error(e);
       const errInfo = extractErrorMessage(e);
-      alert(`Erro ao gerar prÃ©via:\n${errInfo.message}`);
+      alert(`Erro ao gerar prévia:\n${errInfo.message}`);
     } finally {
       setGenerating(false);
     }
@@ -864,7 +864,7 @@ function TestFillModal({
     <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(15,20,20,0.92)", display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", justifyBetween: "space-between", padding: "14px 20px", borderBottom: "1px solid rgba(247,244,239,0.1)" }}>
         <h3 style={{ color: "#f7f4ef", fontFamily: "'Neue Montreal', sans-serif", fontSize: 16, fontWeight: 700, margin: 0 }}>
-          ðŸ§ª Testar Preenchimento da Proposta
+          🧪 Testar Preenchimento da Proposta
         </h3>
         <button onClick={onClose} style={{ background: "none", border: "none", color: "#f7f4ef", cursor: "pointer", marginLeft: "auto" }}>
           <X size={20} />
@@ -873,7 +873,7 @@ function TestFillModal({
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <div style={{ width: 320, padding: 16, overflowY: "auto", borderRight: "1px solid rgba(247,244,239,0.1)", display: "flex", flexDirection: "column", gap: 10 }}>
-          <p style={{ color: "#a0a0a0", fontSize: 11, margin: "0 0 6px" }}>Preencha os dados fictÃ­cios para validar o mapeamento:</p>
+          <p style={{ color: "#a0a0a0", fontSize: 11, margin: "0 0 6px" }}>Preencha os dados fictícios para validar o mapeamento:</p>
           {usedKeys.map((key) => (
             <label key={key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               <span style={{ fontSize: 11, color: "#a0a0a0" }}>{FIELD_KEY_LABELS[key] ?? key}</span>
@@ -909,17 +909,17 @@ function TestFillModal({
               display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
             }}
           >
-            {generating ? <><Loader2 size={14} className="animate-spin" /> Gerando...</> : <><Eye size={14} /> Gerar PrÃ©via</>}
+            {generating ? <><Loader2 size={14} className="animate-spin" /> Gerando...</> : <><Eye size={14} /> Gerar Prévia</>}
           </button>
         </div>
 
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#1a1a1a" }}>
           {previewUrl ? (
-            <iframe src={previewUrl} style={{ width: "100%", height: "100%", border: "none" }} title="PrÃ©via PDF" />
+            <iframe src={previewUrl} style={{ width: "100%", height: "100%", border: "none" }} title="Prévia PDF" />
           ) : (
             <div style={{ textAlign: "center", color: "#a0a0a0" }}>
               <Eye size={48} style={{ marginBottom: 12, opacity: 0.3 }} />
-              <p style={{ fontSize: 13 }}>Preencha os dados e clique em "Gerar PrÃ©via"</p>
+              <p style={{ fontSize: 13 }}>Preencha os dados e clique em "Gerar Prévia"</p>
             </div>
           )}
         </div>
@@ -928,7 +928,7 @@ function TestFillModal({
   );
 }
 
-// â”€â”€â”€ Main TemplateFieldEditor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Main TemplateFieldEditor ────────────────────────────────────
 export function TemplateFieldEditor({
   template,
   onClose,
@@ -1025,7 +1025,7 @@ export function TemplateFieldEditor({
   const selectedField = fields.find((f) => (f as any).id === selectedId) ?? null;
   const pageFields = fields.filter((f) => f.page_number === currentPage);
 
-  // DiagnÃ³stico
+  // Diagnóstico
   const totalFields = fields.length;
   const duplicatedKeys = [...new Set(fields.map((f) => f.field_key).filter((k, i, a) => a.indexOf(k) !== i))];
   const pagesWithFields = [...new Set(fields.map((f) => f.page_number))].sort((a, b) => a - b);
@@ -1044,7 +1044,7 @@ export function TemplateFieldEditor({
       }}
       onClick={() => setSelectedId(null)}
     >
-      {/* â”€â”€â”€ TOOLBAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ─── TOOLBAR ─────────────────────────────────────────── */}
       <div
         style={{
           display: "flex", alignItems: "center", gap: 8, padding: "10px 16px",
@@ -1059,7 +1059,7 @@ export function TemplateFieldEditor({
 
         <div style={{ height: 28, width: 1, background: "rgba(247,244,239,0.12)" }} />
 
-        {/* NavegaÃ§Ã£o de PÃ¡ginas */}
+        {/* Navegação de Páginas */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <button
             onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
@@ -1069,7 +1069,7 @@ export function TemplateFieldEditor({
             <ChevronLeft size={14} />
           </button>
           <span style={{ color: "#f7f4ef", fontSize: 13, minWidth: 70, textAlign: "center" }}>
-            PÃ¡gina {currentPage + 1} / {numPages || "â€”"}
+            Página {currentPage + 1} / {numPages || "—"}
           </span>
           <button
             onClick={() => setCurrentPage((p) => Math.min(numPages - 1, p + 1))}
@@ -1124,12 +1124,12 @@ export function TemplateFieldEditor({
           {showRealData ? "Ver Placeholders" : "Ver Dados Reais"}
         </button>
 
-        {/* DiagnÃ³stico */}
+        {/* Diagnóstico */}
         <button
           onClick={(e) => { e.stopPropagation(); setShowDiagnostics((v) => !v); }}
           style={{ ...btnBase, background: "rgba(247,244,239,0.06)", border: "1px solid rgba(247,244,239,0.12)" }}
         >
-          <Activity size={14} /> DiagnÃ³stico
+          <Activity size={14} /> Diagnóstico
         </button>
 
         {/* Testar Preenchimento */}
@@ -1138,11 +1138,11 @@ export function TemplateFieldEditor({
         </button>
 
         <div style={{ marginLeft: "auto", color: "#a0a0a0", fontSize: 11 }}>
-          {totalFields} campo(s) mapeado(s) Â· {template.name}
+          {totalFields} campo(s) mapeado(s) · {template.name}
         </div>
       </div>
 
-      {/* â”€â”€â”€ MAIN CONTENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ─── MAIN CONTENT ────────────────────────────────────── */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* Canvas area com Escala de Zoom */}
         <div
@@ -1195,7 +1195,7 @@ export function TemplateFieldEditor({
         >
           <div style={{ padding: "12px 14px", borderBottom: "1px solid rgba(247,244,239,0.1)", background: "rgba(247,244,239,0.03)" }}>
             <h4 style={{ color: "#f7f4ef", fontSize: 13, fontWeight: 700, margin: 0 }}>
-              {selectedField ? `Propriedades: ${selectedField.field_label}` : "Campos Mapeados na PÃ¡gina"}
+              {selectedField ? `Propriedades: ${selectedField.field_label}` : "Campos Mapeados na Página"}
             </h4>
           </div>
 
@@ -1209,7 +1209,7 @@ export function TemplateFieldEditor({
           ) : (
             <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
               <p style={{ color: "#a0a0a0", fontSize: 11, marginBottom: 12 }}>
-                Selecione um campo na folha ou abaixo para ajustar tipografia, posiÃ§Ã£o e formataÃ§Ã£o:
+                Selecione um campo na folha ou abaixo para ajustar tipografia, posição e formatação:
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {pageFields.map((f) => (
@@ -1228,7 +1228,7 @@ export function TemplateFieldEditor({
                 ))}
                 {pageFields.length === 0 && (
                   <div style={{ textAlign: "center", color: "#a0a0a0", padding: "20px 0", fontSize: 12 }}>
-                    Nenhum campo mapeado nesta pÃ¡gina.
+                    Nenhum campo mapeado nesta página.
                     <br />
                     Clique em <b>Adicionar Campo</b> para iniciar.
                   </div>
@@ -1239,12 +1239,12 @@ export function TemplateFieldEditor({
         </div>
       </div>
 
-      {/* MODAL DE DIAGNÃ“STICO */}
+      {/* MODAL DE DIAGNÓSTICO */}
       {showDiagnostics && (
         <div style={{ position: "absolute", top: 60, right: 340, zIndex: 250, width: 340, background: "#0f1414", border: "1px solid #701117", borderRadius: 12, padding: 16, color: "#f7f4ef", boxShadow: "0 10px 30px rgba(0,0,0,0.8)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#d4af37", display: "flex", alignItems: "center", gap: 6 }}>
-              <Activity size={16} /> Painel de DiagnÃ³stico do Match
+              <Activity size={16} /> Painel de Diagnóstico do Match
             </h4>
             <button onClick={() => setShowDiagnostics(false)} style={{ background: "none", border: "none", color: "#f7f4ef", cursor: "pointer" }}>
               <X size={16} />
@@ -1256,19 +1256,19 @@ export function TemplateFieldEditor({
               <b>{totalFields}</b>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#a0a0a0" }}>PÃ¡ginas Mapeadas:</span>
+              <span style={{ color: "#a0a0a0" }}>Páginas Mapeadas:</span>
               <b>{pagesWithFields.map((p) => p + 1).join(", ") || "Nenhuma"}</b>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span style={{ color: "#a0a0a0" }}>Duplicados Identificados:</span>
               <b style={{ color: duplicatedKeys.length > 0 ? "#f97b7b" : "#4ade80" }}>
-                {duplicatedKeys.length > 0 ? duplicatedKeys.join(", ") : "Nenhum âœ“"}
+                {duplicatedKeys.length > 0 ? duplicatedKeys.join(", ") : "Nenhum ✓"}
               </b>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span style={{ color: "#a0a0a0" }}>Status do Documento:</span>
               <b style={{ color: totalFields > 0 ? "#4ade80" : "#d4af37" }}>
-                {totalFields > 0 ? "Pronto para EmissÃ£o âœ“" : "Aguardando Mapeamento"}
+                {totalFields > 0 ? "Pronto para Emissão ✓" : "Aguardando Mapeamento"}
               </b>
             </div>
           </div>
@@ -1286,7 +1286,7 @@ export function TemplateFieldEditor({
 
             <div style={{ background: "rgba(247,244,239,0.05)", border: "1px solid rgba(247,244,239,0.1)", borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 13, lineHeight: 1.5 }}>
               <p style={{ margin: "0 0 8px 0" }}><b>Motivo:</b> {errorModal.message}</p>
-              <p style={{ margin: 0, color: "#d4af37", fontFamily: "monospace", fontSize: 11 }}><b>CÃ³digo:</b> {errorModal.code}</p>
+              <p style={{ margin: 0, color: "#d4af37", fontFamily: "monospace", fontSize: 11 }}><b>Código:</b> {errorModal.code}</p>
               {errorModal.details && (
                 <pre style={{ marginTop: 8, fontSize: 10, color: "#a0a0a0", overflowX: "auto", whiteSpace: "pre-wrap" }}>
                   {errorModal.details}

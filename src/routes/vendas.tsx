@@ -48,7 +48,7 @@ function VendasPage() {
   const [loading, setLoading] = useState(true);
 
   const [activeTab, setActiveTab] = useState<
-    "Goat Botequim" | "7Steakhouse" | "Eventos" | "ConsolidaÃ§Ã£o"
+    "Goat Botequim" | "7Steakhouse" | "Eventos" | "Consolidação"
   >("Goat Botequim");
 
   const [periodoDias, setPeriodoDias] = useState<number>(30);
@@ -117,7 +117,7 @@ function VendasPage() {
     clientName: "",
     eventType: "Casamento",
     date: "",
-    city: "SÃ£o Paulo",
+    city: "São Paulo",
     guests: 100,
     drinks: [] as string[],
     finalBudgetValue: "",
@@ -367,7 +367,7 @@ function VendasPage() {
       setShowModal(false);
       loadAllData();
     } catch (e) {
-      console.error("Erro ao salvar sessÃ£o:", e);
+      console.error("Erro ao salvar sessão:", e);
 
       if (editingSessionId) {
         // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
@@ -402,7 +402,7 @@ function VendasPage() {
       deleteFinancialSession(sessionId);
       setFinancialSessions((prev) => prev.filter((s) => s.id !== sessionId));
     } catch (e) {
-      console.error("Erro ao excluir sessÃ£o no Supabase:", e);
+      console.error("Erro ao excluir sessão no Supabase:", e);
       deleteFinancialSession(sessionId);
       setFinancialSessions((prev) => prev.filter((s) => s.id !== sessionId));
     } finally {
@@ -412,7 +412,7 @@ function VendasPage() {
 
   const handleSaveLegacyEvent = async () => {
     if (!legacyForm.clientName || !legacyForm.date) {
-      alert("Por favor, preencha os campos obrigatÃ³rios (Nome do Cliente e Data).");
+      alert("Por favor, preencha os campos obrigatórios (Nome do Cliente e Data).");
       return;
     }
     setSavingLegacyEvent(true);
@@ -435,13 +435,13 @@ function VendasPage() {
         average_drink_cost: avgCost,
       });
 
-      alert("Evento antigo lanÃ§ado com sucesso!");
+      alert("Evento antigo lançado com sucesso!");
       setShowLegacyEventModal(false);
       setLegacyForm({
         clientName: "",
         eventType: "Casamento",
         date: "",
-        city: "SÃ£o Paulo",
+        city: "São Paulo",
         guests: 100,
         drinks: [],
         finalBudgetValue: "",
@@ -514,7 +514,7 @@ function VendasPage() {
 
       loadAllData();
     } catch (error) {
-      console.error("Erro ao atualizar dados da sessÃ£o:", error);
+      console.error("Erro ao atualizar dados da sessão:", error);
     }
   };
 
@@ -665,7 +665,7 @@ function VendasPage() {
   return (
     <div className="min-h-screen bg-background">
       <PageHeader
-        title="OperaÃ§Ãµes Financeiras"
+        title="Operações Financeiras"
         subtitle="Controle de vendas, custos e lucratividade operacional."
         periodo={
           <div className="relative">
@@ -674,12 +674,12 @@ function VendasPage() {
               onChange={(e) => setPeriodoDias(Number(e.target.value))}
               className="appearance-none inline-flex items-center gap-2 pl-4 pr-10 py-2 rounded-lg border border-border bg-surface text-sm font-medium hover:border-border-strong transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
             >
-              <option value={30}>Ãšltimos 30 dias</option>
-              <option value={-1}>Este mÃªs</option>
-              <option value={-2}>MÃªs anterior</option>
-              <option value={7}>Ãšltimos 7 dias</option>
-              <option value={90}>Ãšltimos 90 dias</option>
-              <option value={0}>Todo o perÃ­odo</option>
+              <option value={30}>Últimos 30 dias</option>
+              <option value={-1}>Este mês</option>
+              <option value={-2}>Mês anterior</option>
+              <option value={7}>Últimos 7 dias</option>
+              <option value={90}>Últimos 90 dias</option>
+              <option value={0}>Todo o período</option>
             </select>
             <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none rotate-90" />
           </div>
@@ -688,7 +688,7 @@ function VendasPage() {
 
       <div className="page-container space-y-7">
         <div className="flex w-full max-w-full overflow-x-auto items-center gap-1 p-1 bg-surface border border-border rounded-xl md:w-fit">
-          {["Goat Botequim", "7Steakhouse", "Eventos", "ConsolidaÃ§Ã£o"].map((tab) => (
+          {["Goat Botequim", "7Steakhouse", "Eventos", "Consolidação"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
@@ -713,7 +713,7 @@ function VendasPage() {
               <StatCard label="Receita Bruta" value={fmtBRL(metrics.bot.receita)} />
               <StatCard label="Custo Drinks" value={fmtBRL(metrics.bot.custo)} />
               <StatCard
-                label="Resultado LÃ­quido"
+                label="Resultado Líquido"
                 value={fmtBRL(metrics.bot.receita - metrics.bot.custo)}
               />
               <StatCard
@@ -721,7 +721,7 @@ function VendasPage() {
                 value={fmtBRL((metrics.bot.receita - metrics.bot.custo) * 0.4)}
               />
               <StatCard
-                label="MÃ£o de Obra"
+                label="Mão de Obra"
                 value={fmtBRL(
                   filteredSessions
                     .filter((s) => s.modalidade === "Goat Botequim")
@@ -745,13 +745,13 @@ function VendasPage() {
 
             <div className="flex justify-stretch sm:justify-end">
               <PrimaryButton onClick={openNewSessionModal}>
-                <Plus className="h-4 w-4 mr-2" /> LanÃ§ar SessÃ£o Botequim
+                <Plus className="h-4 w-4 mr-2" /> Lançar Sessão Botequim
               </PrimaryButton>
             </div>
 
             <SectionCard
-              title="SessÃµes LanÃ§adas"
-              subtitle="HistÃ³rico de vendas consolidadas por dia"
+              title="Sessões Lançadas"
+              subtitle="Histórico de vendas consolidadas por dia"
             >
               <div className="space-y-4">
                 {filteredSessions
@@ -769,7 +769,7 @@ function VendasPage() {
 
                 {filteredSessions.filter((s) => s.modalidade === "Goat Botequim").length === 0 && (
                   <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">
-                    Nenhuma sessÃ£o lanÃ§ada.
+                    Nenhuma sessão lançada.
                   </div>
                 )}
               </div>
@@ -791,7 +791,7 @@ function VendasPage() {
                 value={fmtBRL(ganhosTerceiros.valorRetido7Steakhouse)}
               />
               <StatCard
-                label="MÃ£o de Obra"
+                label="Mão de Obra"
                 value={fmtBRL(
                   filteredSessions
                     .filter((s) => s.modalidade === "7Steakhouse")
@@ -813,13 +813,13 @@ function VendasPage() {
 
             <div className="flex justify-end">
               <PrimaryButton onClick={openNewSessionModal}>
-                <Plus className="h-4 w-4 mr-2" /> LanÃ§ar Semana Steakhouse
+                <Plus className="h-4 w-4 mr-2" /> Lançar Semana Steakhouse
               </PrimaryButton>
             </div>
 
             <SectionCard
-              title="SessÃµes Semanais LanÃ§adas"
-              subtitle="Vendas diÃ¡rias agregadas por semana"
+              title="Sessões Semanais Lançadas"
+              subtitle="Vendas diárias agregadas por semana"
             >
               <div className="space-y-4">
                 {filteredSessions
@@ -837,7 +837,7 @@ function VendasPage() {
 
                 {filteredSessions.filter((s) => s.modalidade === "7Steakhouse").length === 0 && (
                   <div className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-xl">
-                    Nenhuma sessÃ£o lanÃ§ada.
+                    Nenhuma sessão lançada.
                   </div>
                 )}
               </div>
@@ -863,7 +863,7 @@ function VendasPage() {
                       clientName: "",
                       eventType: "Casamento",
                       date: new Date().toISOString().split("T")[0],
-                      city: "SÃ£o Paulo",
+                      city: "São Paulo",
                       guests: 100,
                       drinks: [],
                       finalBudgetValue: "",
@@ -872,7 +872,7 @@ function VendasPage() {
                     setShowLegacyEventModal(true);
                   }}
                 >
-                  <Plus className="h-4 w-4 mr-2" /> LanÃ§ar Evento Antigo
+                  <Plus className="h-4 w-4 mr-2" /> Lançar Evento Antigo
                 </PrimaryButton>
               }
             >
@@ -940,7 +940,7 @@ function VendasPage() {
           </div>
         )}
 
-        {activeTab === "ConsolidaÃ§Ã£o" && (
+        {activeTab === "Consolidação" && (
           <div className="space-y-7">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               <StatCard label="Receita Consolidada" value={fmtBRL(metrics.consolidated.receita)} />
@@ -957,7 +957,7 @@ function VendasPage() {
 
             <SectionCard
               title="Ganhos de Terceiros"
-              subtitle="Valores repassados e retidos nas operaÃ§Ãµes do 7Steakhouse"
+              subtitle="Valores repassados e retidos nas operações do 7Steakhouse"
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <SummaryCard
@@ -975,14 +975,14 @@ function VendasPage() {
               </div>
             </SectionCard>
 
-            <SectionCard title="EvoluÃ§Ã£o Mensal" subtitle="Resumo consolidado por mÃªs de operaÃ§Ã£o">
+            <SectionCard title="Evolução Mensal" subtitle="Resumo consolidado por mês de operação">
               <div className="overflow-x-auto -mx-6">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left border-y border-border">
-                      <th className="px-6 py-3 label-eyebrow">MÃªs</th>
+                      <th className="px-6 py-3 label-eyebrow">Mês</th>
                       <th className="px-6 py-3 label-eyebrow">Receita Consolidada</th>
-                      <th className="px-6 py-3 label-eyebrow">Custos/OperaÃ§Ã£o</th>
+                      <th className="px-6 py-3 label-eyebrow">Custos/Operação</th>
                       <th className="px-6 py-3 label-eyebrow text-success">Lucro Total</th>
                     </tr>
                   </thead>
@@ -1015,8 +1015,8 @@ function VendasPage() {
             </SectionCard>
 
             <SectionCard
-              title="DistribuiÃ§Ã£o por Modalidade (Geral)"
-              subtitle="ParticipaÃ§Ã£o de cada unidade no lucro acumulado"
+              title="Distribuição por Modalidade (Geral)"
+              subtitle="Participação de cada unidade no lucro acumulado"
             >
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <SummaryCard
@@ -1048,7 +1048,7 @@ function VendasPage() {
           <div className="w-full max-w-2xl bg-surface border border-border rounded-2xl shadow-2xl my-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <h2 className="font-display text-lg font-semibold">
-                {editingSessionId ? "Editar SessÃ£o" : "LanÃ§ar SessÃ£o"} â€” {activeTab}
+                {editingSessionId ? "Editar Sessão" : "Lançar Sessão"} — {activeTab}
               </h2>
               <button
                 onClick={() => setShowModal(false)}
@@ -1060,7 +1060,7 @@ function VendasPage() {
 
             <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
               <div>
-                <label className="label-eyebrow block mb-2">Data da OperaÃ§Ã£o</label>
+                <label className="label-eyebrow block mb-2">Data da Operação</label>
                 <input
                   type="date"
                   value={modalDate}
@@ -1156,8 +1156,8 @@ function VendasPage() {
                     <GhostButton
                       onClick={() => removeItem(idx)}
                       className="h-10 w-10 px-0 text-destructive hover:text-destructive justify-center"
-                      aria-label="Excluir drink lanÃ§ado"
-                      title="Excluir drink lanÃ§ado"
+                      aria-label="Excluir drink lançado"
+                      title="Excluir drink lançado"
                     >
                       <Trash2 className="h-4 w-4" />
                     </GhostButton>
@@ -1169,7 +1169,7 @@ function VendasPage() {
                 <div className="space-y-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <label className="label-eyebrow">MÃ£o de Obra Detalhada (Semanal)</label>
+                      <label className="label-eyebrow">Mão de Obra Detalhada (Semanal)</label>
                       <GhostButton
                         onClick={() => setMaoDeObraDetalhes(generateSteakhouseDays(modalDate))}
                         className="h-8 text-[10px] uppercase font-bold"
@@ -1238,7 +1238,7 @@ function VendasPage() {
                                 newD[i].nomes = e.target.value;
                                 setMaoDeObraDetalhes(newD);
                               }}
-                              placeholder="Ex.: JoÃ£o e Maria"
+                              placeholder="Ex.: João e Maria"
                               className="w-full h-8 px-2 rounded bg-input border border-border text-xs"
                             />
                           </div>
@@ -1250,7 +1250,7 @@ function VendasPage() {
                   <div className="space-y-4 pt-4 border-t border-border/50">
                     <div className="flex items-center justify-between">
                       <label className="label-eyebrow">
-                        ReposiÃ§Ãµes de Insumos pelo Restaurante
+                        Reposições de Insumos pelo Restaurante
                       </label>
                       <GhostButton
                         onClick={() =>
@@ -1261,13 +1261,13 @@ function VendasPage() {
                         }
                         className="h-8 text-[10px] uppercase font-bold"
                       >
-                        <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar ReposiÃ§Ã£o
+                        <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar Reposição
                       </GhostButton>
                     </div>
 
                     {custosRestauranteDetalhes.length === 0 ? (
                       <div className="text-center py-6 text-xs text-muted-foreground border border-dashed border-border rounded-xl bg-background/20">
-                        Nenhuma reposiÃ§Ã£o lanÃ§ada para esta semana.
+                        Nenhuma reposição lançada para esta semana.
                       </div>
                     ) : (
                       <div className="space-y-2">
@@ -1281,7 +1281,7 @@ function VendasPage() {
                                 newC[idx].descricao = e.target.value;
                                 setCustosRestauranteDetalhes(newC);
                               }}
-                              placeholder="DescriÃ§Ã£o (Ex: HortelÃ£, LimÃ£o)"
+                              placeholder="Descrição (Ex: Hortelã, Limão)"
                               className="flex-1 h-9 px-3 rounded-lg bg-input border border-border text-xs"
                             />
 
@@ -1311,7 +1311,7 @@ function VendasPage() {
                         ))}
 
                         <div className="text-right text-xs font-bold text-muted-foreground pt-2">
-                          Total ReposiÃ§Ã£o:{" "}
+                          Total Reposição:{" "}
                           <span className="text-destructive font-black text-sm">
                             {fmtBRL(reposicaoRestaurante)}
                           </span>
@@ -1328,14 +1328,14 @@ function VendasPage() {
                       type="text"
                       value={maoDeObraNomes}
                       onChange={(e) => setMaoDeObraNomes(e.target.value)}
-                      placeholder="Ex.: JoÃ£o, Maria, Carlos"
+                      placeholder="Ex.: João, Maria, Carlos"
                       className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="label-eyebrow block mb-2">Custo MÃ£o de Obra (Dia)</label>
+                      <label className="label-eyebrow block mb-2">Custo Mão de Obra (Dia)</label>
                       <input
                         type="number"
                         value={maoDeObraValor}
@@ -1360,7 +1360,7 @@ function VendasPage() {
 
             <div className="p-6 border-t border-border flex justify-end gap-3">
               <GhostButton onClick={() => setShowModal(false)}>Cancelar</GhostButton>
-              <PrimaryButton onClick={handleSave}>Salvar LanÃ§amento</PrimaryButton>
+              <PrimaryButton onClick={handleSave}>Salvar Lançamento</PrimaryButton>
             </div>
           </div>
         </div>
@@ -1372,10 +1372,10 @@ function VendasPage() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
               <div>
                 <h2 className="font-display text-lg font-semibold">
-                  LanÃ§ar Evento Antigo (Legado)
+                  Lançar Evento Antigo (Legado)
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  Insira as informaÃ§Ãµes bÃ¡sicas do evento realizado antes do sistema
+                  Insira as informações básicas do evento realizado antes do sistema
                 </p>
               </div>
               <button
@@ -1393,7 +1393,7 @@ function VendasPage() {
                   <input
                     type="text"
                     required
-                    placeholder="Ex: Casamento JoÃ£o & Maria"
+                    placeholder="Ex: Casamento João & Maria"
                     value={legacyForm.clientName}
                     onChange={(e) => setLegacyForm((p) => ({ ...p, clientName: e.target.value }))}
                     className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
@@ -1407,7 +1407,7 @@ function VendasPage() {
                     onChange={(e) => setLegacyForm((p) => ({ ...p, eventType: e.target.value }))}
                     className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
                   >
-                    {["Casamento", "Corporativo", "AniversÃ¡rio", "ConfraternizaÃ§Ã£o", "Outros"].map(
+                    {["Casamento", "Corporativo", "Aniversário", "Confraternização", "Outros"].map(
                       (t) => (
                         <option key={t} value={t}>
                           {t}
@@ -1432,7 +1432,7 @@ function VendasPage() {
                   <label className="label-eyebrow block mb-1.5">Cidade do Evento</label>
                   <input
                     type="text"
-                    placeholder="Ex: SÃ£o Paulo"
+                    placeholder="Ex: São Paulo"
                     value={legacyForm.city}
                     onChange={(e) => setLegacyForm((p) => ({ ...p, city: e.target.value }))}
                     className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
@@ -1440,7 +1440,7 @@ function VendasPage() {
                 </div>
 
                 <div>
-                  <label className="label-eyebrow block mb-1.5">NÃºmero de Convidados</label>
+                  <label className="label-eyebrow block mb-1.5">Número de Convidados</label>
                   <input
                     type="number"
                     value={legacyForm.guests || ""}
@@ -1455,7 +1455,7 @@ function VendasPage() {
                 </div>
 
                 <div>
-                  <label className="label-eyebrow block mb-1.5">Valor do OrÃ§amento (R$) *</label>
+                  <label className="label-eyebrow block mb-1.5">Valor do Orçamento (R$) *</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1469,7 +1469,7 @@ function VendasPage() {
                 </div>
 
                 <div>
-                  <label className="label-eyebrow block mb-1.5">Valor jÃ¡ Pago (R$) *</label>
+                  <label className="label-eyebrow block mb-1.5">Valor já Pago (R$) *</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1484,7 +1484,7 @@ function VendasPage() {
               {/* Drinks Section */}
               <div className="space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <label className="label-eyebrow block">Drinks do CardÃ¡pio *</label>
+                  <label className="label-eyebrow block">Drinks do Cardápio *</label>
                   <div className="relative w-full sm:w-64">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <input
@@ -1731,7 +1731,7 @@ function SessionRow({
                     weekday: "long",
                     day: "2-digit",
                     month: "2-digit",
-                  })} atÃ© ${sessionEndDate.toLocaleDateString("pt-BR", {
+                  })} até ${sessionEndDate.toLocaleDateString("pt-BR", {
                     weekday: "long",
                     day: "2-digit",
                     month: "2-digit",
@@ -1788,7 +1788,7 @@ function SessionRow({
                 onRefresh();
               }}
               className="h-9 w-9 rounded-lg flex items-center justify-center bg-background border border-border hover:border-primary hover:text-primary transition-all shadow-sm"
-              title="Atualizar dados da sessÃ£o"
+              title="Atualizar dados da sessão"
             >
               <RefreshCcw className="h-4 w-4" />
             </button>
@@ -1923,7 +1923,7 @@ function SessionRow({
                 session.custosRestauranteDetalhes.length > 0 && (
                   <div className="mt-6 pt-6 border-t border-border/50 space-y-4">
                     <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-4">
-                      ReposiÃ§Ãµes do Restaurante
+                      Reposições do Restaurante
                     </h4>
 
                     <div className="space-y-3">
@@ -1941,7 +1941,7 @@ function SessionRow({
 
                       <div className="pt-3 border-t border-border/40 flex justify-between items-center">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase">
-                          Total ReposiÃ§Ã£o
+                          Total Reposição
                         </span>
                         <span className="font-black text-sm text-destructive">
                           {fmtBRL(calc.reposicao)}
@@ -1954,7 +1954,7 @@ function SessionRow({
 
             <div className="space-y-4">
               <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-4">
-                CÃ¡lculo de Lucro
+                Cálculo de Lucro
               </h4>
 
               <div className="bg-background/40 rounded-2xl p-5 border border-border/50 space-y-4">
@@ -1968,7 +1968,7 @@ function SessionRow({
 
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">
-                      (-) {isSteak ? "Custo Insumos (ProduÃ§Ã£o)" : "Custo dos Drinks"}
+                      (-) {isSteak ? "Custo Insumos (Produção)" : "Custo dos Drinks"}
                     </span>
                     <span className="text-muted-foreground">{fmtBRL(calc.custoInsumos)}</span>
                   </div>
@@ -2012,14 +2012,14 @@ function SessionRow({
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs">
                     <span className="text-destructive font-medium">
-                      (-) MÃ£o de Obra {isSteak ? "Semanal" : "do Dia"}
+                      (-) Mão de Obra {isSteak ? "Semanal" : "do Dia"}
                     </span>
                     <span className="text-destructive font-bold">{fmtBRL(calc.maoDeObra)}</span>
                   </div>
 
                   {isSteak && (
                     <div className="flex justify-between text-xs text-destructive">
-                      <span className="font-medium">(-) ReposiÃ§Ã£o Restaurante</span>
+                      <span className="font-medium">(-) Reposição Restaurante</span>
                       <span className="font-bold">{fmtBRL(calc.reposicao)}</span>
                     </div>
                   )}

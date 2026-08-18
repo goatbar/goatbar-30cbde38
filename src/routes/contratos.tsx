@@ -65,8 +65,8 @@ export const Route = createFileRoute("/contratos")({
 const tabs = [
   { id: "contratos", label: "Contratos Emitidos", icon: FileText },
   { id: "templates", label: "Editor Visual de DOCX", icon: Upload },
-  { id: "socios", label: "SÃ³cios Assinantes", icon: Users },
-  { id: "copos", label: "Copos / UtensÃ­lios", icon: Wine },
+  { id: "socios", label: "Sócios Assinantes", icon: Users },
+  { id: "copos", label: "Copos / Utensílios", icon: Wine },
 ];
 
 export interface FieldCategory {
@@ -82,67 +82,67 @@ export interface FieldCategory {
 
 export const EDITOR_CATEGORIES: FieldCategory[] = [
   {
-    category: "ðŸ¥‚ Evento",
+    category: "🥂 Evento",
     icon: Calendar,
     fields: [
       { key: "evento.nome", label: "Nome do Evento", desc: "Ex: Casamento Maria & Lucas", sampleValue: "Casamento Maria & Lucas" },
-      { key: "evento.tipo", label: "Tipo do Evento", desc: "Casamento, AniversÃ¡rio, Corporativo", sampleValue: "Casamento" },
-      { key: "evento.data", label: "Data do Evento", desc: "Data de realizaÃ§Ã£o (DD/MM/AAAA)", sampleValue: "15/11/2026" },
-      { key: "evento.horario", label: "HorÃ¡rio de InÃ­cio", desc: "HorÃ¡rio programado", sampleValue: "19:00" },
-      { key: "evento.local", label: "Local do Evento", desc: "EspaÃ§o ou salÃ£o de festas", sampleValue: "EspaÃ§o Villa Bisutti" },
-      { key: "evento.cidade", label: "Cidade", desc: "Cidade da realizaÃ§Ã£o", sampleValue: "SÃ£o Paulo" },
-      { key: "evento.convidados", label: "NÃºmero de Convidados", desc: "Total de convidados", sampleValue: "150" },
+      { key: "evento.tipo", label: "Tipo do Evento", desc: "Casamento, Aniversário, Corporativo", sampleValue: "Casamento" },
+      { key: "evento.data", label: "Data do Evento", desc: "Data de realização (DD/MM/AAAA)", sampleValue: "15/11/2026" },
+      { key: "evento.horario", label: "Horário de Início", desc: "Horário programado", sampleValue: "19:00" },
+      { key: "evento.local", label: "Local do Evento", desc: "Espaço ou salão de festas", sampleValue: "Espaço Villa Bisutti" },
+      { key: "evento.cidade", label: "Cidade", desc: "Cidade da realização", sampleValue: "São Paulo" },
+      { key: "evento.convidados", label: "Número de Convidados", desc: "Total de convidados", sampleValue: "150" },
     ],
   },
   {
-    category: "ðŸ‘¤ Cliente",
+    category: "👤 Cliente",
     icon: UserCheck,
     fields: [
-      { key: "cliente.nome", label: "Nome do Cliente", desc: "Nome completo ou RazÃ£o Social", sampleValue: "Maria Fernanda Oliveira" },
+      { key: "cliente.nome", label: "Nome do Cliente", desc: "Nome completo ou Razão Social", sampleValue: "Maria Fernanda Oliveira" },
       { key: "cliente.documento", label: "CPF / CNPJ", desc: "Documento do contratante", sampleValue: "123.456.789-00" },
-      { key: "cliente.telefone", label: "Telefone / WhatsApp", desc: "NÃºmero para contato", sampleValue: "(11) 98765-4321" },
-      { key: "cliente.email", label: "E-mail de Contato", desc: "EndereÃ§o de e-mail", sampleValue: "maria.fernanda@email.com" },
-      { key: "cliente.endereco", label: "EndereÃ§o do Cliente", desc: "Logradouro, nÃºmero e bairro", sampleValue: "Av. Paulista, 1000, Apto 42 - SÃ£o Paulo/SP" },
+      { key: "cliente.telefone", label: "Telefone / WhatsApp", desc: "Número para contato", sampleValue: "(11) 98765-4321" },
+      { key: "cliente.email", label: "E-mail de Contato", desc: "Endereço de e-mail", sampleValue: "maria.fernanda@email.com" },
+      { key: "cliente.endereco", label: "Endereço do Cliente", desc: "Logradouro, número e bairro", sampleValue: "Av. Paulista, 1000, Apto 42 - São Paulo/SP" },
     ],
   },
   {
-    category: "ðŸ’° Financeiro",
+    category: "💰 Financeiro",
     icon: DollarSign,
     fields: [
-      { key: "financeiro.valor_total", label: "Valor do Contrato", desc: "Valor total do orÃ§amento", sampleValue: "R$ 6.800,00" },
+      { key: "financeiro.valor_total", label: "Valor do Contrato", desc: "Valor total do orçamento", sampleValue: "R$ 6.800,00" },
       { key: "financeiro.valor_entrada", label: "Valor da Entrada", desc: "Valor do sinal/sinalizador", sampleValue: "R$ 3.400,00" },
       { key: "financeiro.saldo_restante", label: "Saldo Restante", desc: "Valor a quitar", sampleValue: "R$ 3.400,00" },
-      { key: "financeiro.forma_pagamento", label: "Forma de Pagamento", desc: "CondiÃ§Ãµes de parcelamento", sampleValue: "50% no ato + 50% atÃ© 5 dias antes" },
-      { key: "financeiro.data_vencimento", label: "Data de Vencimento", desc: "Data limite para quitaÃ§Ã£o", sampleValue: "10/11/2026" },
+      { key: "financeiro.forma_pagamento", label: "Forma de Pagamento", desc: "Condições de parcelamento", sampleValue: "50% no ato + 50% até 5 dias antes" },
+      { key: "financeiro.data_vencimento", label: "Data de Vencimento", desc: "Data limite para quitação", sampleValue: "10/11/2026" },
     ],
   },
   {
-    category: "ðŸ¢ Empresa (GOAT Bar)",
+    category: "🏢 Empresa (GOAT Bar)",
     icon: Building2,
     fields: [
-      { key: "empresa.nome", label: "Nome da Empresa", desc: "RazÃ£o social da contratada", sampleValue: "GOAT BAR EVENTOS LTDA" },
+      { key: "empresa.nome", label: "Nome da Empresa", desc: "Razão social da contratada", sampleValue: "GOAT BAR EVENTOS LTDA" },
       { key: "empresa.cnpj", label: "CNPJ da Empresa", desc: "Documento da GOAT Bar", sampleValue: "42.123.456/0001-99" },
-      { key: "empresa.endereco", label: "EndereÃ§o da Empresa", desc: "Sede comercial", sampleValue: "Av. Faria Lima, 2000 - SP" },
-      { key: "empresa.responsavel", label: "Nome do ResponsÃ¡vel / SÃ³cio", desc: "SÃ³cio representante", sampleValue: "Gabriel Santos Silva" },
-      { key: "empresa.cpf_responsavel", label: "CPF do ResponsÃ¡vel", desc: "Documento do sÃ³cio", sampleValue: "987.654.321-11" },
-      { key: "empresa.cargo_responsavel", label: "Cargo do ResponsÃ¡vel", desc: "Ex: SÃ³cio Diretor", sampleValue: "SÃ³cio Diretor" },
-      { key: "empresa.endereco_responsavel", label: "EndereÃ§o do ResponsÃ¡vel", desc: "EndereÃ§o do sÃ³cio", sampleValue: "Rua Haddock Lobo, 500 - SP" },
+      { key: "empresa.endereco", label: "Endereço da Empresa", desc: "Sede comercial", sampleValue: "Av. Faria Lima, 2000 - SP" },
+      { key: "empresa.responsavel", label: "Nome do Responsável / Sócio", desc: "Sócio representante", sampleValue: "Gabriel Santos Silva" },
+      { key: "empresa.cpf_responsavel", label: "CPF do Responsável", desc: "Documento do sócio", sampleValue: "987.654.321-11" },
+      { key: "empresa.cargo_responsavel", label: "Cargo do Responsável", desc: "Ex: Sócio Diretor", sampleValue: "Sócio Diretor" },
+      { key: "empresa.endereco_responsavel", label: "Endereço do Responsável", desc: "Endereço do sócio", sampleValue: "Rua Haddock Lobo, 500 - SP" },
     ],
   },
   {
-    category: "ðŸ¹ CardÃ¡pio & UtensÃ­lios",
+    category: "🍹 Cardápio & Utensílios",
     icon: GlassWater,
     fields: [
-      { key: "cardapio.drinks", label: "Lista dos Drinks", desc: "CoquetÃ©is inclusos", sampleValue: "Gin TÃ´nica, Moscow Mule, Penicillin, Aperol Spritz" },
-      { key: "cardapio.descricao", label: "DescriÃ§Ã£o do CardÃ¡pio", desc: "Detalhamento de insumos e marcas", sampleValue: "Insumos premium artesanais e gelo translÃºcido fornecido pela GOAT Bar." },
-      { key: "cardapio.tabela_reposicao", label: "Tabela de ReposiÃ§Ã£o de Copos", desc: "Valores por unidade em caso de quebra", sampleValue: "â€¢ TaÃ§a Gin: R$ 25,00\nâ€¢ Copo Baixo: R$ 18,00" },
+      { key: "cardapio.drinks", label: "Lista dos Drinks", desc: "Coquetéis inclusos", sampleValue: "Gin Tônica, Moscow Mule, Penicillin, Aperol Spritz" },
+      { key: "cardapio.descricao", label: "Descrição do Cardápio", desc: "Detalhamento de insumos e marcas", sampleValue: "Insumos premium artesanais e gelo translúcido fornecido pela GOAT Bar." },
+      { key: "cardapio.tabela_reposicao", label: "Tabela de Reposição de Copos", desc: "Valores por unidade em caso de quebra", sampleValue: "• Taça Gin: R$ 25,00\n• Copo Baixo: R$ 18,00" },
     ],
   },
   {
-    category: "ðŸ—“ï¸ Geral",
+    category: "🗓️ Geral",
     icon: Calendar,
     fields: [
-      { key: "geral.data_emissao", label: "Data de EmissÃ£o", desc: "Data de emissÃ£o do contrato", sampleValue: new Date().toLocaleDateString("pt-BR") },
+      { key: "geral.data_emissao", label: "Data de Emissão", desc: "Data de emissão do contrato", sampleValue: new Date().toLocaleDateString("pt-BR") },
     ],
   },
 ];
@@ -152,30 +152,30 @@ const SAMPLE_VARIABLES: Record<string, string> = {
   "evento.tipo": "Casamento",
   "evento.data": "15/11/2026",
   "evento.horario": "19:00",
-  "evento.local": "EspaÃ§o Villa Bisutti",
-  "evento.cidade": "SÃ£o Paulo",
+  "evento.local": "Espaço Villa Bisutti",
+  "evento.cidade": "São Paulo",
   "evento.convidados": "150",
   "evento.valor_por_pessoa": "R$ 45,33",
   "cliente.nome": "Maria Fernanda Oliveira",
   "cliente.documento": "123.456.789-00",
   "cliente.telefone": "(11) 98765-4321",
   "cliente.email": "maria.fernanda@email.com",
-  "cliente.endereco": "Av. Paulista, 1000, Apto 42 - SÃ£o Paulo/SP",
+  "cliente.endereco": "Av. Paulista, 1000, Apto 42 - São Paulo/SP",
   "financeiro.valor_total": "R$ 6.800,00",
   "financeiro.valor_entrada": "R$ 3.400,00",
   "financeiro.saldo_restante": "R$ 3.400,00",
-  "financeiro.forma_pagamento": "50% no ato + 50% atÃ© 5 dias antes",
+  "financeiro.forma_pagamento": "50% no ato + 50% até 5 dias antes",
   "financeiro.data_vencimento": "10/11/2026",
   "empresa.nome": "GOAT BAR EVENTOS LTDA",
   "empresa.cnpj": "42.123.456/0001-99",
-  "empresa.endereco": "Av. Faria Lima, 2000 - SÃ£o Paulo/SP",
+  "empresa.endereco": "Av. Faria Lima, 2000 - São Paulo/SP",
   "empresa.responsavel": "Gabriel Santos Silva",
   "empresa.cpf_responsavel": "987.654.321-11",
-  "empresa.cargo_responsavel": "SÃ³cio Diretor",
+  "empresa.cargo_responsavel": "Sócio Diretor",
   "empresa.endereco_responsavel": "Rua Haddock Lobo, 500 - SP",
-  "cardapio.drinks": "Gin TÃ´nica, Moscow Mule, Penicillin, Aperol Spritz",
-  "cardapio.descricao": "Insumos premium artesanais e gelo translÃºcido fornecido pela GOAT Bar.",
-  "cardapio.tabela_reposicao": "â€¢ TaÃ§a Gin: R$ 25,00\nâ€¢ Copo Baixo: R$ 18,00",
+  "cardapio.drinks": "Gin Tônica, Moscow Mule, Penicillin, Aperol Spritz",
+  "cardapio.descricao": "Insumos premium artesanais e gelo translúcido fornecido pela GOAT Bar.",
+  "cardapio.tabela_reposicao": "• Taça Gin: R$ 25,00\n• Copo Baixo: R$ 18,00",
   "geral.data_emissao": new Date().toLocaleDateString("pt-BR"),
 };
 
@@ -207,7 +207,7 @@ function ContratosPage() {
   const [isDefault, setIsDefault] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<string>("ðŸ¥‚ Evento");
+  const [activeCategory, setActiveCategory] = useState<string>("🥂 Evento");
   const [selectedText, setSelectedText] = useState("");
 
   const editorRef = useRef<HTMLDivElement>(null);
@@ -301,7 +301,7 @@ function ContratosPage() {
       }
     } catch (err) {
       console.error("Erro ao importar arquivo DOCX:", err);
-      alert("NÃ£o foi possÃ­vel ler o arquivo enviado. Certifique-se de que Ã© um arquivo .docx vÃ¡lido.");
+      alert("Não foi possível ler o arquivo enviado. Certifique-se de que é um arquivo .docx válido.");
     }
   };
 
@@ -315,7 +315,7 @@ function ContratosPage() {
   const insertFieldIntoDocument = (fieldKey: string, fieldLabel: string) => {
     const placeholderToken = `{{${fieldKey}}}`;
     
-    // Se houver seleÃ§Ã£o de texto no navegador
+    // Se houver seleção de texto no navegador
     const sel = window.getSelection();
     if (sel && sel.rangeCount > 0 && sel.toString().trim().length > 0) {
       const range = sel.getRangeAt(0);
@@ -337,7 +337,7 @@ function ContratosPage() {
       return;
     }
 
-    // Se o usuÃ¡rio clicou no editor sem seleÃ§Ã£o
+    // Se o usuário clicou no editor sem seleção
     if (editorRef.current) {
       const chipHtml = `<span class="docx-field-chip" contenteditable="false">${placeholderToken}</span>&nbsp;`;
       document.execCommand("insertHTML", false, chipHtml);
@@ -352,7 +352,7 @@ function ContratosPage() {
     try {
       await contractTemplatesService.deleteTemplate(tplId);
       loadData();
-      alert("Modelo de contrato excluÃ­do com sucesso.");
+      alert("Modelo de contrato excluído com sucesso.");
     } catch (e: any) {
       alert(`Erro ao excluir template: ${e.message}`);
     }
@@ -362,7 +362,7 @@ function ContratosPage() {
     name: "",
     email: "",
     phone: "",
-    role: "SÃ³cio Diretor",
+    role: "Sócio Diretor",
     cpf: "",
     address: "",
   });
@@ -373,7 +373,7 @@ function ContratosPage() {
       name: "",
       email: "",
       phone: "",
-      role: "SÃ³cio Diretor",
+      role: "Sócio Diretor",
       cpf: "",
       address: "",
     });
@@ -387,7 +387,7 @@ function ContratosPage() {
       name: s.name || "",
       email: s.email || "",
       phone: s.phone || "",
-      role: s.role || "SÃ³cio Diretor",
+      role: s.role || "Sócio Diretor",
       cpf: s.cpf || "",
       address: s.address || "",
     });
@@ -395,13 +395,13 @@ function ContratosPage() {
   };
 
   const handleDeleteSigner = async (signerId: string) => {
-    if (!confirm("Tem certeza de que deseja excluir este sÃ³cio assinante?")) return;
+    if (!confirm("Tem certeza de que deseja excluir este sócio assinante?")) return;
     try {
       await contractSignersService.deleteSigner(signerId);
       loadData();
-      alert("SÃ³cio assinante excluÃ­do com sucesso.");
+      alert("Sócio assinante excluído com sucesso.");
     } catch (e: any) {
-      alert(`Erro ao excluir sÃ³cio: ${e.message}`);
+      alert(`Erro ao excluir sócio: ${e.message}`);
     }
   };
 
@@ -411,7 +411,7 @@ function ContratosPage() {
       await contractSignersService.updateSigner(signer.id, { is_active: !signer.is_active });
       loadData();
     } catch (e: any) {
-      alert(`Erro ao atualizar status do sÃ³cio: ${e.message}`);
+      alert(`Erro ao atualizar status do sócio: ${e.message}`);
     }
   };
 
@@ -469,7 +469,7 @@ function ContratosPage() {
       <PageHeader
         breadcrumb="Documentos"
         title="Contratos & Editor Visual DOCX"
-        subtitle="Importe seus arquivos .DOCX e vincule os campos dinÃ¢micos preservando a formataÃ§Ã£o original."
+        subtitle="Importe seus arquivos .DOCX e vincule os campos dinâmicos preservando a formatação original."
       />
 
       <div className="page-container grid grid-cols-1 xl:grid-cols-12 gap-5">
@@ -494,12 +494,12 @@ function ContratosPage() {
           })}
         </aside>
 
-        {/* ConteÃºdo Principal */}
+        {/* Conteúdo Principal */}
         <div className="xl:col-span-9 space-y-5">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 bg-surface border border-border rounded-2xl">
               <Loader2 className="h-8 w-8 text-primary animate-spin mb-4" />
-              <p className="text-sm text-muted-foreground">Carregando mÃ³dulo de contratos...</p>
+              <p className="text-sm text-muted-foreground">Carregando módulo de contratos...</p>
             </div>
           ) : (
             <>
@@ -507,7 +507,7 @@ function ContratosPage() {
               {activeTab === "contratos" && (
                 <SectionCard
                   title="Contratos Emitidos"
-                  subtitle="HistÃ³rico de documentos gerados para os eventos da GOAT Bar"
+                  subtitle="Histórico de documentos gerados para os eventos da GOAT Bar"
                   action={
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -523,7 +523,7 @@ function ContratosPage() {
                 >
                   {filteredContracts.length === 0 ? (
                     <div className="p-12 text-center text-muted-foreground text-sm border-2 border-dashed border-border rounded-2xl">
-                      Nenhum contrato gerado ainda. Acesse a aba <b>Contrato</b> de qualquer evento para emitir documentos com preenchimento automÃ¡tico.
+                      Nenhum contrato gerado ainda. Acesse a aba <b>Contrato</b> de qualquer evento para emitir documentos com preenchimento automático.
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -553,7 +553,7 @@ function ContratosPage() {
                                 <span>{ec.event_name}</span>
                                 {ec.event_date && (
                                   <>
-                                    <span>â€¢</span>
+                                    <span>•</span>
                                     <span>{new Date(ec.event_date + "T00:00:00").toLocaleDateString("pt-BR")}</span>
                                   </>
                                 )}
@@ -601,7 +601,7 @@ function ContratosPage() {
                       <div>
                         <h3 className="font-display font-bold text-lg">Editor Visual de Contratos (.DOCX)</h3>
                         <p className="text-xs text-muted-foreground max-w-xl">
-                          Importe seu arquivo Word (.docx). O documento Ã© aberto preservando 100% das tabelas, cabeÃ§alhos e formataÃ§Ã£o original. VocÃª pode selecionar o texto desejado e vinculÃ¡-lo a qualquer campo do sistema!
+                          Importe seu arquivo Word (.docx). O documento é aberto preservando 100% das tabelas, cabeçalhos e formatação original. Você pode selecionar o texto desejado e vinculá-lo a qualquer campo do sistema!
                         </p>
                       </div>
                     </div>
@@ -632,12 +632,12 @@ function ContratosPage() {
                                     {t.name}
                                     {t.is_default && (
                                       <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-md border border-primary/20">
-                                        Modelo PadrÃ£o
+                                        Modelo Padrão
                                       </span>
                                     )}
                                   </div>
                                   <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                    {t.description || "Modelo de contrato com formataÃ§Ã£o preservada e campos dinÃ¢micos."}
+                                    {t.description || "Modelo de contrato com formatação preservada e campos dinâmicos."}
                                   </p>
                                 </div>
                                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-background border rounded-md text-muted-foreground shrink-0">
@@ -671,7 +671,7 @@ function ContratosPage() {
                                   onClick={() => setPreviewTemplate(t)}
                                   className="h-8 text-xs font-semibold px-2.5"
                                 >
-                                  <Eye className="h-3.5 w-3.5 mr-1" /> PrÃ©via
+                                  <Eye className="h-3.5 w-3.5 mr-1" /> Prévia
                                 </GhostButton>
                               </div>
 
@@ -684,7 +684,7 @@ function ContratosPage() {
                                     }}
                                     className="text-xs font-bold text-primary hover:underline"
                                   >
-                                    Tornar PadrÃ£o
+                                    Tornar Padrão
                                   </button>
                                 )}
                                 <button
@@ -708,7 +708,7 @@ function ContratosPage() {
                           <div>
                             <h4 className="font-display font-bold text-base text-foreground mb-1">Nenhum contrato importado ainda</h4>
                             <p className="text-xs max-w-md mx-auto">
-                              Clique em <b>"IMPORTAR MODELO (.DOCX)"</b> para subir seu contrato Word, abrir a folha visual e vincular os campos dinÃ¢micos.
+                              Clique em <b>"IMPORTAR MODELO (.DOCX)"</b> para subir seu contrato Word, abrir a folha visual e vincular os campos dinâmicos.
                             </p>
                           </div>
                         </div>
@@ -718,17 +718,17 @@ function ContratosPage() {
                 </div>
               )}
 
-              {/* TAB 3: SÃ“CIOS ASSINANTES */}
+              {/* TAB 3: SÓCIOS ASSINANTES */}
               {activeTab === "socios" && (
                 <SectionCard
-                  title="SÃ³cios Assinantes da GOAT Bar"
+                  title="Sócios Assinantes da GOAT Bar"
                   subtitle="Representantes legais cadastrados para constar como contratada nos contratos anexados"
                   action={
                     <PrimaryButton
                       onClick={openCreateSignerModal}
                       className="h-9 px-4 text-sm font-bold"
                     >
-                      <Plus className="h-4 w-4 mr-1" /> Novo SÃ³cio
+                      <Plus className="h-4 w-4 mr-1" /> Novo Sócio
                     </PrimaryButton>
                   }
                 >
@@ -744,7 +744,7 @@ function ContratosPage() {
                           <div className="font-display font-bold text-base flex items-center gap-2">
                             {s.name}
                             <span className="text-xs font-normal text-muted-foreground">
-                              ({s.role || "SÃ³cio Diretor"})
+                              ({s.role || "Sócio Diretor"})
                             </span>
                           </div>
                           <div className="text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
@@ -754,7 +754,7 @@ function ContratosPage() {
                           </div>
                           {s.address && (
                             <div className="text-xs text-primary font-medium mt-1">
-                              ðŸ“ EndereÃ§o: {s.address}
+                              📍 Endereço: {s.address}
                             </div>
                           )}
                         </div>
@@ -770,14 +770,14 @@ function ContratosPage() {
                             className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full cursor-pointer transition-opacity hover:opacity-80 ${
                               s.is_active ? "bg-success/15 text-success border border-success/20" : "bg-muted text-muted-foreground border"
                             }`}
-                            title="Clique para alternar o status do sÃ³cio"
+                            title="Clique para alternar o status do sócio"
                           >
                             {s.is_active ? "Ativo" : "Inativo"}
                           </button>
                           <button
                             onClick={() => handleDeleteSigner(s.id)}
                             className="text-xs text-destructive hover:bg-destructive/10 p-2 rounded-xl transition-colors"
-                            title="Excluir SÃ³cio Assinante"
+                            title="Excluir Sócio Assinante"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -787,18 +787,18 @@ function ContratosPage() {
 
                     {signers.length === 0 && (
                       <div className="text-center py-10 text-muted-foreground text-sm border-2 border-dashed border-border rounded-2xl">
-                        Nenhum sÃ³cio cadastrado. Cadastre o representante legal para substituiÃ§Ã£o do sÃ³cio assinante e seu endereÃ§o.
+                        Nenhum sócio cadastrado. Cadastre o representante legal para substituição do sócio assinante e seu endereço.
                       </div>
                     )}
                   </div>
                 </SectionCard>
               )}
 
-              {/* TAB 4: COPOS / UTENSÃLIOS */}
+              {/* TAB 4: COPOS / UTENSÍLIOS */}
               {activeTab === "copos" && (
                 <SectionCard
-                  title="Copos e UtensÃ­lios"
-                  subtitle="Tabela oficial de valores de reposiÃ§Ã£o para quebras nos eventos"
+                  title="Copos e Utensílios"
+                  subtitle="Tabela oficial de valores de reposição para quebras nos eventos"
                   action={
                     <PrimaryButton
                       onClick={() => setShowGlasswareModal(true)}
@@ -812,9 +812,9 @@ function ContratosPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-left bg-background/50">
-                          <th className="label-eyebrow px-6 py-3 border-y border-border">Nome do UtensÃ­lio</th>
+                          <th className="label-eyebrow px-6 py-3 border-y border-border">Nome do Utensílio</th>
                           <th className="label-eyebrow px-6 py-3 border-y border-border">Tipo</th>
-                          <th className="label-eyebrow px-6 py-3 border-y border-border">Valor de ReposiÃ§Ã£o</th>
+                          <th className="label-eyebrow px-6 py-3 border-y border-border">Valor de Reposição</th>
                           <th className="label-eyebrow px-6 py-3 border-y border-border">Status</th>
                         </tr>
                       </thead>
@@ -860,7 +860,7 @@ function ContratosPage() {
         onSaved={loadData}
       />
 
-      {/* MODAL VISUALIZAR PRÃ‰VIA DO CONTRATO EDITADO */}
+      {/* MODAL VISUALIZAR PRÉVIA DO CONTRATO EDITADO */}
       {previewTemplate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="w-full max-w-4xl bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden my-8">
@@ -870,7 +870,7 @@ function ContratosPage() {
                   <FileText className="h-5 w-5 text-primary" /> {previewTemplate.name}
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  SimulaÃ§Ã£o do contrato preenchido com dados de demonstraÃ§Ã£o da GOAT Bar
+                  Simulação do contrato preenchido com dados de demonstração da GOAT Bar
                 </p>
               </div>
               <button
@@ -883,8 +883,8 @@ function ContratosPage() {
 
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
               <div className="p-3 bg-primary/5 border border-primary/10 rounded-xl text-xs flex justify-between items-center">
-                <span className="font-bold text-primary">PrÃ©via com SubstituiÃ§Ã£o AutomÃ¡tica dos Campos:</span>
-                <span className="text-muted-foreground">FormataÃ§Ã£o e tabelas preservadas</span>
+                <span className="font-bold text-primary">Prévia com Substituição Automática dos Campos:</span>
+                <span className="text-muted-foreground">Formatação e tabelas preservadas</span>
               </div>
 
               <div
@@ -915,13 +915,13 @@ function ContratosPage() {
         </div>
       )}
 
-      {/* MODAL SÃ“CIO ASSINANTE */}
+      {/* MODAL SÓCIO ASSINANTE */}
       {showSignerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-md bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
               <h2 className="font-display text-lg font-bold">
-                {editingSigner ? `Editar SÃ³cio: ${editingSigner.name}` : "Novo SÃ³cio Assinante"}
+                {editingSigner ? `Editar Sócio: ${editingSigner.name}` : "Novo Sócio Assinante"}
               </h2>
               <button
                 onClick={() => setShowSignerModal(false)}
@@ -959,7 +959,7 @@ function ContratosPage() {
                     type="text"
                     value={newSigner.role}
                     onChange={(e) => setNewSigner({ ...newSigner, role: e.target.value })}
-                    placeholder="Ex: SÃ³cio Diretor"
+                    placeholder="Ex: Sócio Diretor"
                     className="w-full h-10 px-4 rounded-xl bg-input border border-border text-sm"
                   />
                 </div>
@@ -987,12 +987,12 @@ function ContratosPage() {
                 </div>
               </div>
               <div>
-                <label className="label-eyebrow block mb-1">EndereÃ§o Completo do SÃ³cio</label>
+                <label className="label-eyebrow block mb-1">Endereço Completo do Sócio</label>
                 <input
                   type="text"
                   value={newSigner.address}
                   onChange={(e) => setNewSigner({ ...newSigner, address: e.target.value })}
-                  placeholder="Ex: Rua Haddock Lobo, 500, Apto 12, Jardins - SÃ£o Paulo/SP"
+                  placeholder="Ex: Rua Haddock Lobo, 500, Apto 12, Jardins - São Paulo/SP"
                   className="w-full h-10 px-4 rounded-xl bg-input border border-border text-sm font-medium"
                 />
               </div>
@@ -1001,7 +1001,7 @@ function ContratosPage() {
               <GhostButton onClick={() => setShowSignerModal(false)}>Cancelar</GhostButton>
               <PrimaryButton
                 onClick={async () => {
-                  if (!newSigner.name) return alert("Preencha o nome do sÃ³cio.");
+                  if (!newSigner.name) return alert("Preencha o nome do sócio.");
                   const payload = {
                     ...newSigner,
                     cpf: onlyDigits(newSigner.cpf),
@@ -1009,23 +1009,23 @@ function ContratosPage() {
                   if (payload.cpf) {
                     const val = validateBrazilianDocument(payload.cpf);
                     if (!val.valid) {
-                      alert(`Documento do SÃ³cio InvÃ¡lido:\n${val.error || "O CPF informado Ã© invÃ¡lido."}`);
+                      alert(`Documento do Sócio Inválido:\n${val.error || "O CPF informado é inválido."}`);
                       return;
                     }
                   }
                   if (editingSigner) {
                     await contractSignersService.updateSigner(editingSigner.id, payload);
-                    alert("Dados do sÃ³cio atualizados com sucesso!");
+                    alert("Dados do sócio atualizados com sucesso!");
                   } else {
                     await contractSignersService.createSigner(payload);
-                    alert("SÃ³cio cadastrado com sucesso!");
+                    alert("Sócio cadastrado com sucesso!");
                   }
                   setShowSignerModal(false);
                   loadData();
                 }}
                 className="font-bold"
               >
-                {editingSigner ? "Atualizar SÃ³cio" : "Salvar SÃ³cio"}
+                {editingSigner ? "Atualizar Sócio" : "Salvar Sócio"}
               </PrimaryButton>
             </div>
           </div>
@@ -1037,7 +1037,7 @@ function ContratosPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
-              <h2 className="font-display text-lg font-bold">Novo Copo / UtensÃ­lio</h2>
+              <h2 className="font-display text-lg font-bold">Novo Copo / Utensílio</h2>
               <button
                 onClick={() => setShowGlasswareModal(false)}
                 className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"
@@ -1052,7 +1052,7 @@ function ContratosPage() {
                   type="text"
                   value={newGlassware.name}
                   onChange={(e) => setNewGlassware({ ...newGlassware, name: e.target.value })}
-                  placeholder="Ex: TaÃ§a Gin Crystal 600ml"
+                  placeholder="Ex: Taça Gin Crystal 600ml"
                   className="w-full h-10 px-4 rounded-xl bg-input border border-border text-sm font-medium"
                 />
               </div>
@@ -1063,14 +1063,14 @@ function ContratosPage() {
                   onChange={(e) => setNewGlassware({ ...newGlassware, type: e.target.value })}
                   className="w-full h-10 px-4 rounded-xl bg-input border border-border text-sm"
                 >
-                  <option value="TaÃ§a">TaÃ§a</option>
+                  <option value="Taça">Taça</option>
                   <option value="Copo">Copo</option>
                   <option value="Caneca">Caneca</option>
-                  <option value="UtensÃ­lio">UtensÃ­lio</option>
+                  <option value="Utensílio">Utensílio</option>
                 </select>
               </div>
               <div>
-                <label className="label-eyebrow block mb-1">Valor de ReposiÃ§Ã£o (R$)</label>
+                <label className="label-eyebrow block mb-1">Valor de Reposição (R$)</label>
                 <input
                   type="number"
                   value={newGlassware.replacement_value}

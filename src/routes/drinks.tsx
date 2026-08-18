@@ -91,7 +91,7 @@ function DrinksPage() {
             )}
           </div>
         }
-        subtitle="CatÃ¡logo completo com fichas tÃ©cnicas e precificaÃ§Ã£o."
+        subtitle="Catálogo completo com fichas técnicas e precificação."
         action={
           <PrimaryButton onClick={() => setEditingDrink(blankDrink)}>
             <Plus className="h-4 w-4 mr-2" /> Novo Drink
@@ -102,16 +102,16 @@ function DrinksPage() {
       <div className="page-container space-y-7">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
           <StatCard
-            label="Total no catÃ¡logo"
+            label="Total no catálogo"
             value={String(allDrinks.length)}
             icon={<Wine className="h-4 w-4" />}
           />
           <StatCard
-            label="Custo mÃ©dio"
+            label="Custo médio"
             value={fmtBRL(custoMedio)}
             icon={<TrendingUp className="h-4 w-4" />}
           />
-          <StatCard label="Margem mÃ©dia" value={`${margemMedia.toFixed(1)}%`} />
+          <StatCard label="Margem média" value={`${margemMedia.toFixed(1)}%`} />
         </div>
 
         {/* Filtros */}
@@ -139,7 +139,7 @@ function DrinksPage() {
           </select>
         </div>
 
-        <SectionCard title="CatÃ¡logo" subtitle={`${filtrados.length} drinks`}>
+        <SectionCard title="Catálogo" subtitle={`${filtrados.length} drinks`}>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtrados.map((d) => (
               <DrinkCard
@@ -148,7 +148,7 @@ function DrinksPage() {
                 onEdit={() => setEditingDrink(d)}
                 onDelete={() => {
                   if (
-                    window.confirm(`Excluir o drink "${d.nome}"? Esta aÃ§Ã£o nÃ£o pode ser desfeita.`)
+                    window.confirm(`Excluir o drink "${d.nome}"? Esta ação não pode ser desfeita.`)
                   ) {
                     deleteDrink(d.id);
                   }
@@ -226,7 +226,7 @@ function DrinkCard({
         {d.insumos && d.insumos.length > 0 && (
           <div className="mt-3 pt-3 border-t border-border/60 bg-surface/30 rounded-lg p-2 -mx-2">
             <div className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1.5 flex justify-between items-center">
-              <span>Ficha TÃ©cnica (Insumos)</span>
+              <span>Ficha Técnica (Insumos)</span>
               <span className="text-muted-foreground opacity-60">
                 Total: {fmtBRL(d.custoUnitario)}
               </span>
@@ -269,7 +269,7 @@ function DrinkCard({
                 {d.modalityConfig?.goatbotequim?.active
                   ? d.modalityConfig?.goatbotequim?.price
                     ? fmtBRL(d.modalityConfig?.goatbotequim?.price)
-                    : "S/ PreÃ§o"
+                    : "S/ Preço"
                   : "---"}
               </span>
               {d.modalityConfig?.goatbotequim?.active && d.modalityConfig?.goatbotequim?.price && (
@@ -345,7 +345,7 @@ function EditModal({
     "Rum",
     "Vodka",
     "Campari",
-    "CachaÃ§a",
+    "Cachaça",
     "Espumante",
     "Mocktail",
     "Gin",
@@ -367,7 +367,7 @@ function EditModal({
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border sticky top-0 bg-surface z-10">
           <div>
             <h2 className="font-display text-lg font-semibold">
-              {drink.id === "new" ? "Cadastrar Novo Item" : "GestÃ£o Multimodalidade"}
+              {drink.id === "new" ? "Cadastrar Novo Item" : "Gestão Multimodalidade"}
             </h2>
             <p className="text-xs text-muted-foreground">{nome || "Novo Item"}</p>
           </div>
@@ -380,7 +380,7 @@ function EditModal({
         </div>
 
         <div className="p-6 space-y-8 max-h-[75vh] overflow-y-auto">
-          {/* InformaÃ§Ãµes BÃ¡sicas */}
+          {/* Informações Básicas */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label-eyebrow block mb-2">Nome</label>
@@ -426,7 +426,7 @@ function EditModal({
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="label-eyebrow block mb-2">DescriÃ§Ã£o Curta</label>
+              <label className="label-eyebrow block mb-2">Descrição Curta</label>
               <input
                 type="text"
                 value={descricao}
@@ -436,10 +436,10 @@ function EditModal({
             </div>
           </div>
 
-          {/* ConfiguraÃ§Ã£o por Modalidade */}
+          {/* Configuração por Modalidade */}
           <div className="space-y-4">
             <h3 className="text-sm font-bold flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-primary" /> Canais de Venda e PrecificaÃ§Ã£o
+              <TrendingUp className="h-4 w-4 text-primary" /> Canais de Venda e Precificação
             </h3>
 
             <div className="grid grid-cols-1 gap-4">
@@ -459,7 +459,7 @@ function EditModal({
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <label className="text-[10px] uppercase font-bold text-muted-foreground block">
-                          Insumos (Ficha TÃ©cnica)
+                          Insumos (Ficha Técnica)
                         </label>
                         <GhostButton
                           onClick={() => setInsumos([...insumos, { nome: "", custo: 0 }])}
@@ -514,7 +514,7 @@ function EditModal({
                       <label className="text-[10px] uppercase font-bold text-muted-foreground whitespace-nowrap">
                         {insumos.length > 0
                           ? "Custo Total (Soma dos Insumos)"
-                          : "Custo Evento (R$) â€” sem ficha tÃ©cnica"}
+                          : "Custo Evento (R$) — sem ficha técnica"}
                       </label>
                       {insumos.length > 0 ? (
                         <div className="font-bold text-sm text-primary">{fmtBRL(insumosTotal)}</div>
@@ -562,7 +562,7 @@ function EditModal({
                     </div>
                     <div>
                       <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">
-                        PreÃ§o de Venda (R$)
+                        Preço de Venda (R$)
                       </label>
                       <input
                         type="number"
@@ -605,7 +605,7 @@ function EditModal({
                     </div>
                     <div>
                       <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">
-                        PreÃ§o de Venda (Opcional R$)
+                        Preço de Venda (Opcional R$)
                       </label>
                       <input
                         type="number"
