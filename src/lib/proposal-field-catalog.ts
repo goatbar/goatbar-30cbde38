@@ -13,6 +13,7 @@ export interface ProposalCatalogField {
     | "Equipe"
     | "Cardápio & Bebidas"
     | "Drinks"
+    | "Bebidas"
     | "Empresa"
     | "Campos Formatados / Calculados"
     | "Campos calculados";
@@ -32,9 +33,11 @@ export const OFFICIAL_CANVA_PROPOSAL_FIELDS = [
   "NOME_EVENTO",
   "DATA_ORCAMENTO",
   "DATA_EVENTO",
-  "INICIAIS_NOIVOS",
+  "INO",
+  "INA",
   "QUANTIDADE_PESSOAS",
   "DRINKS",
+  "BEBIDAS",
   "QTD_BARTENDERS",
   "QTD_COPEIRAS",
   "QTD_BAR_KEEPERS",
@@ -51,7 +54,9 @@ export interface CanvaDatasetField {
 }
 
 /** Preserva a ordem oficial e agrega campos extras do Canva, sem duplicar por key. */
-export function mergeOfficialCanvaFields(dataset: CanvaDatasetField[]): Required<CanvaDatasetField>[] {
+export function mergeOfficialCanvaFields(
+  dataset: CanvaDatasetField[],
+): Required<CanvaDatasetField>[] {
   const canvaByKey = new Map(dataset.map((field) => [field.key, field]));
   const merged: Required<CanvaDatasetField>[] = OFFICIAL_CANVA_PROPOSAL_FIELDS.map((key) => {
     const metadata = canvaByKey.get(key);
@@ -59,7 +64,11 @@ export function mergeOfficialCanvaFields(dataset: CanvaDatasetField[]): Required
   });
 
   for (const field of dataset) {
-    if (!OFFICIAL_CANVA_PROPOSAL_FIELDS.includes(field.key as typeof OFFICIAL_CANVA_PROPOSAL_FIELDS[number])) {
+    if (
+      !OFFICIAL_CANVA_PROPOSAL_FIELDS.includes(
+        field.key as (typeof OFFICIAL_CANVA_PROPOSAL_FIELDS)[number],
+      )
+    ) {
       merged.push({ key: field.key, name: field.name || field.key, type: field.type || "text" });
     }
   }
@@ -67,13 +76,29 @@ export function mergeOfficialCanvaFields(dataset: CanvaDatasetField[]): Required
 }
 
 export const PROPOSAL_FORMATTERS: FieldFormatterOption[] = [
-  { key: "raw", label: "Texto Original (Sem formatação)", description: "Insere o valor bruto do sistema." },
-  { key: "currency", label: "Moeda (R$ 1.234,56)", description: "Formata valores numéricos como reais." },
+  {
+    key: "raw",
+    label: "Texto Original (Sem formatação)",
+    description: "Insere o valor bruto do sistema.",
+  },
+  {
+    key: "currency",
+    label: "Moeda (R$ 1.234,56)",
+    description: "Formata valores numéricos como reais.",
+  },
   { key: "date_short", label: "Data Curta (DD/MM/AAAA)", description: "Exemplo: 20/10/2026" },
   { key: "date_long", label: "Data por Extenso", description: "Exemplo: 20 de Outubro de 2026" },
   { key: "integer", label: "Número Inteiro", description: "Remove casas decimais." },
-  { key: "uppercase", label: "TUDO EM MAIÚSCULAS", description: "Converte o texto para caixa alta." },
-  { key: "lowercase", label: "tudo em minúsculas", description: "Converte o texto para caixa baixa." },
+  {
+    key: "uppercase",
+    label: "TUDO EM MAIÚSCULAS",
+    description: "Converte o texto para caixa alta.",
+  },
+  {
+    key: "lowercase",
+    label: "tudo em minúsculas",
+    description: "Converte o texto para caixa baixa.",
+  },
   { key: "yes_no", label: "Sim / Não", description: "Converte booleanos para Sim ou Não." },
 ];
 
@@ -256,6 +281,14 @@ export const PROPOSAL_FIELD_CATALOG: ProposalCatalogField[] = [
     example: "Moscow Mule, Gin Tropical, Aperol Spritz, Negroni",
   },
   {
+    key: "budget.beverages",
+    label: "Bebidas selecionadas",
+    group: "Bebidas",
+    type: "list",
+    description: "Bebidas e itens de bebida lançados nesta versão do orçamento.",
+    example: "Água, Refrigerante, Espumante",
+  },
+  {
     key: "package.welcome_drinks",
     label: "Lista de Welcome Drinks",
     group: "Cardápio & Bebidas",
@@ -316,12 +349,20 @@ export const PROPOSAL_FIELD_CATALOG: ProposalCatalogField[] = [
 
   // ─── Campos Formatados / Calculados ───────────────────────
   {
-    key: "computed.couple_initials",
-    label: "Iniciais dos noivos",
+    key: "computed.groom_initial",
+    label: "Inicial do noivo",
     group: "Campos calculados",
     type: "text",
-    description: "Iniciais obtidas dos dois nomes reais do casal.",
-    example: "R | P",
+    description: "Inicial obtida do nome do noivo informado explicitamente no evento.",
+    example: "P",
+  },
+  {
+    key: "computed.bride_initial",
+    label: "Inicial da noiva",
+    group: "Campos calculados",
+    type: "text",
+    description: "Inicial obtida do nome da noiva informado explicitamente no evento.",
+    example: "R",
   },
   {
     key: "computed.final_payment_date",
@@ -397,7 +438,13 @@ export const PROPOSAL_FIELD_CATALOG: ProposalCatalogField[] = [
   },
 ];
 
-const VALID_FIELD_KEYS = new Set(PROPOSAL_FIELD_CATALOG.map((f) => f.key));
+// Aceito apenas para que configurações persistidas antes da separação INO/INA
+// continuem salvando e resolvendo. Não integra o catálogo exibido para novos mappings.
+const LEGACY_FIELD_KEYS = ["computed.couple_initials"] as const;
+const VALID_FIELD_KEYS = new Set([
+  ...PROPOSAL_FIELD_CATALOG.map((f) => f.key),
+  ...LEGACY_FIELD_KEYS,
+]);
 
 /**
  * Validates whether a given source_field_key exists in the official catalog.
@@ -428,15 +475,40 @@ function normalizeName(str: string): string {
  * Heuristic dictionary for intelligent auto-matching between Canva Data Fields and Goat Bar catalog keys.
  */
 const AUTO_MATCH_ALIASES: Record<string, string[]> = {
-  "event.client_name": ["clientname", "cliente", "nomecliente", "noivos", "nomecasal", "aniversariante", "contratante", "client"],
+  "event.client_name": [
+    "clientname",
+    "cliente",
+    "nomecliente",
+    "noivos",
+    "nomecasal",
+    "aniversariante",
+    "contratante",
+    "client",
+  ],
   "event.event_name": ["eventname", "nomeevento", "tituloevento", "evento"],
   "event.event_type": ["eventtype", "tipoevento", "categoriaevento", "tipo"],
   "event.event_date": ["eventdate", "dataevento", "data", "date", "diaevento"],
   "event.event_time": ["eventtime", "horario", "hora", "horainicio", "time"],
-  "event.guest_count": ["guestcount", "convidados", "numeroconvidados", "qtdconvidados", "guests", "pessoas", "qtdpessoas"],
+  "event.guest_count": [
+    "guestcount",
+    "convidados",
+    "numeroconvidados",
+    "qtdconvidados",
+    "guests",
+    "pessoas",
+    "qtdpessoas",
+  ],
   "event.location": ["location", "local", "localevento", "espaco", "cidade", "endereco"],
   "event.duration_hours": ["durationhours", "duracao", "duracaobar", "horasbar", "hours"],
-  "budget.total_value": ["totalvalue", "valortotal", "total", "investimento", "investimentototal", "preco", "valor"],
+  "budget.total_value": [
+    "totalvalue",
+    "valortotal",
+    "total",
+    "investimento",
+    "investimentototal",
+    "preco",
+    "valor",
+  ],
   "budget.discount_value": ["discountvalue", "desconto", "valordesconto"],
   "budget.payment_terms": ["paymentterms", "formapagamento", "condicoespagamento", "pagamento"],
   "budget.bartenders_count": ["bartenderscount", "bartenders", "qtdbartenders"],
@@ -452,7 +524,11 @@ const AUTO_MATCH_ALIASES: Record<string, string[]> = {
   "company.instagram": ["companyinstagram", "instagram", "insta"],
   "computed.proposal_date": ["proposaldate", "dataorcamento", "dataemissao", "propostaemissao"],
   "computed.event_date_formatted": ["eventdateformatted", "dataextenso", "dataeventoextenso"],
-  "computed.total_value_formatted": ["totalvalueformatted", "valortotalformatado", "precofromatado"],
+  "computed.total_value_formatted": [
+    "totalvalueformatted",
+    "valortotalformatado",
+    "precofromatado",
+  ],
   "computed.total_value_in_words": ["totalvalueinwords", "valorextenso", "totalextenso"],
 };
 
@@ -460,7 +536,7 @@ const AUTO_MATCH_ALIASES: Record<string, string[]> = {
  * Intelligent Auto-Match algorithm to suggest pairings between Canva Data Fields and Goat Bar catalog items.
  */
 export function suggestAutoMatches(
-  canvaFields: Array<{ key: string; name?: string; type?: string }>
+  canvaFields: Array<{ key: string; name?: string; type?: string }>,
 ): Record<string, string> {
   const suggestions: Record<string, string> = {};
 
@@ -490,7 +566,7 @@ export function suggestAutoMatches(
             aliases.some(
               (alias) =>
                 alias.length >= 4 &&
-                (normalizedKey.includes(alias) || normalizedName.includes(alias))
+                (normalizedKey.includes(alias) || normalizedName.includes(alias)),
             )
           ) {
             matchedCatalogKey = catalogKey;

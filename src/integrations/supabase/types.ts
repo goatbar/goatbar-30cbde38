@@ -332,6 +332,7 @@ export type Database = {
           pending_value: number | null
           profit_value: number | null
           selected_drinks: Json | null
+          beverages: Json
           status: string | null
           team_total_value: number | null
           updated_at: string | null
@@ -383,6 +384,7 @@ export type Database = {
           pending_value?: number | null
           profit_value?: number | null
           selected_drinks?: Json | null
+          beverages?: Json
           status?: string | null
           team_total_value?: number | null
           updated_at?: string | null
@@ -434,6 +436,7 @@ export type Database = {
           pending_value?: number | null
           profit_value?: number | null
           selected_drinks?: Json | null
+          beverages?: Json
           status?: string | null
           team_total_value?: number | null
           updated_at?: string | null
@@ -658,6 +661,8 @@ export type Database = {
         Row: {
           city: string | null
           client_name: string
+          groom_name: string | null
+          bride_name: string | null
           created_at: string | null
           current_budget_value: number | null
           current_profit_value: number | null
@@ -683,6 +688,8 @@ export type Database = {
         Insert: {
           city?: string | null
           client_name: string
+          groom_name?: string | null
+          bride_name?: string | null
           created_at?: string | null
           current_budget_value?: number | null
           current_profit_value?: number | null
@@ -708,6 +715,8 @@ export type Database = {
         Update: {
           city?: string | null
           client_name?: string
+          groom_name?: string | null
+          bride_name?: string | null
           created_at?: string | null
           current_budget_value?: number | null
           current_profit_value?: number | null
