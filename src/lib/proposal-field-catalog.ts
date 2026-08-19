@@ -98,7 +98,7 @@ export function auditCanvaFields(
   };
 }
 
-/** Preserva a ordem oficial e agrega campos extras do Canva, sem duplicar por key. */
+/** Preserva exatamente os 15 campos oficiais. Extras são exibidos apenas na auditoria. */
 export function mergeOfficialCanvaFields(
   dataset: CanvaDatasetField[],
 ): Required<CanvaDatasetField>[] {
@@ -116,18 +116,6 @@ export function mergeOfficialCanvaFields(
     };
   });
 
-  for (const field of dataset) {
-    // O Data Field antigo pode continuar no Canva/banco, mas não volta à experiência
-    // de configuração de modelos novos.
-    const normalized = normalizeCanvaFieldKey(field.key);
-    if (normalized === "INICIAIS_NOIVOS") continue;
-    if (
-      !OFFICIAL_CANVA_PROPOSAL_FIELDS.some((key) => normalizeCanvaFieldKey(key) === normalized) &&
-      !merged.some((item) => normalizeCanvaFieldKey(item.key) === normalized)
-    ) {
-      merged.push({ key: field.key, name: field.name || field.key, type: field.type || "text" });
-    }
-  }
   return merged;
 }
 
