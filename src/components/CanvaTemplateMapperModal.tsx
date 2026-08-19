@@ -40,6 +40,8 @@ import {
   PROPOSAL_FORMATTERS,
   mergeOfficialCanvaFields,
   auditCanvaFields,
+  normalizeCanvaFieldKey,
+  OFFICIAL_CANVA_PROPOSAL_FIELDS,
   getFieldCatalogItem,
   type ProposalCatalogField,
 } from "@/lib/proposal-field-catalog";
@@ -65,7 +67,10 @@ export interface CanvaFieldState {
   required: boolean;
   isRemoved?: boolean;
   existsInCanva: boolean;
+  expectedKey: string;
 }
+
+type FieldFilter = "all" | "mapped" | "unmapped" | "valid" | "missing";
 
 export function CanvaTemplateMapperModal({
   template,
@@ -81,13 +86,13 @@ export function CanvaTemplateMapperModal({
 
   // Template metadata
   const [selectedBrandTemplateId, setSelectedBrandTemplateId] = useState<string | null>(
-    template.canva_brand_template_id || null
+    template.canva_brand_template_id || null,
   );
   const [brandTemplateTitle, setBrandTemplateTitle] = useState<string>(
-    template.canva_brand_template_title || ""
+    template.canva_brand_template_title || "",
   );
   const [brandTemplateThumbnail, setBrandTemplateThumbnail] = useState<string | null>(
-    template.canva_brand_template_thumbnail_url || null
+    template.canva_brand_template_thumbnail_url || null,
   );
 
   // Brand templates list picker state
@@ -100,9 +105,13 @@ export function CanvaTemplateMapperModal({
 
   // Data fields state
   const [fields, setFields] = useState<CanvaFieldState[]>([]);
-  const [canvaDatasetFields, setCanvaDatasetFields] = useState<Array<{ key: string; name: string; type: string }>>([]);
+  const [canvaDatasetFields, setCanvaDatasetFields] = useState<
+    Array<{ key: string; name: string; type: string }>
+  >([]);
   const [selectedFieldIndex, setSelectedFieldIndex] = useState<number | null>(null);
   const [fieldSearch, setFieldSearch] = useState("");
+  const [fieldFilter, setFieldFilter] = useState<FieldFilter>("all");
+  const [legacyMappings, setLegacyMappings] = useState<ProposalTemplateFieldMapping[]>([]);
 
   // Visual preview zoom state
   const [zoomLevel, setZoomLevel] = useState<number>(100);
@@ -156,7 +165,7 @@ export function CanvaTemplateMapperModal({
 
   const syncFieldsWithCanva = async (
     brandTemplateId: string,
-    existingMappings?: ProposalTemplateFieldMapping[]
+    existingMappings?: ProposalTemplateFieldMapping[],
   ) => {
     setSyncing(true);
     setApiError(null);
@@ -177,9 +186,8 @@ export function CanvaTemplateMapperModal({
       const canvaFields = mergeOfficialCanvaFields(realDatasetFields);
 
       // Current mappings from state or existing records
-      const currentMappings =
-        existingMappings ||
-        fields.map((f) => ({
+      const currentMappings = existingMappings || [
+        ...fields.map((f) => ({
           canva_field_key: f.key,
           canva_field_type: f.type,
           source_type: f.source_type,
@@ -188,24 +196,38 @@ export function CanvaTemplateMapperModal({
           formatter: f.formatter,
           required: f.required,
           template_id: template.id,
-        }));
+        })),
+        ...legacyMappings,
+      ];
 
-      const mappingsMap = new Map(currentMappings.map((m) => [m.canva_field_key, m]));
-      const canvaKeySet = new Set(realDatasetFields.map((f) => f.key));
-      const displayedKeySet = new Set(canvaFields.map((f) => f.key));
+      const mappingsMap = new Map(
+        currentMappings.map((m) => [normalizeCanvaFieldKey(m.canva_field_key), m]),
+      );
+      setLegacyMappings(
+        currentMappings.filter(
+          (m) => normalizeCanvaFieldKey(m.canva_field_key) === "INICIAIS_NOIVOS",
+        ),
+      );
+      const canvaKeySet = new Set(realDatasetFields.map((f) => normalizeCanvaFieldKey(f.key)));
+      const displayedKeySet = new Set(canvaFields.map((f) => normalizeCanvaFieldKey(f.key)));
 
       const nextFields: CanvaFieldState[] = [];
       let idxCounter = 1;
 
       // Campos oficiais sempre vêm primeiro; metadata e extras da Canva são mesclados por key.
       for (const cf of canvaFields) {
-        const existing = mappingsMap.get(cf.key);
+        const normalizedKey = normalizeCanvaFieldKey(cf.key);
+        const existing = mappingsMap.get(normalizedKey);
+        const expectedKey =
+          OFFICIAL_CANVA_PROPOSAL_FIELDS.find(
+            (key) => normalizeCanvaFieldKey(key) === normalizedKey,
+          ) || cf.key;
         const sourceType: SourceType =
           existing?.source_type === "static"
             ? "static"
             : existing?.source_type === "none"
-            ? "none"
-            : "field";
+              ? "none"
+              : "field";
 
         nextFields.push({
           index: idxCounter++,
@@ -215,16 +237,20 @@ export function CanvaTemplateMapperModal({
           source_type: sourceType,
           source_field_key: existing?.source_field_key || null,
           static_value: existing?.static_value || null,
-          formatter: existing?.formatter || (cf.key.toLowerCase().includes("valor") ? "currency" : "raw"),
+          formatter:
+            existing?.formatter || (cf.key.toLowerCase().includes("valor") ? "currency" : "raw"),
           required: Boolean(existing?.required),
           isRemoved: false,
-          existsInCanva: canvaKeySet.has(cf.key),
+          existsInCanva: canvaKeySet.has(normalizedKey),
+          expectedKey,
         });
       }
 
       // 2. Add previously mapped fields that no longer exist in Canva (marked as removed)
-      for (const [key, mapping] of mappingsMap.entries()) {
-        if (!displayedKeySet.has(key)) {
+      for (const [normalizedKey, mapping] of mappingsMap.entries()) {
+        if (normalizedKey === "INICIAIS_NOIVOS") continue;
+        if (!displayedKeySet.has(normalizedKey)) {
+          const key = mapping.canva_field_key;
           nextFields.push({
             index: idxCounter++,
             key,
@@ -237,6 +263,7 @@ export function CanvaTemplateMapperModal({
             required: Boolean(mapping.required),
             isRemoved: true,
             existsInCanva: false,
+            expectedKey: key,
           });
         }
       }
@@ -287,9 +314,7 @@ export function CanvaTemplateMapperModal({
 
   const updateSelectedField = (patch: Partial<CanvaFieldState>) => {
     if (selectedFieldIndex === null) return;
-    setFields((prev) =>
-      prev.map((f, i) => (i === selectedFieldIndex ? { ...f, ...patch } : f))
-    );
+    setFields((prev) => prev.map((f, i) => (i === selectedFieldIndex ? { ...f, ...patch } : f)));
   };
 
   const handleClearSelectedField = () => {
@@ -360,25 +385,43 @@ export function CanvaTemplateMapperModal({
     if (f.source_type === "none") return true;
     return false;
   });
-  const mappingAudit = auditCanvaFields(canvaDatasetFields, mappedFields.map((field) => field.key));
+  const mappingAudit = auditCanvaFields(canvaDatasetFields, [
+    ...mappedFields.map((field) => field.key),
+    ...legacyMappings.map((mapping) => mapping.canva_field_key),
+  ]);
   const mappedCount = mappingAudit.configuredMappingCount;
   const validMappedCount = mappingAudit.validMappingCount;
-  const unmappedCount = activeFields.length - mappedCount;
-  const isComplete = activeFields.length > 0 && unmappedCount === 0 && mappingAudit.missingMappingKeys.length === 0;
+  const unmappedCount = activeFields.length - (mappedCount - mappingAudit.legacyMappingKeys.length);
+  const isComplete =
+    activeFields.length > 0 && unmappedCount === 0 && mappingAudit.missingMappingKeys.length === 0;
 
   // Filtered fields list by search
-  const filteredFields = fields.filter((f) =>
-    f.key.toLowerCase().includes(fieldSearch.toLowerCase()) ||
-    f.name.toLowerCase().includes(fieldSearch.toLowerCase()) ||
-    (f.source_field_key && f.source_field_key.toLowerCase().includes(fieldSearch.toLowerCase()))
-  );
+  const filteredFields = fields.filter((f) => {
+    const isMapped =
+      f.source_type === "none" ||
+      (f.source_type === "field" && Boolean(f.source_field_key)) ||
+      (f.source_type === "static" && Boolean(f.static_value?.trim()));
+    const matchesFilter =
+      fieldFilter === "all" ||
+      (fieldFilter === "mapped" && isMapped) ||
+      (fieldFilter === "unmapped" && !isMapped) ||
+      (fieldFilter === "valid" && f.existsInCanva) ||
+      (fieldFilter === "missing" && !f.existsInCanva);
+    const query = fieldSearch.trim().toLowerCase();
+    return (
+      matchesFilter &&
+      (!query ||
+        [f.key, f.expectedKey, f.name, f.source_field_key || ""].some((value) =>
+          value.toLowerCase().includes(query),
+        ))
+    );
+  });
 
   const selectedField = selectedFieldIndex !== null ? fields[selectedFieldIndex] : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-3 md:p-6 animate-in fade-in">
       <div className="w-full max-w-[1400px] h-[92vh] bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95">
-        
         {/* ─── TOP HEADER ────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-6 py-3.5 border-b border-border bg-card">
           <div className="flex items-center gap-3">
@@ -403,6 +446,16 @@ export function CanvaTemplateMapperModal({
           </div>
 
           <div className="flex items-center gap-2">
+            {selectedBrandTemplateId && (
+              <button
+                onClick={() => syncFieldsWithCanva(selectedBrandTemplateId)}
+                disabled={syncing}
+                className="h-8 px-3 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} /> Atualizar
+                Dados
+              </button>
+            )}
             <button
               onClick={handleOpenPicker}
               className="h-8 px-3 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -422,10 +475,8 @@ export function CanvaTemplateMapperModal({
 
         {/* ─── WORKSPACE (2 COLUMNS: PREVIEW + FIELD INSPECTOR) ──── */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 min-h-0 overflow-hidden">
-          
           {/* ─── LEFT COLUMN: VISUAL PREVIEW & ZOOM WORKSPACE ───── */}
-          <div className="lg:col-span-7 border-r border-border flex flex-col bg-background/50 overflow-hidden relative">
-            
+          <div className="lg:col-span-5 border-r border-border flex flex-col bg-background/50 overflow-hidden relative min-h-[280px]">
             {/* Visual Toolbar */}
             <div className="px-4 py-2.5 border-b border-border/80 bg-card/60 flex items-center justify-between text-xs">
               <div className="flex items-center gap-1 text-muted-foreground font-medium">
@@ -482,7 +533,8 @@ export function CanvaTemplateMapperModal({
                     Nenhum Brand Template vinculado
                   </h4>
                   <p className="text-xs text-muted-foreground mb-4">
-                    Vincule um Brand Template da sua conta Canva para visualizar o design e realizar o mapeamento manual.
+                    Vincule um Brand Template da sua conta Canva para visualizar o design e realizar
+                    o mapeamento manual.
                   </p>
                   <PrimaryButton onClick={handleOpenPicker} className="text-xs h-9 px-4 mx-auto">
                     Selecionar Brand Template
@@ -515,25 +567,34 @@ export function CanvaTemplateMapperModal({
             {/* Preview Footer info */}
             {selectedBrandTemplateId && (
               <div className="px-4 py-2 bg-card/40 border-t border-border/60 flex items-center justify-between text-[11px] text-muted-foreground">
-                <span className="truncate">
-                  {brandTemplateTitle || "Brand Template Vinculado"}
-                </span>
+                <span className="truncate">{brandTemplateTitle || "Brand Template Vinculado"}</span>
                 <span>Visualização Oficial Canva API</span>
               </div>
             )}
           </div>
 
           {/* ─── RIGHT COLUMN: NUMBERED FIELDS & INSPECTOR WORKSPACE ── */}
-          <div className="lg:col-span-5 flex flex-col bg-surface overflow-hidden">
-            
+          <div className="lg:col-span-7 flex flex-col bg-surface overflow-hidden min-w-0">
             {/* Metrics & Sync Bar */}
             <div className="p-4 border-b border-border bg-card/40 space-y-3">
-              <h3 className="font-display font-semibold text-sm text-foreground">Mapeamento de Campos</h3>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                <span>Campos oficiais Goat Bar: {mappingAudit.officialCount}</span>
-                <span>Data Fields encontrados no Canva: {mappingAudit.datasetCount}</span>
-                <span>Mappings configurados: {mappedCount}</span>
-                <span>Mappings válidos no Canva: {validMappedCount}</span>
+              <h3 className="font-display font-semibold text-sm text-foreground">
+                Mapeamento de Campos
+              </h3>
+              <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
+                {[
+                  ["Campos oficiais Goat Bar", mappingAudit.officialCount],
+                  ["Data Fields Canva", mappingAudit.datasetCount],
+                  ["Mappings configurados", mappedCount],
+                  ["Mappings válidos", validMappedCount],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="rounded-lg border border-border bg-surface px-3 py-2 min-w-0"
+                  >
+                    <div className="text-[10px] text-muted-foreground truncate">{label}</div>
+                    <div className="text-lg font-semibold leading-5">{value}</div>
+                  </div>
+                ))}
               </div>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -544,47 +605,91 @@ export function CanvaTemplateMapperModal({
                         : "bg-amber-500/15 text-amber-400 border-amber-500/30"
                     }`}
                   >
-                    {isComplete ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-                    {isComplete ? "MAPEAMENTO COMPLETO" : mappingAudit.missingMappingKeys.length > 0 ? "Mapeamento configurado, mas existem campos ausentes no Canva" : "Mapeamento Incompleto"}
+                    {isComplete ? (
+                      <CheckCircle2 className="h-3 w-3" />
+                    ) : (
+                      <AlertTriangle className="h-3 w-3" />
+                    )}
+                    {isComplete
+                      ? "MAPEAMENTO COMPLETO"
+                      : mappingAudit.missingMappingKeys.length > 0
+                        ? "Mapeamento configurado, mas existem campos ausentes no Canva"
+                        : "Mapeamento Incompleto"}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {validMappedCount} de {mappedCount} mappings válidos
                   </span>
                 </div>
-
-                {selectedBrandTemplateId && (
-                  <button
-                    onClick={() => syncFieldsWithCanva(selectedBrandTemplateId)}
-                    disabled={syncing}
-                    className="h-7 px-2.5 rounded-lg border border-border bg-surface text-[11px] font-medium text-foreground hover:bg-muted flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-                    title="Recarregar Data Fields do Canva"
-                  >
-                    <RefreshCw className={`h-3 w-3 ${syncing ? "animate-spin text-primary" : ""}`} />
-                    {syncing ? "Sincronizando..." : "Atualizar Dados"}
-                  </button>
-                )}
               </div>
 
               {mappingAudit.missingMappingKeys.length > 0 && (
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-300">
                   <p className="font-semibold">Campos ausentes no Brand Template Canva:</p>
                   <ul className="mt-1 list-disc pl-5 font-mono">
-                    {mappingAudit.missingMappingKeys.map((key) => <li key={key}>{key}</li>)}
+                    {mappingAudit.missingMappingKeys.map((key) => (
+                      <li key={key}>{key}</li>
+                    ))}
                   </ul>
                 </div>
               )}
 
-              {/* Search bar */}
-              <div className="relative">
-                <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  value={fieldSearch}
-                  onChange={(e) => setFieldSearch(e.target.value)}
-                  placeholder="Buscar Data Field do Canva..."
-                  className="w-full h-8 pl-8 pr-3 rounded-lg bg-input border border-border text-xs focus:border-primary focus:outline-none transition-colors"
-                />
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={fieldSearch}
+                    onChange={(e) => setFieldSearch(e.target.value)}
+                    placeholder="Buscar campo ou Data Field..."
+                    className="w-full h-8 pl-8 pr-3 rounded-lg bg-input border border-border text-xs focus:border-primary focus:outline-none transition-colors"
+                  />
+                </div>
+                <select
+                  aria-label="Filtrar campos"
+                  value={fieldFilter}
+                  onChange={(e) => setFieldFilter(e.target.value as FieldFilter)}
+                  className="h-8 rounded-lg bg-input border border-border px-2 text-xs"
+                >
+                  <option value="all">Todos</option>
+                  <option value="mapped">Mapeados</option>
+                  <option value="unmapped">Não mapeados</option>
+                  <option value="valid">Válidos no Canva</option>
+                  <option value="missing">Ausentes no Canva</option>
+                </select>
               </div>
+              <details className="rounded-lg border border-border bg-surface px-3 py-2 text-xs">
+                <summary className="cursor-pointer font-semibold">
+                  Data Fields encontrados no Canva ({mappingAudit.datasetCount})
+                </summary>
+                <div className="mt-2 flex max-h-24 flex-wrap gap-1 overflow-y-auto">
+                  {canvaDatasetFields.map((field) => (
+                    <code key={field.key} className="rounded bg-muted px-1.5 py-0.5">
+                      {field.key}
+                    </code>
+                  ))}
+                  {!canvaDatasetFields.length && (
+                    <span className="text-muted-foreground">Nenhum Data Field encontrado.</span>
+                  )}
+                </div>
+              </details>
+              {legacyMappings.length > 0 && (
+                <div className="rounded-lg border border-border p-2 text-xs">
+                  <strong>Mappings legados</strong>
+                  {legacyMappings.map((mapping) => (
+                    <div key={mapping.canva_field_key} className="mt-1 flex justify-between">
+                      <code>{mapping.canva_field_key}</code>
+                      <button
+                        className="text-danger"
+                        onClick={() =>
+                          setLegacyMappings((items) => items.filter((item) => item !== mapping))
+                        }
+                      >
+                        remover legado
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Error Banner */}
@@ -600,7 +705,9 @@ export function CanvaTemplateMapperModal({
               {loading ? (
                 <div className="py-12 flex flex-col items-center justify-center">
                   <Loader2 className="h-6 w-6 text-primary animate-spin mb-2" />
-                  <span className="text-xs text-muted-foreground">Consultando Data Fields do Canva...</span>
+                  <span className="text-xs text-muted-foreground">
+                    Consultando Data Fields do Canva...
+                  </span>
                 </div>
               ) : !selectedBrandTemplateId ? (
                 <div className="p-8 text-center text-xs text-muted-foreground">
@@ -616,8 +723,9 @@ export function CanvaTemplateMapperModal({
                       Nenhum campo dinâmico encontrado
                     </h4>
                     <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
-                      Esse Brand Template ainda não possui Data Fields configurados para preenchimento.
-                      Configure os campos dinâmicos no Brand Template dentro do Canva e depois clique no botão abaixo.
+                      Esse Brand Template ainda não possui Data Fields configurados para
+                      preenchimento. Configure os campos dinâmicos no Brand Template dentro do Canva
+                      e depois clique no botão abaixo.
                     </p>
                   </div>
                   <button
@@ -634,96 +742,62 @@ export function CanvaTemplateMapperModal({
                   Nenhum Data Field encontrado para a busca "{fieldSearch}".
                 </div>
               ) : (
-                filteredFields.map((field) => {
-                  const isSelected = selectedField?.key === field.key;
-                  const isMapped =
-                    field.source_type === "field"
-                      ? Boolean(field.source_field_key)
-                      : field.source_type === "static"
-                      ? Boolean(field.static_value)
-                      : field.source_type === "none";
-
-                  const catalogItem = field.source_field_key ? getFieldCatalogItem(field.source_field_key) : null;
-
-                  return (
-                    <div
-                      key={field.key}
-                      onClick={() => {
-                        const originalIndex = fields.findIndex((f) => f.key === field.key);
-                        setSelectedFieldIndex(originalIndex);
-                      }}
-                      className={`p-3.5 transition-all cursor-pointer flex items-start gap-3 ${
-                        isSelected
-                          ? "bg-primary/10 border-l-4 border-l-primary"
-                          : "hover:bg-muted/30 border-l-4 border-l-transparent"
-                      } ${field.isRemoved ? "bg-red-500/5 opacity-75" : ""}`}
-                    >
-                      {/* Number badge */}
-                      <div
-                        className={`h-6 w-6 rounded-full text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 ${
-                          isSelected
-                            ? "bg-primary text-primary-foreground"
-                            : isMapped
-                            ? "bg-success/20 text-[#22c55e] border border-[rgba(34,197,94,0.35)]"
-                            : "bg-muted text-muted-foreground border border-border"
-                        }`}
+                <div className="min-w-[680px]">
+                  <div className="sticky top-0 z-10 grid grid-cols-[1.3fr_.5fr_1.3fr_1.3fr_.45fr] gap-2 border-b border-border bg-card px-3 py-2 text-[10px] font-semibold uppercase text-muted-foreground">
+                    <span>Campo oficial Goat Bar</span>
+                    <span>Tipo</span>
+                    <span>Data Field Canva</span>
+                    <span>Status</span>
+                    <span>Ações</span>
+                  </div>
+                  {filteredFields.map((field) => {
+                    const originalIndex = fields.indexOf(field);
+                    const isSelected = selectedFieldIndex === originalIndex;
+                    const isMapped =
+                      field.source_type === "none" ||
+                      (field.source_type === "field" && Boolean(field.source_field_key)) ||
+                      (field.source_type === "static" && Boolean(field.static_value?.trim()));
+                    const divergent = field.existsInCanva && field.key !== field.expectedKey;
+                    return (
+                      <button
+                        type="button"
+                        key={normalizeCanvaFieldKey(field.key)}
+                        onClick={() => setSelectedFieldIndex(originalIndex)}
+                        className={`grid min-h-[56px] w-full grid-cols-[1.3fr_.5fr_1.3fr_1.3fr_.45fr] items-center gap-2 border-b border-border/60 px-3 py-2 text-left text-xs hover:bg-muted/30 ${isSelected ? "bg-primary/10 ring-1 ring-inset ring-primary/30" : ""}`}
                       >
-                        {field.index}
-                      </div>
-
-                      {/* Field details */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-mono text-xs font-semibold text-foreground truncate">
-                            {field.key}
+                        <code className="truncate font-semibold" title={field.expectedKey}>
+                          {field.expectedKey}
+                        </code>
+                        <span className="uppercase text-muted-foreground">{field.type}</span>
+                        <code className="truncate" title={field.key}>
+                          {field.existsInCanva ? field.key : "—"}
+                        </code>
+                        <span className="flex flex-wrap gap-1">
+                          <span
+                            className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold ${field.existsInCanva ? "border-green-500/30 bg-green-500/10 text-green-500" : "border-amber-500/30 bg-amber-500/10 text-amber-500"}`}
+                          >
+                            {field.existsInCanva ? "✓ VÁLIDO" : "⚠ AUSENTE NO CANVA"}
                           </span>
-                          <span className="text-[10px] uppercase font-mono px-1.5 py-0.2 rounded bg-secondary text-secondary-foreground">
-                            {field.type}
-                          </span>
-                          <span className={`text-[10px] px-1.5 py-0.2 rounded border ${field.existsInCanva ? "bg-success/15 text-[#22c55e] border-[rgba(34,197,94,0.35)]" : "bg-amber-500/15 text-amber-400 border-amber-500/30"}`}>
-                            {field.existsInCanva ? "CANVA FIELD" : "AUSENTE NO CANVA"}
-                          </span>
-                        </div>
-
-                        {/* Mapping summary */}
-                        <div className="text-xs text-muted-foreground truncate">
-                          {isMapped && <div className="mb-0.5 text-[#22c55e] font-medium">✓ MAPEADO</div>}
-                          {field.source_type === "field" && field.source_field_key ? (
-                            <span className="text-foreground font-medium flex items-center gap-1">
-                              <span className="text-xs text-[#22c55e]">✓</span>
-                              {catalogItem?.label || field.source_field_key}
-                              <span className="text-[10px] text-muted-foreground">({field.formatter})</span>
+                          {divergent && (
+                            <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-500">
+                              ⚠ KEY DIVERGENTE
                             </span>
-                          ) : field.source_type === "static" && field.static_value ? (
-                            <span className="text-foreground font-medium flex items-center gap-1">
-                              <span className="text-xs text-[#22c55e]">✓</span>
-                              Texto fixo: "{field.static_value}"
-                            </span>
-                          ) : field.source_type === "none" ? (
-                            <span className="text-muted-foreground italic flex items-center gap-1">
-                              <Ban className="h-3 w-3" /> Não preencher
-                            </span>
-                          ) : (
-                            <span className="text-amber-400 font-medium">○ Não mapeado</span>
                           )}
-                        </div>
-                      </div>
-
-                      {/* Required indicator */}
-                      {field.required && (
-                        <span className="text-[10px] text-primary font-semibold border border-primary/30 px-1.5 py-0.5 rounded bg-primary/5 shrink-0">
-                          Obrigatório
+                          <span className="rounded border border-border px-1.5 py-0.5 text-[9px] font-semibold">
+                            {isMapped ? "✓ MAPEADO" : "○ NÃO MAPEADO"}
+                          </span>
                         </span>
-                      )}
-                    </div>
-                  );
-                })
+                        <span className="font-semibold text-primary">editar</span>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
             {/* ─── FIELD INSPECTOR & MANUAL CONFIGURATION PANEL ──── */}
             {selectedField && (
-              <div className="border-t border-border bg-card p-4 space-y-3.5 shadow-inner">
+              <div className="max-h-[42%] overflow-y-auto border-t border-border bg-card p-4 space-y-3.5 shadow-inner">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">
@@ -792,7 +866,9 @@ export function CanvaTemplateMapperModal({
                       </label>
                       <select
                         value={selectedField.source_field_key || ""}
-                        onChange={(e) => updateSelectedField({ source_field_key: e.target.value || null })}
+                        onChange={(e) =>
+                          updateSelectedField({ source_field_key: e.target.value || null })
+                        }
                         className="w-full h-8 px-2.5 rounded-lg bg-input border border-border text-xs focus:border-primary focus:outline-none transition-colors"
                       >
                         <option value="">-- Selecione o campo do Goat Bar --</option>
@@ -861,7 +937,10 @@ export function CanvaTemplateMapperModal({
                     onChange={(e) => updateSelectedField({ required: e.target.checked })}
                     className="rounded border-border text-primary focus:ring-primary bg-input cursor-pointer"
                   />
-                  <label htmlFor="requiredToggle" className="text-xs text-muted-foreground select-none cursor-pointer">
+                  <label
+                    htmlFor="requiredToggle"
+                    className="text-xs text-muted-foreground select-none cursor-pointer"
+                  >
                     Campo Obrigatório no Goat Bar (valida antes da geração)
                   </label>
                 </div>
@@ -935,7 +1014,9 @@ export function CanvaTemplateMapperModal({
                     Consultando templates na Canva Connect API...
                   </span>
                 </div>
-              ) : availableTemplates.filter((t) => t.title.toLowerCase().includes(pickerSearch.toLowerCase())).length === 0 ? (
+              ) : availableTemplates.filter((t) =>
+                  t.title.toLowerCase().includes(pickerSearch.toLowerCase()),
+                ).length === 0 ? (
                 <div className="py-16 text-center text-muted-foreground text-xs">
                   Nenhum Brand Template encontrado na sua conta Canva.
                 </div>

@@ -3,6 +3,7 @@ import {
   auditCanvaFields,
   isValidSourceFieldKey,
   mergeOfficialCanvaFields,
+  normalizeCanvaFieldKey,
   OFFICIAL_CANVA_PROPOSAL_FIELDS,
   PROPOSAL_FIELD_CATALOG,
 } from "./proposal-field-catalog";
@@ -37,7 +38,10 @@ const context: any = {
 describe("campos oficiais Canva", () => {
   it("mantém catálogo oficial e dataset real como conceitos independentes", () => {
     expect(auditCanvaFields([], [])).toMatchObject({ officialCount: 15, datasetCount: 0 });
-    expect(auditCanvaFields([{ key: "INO" }, { key: "INA" }], [])).toMatchObject({ officialCount: 15, datasetCount: 2 });
+    expect(auditCanvaFields([{ key: "INO" }, { key: "INA" }], [])).toMatchObject({
+      officialCount: 15,
+      datasetCount: 2,
+    });
   });
   it("mantém mappings ausentes e os valida automaticamente quando o dataset muda", () => {
     const mappingKeys = [...OFFICIAL_CANVA_PROPOSAL_FIELDS];
@@ -45,8 +49,15 @@ describe("campos oficiais Canva", () => {
     expect(before).toMatchObject({ configuredMappingCount: 15, validMappingCount: 2 });
     expect(before.missingMappingKeys).toHaveLength(13);
     expect(mappingKeys).toHaveLength(15);
-    expect(auditCanvaFields(mappingKeys.map((key) => ({ key })), mappingKeys)).toMatchObject({
-      configuredMappingCount: 15, validMappingCount: 15, missingMappingKeys: [],
+    expect(
+      auditCanvaFields(
+        mappingKeys.map((key) => ({ key })),
+        mappingKeys,
+      ),
+    ).toMatchObject({
+      configuredMappingCount: 15,
+      validMappingCount: 15,
+      missingMappingKeys: [],
     });
   });
   it("oferece os 15 campos na ordem oficial para dataset vazio", () => {
@@ -61,7 +72,28 @@ describe("campos oficiais Canva", () => {
     expect(new Set(full.map((field) => field.key)).size).toBe(15);
   });
   it("não reintroduz INICIAIS_NOIVOS mesmo quando o dataset legado ainda o contém", () => {
-    expect(mergeOfficialCanvaFields([{ key: "INICIAIS_NOIVOS" }]).map((field) => field.key)).not.toContain("INICIAIS_NOIVOS");
+    expect(
+      mergeOfficialCanvaFields([{ key: "INICIAIS_NOIVOS" }]).map((field) => field.key),
+    ).not.toContain("INICIAIS_NOIVOS");
+  });
+  it("normaliza espaços sem alterar a key real e deduplica catálogo, dataset e mapping", () => {
+    expect(normalizeCanvaFieldKey(" quantidade_ pessoas ")).toBe("QUANTIDADE_PESSOAS");
+    const merged = mergeOfficialCanvaFields([{ key: "QUANTIDADE_ PESSOAS", type: "number" }]);
+    expect(
+      merged.filter((field) => normalizeCanvaFieldKey(field.key) === "QUANTIDADE_PESSOAS"),
+    ).toEqual([{ key: "QUANTIDADE_ PESSOAS", name: "QUANTIDADE_PESSOAS", type: "number" }]);
+    expect(
+      auditCanvaFields([{ key: "QUANTIDADE_ PESSOAS" }], ["QUANTIDADE_PESSOAS"]),
+    ).toMatchObject({ configuredMappingCount: 1, validMappingCount: 1, missingMappingKeys: [] });
+  });
+  it("conta mapping legado separadamente sem tratá-lo como campo oficial", () => {
+    expect(auditCanvaFields([{ key: "INO" }], ["INO", "INICIAIS_NOIVOS"])).toMatchObject({
+      officialCount: 15,
+      datasetCount: 1,
+      configuredMappingCount: 2,
+      validMappingCount: 1,
+      legacyMappingKeys: ["INICIAIS_NOIVOS"],
+    });
   });
   it("inclui INO, INA e BEBIDAS, mas não oferece o legado", () => {
     expect(OFFICIAL_CANVA_PROPOSAL_FIELDS).toEqual(
