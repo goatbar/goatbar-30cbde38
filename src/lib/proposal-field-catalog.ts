@@ -12,8 +12,10 @@ export interface ProposalCatalogField {
     | "Orçamento"
     | "Equipe"
     | "Cardápio & Bebidas"
+    | "Drinks"
     | "Empresa"
-    | "Campos Formatados / Calculados";
+    | "Campos Formatados / Calculados"
+    | "Campos calculados";
   type: FieldValueType;
   description: string;
   example: string;
@@ -23,6 +25,45 @@ export interface FieldFormatterOption {
   key: string;
   label: string;
   description: string;
+}
+
+/** Campos que todo Brand Template de proposta pode mapear, mesmo sem dataset Canva. */
+export const OFFICIAL_CANVA_PROPOSAL_FIELDS = [
+  "NOME_EVENTO",
+  "DATA_ORCAMENTO",
+  "DATA_EVENTO",
+  "INICIAIS_NOIVOS",
+  "QUANTIDADE_PESSOAS",
+  "DRINKS",
+  "QTD_BARTENDERS",
+  "QTD_COPEIRAS",
+  "QTD_BAR_KEEPERS",
+  "QUANTIDADE_DRINKS",
+  "VALOR_INVESTIMENTO",
+  "DATA_FINAL_PAGAMENTO",
+  "QUANTIDADE_HORAS_EVENTO",
+] as const;
+
+export interface CanvaDatasetField {
+  key: string;
+  name?: string;
+  type?: string;
+}
+
+/** Preserva a ordem oficial e agrega campos extras do Canva, sem duplicar por key. */
+export function mergeOfficialCanvaFields(dataset: CanvaDatasetField[]): Required<CanvaDatasetField>[] {
+  const canvaByKey = new Map(dataset.map((field) => [field.key, field]));
+  const merged: Required<CanvaDatasetField>[] = OFFICIAL_CANVA_PROPOSAL_FIELDS.map((key) => {
+    const metadata = canvaByKey.get(key);
+    return { key, name: metadata?.name || key, type: metadata?.type || "text" };
+  });
+
+  for (const field of dataset) {
+    if (!OFFICIAL_CANVA_PROPOSAL_FIELDS.includes(field.key as typeof OFFICIAL_CANVA_PROPOSAL_FIELDS[number])) {
+      merged.push({ key: field.key, name: field.name || field.key, type: field.type || "text" });
+    }
+  }
+  return merged;
 }
 
 export const PROPOSAL_FORMATTERS: FieldFormatterOption[] = [
@@ -66,7 +107,7 @@ export const PROPOSAL_FIELD_CATALOG: ProposalCatalogField[] = [
   // ─── Evento ───────────────────────────────────────────────
   {
     key: "event.event_name",
-    label: "Nome do Evento",
+    label: "Nome do evento",
     group: "Evento",
     type: "text",
     description: "Título ou identificador do evento.",
@@ -82,7 +123,7 @@ export const PROPOSAL_FIELD_CATALOG: ProposalCatalogField[] = [
   },
   {
     key: "event.event_date",
-    label: "Data do Evento",
+    label: "Data do evento",
     group: "Evento",
     type: "date",
     description: "Data agendada para o evento.",
@@ -98,7 +139,7 @@ export const PROPOSAL_FIELD_CATALOG: ProposalCatalogField[] = [
   },
   {
     key: "event.guest_count",
-    label: "Nº de Convidados",
+    label: "Quantidade de pessoas",
     group: "Evento",
     type: "number",
     description: "Quantidade total de convidados previstos.",
@@ -114,7 +155,7 @@ export const PROPOSAL_FIELD_CATALOG: ProposalCatalogField[] = [
   },
   {
     key: "event.duration_hours",
-    label: "Duração do Bar (Horas)",
+    label: "Duração do evento",
     group: "Evento",
     type: "number",
     description: "Total de horas de operação do bar contratadas.",
@@ -124,11 +165,27 @@ export const PROPOSAL_FIELD_CATALOG: ProposalCatalogField[] = [
   // ─── Orçamento & Pagamento ─────────────────────────────────
   {
     key: "budget.total_value",
-    label: "Investimento Total (R$)",
+    label: "Valor do investimento",
     group: "Orçamento",
     type: "currency",
     description: "Valor total final do orçamento.",
     example: "8500.00",
+  },
+  {
+    key: "budget.created_at",
+    label: "Data do orçamento",
+    group: "Orçamento",
+    type: "date",
+    description: "Data real de criação da versão do orçamento.",
+    example: "2026-08-19",
+  },
+  {
+    key: "budget.total_drinks",
+    label: "Quantidade total de drinks",
+    group: "Orçamento",
+    type: "number",
+    description: "Quantidade calculada como convidados × drinks por pessoa.",
+    example: "600",
   },
   {
     key: "budget.discount_value",
@@ -150,7 +207,7 @@ export const PROPOSAL_FIELD_CATALOG: ProposalCatalogField[] = [
   // ─── Equipe ───────────────────────────────────────────────
   {
     key: "budget.bartenders_count",
-    label: "Qtd. de Bartenders",
+    label: "Quantidade de Bartenders",
     group: "Equipe",
     type: "number",
     description: "Número de bartenders escalados para o evento.",
@@ -158,7 +215,7 @@ export const PROPOSAL_FIELD_CATALOG: ProposalCatalogField[] = [
   },
   {
     key: "budget.bar_keepers_count",
-    label: "Qtd. de Bar Keepers",
+    label: "Quantidade de Bar Keepers",
     group: "Equipe",
     type: "number",
     description: "Número de bar keepers / apoio.",
@@ -166,7 +223,7 @@ export const PROPOSAL_FIELD_CATALOG: ProposalCatalogField[] = [
   },
   {
     key: "budget.copeiras_count",
-    label: "Qtd. de Copeiras",
+    label: "Quantidade de Copeiras",
     group: "Equipe",
     type: "number",
     description: "Número de copeiras escaladas.",
@@ -192,8 +249,8 @@ export const PROPOSAL_FIELD_CATALOG: ProposalCatalogField[] = [
   },
   {
     key: "package.drinks_list",
-    label: "Lista de Drinks",
-    group: "Cardápio & Bebidas",
+    label: "Drinks selecionados",
+    group: "Drinks",
     type: "list",
     description: "Nomes dos drinks selecionados separados por linha ou vírgula.",
     example: "Moscow Mule, Gin Tropical, Aperol Spritz, Negroni",
@@ -258,6 +315,22 @@ export const PROPOSAL_FIELD_CATALOG: ProposalCatalogField[] = [
   },
 
   // ─── Campos Formatados / Calculados ───────────────────────
+  {
+    key: "computed.couple_initials",
+    label: "Iniciais dos noivos",
+    group: "Campos calculados",
+    type: "text",
+    description: "Iniciais obtidas dos dois nomes reais do casal.",
+    example: "R | P",
+  },
+  {
+    key: "computed.final_payment_date",
+    label: "Data final para pagamento",
+    group: "Campos calculados",
+    type: "date",
+    description: "Data do evento menos sete dias.",
+    example: "2026-10-13",
+  },
   {
     key: "computed.proposal_date",
     label: "Data da Proposta",

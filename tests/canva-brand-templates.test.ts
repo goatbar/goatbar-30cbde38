@@ -38,7 +38,8 @@ describe("1. Canva Connection Test & Fine-Grained Diagnostics", () => {
   });
 
   it("differentiates 401 token expired/revoked with CanvaApiError('token_expired_or_revoked')", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+    // The assertion invokes the API twice: once for the class and once for diagnostics.
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: false,
       status: 401,
       json: async () => ({ code: "invalid_token" }),
