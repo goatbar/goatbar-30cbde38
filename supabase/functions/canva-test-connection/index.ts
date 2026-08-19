@@ -1,9 +1,10 @@
 // supabase/functions/canva-test-connection/index.ts
-// Tests Canva Connect API connectivity and validates access token / profile
+// Tests Canva Connect API connectivity and validates user profile with fine-grained error diagnostics
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
+  CanvaApiError,
   fetchCanvaUserProfile,
   getValidCanvaAccessToken,
   sanitizeLog,
@@ -22,28 +23,39 @@ serve(async (req: Request) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Não autorizado. Token de autenticação ausente." }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          connected: false,
+          error_code: "unauthenticated",
+          error: "Não autorizado. Token de autenticação ausente.",
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-
-    const supabaseAuthClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 1. Authenticate user
-    const { data: { user }, error: authError } = await supabaseAuthClient.auth.getUser();
+    // 1. Authenticate user extracting JWT from header
+    const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(jwt);
+
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Usuário não autenticado." }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          connected: false,
+          error_code: "unauthenticated",
+          error: "Usuário não autenticado ou sessão expirada.",
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     // 2. Get valid access token (refreshes atomically if needed)
@@ -52,9 +64,23 @@ serve(async (req: Request) => {
       accessToken = await getValidCanvaAccessToken(user.id, supabaseAdmin);
     } catch (err: any) {
       console.warn("[canva-test-connection] Failed to get valid token:", sanitizeLog(err));
+      if (err instanceof CanvaApiError) {
+        return new Response(
+          JSON.stringify({
+            connected: false,
+            error_code: err.code,
+            error: err.message,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
       return new Response(
         JSON.stringify({
           connected: false,
+          error_code: "integration_not_found",
           error: "Conexão com Canva inativa ou expirada. Por favor, conecte novamente.",
         }),
         {
@@ -64,8 +90,37 @@ serve(async (req: Request) => {
       );
     }
 
-    // 3. Test API call by fetching user profile
-    const profile = await fetchCanvaUserProfile(accessToken);
+    // 3. Test API call by fetching user profile from official endpoint
+    let profile: { id: string | null; display_name: string | null };
+    try {
+      profile = await fetchCanvaUserProfile(accessToken);
+    } catch (err: any) {
+      console.warn("[canva-test-connection] Failed to fetch profile:", sanitizeLog(err));
+      if (err instanceof CanvaApiError) {
+        return new Response(
+          JSON.stringify({
+            connected: false,
+            error_code: err.code,
+            error: err.message,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          connected: false,
+          error_code: "canva_api_error",
+          error: "Falha na comunicação com a API do Canva.",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     // 4. Update canva_user_id if available and not set
     if (profile.id) {
@@ -86,8 +141,8 @@ serve(async (req: Request) => {
       JSON.stringify({
         connected: true,
         canva_user: {
-          id: profile.id ?? "unknown",
-          display_name: profile.display_name ?? "Usuário Canva",
+          id: profile.id ?? "user_authenticated",
+          display_name: profile.display_name ?? "Conta Canva Conectada",
         },
       }),
       {
@@ -100,10 +155,11 @@ serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         connected: false,
-        error: "Falha ao testar conexão com o Canva.",
+        error_code: "canva_api_error",
+        error: "Erro inesperado ao testar conexão com o Canva.",
       }),
       {
-        status: 400,
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );

@@ -13,7 +13,10 @@ import {
   Loader2, 
   FileText, 
   AlertTriangle,
-  Map 
+  Map,
+  Layers,
+  Sparkles,
+  Image as ImageIcon
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { 
@@ -22,6 +25,7 @@ import {
 } from "@/services/proposal-service";
 import { useAuth } from "@/lib/auth-context";
 import { TemplateFieldEditor } from "@/components/TemplateFieldEditor";
+import { CanvaTemplateMapperModal } from "@/components/CanvaTemplateMapperModal";
 
 export const Route = createFileRoute("/modelos")({
   component: () => (
@@ -44,11 +48,13 @@ function ModelosPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showReplaceModal, setShowReplaceModal] = useState<ProposalTemplate | null>(null);
   const [editorTemplate, setEditorTemplate] = useState<ProposalTemplate | null>(null);
+  const [canvaMapperTemplate, setCanvaMapperTemplate] = useState<ProposalTemplate | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   
   // New template form
   const [newName, setNewName] = useState("");
+  const [newProvider, setNewProvider] = useState<"internal" | "canva">("internal");
   const [newEventType, setNewEventType] = useState<"casamento" | "aniversario" | "comemoracao">("casamento");
   const [newIsDefault, setNewIsDefault] = useState(false);
 
@@ -61,13 +67,18 @@ function ModelosPage() {
     try {
       const data = await proposalTemplatesService.listTemplates();
       setTemplates(data);
-      // Load field counts for all templates
+      // Load field counts for all templates (differentiating Canva vs internal)
       const counts: Record<string, number> = {};
       await Promise.all(
         data.map(async (t) => {
           try {
-            const fields = await proposalTemplatesService.listTemplateFields(t.id);
-            counts[t.id] = fields.length;
+            if (t.provider === "canva") {
+              const mappings = await proposalTemplatesService.listFieldMappings(t.id);
+              counts[t.id] = mappings.length;
+            } else {
+              const fields = await proposalTemplatesService.listTemplateFields(t.id);
+              counts[t.id] = fields.length;
+            }
           } catch {
             counts[t.id] = 0;
           }
@@ -83,17 +94,26 @@ function ModelosPage() {
 
   const handleAddTemplate = async () => {
     if (!newName.trim()) return alert("Por favor, digite o nome do modelo.");
-    if (!selectedFile) return alert("Por favor, selecione um arquivo PDF.");
-    if (selectedFile.type !== "application/pdf" && !selectedFile.name.endsWith(".pdf")) {
-      return alert("Apenas arquivos PDF são aceitos.");
+
+    if (newProvider === "internal") {
+      if (!selectedFile) return alert("Por favor, selecione um arquivo PDF.");
+      if (selectedFile.type !== "application/pdf" && !selectedFile.name.endsWith(".pdf")) {
+        return alert("Apenas arquivos PDF são aceitos.");
+      }
     }
 
     setUploading(true);
     try {
-      const { publicUrl } = await proposalTemplatesService.uploadTemplateFile(selectedFile);
+      let publicUrl: string | null = null;
+      if (newProvider === "internal" && selectedFile) {
+        const { publicUrl: url } = await proposalTemplatesService.uploadTemplateFile(selectedFile);
+        publicUrl = url;
+      }
+
       const created = await proposalTemplatesService.createTemplate({
         name: newName,
         event_type: newEventType,
+        provider: newProvider,
         file_url: publicUrl,
         is_active: true,
         is_default: newIsDefault,
@@ -107,10 +127,16 @@ function ModelosPage() {
       setNewName("");
       setSelectedFile(null);
       setNewIsDefault(false);
-      loadTemplates();
+      setNewProvider("internal");
+      await loadTemplates();
+
+      // If Canva template, open Canva mapper modal immediately to link Brand Template
+      if (newProvider === "canva") {
+        setCanvaMapperTemplate(created);
+      }
     } catch (error) {
       console.error("Erro ao salvar modelo:", error);
-      alert("Erro ao enviar arquivo ou salvar no banco de dados.");
+      alert("Erro ao salvar modelo no banco de dados.");
     } finally {
       setUploading(false);
     }
@@ -188,7 +214,7 @@ function ModelosPage() {
       <PageHeader
         breadcrumb="Sistema"
         title="Modelos de Proposta"
-        subtitle="Gerencie os arquivos PDF de base visual fixa para a proposta comercial de cada tipo de evento."
+        subtitle="Gerencie modelos visuais com Canva Brand Templates ou arquivos PDF para propostas comerciais."
         action={
           isAdmin && (
             <PrimaryButton onClick={() => setShowAddModal(true)} className="h-10 px-4">
@@ -213,128 +239,185 @@ function ModelosPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {templates.map((template) => (
-              <div 
-                key={template.id} 
-                className={`flex flex-col justify-between p-5 border bg-surface rounded-2xl transition-all duration-300 ${
-                  template.is_active 
-                    ? "border-border hover:border-primary/40 hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)]" 
-                    : "border-border-strong/30 opacity-60 hover:opacity-80"
-                }`}
-              >
-                <div>
-                  <div className="flex justify-between items-start mb-3">
-                    {getEventTypeBadge(template.event_type)}
-                    <div className="flex items-center gap-2">
-                      {template.is_default && (
-                        <span className="flex items-center gap-1 text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded border border-primary/30">
-                          <Star className="h-3 w-3 fill-primary" /> Padrão
+            {templates.map((template) => {
+              const isCanva = template.provider === "canva";
+              const count = fieldCounts[template.id] ?? 0;
+
+              return (
+                <div 
+                  key={template.id} 
+                  className={`flex flex-col justify-between p-5 border bg-surface rounded-2xl transition-all duration-300 ${
+                    template.is_active 
+                      ? "border-border hover:border-primary/40 hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)]" 
+                      : "border-border-strong/30 opacity-60 hover:opacity-80"
+                  }`}
+                >
+                  <div>
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center gap-1.5">
+                        {getEventTypeBadge(template.event_type)}
+                        {isCanva ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-[#00C4CC]/15 text-[#00C4CC] border border-[#00C4CC]/30 font-semibold flex items-center gap-1">
+                            Canva
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-secondary text-secondary-foreground border border-border font-medium">
+                            PDF Interno
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {template.is_default && (
+                          <span className="flex items-center gap-1 text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded border border-primary/30">
+                            <Star className="h-3 w-3 fill-primary" /> Padrão
+                          </span>
+                        )}
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                          template.is_active 
+                            ? "bg-success/10 text-success border-success/20" 
+                            : "bg-muted text-muted-foreground border-border"
+                        }`}>
+                          {template.is_active ? "Ativo" : "Inativo"}
                         </span>
-                      )}
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                        template.is_active 
-                          ? "bg-success/10 text-success border-success/20" 
-                          : "bg-muted text-muted-foreground border-border"
-                      }`}>
-                        {template.is_active ? "Ativo" : "Inativo"}
-                      </span>
+                      </div>
                     </div>
+
+                    <h3 className="font-display font-semibold text-lg text-foreground mb-1 flex items-center gap-2">
+                      <FileText className="h-5 w-5 text-muted-foreground" />
+                      {template.name}
+                    </h3>
+                    
+                    {isCanva ? (
+                      <div className="flex items-center gap-2.5 my-3 p-2.5 bg-card rounded-xl border border-border">
+                        {template.canva_brand_template_thumbnail_url ? (
+                          <img
+                            src={template.canva_brand_template_thumbnail_url}
+                            alt="Canva Thumbnail"
+                            className="h-10 w-10 object-cover rounded-lg border border-border shrink-0"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center border border-border shrink-0 text-muted-foreground">
+                            <ImageIcon className="h-4 w-4" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-foreground truncate">
+                            {template.canva_brand_template_title || "Template Canva não vinculado"}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground font-mono truncate">
+                            {template.canva_brand_template_id ? `ID: ${template.canva_brand_template_id}` : "Clique em Mapear para vincular"}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground truncate mb-4">
+                        PDF Original: {template.file_url ? template.file_url.split("/").pop() : "Sem arquivo"}
+                      </p>
+                    )}
                   </div>
 
-                  <h3 className="font-display font-semibold text-lg text-foreground mb-1 flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-muted-foreground" />
-                    {template.name}
-                  </h3>
-                  
-                  <p className="text-xs text-muted-foreground truncate mb-4">
-                    PDF Original: {template.file_url ? template.file_url.split("/").pop() : "Sem arquivo"}
-                  </p>
-                </div>
-
-                <div className="flex flex-col gap-2.5 pt-4 border-t border-border/60">
-                  <div className="flex gap-2 w-full">
-                    {template.file_url ? (
-                      <a 
-                        href={template.file_url} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-all"
+                  <div className="flex flex-col gap-2.5 pt-4 border-t border-border/60">
+                    {/* Primary Mapping Button */}
+                    {isCanva ? (
+                      <button
+                        onClick={() => setCanvaMapperTemplate(template)}
+                        className="w-full flex items-center justify-center gap-2 h-9 rounded-lg border border-[#00C4CC]/40 bg-[#00C4CC]/10 hover:bg-[#00C4CC]/20 text-xs font-semibold text-[#00C4CC] transition-all cursor-pointer"
                       >
-                        <Eye className="h-3.5 w-3.5" /> Ver PDF Base
-                      </a>
+                        <Layers className="h-3.5 w-3.5" />
+                        Configurar Mapeamento Canva
+                        {count > 0 && (
+                          <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-[#00C4CC]/20 text-[#00C4CC] border border-[#00C4CC]/30">
+                            {count} campo{count !== 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </button>
                     ) : (
-                      <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground h-9 border border-dashed border-border rounded-lg">
-                        Sem visualização
-                      </div>
+                      <>
+                        <div className="flex gap-2 w-full">
+                          {template.file_url ? (
+                            <a 
+                              href={template.file_url} 
+                              target="_blank" 
+                              rel="noreferrer"
+                              className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-all"
+                            >
+                              <Eye className="h-3.5 w-3.5" /> Ver PDF Base
+                            </a>
+                          ) : (
+                            <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground h-9 border border-dashed border-border rounded-lg">
+                              Sem visualização
+                            </div>
+                          )}
+
+                          {isAdmin && (
+                            <button
+                              onClick={() => setShowReplaceModal(template)}
+                              className="flex items-center justify-center gap-1.5 px-3 h-9 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-all"
+                              title="Substituir PDF"
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        {isAdmin && (
+                          <button
+                            onClick={() => setEditorTemplate(template)}
+                            className="w-full flex items-center justify-center gap-2 h-9 rounded-lg border border-primary/40 bg-primary/10 hover:bg-primary/20 text-xs font-semibold text-primary transition-all"
+                          >
+                            <Map className="h-3.5 w-3.5" />
+                            Mapear Campos (PDF)
+                            {count > 0 && (
+                              <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-primary/20 text-primary border border-primary/30">
+                                {count} campo{count !== 1 ? "s" : ""}
+                              </span>
+                            )}
+                          </button>
+                        )}
+                      </>
                     )}
 
                     {isAdmin && (
-                      <button
-                        onClick={() => setShowReplaceModal(template)}
-                        className="flex items-center justify-center gap-1.5 px-3 h-9 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-all"
-                        title="Substituir PDF"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Mapear Campos button */}
-                  {isAdmin && (
-                    <button
-                      onClick={() => setEditorTemplate(template)}
-                      className="w-full flex items-center justify-center gap-2 h-9 rounded-lg border border-primary/40 bg-primary/10 hover:bg-primary/20 text-xs font-semibold text-primary transition-all"
-                    >
-                      <Map className="h-3.5 w-3.5" />
-                      Mapear Campos
-                      {(fieldCounts[template.id] ?? 0) > 0 && (
-                        <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-primary/20 text-primary border border-primary/30">
-                          {fieldCounts[template.id]} campo{fieldCounts[template.id] !== 1 ? "s" : ""}
-                        </span>
-                      )}
-                    </button>
-                  )}
-
-                  {isAdmin && (
-                    <div className="flex items-center justify-between gap-2 mt-1">
-                      <div className="flex gap-1.5">
-                        {!template.is_default && template.is_active && (
+                      <div className="flex items-center justify-between gap-2 mt-1">
+                        <div className="flex gap-1.5">
+                          {!template.is_default && template.is_active && (
+                            <button
+                              onClick={() => handleSetDefault(template)}
+                              className="flex items-center gap-1 text-[11px] text-primary hover:underline font-medium"
+                            >
+                              <Star className="h-3 w-3" /> Tornar Padrão
+                            </button>
+                          )}
+                          
                           <button
-                            onClick={() => handleSetDefault(template)}
-                            className="flex items-center gap-1 text-[11px] text-primary hover:underline font-medium"
+                            onClick={() => handleToggleActive(template)}
+                            className={`flex items-center gap-1 text-[11px] font-medium hover:underline ${
+                              template.is_active ? "text-muted-foreground" : "text-success"
+                            }`}
                           >
-                            <Star className="h-3 w-3" /> Tornar Padrão
+                            {template.is_active ? "Desativar" : "Ativar"}
                           </button>
-                        )}
-                        
+                        </div>
+
                         <button
-                          onClick={() => handleToggleActive(template)}
-                          className={`flex items-center gap-1 text-[11px] font-medium hover:underline ${
-                            template.is_active ? "text-muted-foreground" : "text-success"
-                          }`}
+                          onClick={() => handleDeleteTemplate(template.id)}
+                          className="text-[11px] text-danger hover:underline font-medium flex items-center gap-0.5"
                         >
-                          {template.is_active ? "Desativar" : "Ativar"}
+                          <Trash2 className="h-3 w-3" /> Excluir
                         </button>
                       </div>
-
-                      <button
-                        onClick={() => handleDeleteTemplate(template.id)}
-                        className="text-[11px] text-danger hover:underline font-medium flex items-center gap-0.5"
-                      >
-                        <Trash2 className="h-3 w-3" /> Excluir
-                      </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {templates.length === 0 && (
               <div className="col-span-full py-16 text-center border border-dashed border-border rounded-2xl bg-surface flex flex-col items-center justify-center">
                 <FileText className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
                 <h4 className="font-display font-semibold text-lg text-foreground mb-1">Nenhum modelo cadastrado</h4>
                 <p className="text-sm text-muted-foreground max-w-sm mb-6">
-                  Adicione modelos PDF fixos para gerar propostas comerciais preenchidas automaticamente.
+                  Adicione modelos Canva Connect ou arquivos PDF para gerar propostas comerciais preenchidas automaticamente.
                 </p>
                 {isAdmin && (
                   <PrimaryButton onClick={() => setShowAddModal(true)}>
@@ -357,6 +440,7 @@ function ModelosPage() {
                 onClick={() => {
                   setShowAddModal(false);
                   setSelectedFile(null);
+                  setNewProvider("internal");
                 }}
                 className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"
               >
@@ -364,13 +448,42 @@ function ModelosPage() {
               </button>
             </div>
             <div className="p-6 space-y-5">
+              {/* Provider Selection Tabs */}
+              <div>
+                <label className="label-eyebrow block mb-2">Tipo de Integração</label>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-input rounded-xl border border-border">
+                  <button
+                    type="button"
+                    onClick={() => setNewProvider("internal")}
+                    className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                      newProvider === "internal"
+                        ? "bg-surface text-foreground shadow-sm border border-border"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <FileText className="h-3.5 w-3.5" /> PDF Base Interno
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewProvider("canva")}
+                    className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                      newProvider === "canva"
+                        ? "bg-[#00C4CC]/20 text-[#00C4CC] shadow-sm border border-[#00C4CC]/40"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Layers className="h-3.5 w-3.5" /> Canva Connect API
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="label-eyebrow block mb-2">Nome do Modelo</label>
                 <input
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder="Ex: Proposta Casamento Premium 2026"
+                  placeholder={newProvider === "canva" ? "Ex: Proposta Canva Casamento 2026" : "Ex: Proposta Casamento Premium 2026"}
                   className="w-full h-10 px-4 rounded-lg bg-input border border-border text-sm focus:border-primary focus:outline-none transition-colors"
                 />
               </div>
@@ -388,24 +501,35 @@ function ModelosPage() {
                 </select>
               </div>
 
-              <div>
-                <label className="label-eyebrow block mb-2">Arquivo PDF Base</label>
-                <div className="flex flex-col items-center justify-center border-2 border-dashed border-border hover:border-primary/40 rounded-xl p-5 bg-background/50 hover:bg-background/80 transition-colors relative cursor-pointer group">
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                  />
-                  <Upload className="h-8 w-8 text-muted-foreground group-hover:text-primary mb-2 transition-colors" />
-                  <span className="text-xs font-semibold text-foreground">
-                    {selectedFile ? selectedFile.name : "Clique para selecionar o PDF"}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground mt-1">
-                    Apenas arquivos .pdf são suportados
-                  </span>
+              {newProvider === "internal" ? (
+                <div>
+                  <label className="label-eyebrow block mb-2">Arquivo PDF Base</label>
+                  <div className="flex flex-col items-center justify-center border-2 border-dashed border-border hover:border-primary/40 rounded-xl p-5 bg-background/50 hover:bg-background/80 transition-colors relative cursor-pointer group">
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                    <Upload className="h-8 w-8 text-muted-foreground group-hover:text-primary mb-2 transition-colors" />
+                    <span className="text-xs font-semibold text-foreground">
+                      {selectedFile ? selectedFile.name : "Clique para selecionar o PDF"}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground mt-1">
+                      Apenas arquivos .pdf são suportados
+                    </span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="p-4 bg-[#00C4CC]/10 border border-[#00C4CC]/20 rounded-xl space-y-1">
+                  <h4 className="text-xs font-semibold text-[#00C4CC] flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5" /> Integração Canva Connect API
+                  </h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Após salvar, o seletor de Brand Templates do Canva será aberto para você vincular o template e configurar o match de campos.
+                  </p>
+                </div>
+              )}
 
               <div className="flex items-center gap-2">
                 <input
@@ -425,6 +549,7 @@ function ModelosPage() {
               <GhostButton onClick={() => {
                 setShowAddModal(false);
                 setSelectedFile(null);
+                setNewProvider("internal");
               }}>
                 Cancelar
               </GhostButton>
@@ -435,11 +560,11 @@ function ModelosPage() {
               >
                 {uploading ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" /> Enviando...
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" /> Salvando...
                   </>
                 ) : (
                   <>
-                    <Upload className="h-4 w-4 mr-2" /> Salvar Modelo
+                    <Plus className="h-4 w-4 mr-2" /> Salvar Modelo
                   </>
                 )}
               </PrimaryButton>
@@ -519,14 +644,26 @@ function ModelosPage() {
         </div>
       )}
 
-      {/* --- FIELD EDITOR MODAL (fullscreen) --- */}
+      {/* --- FIELD EDITOR MODAL (PDF internal) --- */}
       {editorTemplate && (
         <TemplateFieldEditor
           template={editorTemplate}
           onClose={() => {
             setEditorTemplate(null);
-            loadTemplates(); // Refresh counts after saving
+            loadTemplates();
           }}
+        />
+      )}
+
+      {/* --- CANVA BRAND TEMPLATE MAPPER MODAL --- */}
+      {canvaMapperTemplate && (
+        <CanvaTemplateMapperModal
+          template={canvaMapperTemplate}
+          onClose={() => {
+            setCanvaMapperTemplate(null);
+            loadTemplates();
+          }}
+          onSaved={loadTemplates}
         />
       )}
     </>

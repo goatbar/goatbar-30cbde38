@@ -17,24 +17,21 @@ serve(async (req: Request) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Não autorizado. Token de autenticação ausente." }), {
+      return new Response(JSON.stringify({ connected: false, error: "Token de autenticação ausente." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-
-    const supabaseAuthClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data: { user }, error: authError } = await supabaseAuthClient.auth.getUser();
+    const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(jwt);
+
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Usuário não autenticado." }), {
+      return new Response(JSON.stringify({ connected: false, error: "Usuário não autenticado." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

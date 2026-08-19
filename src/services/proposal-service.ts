@@ -1,15 +1,34 @@
-﻿import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import { PDFDocument, degrees, rgb, StandardFonts } from "pdf-lib";
 import { proposalTemplateConfigs, type EventTemplateType, type FieldConfig } from "@/lib/proposal-template-configs";
 import type { ProposalTemplateField } from "@/lib/proposal-template-mapper";
+
+import { isValidSourceFieldKey } from "@/lib/proposal-field-catalog";
 
 export interface ProposalTemplate {
   id: string;
   name: string;
   event_type: "casamento" | "aniversario" | "comemoracao";
   file_url: string | null;
+  provider?: "internal" | "canva" | string;
+  canva_brand_template_id?: string | null;
+  canva_brand_template_title?: string | null;
+  canva_brand_template_thumbnail_url?: string | null;
+  canva_last_synced_at?: string | null;
   is_active: boolean;
   is_default: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProposalTemplateFieldMapping {
+  id?: string;
+  template_id: string;
+  canva_field_key: string;
+  canva_field_type: string;
+  source_field_key: string;
+  formatter: string;
+  required: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -173,6 +192,110 @@ export const proposalTemplatesService = {
     const { data, error } = await supabase.from("proposal_template_fields").insert(payload).select("*");
     if (error) throw error;
     return (data ?? []) as ProposalTemplateField[];
+  },
+
+  // ─── Canva Brand Templates & Field Mappings ───────────────
+
+  async listFieldMappings(templateId: string): Promise<ProposalTemplateFieldMapping[]> {
+    const { data, error } = await supabase
+      .from("proposal_template_field_mappings")
+      .select("*")
+      .eq("template_id", templateId)
+      .order("canva_field_key", { ascending: true });
+
+    if (error) throw error;
+    return (data ?? []) as ProposalTemplateFieldMapping[];
+  },
+
+  async saveFieldMappings(
+    templateId: string,
+    mappings: Array<Omit<ProposalTemplateFieldMapping, "id" | "template_id" | "created_at" | "updated_at">>
+  ): Promise<ProposalTemplateFieldMapping[]> {
+    // 1. Server-side validation of source_field_key against PROPOSAL_FIELD_CATALOG
+    for (const m of mappings) {
+      if (m.source_field_key && !isValidSourceFieldKey(m.source_field_key)) {
+        throw new Error(
+          `Campo de origem inválido: "${m.source_field_key}". Utilize apenas campos do catálogo oficial.`
+        );
+      }
+    }
+
+    // 2. Delete existing mappings for this template
+    const { error: deleteError } = await supabase
+      .from("proposal_template_field_mappings")
+      .delete()
+      .eq("template_id", templateId);
+
+    if (deleteError) throw deleteError;
+
+    if (!mappings.length) return [];
+
+    // 3. Insert validated mappings
+    const payload = mappings.map((m) => ({
+      template_id: templateId,
+      canva_field_key: m.canva_field_key,
+      canva_field_type: m.canva_field_type || "text",
+      source_field_key: m.source_field_key,
+      formatter: m.formatter || "raw",
+      required: Boolean(m.required),
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { data, error } = await supabase
+      .from("proposal_template_field_mappings")
+      .insert(payload)
+      .select("*");
+
+    if (error) throw error;
+    return (data ?? []) as ProposalTemplateFieldMapping[];
+  },
+
+  async deleteFieldMapping(mappingId: string): Promise<void> {
+    const { error } = await supabase
+      .from("proposal_template_field_mappings")
+      .delete()
+      .eq("id", mappingId);
+
+    if (error) throw error;
+  },
+
+  async listCanvaBrandTemplates(continuation?: string) {
+    const { data, error } = await supabase.functions.invoke("canva-list-brand-templates", {
+      body: continuation ? { continuation } : undefined,
+    });
+
+    if (error) throw error;
+    return data as {
+      items: Array<{
+        id: string;
+        title: string;
+        view_url?: string;
+        create_url?: string;
+        thumbnail_url?: string;
+        updated_at?: number;
+      }>;
+      continuation?: string;
+      error_code?: string;
+      error?: string;
+    };
+  },
+
+  async getCanvaBrandTemplateFields(brandTemplateId: string) {
+    const { data, error } = await supabase.functions.invoke("canva-get-brand-template-fields", {
+      body: { brand_template_id: brandTemplateId },
+    });
+
+    if (error) throw error;
+    return data as {
+      brand_template_id: string;
+      fields: Array<{
+        key: string;
+        name: string;
+        type: string;
+      }>;
+      error_code?: string;
+      error?: string;
+    };
   },
 };
 

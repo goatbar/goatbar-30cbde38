@@ -1137,6 +1137,10 @@ export type Database = {
       }
       proposal_templates: {
         Row: {
+          canva_brand_template_id: string | null
+          canva_brand_template_thumbnail_url: string | null
+          canva_brand_template_title: string | null
+          canva_last_synced_at: string | null
           created_at: string | null
           event_type: string
           file_url: string | null
@@ -1144,9 +1148,14 @@ export type Database = {
           is_active: boolean | null
           is_default: boolean | null
           name: string
+          provider: string
           updated_at: string | null
         }
         Insert: {
+          canva_brand_template_id?: string | null
+          canva_brand_template_thumbnail_url?: string | null
+          canva_brand_template_title?: string | null
+          canva_last_synced_at?: string | null
           created_at?: string | null
           event_type: string
           file_url?: string | null
@@ -1154,9 +1163,14 @@ export type Database = {
           is_active?: boolean | null
           is_default?: boolean | null
           name: string
+          provider?: string
           updated_at?: string | null
         }
         Update: {
+          canva_brand_template_id?: string | null
+          canva_brand_template_thumbnail_url?: string | null
+          canva_brand_template_title?: string | null
+          canva_last_synced_at?: string | null
           created_at?: string | null
           event_type?: string
           file_url?: string | null
@@ -1164,9 +1178,54 @@ export type Database = {
           is_active?: boolean | null
           is_default?: boolean | null
           name?: string
+          provider?: string
           updated_at?: string | null
         }
         Relationships: []
+      }
+      proposal_template_field_mappings: {
+        Row: {
+          canva_field_key: string
+          canva_field_type: string
+          created_at: string | null
+          formatter: string
+          id: string
+          required: boolean
+          source_field_key: string
+          template_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          canva_field_key: string
+          canva_field_type?: string
+          created_at?: string | null
+          formatter?: string
+          id?: string
+          required?: boolean
+          source_field_key: string
+          template_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          canva_field_key?: string
+          canva_field_type?: string
+          created_at?: string | null
+          formatter?: string
+          id?: string
+          required?: boolean
+          source_field_key?: string
+          template_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_template_field_mappings_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       proposal_template_fields: {
         Row: {
