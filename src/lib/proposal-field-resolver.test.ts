@@ -25,7 +25,7 @@ const context: any = {
   },
   budget: {
     selected_drinks: [{ nome: "Moscow Mule" }],
-    beverages: ["Água", "Espumante"],
+    beverages: ["Água com gás", "Refrigerante zero", "Vinho branco"],
     drinks_per_person: 4,
     final_budget_value: 6850,
     bartender_quantity: 3,
@@ -114,8 +114,8 @@ describe("campos oficiais Canva", () => {
 describe("resolver", () => {
   it("resolve bebidas como lista e formata separadamente", () => {
     const value = resolveProposalField("budget.beverages", context);
-    expect(value).toEqual(["Água", "Espumante"]);
-    expect(formatProposalFieldValue(value)).toBe("Água, Espumante");
+    expect(value).toEqual(["Água com gás", "Refrigerante zero", "Vinho branco"]);
+    expect(formatProposalFieldValue(value)).toBe("Água com gás, Refrigerante zero, Vinho branco");
     expect(PROPOSAL_FIELD_CATALOG.some((field) => field.key === "budget.beverages")).toBe(true);
   });
   it("resolve iniciais exclusivamente das fontes explícitas", () => {
