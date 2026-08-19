@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  auditCanvaFields,
   isValidSourceFieldKey,
   mergeOfficialCanvaFields,
   OFFICIAL_CANVA_PROPOSAL_FIELDS,
@@ -34,6 +35,20 @@ const context: any = {
 };
 
 describe("campos oficiais Canva", () => {
+  it("mantém catálogo oficial e dataset real como conceitos independentes", () => {
+    expect(auditCanvaFields([], [])).toMatchObject({ officialCount: 15, datasetCount: 0 });
+    expect(auditCanvaFields([{ key: "INO" }, { key: "INA" }], [])).toMatchObject({ officialCount: 15, datasetCount: 2 });
+  });
+  it("mantém mappings ausentes e os valida automaticamente quando o dataset muda", () => {
+    const mappingKeys = [...OFFICIAL_CANVA_PROPOSAL_FIELDS];
+    const before = auditCanvaFields([{ key: "INO" }, { key: "INA" }], mappingKeys);
+    expect(before).toMatchObject({ configuredMappingCount: 15, validMappingCount: 2 });
+    expect(before.missingMappingKeys).toHaveLength(13);
+    expect(mappingKeys).toHaveLength(15);
+    expect(auditCanvaFields(mappingKeys.map((key) => ({ key })), mappingKeys)).toMatchObject({
+      configuredMappingCount: 15, validMappingCount: 15, missingMappingKeys: [],
+    });
+  });
   it("oferece os 15 campos na ordem oficial para dataset vazio", () => {
     expect(OFFICIAL_CANVA_PROPOSAL_FIELDS).toHaveLength(15);
     expect(mergeOfficialCanvaFields([]).map((field) => field.key)).toEqual(

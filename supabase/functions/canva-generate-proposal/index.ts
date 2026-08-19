@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCanvaBrandTemplateDataset, getValidCanvaAccessToken, sanitizeLog } from "../_shared/canva-auth.ts";
-import { autofillAndExportPdf, buildAutofillData, normalizeProposalEventType, ProposalGenerationError } from "./logic.ts";
+import { autofillAndExportPdf, buildAutofillData, getMissingCanvaMappingKeys, normalizeProposalEventType, ProposalGenerationError } from "./logic.ts";
 
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -32,7 +32,24 @@ serve(async (req: Request) => {
 
     const token = await getValidCanvaAccessToken(user.id, supabaseAdmin);
     const dataset = await getCanvaBrandTemplateDataset(token, template.canva_brand_template_id);
-    const autofillData = buildAutofillData(mappings || [], dataset.fields.map((field) => field.key), event, budget);
+    const mappingKeys = (mappings || []).map((mapping) => mapping.canva_field_key);
+    const datasetKeys = dataset.fields.map((field) => field.key);
+    const missingKeys = getMissingCanvaMappingKeys(mappings || [], datasetKeys);
+    console.log("[canva-generate-proposal] dataset validation", {
+      template_id: template.id,
+      brand_template_id: template.canva_brand_template_id,
+      dataset_keys: datasetKeys,
+      mapping_keys: mappingKeys,
+      missing_keys: missingKeys,
+    });
+    if (missingKeys.length > 0) {
+      return json({
+        error_code: "canva_fields_missing",
+        error: "Existem campos mapeados que não são Data Fields do Brand Template Canva.",
+        missing_fields: missingKeys,
+      }, 400);
+    }
+    const autofillData = buildAutofillData(mappings || [], datasetKeys, event, budget);
     const generated = await autofillAndExportPdf({ token, brandTemplateId: template.canva_brand_template_id, data: autofillData });
     const pdfResponse = await fetch(generated.downloadUrl);
     if (!pdfResponse.ok) throw new ProposalGenerationError("storage_failed", "Não foi possível baixar o PDF temporário do Canva.", 502);

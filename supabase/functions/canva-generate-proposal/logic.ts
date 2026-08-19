@@ -9,6 +9,14 @@ export class ProposalGenerationError extends Error {
   constructor(public code: string, message: string, public status = 400) { super(message); }
 }
 
+export function getMissingCanvaMappingKeys(mappings: Mapping[], datasetKeys: string[]) {
+  const available = new Set(datasetKeys);
+  return [...new Set(mappings
+    .filter((mapping) => mapping.canva_field_key !== "INICIAIS_NOIVOS")
+    .filter((mapping) => !available.has(mapping.canva_field_key))
+    .map((mapping) => mapping.canva_field_key))];
+}
+
 export function normalizeProposalEventType(value: string) {
   const normalized = value.toLocaleLowerCase("pt-BR");
   if (normalized.includes("casamento")) return "casamento";

@@ -39,6 +39,7 @@ import {
   PROPOSAL_FIELD_CATALOG,
   PROPOSAL_FORMATTERS,
   mergeOfficialCanvaFields,
+  auditCanvaFields,
   getFieldCatalogItem,
   type ProposalCatalogField,
 } from "@/lib/proposal-field-catalog";
@@ -63,6 +64,7 @@ export interface CanvaFieldState {
   formatter: string;
   required: boolean;
   isRemoved?: boolean;
+  existsInCanva: boolean;
 }
 
 export function CanvaTemplateMapperModal({
@@ -98,6 +100,7 @@ export function CanvaTemplateMapperModal({
 
   // Data fields state
   const [fields, setFields] = useState<CanvaFieldState[]>([]);
+  const [canvaDatasetFields, setCanvaDatasetFields] = useState<Array<{ key: string; name: string; type: string }>>([]);
   const [selectedFieldIndex, setSelectedFieldIndex] = useState<number | null>(null);
   const [fieldSearch, setFieldSearch] = useState("");
 
@@ -169,7 +172,9 @@ export function CanvaTemplateMapperModal({
       }
 
       setCanvaConnected(true);
-      const canvaFields = mergeOfficialCanvaFields(res.fields || []);
+      const realDatasetFields = res.fields || [];
+      setCanvaDatasetFields(realDatasetFields);
+      const canvaFields = mergeOfficialCanvaFields(realDatasetFields);
 
       // Current mappings from state or existing records
       const currentMappings =
@@ -186,7 +191,8 @@ export function CanvaTemplateMapperModal({
         }));
 
       const mappingsMap = new Map(currentMappings.map((m) => [m.canva_field_key, m]));
-      const canvaKeySet = new Set(canvaFields.map((f) => f.key));
+      const canvaKeySet = new Set(realDatasetFields.map((f) => f.key));
+      const displayedKeySet = new Set(canvaFields.map((f) => f.key));
 
       const nextFields: CanvaFieldState[] = [];
       let idxCounter = 1;
@@ -212,12 +218,13 @@ export function CanvaTemplateMapperModal({
           formatter: existing?.formatter || (cf.key.toLowerCase().includes("valor") ? "currency" : "raw"),
           required: Boolean(existing?.required),
           isRemoved: false,
+          existsInCanva: canvaKeySet.has(cf.key),
         });
       }
 
       // 2. Add previously mapped fields that no longer exist in Canva (marked as removed)
       for (const [key, mapping] of mappingsMap.entries()) {
-        if (!canvaKeySet.has(key)) {
+        if (!displayedKeySet.has(key)) {
           nextFields.push({
             index: idxCounter++,
             key,
@@ -229,6 +236,7 @@ export function CanvaTemplateMapperModal({
             formatter: mapping.formatter || "raw",
             required: Boolean(mapping.required),
             isRemoved: true,
+            existsInCanva: false,
           });
         }
       }
@@ -345,15 +353,18 @@ export function CanvaTemplateMapperModal({
   };
 
   // Status Metrics
-  const activeFields = fields.filter((f) => !f.isRemoved);
-  const mappedCount = activeFields.filter((f) => {
+  const activeFields = fields.filter((f) => f.key !== "INICIAIS_NOIVOS");
+  const mappedFields = activeFields.filter((f) => {
     if (f.source_type === "field") return Boolean(f.source_field_key);
     if (f.source_type === "static") return Boolean(f.static_value && f.static_value.trim());
     if (f.source_type === "none") return true;
     return false;
-  }).length;
+  });
+  const mappingAudit = auditCanvaFields(canvaDatasetFields, mappedFields.map((field) => field.key));
+  const mappedCount = mappingAudit.configuredMappingCount;
+  const validMappedCount = mappingAudit.validMappingCount;
   const unmappedCount = activeFields.length - mappedCount;
-  const isComplete = activeFields.length > 0 && unmappedCount === 0;
+  const isComplete = activeFields.length > 0 && unmappedCount === 0 && mappingAudit.missingMappingKeys.length === 0;
 
   // Filtered fields list by search
   const filteredFields = fields.filter((f) =>
@@ -518,10 +529,11 @@ export function CanvaTemplateMapperModal({
             {/* Metrics & Sync Bar */}
             <div className="p-4 border-b border-border bg-card/40 space-y-3">
               <h3 className="font-display font-semibold text-sm text-foreground">Mapeamento de Campos</h3>
-              <div className="text-xs text-muted-foreground">
-                <span>{activeFields.length} campos encontrados</span>
-                <span className="mx-2">•</span><span>{mappedCount} mapeados</span>
-                {unmappedCount > 0 && <><span className="mx-2">•</span><span>{unmappedCount} não mapeados</span></>}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span>Campos oficiais Goat Bar: {mappingAudit.officialCount}</span>
+                <span>Data Fields encontrados no Canva: {mappingAudit.datasetCount}</span>
+                <span>Mappings configurados: {mappedCount}</span>
+                <span>Mappings válidos no Canva: {validMappedCount}</span>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -533,10 +545,10 @@ export function CanvaTemplateMapperModal({
                     }`}
                   >
                     {isComplete ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-                    {isComplete ? "Mapeamento Completo" : "Mapeamento Incompleto"}
+                    {isComplete ? "MAPEAMENTO COMPLETO" : mappingAudit.missingMappingKeys.length > 0 ? "Mapeamento configurado, mas existem campos ausentes no Canva" : "Mapeamento Incompleto"}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {mappedCount} de {activeFields.length} mapeados
+                    {validMappedCount} de {mappedCount} mappings válidos
                   </span>
                 </div>
 
@@ -552,6 +564,15 @@ export function CanvaTemplateMapperModal({
                   </button>
                 )}
               </div>
+
+              {mappingAudit.missingMappingKeys.length > 0 && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-300">
+                  <p className="font-semibold">Campos ausentes no Brand Template Canva:</p>
+                  <ul className="mt-1 list-disc pl-5 font-mono">
+                    {mappingAudit.missingMappingKeys.map((key) => <li key={key}>{key}</li>)}
+                  </ul>
+                </div>
+              )}
 
               {/* Search bar */}
               <div className="relative">
@@ -659,15 +680,14 @@ export function CanvaTemplateMapperModal({
                           <span className="text-[10px] uppercase font-mono px-1.5 py-0.2 rounded bg-secondary text-secondary-foreground">
                             {field.type}
                           </span>
-                          {field.isRemoved && (
-                            <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.2 rounded border border-red-500/30">
-                              Removido no Canva
-                            </span>
-                          )}
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded border ${field.existsInCanva ? "bg-success/15 text-[#22c55e] border-[rgba(34,197,94,0.35)]" : "bg-amber-500/15 text-amber-400 border-amber-500/30"}`}>
+                            {field.existsInCanva ? "CANVA FIELD" : "AUSENTE NO CANVA"}
+                          </span>
                         </div>
 
                         {/* Mapping summary */}
                         <div className="text-xs text-muted-foreground truncate">
+                          {isMapped && <div className="mb-0.5 text-[#22c55e] font-medium">✓ MAPEADO</div>}
                           {field.source_type === "field" && field.source_field_key ? (
                             <span className="text-foreground font-medium flex items-center gap-1">
                               <span className="text-xs text-[#22c55e]">✓</span>
