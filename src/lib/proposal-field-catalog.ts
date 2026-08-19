@@ -59,6 +59,16 @@ export interface CanvaFieldAudit {
   configuredMappingCount: number;
   validMappingCount: number;
   missingMappingKeys: string[];
+  legacyMappingKeys: string[];
+}
+
+/** Normaliza somente para comparação; a chave original continua sendo usada pela API. */
+export function normalizeCanvaFieldKey(key: string): string {
+  return key
+    .trim()
+    .replace(/\s*_\s*/g, "_")
+    .replace(/\s+/g, " ")
+    .toUpperCase();
 }
 
 /** Calcula os contadores sem confundir o catálogo local com o Dataset do Canva. */
@@ -66,16 +76,25 @@ export function auditCanvaFields(
   dataset: CanvaDatasetField[],
   mappingKeys: string[],
 ): CanvaFieldAudit {
-  const datasetKeys = new Set(dataset.map((field) => field.key));
-  const activeMappingKeys = [...new Set(mappingKeys)].filter((key) => key !== "INICIAIS_NOIVOS");
-  const missingMappingKeys = activeMappingKeys.filter((key) => !datasetKeys.has(key));
+  const datasetKeys = new Set(dataset.map((field) => normalizeCanvaFieldKey(field.key)));
+  const uniqueMappings = new Map(mappingKeys.map((key) => [normalizeCanvaFieldKey(key), key]));
+  const legacyMappingKeys = [...uniqueMappings.values()].filter(
+    (key) => normalizeCanvaFieldKey(key) === "INICIAIS_NOIVOS",
+  );
+  const activeMappingKeys = [...uniqueMappings.values()].filter(
+    (key) => normalizeCanvaFieldKey(key) !== "INICIAIS_NOIVOS",
+  );
+  const missingMappingKeys = activeMappingKeys.filter(
+    (key) => !datasetKeys.has(normalizeCanvaFieldKey(key)),
+  );
 
   return {
     officialCount: OFFICIAL_CANVA_PROPOSAL_FIELDS.length,
     datasetCount: datasetKeys.size,
-    configuredMappingCount: activeMappingKeys.length,
+    configuredMappingCount: uniqueMappings.size,
     validMappingCount: activeMappingKeys.length - missingMappingKeys.length,
     missingMappingKeys,
+    legacyMappingKeys,
   };
 }
 
@@ -83,20 +102,28 @@ export function auditCanvaFields(
 export function mergeOfficialCanvaFields(
   dataset: CanvaDatasetField[],
 ): Required<CanvaDatasetField>[] {
-  const canvaByKey = new Map(dataset.map((field) => [field.key, field]));
+  const canvaByKey = new Map<string, CanvaDatasetField>();
+  for (const field of dataset) {
+    const normalized = normalizeCanvaFieldKey(field.key);
+    if (!canvaByKey.has(normalized)) canvaByKey.set(normalized, field);
+  }
   const merged: Required<CanvaDatasetField>[] = OFFICIAL_CANVA_PROPOSAL_FIELDS.map((key) => {
-    const metadata = canvaByKey.get(key);
-    return { key, name: metadata?.name || key, type: metadata?.type || "text" };
+    const metadata = canvaByKey.get(normalizeCanvaFieldKey(key));
+    return {
+      key: metadata?.key || key,
+      name: metadata?.name || key,
+      type: metadata?.type || "text",
+    };
   });
 
   for (const field of dataset) {
     // O Data Field antigo pode continuar no Canva/banco, mas não volta à experiência
     // de configuração de modelos novos.
-    if (field.key === "INICIAIS_NOIVOS") continue;
+    const normalized = normalizeCanvaFieldKey(field.key);
+    if (normalized === "INICIAIS_NOIVOS") continue;
     if (
-      !OFFICIAL_CANVA_PROPOSAL_FIELDS.includes(
-        field.key as (typeof OFFICIAL_CANVA_PROPOSAL_FIELDS)[number],
-      )
+      !OFFICIAL_CANVA_PROPOSAL_FIELDS.some((key) => normalizeCanvaFieldKey(key) === normalized) &&
+      !merged.some((item) => normalizeCanvaFieldKey(item.key) === normalized)
     ) {
       merged.push({ key: field.key, name: field.name || field.key, type: field.type || "text" });
     }
