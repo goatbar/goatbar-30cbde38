@@ -10,7 +10,6 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import {
   X,
   RefreshCw,
-  Sparkles,
   Save,
   CheckCircle2,
   AlertTriangle,
@@ -39,7 +38,7 @@ import {
 import {
   PROPOSAL_FIELD_CATALOG,
   PROPOSAL_FORMATTERS,
-  suggestAutoMatches,
+  mergeOfficialCanvaFields,
   getFieldCatalogItem,
   type ProposalCatalogField,
 } from "@/lib/proposal-field-catalog";
@@ -170,7 +169,7 @@ export function CanvaTemplateMapperModal({
       }
 
       setCanvaConnected(true);
-      const canvaFields = res.fields || [];
+      const canvaFields = mergeOfficialCanvaFields(res.fields || []);
 
       // Current mappings from state or existing records
       const currentMappings =
@@ -192,7 +191,7 @@ export function CanvaTemplateMapperModal({
       const nextFields: CanvaFieldState[] = [];
       let idxCounter = 1;
 
-      // 1. Add fields present in Canva dataset
+      // Campos oficiais sempre vêm primeiro; metadata e extras da Canva são mesclados por key.
       for (const cf of canvaFields) {
         const existing = mappingsMap.get(cf.key);
         const sourceType: SourceType =
@@ -295,31 +294,6 @@ export function CanvaTemplateMapperModal({
       required: false,
     });
     toast.info("Mapeamento do campo limpo.");
-  };
-
-  const handleManualSuggestMatches = () => {
-    if (!confirm("Deseja aplicar sugestões automáticas apenas nos campos ainda não mapeados? Nenhum campo existente será sobrescrito.")) {
-      return;
-    }
-
-    const suggestions = suggestAutoMatches(fields.filter((f) => !f.isRemoved));
-    let appliedCount = 0;
-
-    setFields((prev) =>
-      prev.map((f) => {
-        if (f.source_type === "field" && !f.source_field_key && suggestions[f.key]) {
-          appliedCount++;
-          return { ...f, source_field_key: suggestions[f.key] };
-        }
-        return f;
-      })
-    );
-
-    if (appliedCount > 0) {
-      toast.success(`${appliedCount} correspondência(s) sugerida(s) aplicada(s) para revisão.`);
-    } else {
-      toast.info("Nenhuma nova correspondência encontrada para os campos pendentes.");
-    }
   };
 
   const handleSave = async () => {
@@ -543,6 +517,12 @@ export function CanvaTemplateMapperModal({
             
             {/* Metrics & Sync Bar */}
             <div className="p-4 border-b border-border bg-card/40 space-y-3">
+              <h3 className="font-display font-semibold text-sm text-foreground">Mapeamento de Campos</h3>
+              <div className="text-xs text-muted-foreground">
+                <span>{activeFields.length} campos encontrados</span>
+                <span className="mx-2">•</span><span>{mappedCount} mapeados</span>
+                {unmappedCount > 0 && <><span className="mx-2">•</span><span>{unmappedCount} não mapeados</span></>}
+              </div>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span
@@ -872,17 +852,7 @@ export function CanvaTemplateMapperModal({
 
         {/* ─── BOTTOM FOOTER ─────────────────────────────────────── */}
         <div className="flex items-center justify-between px-6 py-3.5 bg-card border-t border-border">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleManualSuggestMatches}
-              disabled={fields.length === 0}
-              className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40"
-              title="Aplica sugestões apenas aos campos ainda não configurados"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Sugerir Matches Automáticos
-            </button>
-          </div>
+          <div />
 
           <div className="flex items-center gap-3">
             <GhostButton onClick={onClose}>Cancelar</GhostButton>
