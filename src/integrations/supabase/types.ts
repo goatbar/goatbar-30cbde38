@@ -964,34 +964,43 @@ export type Database = {
       generated_proposals: {
         Row: {
           budget_id: string | null
+          canva_design_id: string | null
           created_at: string | null
           event_id: string
           final_pdf_url: string | null
+          generated_at: string | null
           id: string
           proposal_data: Json
           status: string
+          storage_path: string | null
           template_id: string | null
           updated_at: string | null
         }
         Insert: {
           budget_id?: string | null
+          canva_design_id?: string | null
           created_at?: string | null
           event_id: string
           final_pdf_url?: string | null
+          generated_at?: string | null
           id?: string
           proposal_data?: Json
           status?: string
+          storage_path?: string | null
           template_id?: string | null
           updated_at?: string | null
         }
         Update: {
           budget_id?: string | null
+          canva_design_id?: string | null
           created_at?: string | null
           event_id?: string
           final_pdf_url?: string | null
+          generated_at?: string | null
           id?: string
           proposal_data?: Json
           status?: string
+          storage_path?: string | null
           template_id?: string | null
           updated_at?: string | null
         }

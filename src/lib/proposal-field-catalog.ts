@@ -64,6 +64,9 @@ export function mergeOfficialCanvaFields(
   });
 
   for (const field of dataset) {
+    // O Data Field antigo pode continuar no Canva/banco, mas não volta à experiência
+    // de configuração de modelos novos.
+    if (field.key === "INICIAIS_NOIVOS") continue;
     if (
       !OFFICIAL_CANVA_PROPOSAL_FIELDS.includes(
         field.key as (typeof OFFICIAL_CANVA_PROPOSAL_FIELDS)[number],
@@ -486,6 +489,8 @@ const AUTO_MATCH_ALIASES: Record<string, string[]> = {
     "client",
   ],
   "event.event_name": ["eventname", "nomeevento", "tituloevento", "evento"],
+  "computed.groom_initial": ["ino", "inicialnoivo"],
+  "computed.bride_initial": ["ina", "inicialnoiva"],
   "event.event_type": ["eventtype", "tipoevento", "categoriaevento", "tipo"],
   "event.event_date": ["eventdate", "dataevento", "data", "date", "diaevento"],
   "event.event_time": ["eventtime", "horario", "hora", "horainicio", "time"],
@@ -511,6 +516,7 @@ const AUTO_MATCH_ALIASES: Record<string, string[]> = {
   ],
   "budget.discount_value": ["discountvalue", "desconto", "valordesconto"],
   "budget.payment_terms": ["paymentterms", "formapagamento", "condicoespagamento", "pagamento"],
+  "budget.beverages": ["bebidas", "beverages", "listabebidas"],
   "budget.bartenders_count": ["bartenderscount", "bartenders", "qtdbartenders"],
   "budget.bar_keepers_count": ["barkeeperscount", "barkeepers", "barback", "apoio"],
   "budget.copeiras_count": ["copeirascount", "copeiras", "qtdcopeiras"],

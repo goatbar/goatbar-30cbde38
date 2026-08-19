@@ -42,6 +42,9 @@ export interface GeneratedProposal {
   template_id: string | null;
   proposal_data: ProposalData;
   final_pdf_url: string | null;
+  canva_design_id?: string | null;
+  generated_at?: string | null;
+  storage_path?: string | null;
   status: "draft" | "reviewed" | "downloaded" | "sent";
   created_at?: string;
   updated_at?: string;
@@ -1042,5 +1045,4 @@ export const pdfGenerationService = {
     return pdfDoc;
   },
 };
-
 
