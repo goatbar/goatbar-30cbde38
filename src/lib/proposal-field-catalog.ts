@@ -53,6 +53,32 @@ export interface CanvaDatasetField {
   type?: string;
 }
 
+export interface CanvaFieldAudit {
+  officialCount: number;
+  datasetCount: number;
+  configuredMappingCount: number;
+  validMappingCount: number;
+  missingMappingKeys: string[];
+}
+
+/** Calcula os contadores sem confundir o catálogo local com o Dataset do Canva. */
+export function auditCanvaFields(
+  dataset: CanvaDatasetField[],
+  mappingKeys: string[],
+): CanvaFieldAudit {
+  const datasetKeys = new Set(dataset.map((field) => field.key));
+  const activeMappingKeys = [...new Set(mappingKeys)].filter((key) => key !== "INICIAIS_NOIVOS");
+  const missingMappingKeys = activeMappingKeys.filter((key) => !datasetKeys.has(key));
+
+  return {
+    officialCount: OFFICIAL_CANVA_PROPOSAL_FIELDS.length,
+    datasetCount: datasetKeys.size,
+    configuredMappingCount: activeMappingKeys.length,
+    validMappingCount: activeMappingKeys.length - missingMappingKeys.length,
+    missingMappingKeys,
+  };
+}
+
 /** Preserva a ordem oficial e agrega campos extras do Canva, sem duplicar por key. */
 export function mergeOfficialCanvaFields(
   dataset: CanvaDatasetField[],
