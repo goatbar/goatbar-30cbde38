@@ -1191,7 +1191,9 @@ export type Database = {
           formatter: string
           id: string
           required: boolean
-          source_field_key: string
+          source_field_key: string | null
+          source_type: string
+          static_value: string | null
           template_id: string
           updated_at: string | null
         }
@@ -1202,7 +1204,9 @@ export type Database = {
           formatter?: string
           id?: string
           required?: boolean
-          source_field_key: string
+          source_field_key?: string | null
+          source_type?: string
+          static_value?: string | null
           template_id: string
           updated_at?: string | null
         }
@@ -1213,7 +1217,9 @@ export type Database = {
           formatter?: string
           id?: string
           required?: boolean
-          source_field_key?: string
+          source_field_key?: string | null
+          source_type?: string
+          static_value?: string | null
           template_id?: string
           updated_at?: string | null
         }

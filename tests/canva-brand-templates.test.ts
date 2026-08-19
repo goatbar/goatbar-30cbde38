@@ -203,11 +203,12 @@ describe("4. Goat Bar Field Catalog & Server-Side Validation", () => {
     expect(isValidSourceFieldKey("")).toBe(false);
   });
 
-  it("rejects invalid source_field_key in saveFieldMappings (Server-Side Validation)", async () => {
+  it("rejects invalid source_field_key when source_type is field", async () => {
     const invalidMappings = [
       {
         canva_field_key: "CLIENT_NAME",
         canva_field_type: "text",
+        source_type: "field",
         source_field_key: "malicious_unregistered_key",
         formatter: "raw",
         required: false,
@@ -217,6 +218,55 @@ describe("4. Goat Bar Field Catalog & Server-Side Validation", () => {
     await expect(
       proposalTemplatesService.saveFieldMappings("template-123", invalidMappings as any)
     ).rejects.toThrow(/Campo de origem inválido/);
+  });
+
+  it("rejects invalid source_type in saveFieldMappings", async () => {
+    const invalidTypeMappings = [
+      {
+        canva_field_key: "CLIENT_NAME",
+        canva_field_type: "text",
+        source_type: "arbitrary_invalid_type",
+        source_field_key: null,
+        formatter: "raw",
+        required: false,
+      },
+    ];
+
+    await expect(
+      proposalTemplatesService.saveFieldMappings("template-123", invalidTypeMappings as any)
+    ).rejects.toThrow(/Tipo de origem inválido/);
+  });
+
+  it("accepts valid static_value when source_type is static", async () => {
+    const validStaticMapping = {
+      canva_field_key: "PROPOSAL_TITLE",
+      canva_field_type: "text",
+      source_type: "static",
+      source_field_key: null,
+      static_value: "PROPOSTA COMERCIAL PREMIUM",
+      formatter: "raw",
+      required: false,
+    };
+
+    expect(validStaticMapping.source_type).toBe("static");
+    expect(validStaticMapping.static_value).toBe("PROPOSTA COMERCIAL PREMIUM");
+    expect(validStaticMapping.source_field_key).toBeNull();
+  });
+
+  it("accepts source_type none with null source_field_key and null static_value", () => {
+    const noneMapping = {
+      canva_field_key: "OPTIONAL_SUBTITLE",
+      canva_field_type: "text",
+      source_type: "none",
+      source_field_key: null,
+      static_value: null,
+      formatter: "raw",
+      required: false,
+    };
+
+    expect(noneMapping.source_type).toBe("none");
+    expect(noneMapping.source_field_key).toBeNull();
+    expect(noneMapping.static_value).toBeNull();
   });
 
   it("suggests intelligent auto-matches between Canva Data Fields and Goat Bar catalog", () => {

@@ -26,7 +26,9 @@ export interface ProposalTemplateFieldMapping {
   template_id: string;
   canva_field_key: string;
   canva_field_type: string;
-  source_field_key: string;
+  source_type?: "field" | "static" | "none" | string;
+  source_field_key?: string | null;
+  static_value?: string | null;
   formatter: string;
   required: boolean;
   created_at?: string;
@@ -211,12 +213,19 @@ export const proposalTemplatesService = {
     templateId: string,
     mappings: Array<Omit<ProposalTemplateFieldMapping, "id" | "template_id" | "created_at" | "updated_at">>
   ): Promise<ProposalTemplateFieldMapping[]> {
-    // 1. Server-side validation of source_field_key against PROPOSAL_FIELD_CATALOG
+    // 1. Server-side validation of mappings
     for (const m of mappings) {
-      if (m.source_field_key && !isValidSourceFieldKey(m.source_field_key)) {
-        throw new Error(
-          `Campo de origem inválido: "${m.source_field_key}". Utilize apenas campos do catálogo oficial.`
-        );
+      const sourceType = m.source_type || "field";
+      if (!["field", "static", "none"].includes(sourceType)) {
+        throw new Error(`Tipo de origem inválido: "${sourceType}".`);
+      }
+
+      if (sourceType === "field") {
+        if (m.source_field_key && !isValidSourceFieldKey(m.source_field_key)) {
+          throw new Error(
+            `Campo de origem inválido: "${m.source_field_key}". Utilize apenas campos do catálogo oficial.`
+          );
+        }
       }
     }
 
@@ -231,15 +240,20 @@ export const proposalTemplatesService = {
     if (!mappings.length) return [];
 
     // 3. Insert validated mappings
-    const payload = mappings.map((m) => ({
-      template_id: templateId,
-      canva_field_key: m.canva_field_key,
-      canva_field_type: m.canva_field_type || "text",
-      source_field_key: m.source_field_key,
-      formatter: m.formatter || "raw",
-      required: Boolean(m.required),
-      updated_at: new Date().toISOString(),
-    }));
+    const payload = mappings.map((m) => {
+      const sourceType = (m.source_type || "field") as "field" | "static" | "none";
+      return {
+        template_id: templateId,
+        canva_field_key: m.canva_field_key,
+        canva_field_type: m.canva_field_type || "text",
+        source_type: sourceType,
+        source_field_key: sourceType === "field" ? (m.source_field_key || null) : null,
+        static_value: sourceType === "static" ? (m.static_value ? String(m.static_value).trim() : null) : null,
+        formatter: m.formatter || "raw",
+        required: Boolean(m.required),
+        updated_at: new Date().toISOString(),
+      };
+    });
 
     const { data, error } = await supabase
       .from("proposal_template_field_mappings")
