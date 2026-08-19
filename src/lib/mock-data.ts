@@ -158,6 +158,8 @@ export interface Evento {
   descontos?: { valor: number; motivo: string; deduzirCustoDrinks?: boolean }[];
   descricaoBebidas?: string;
   bebidas: string[];
+  /** Raw line-based editor value; spaces are normalized only when the budget is saved. */
+  bebidasInput: string;
 }
 
 export interface Contrato {

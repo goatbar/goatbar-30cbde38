@@ -3,6 +3,11 @@ import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { calcularOrcamentoEvento, type Evento, type EventoStatus } from "@/lib/mock-data";
 import { ADDITIONAL_COST_LABEL, calcularTotalShots } from "@/lib/additional-budget-items";
+import {
+  beveragesToEditorValue,
+  normalizeBeveragesForSave,
+  preserveBeveragesInput,
+} from "@/lib/budget-beverages";
 import { fmtBRL } from "@/lib/format";
 import {
   formatBrazilianDocument,
@@ -424,6 +429,7 @@ function EventoInterna() {
     descontos: [],
     descricaoBebidas: "",
     bebidas: [],
+    bebidasInput: "",
   });
 
   const mapBudgetToDraft = (ev: RealEvent, b: BudgetVersion): Evento => ({
@@ -492,6 +498,7 @@ function EventoInterna() {
     bebidas: Array.isArray(b.beverages)
       ? b.beverages.filter((item): item is string => typeof item === "string")
       : [],
+    bebidasInput: beveragesToEditorValue(b.beverages),
   });
 
   const [draft, setDraft] = useState<Evento | null>(null);
@@ -543,7 +550,7 @@ function EventoInterna() {
         pending_percentage: calc.percPendente,
         pending_value: calc.valorPendente,
         pending_payment_date: draft.pagamento.dataPagamento,
-        beverages: draft.bebidas,
+        beverages: normalizeBeveragesForSave(draft.bebidasInput),
         selected_drinks: {
           ids: draft.drinks,
           copos: draft.coposVinculados,
@@ -1659,16 +1666,13 @@ function EventoInterna() {
                     <textarea
                       aria-label="Bebidas"
                       placeholder={"Uma bebida por linha (ex: Água\nRefrigerante)"}
-                      value={draft.bebidas.join("\n")}
+                      value={draft.bebidasInput}
                       onChange={(e) =>
                         setDraft((p) =>
                           p
                             ? {
                                 ...p,
-                                bebidas: e.target.value
-                                  .split("\n")
-                                  .map((item) => item.trim())
-                                  .filter(Boolean),
+                                bebidasInput: preserveBeveragesInput(e.target.value),
                               }
                             : null,
                         )
