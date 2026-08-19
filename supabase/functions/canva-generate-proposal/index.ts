@@ -11,6 +11,7 @@ import {
   getMissingCanvaMappingKeys,
   normalizeProposalEventType,
   ProposalGenerationError,
+  resolveSelectedDrinks,
 } from "./logic.ts";
 import { resolveProposalField } from "../../../src/lib/proposal-field-resolver.ts";
 
@@ -95,32 +96,11 @@ serve(async (req: Request) => {
         "A versão do orçamento selecionada não foi encontrada.",
         404,
       );
-    // selected_drinks é congelado na versão como `{ ids: uuid[] }`. Resolva os
-    // nomes no catálogo sem misturar com `beverages`, que é um campo independente.
-    const selectedIds = Array.isArray(budget.selected_drinks?.ids)
-      ? budget.selected_drinks.ids.filter((id: unknown) => typeof id === "string")
-      : [];
-    let resolvedDrinkNames: string[] = [];
-    if (selectedIds.length) {
-      const { data: drinkRows, error: drinksError } = await supabaseAdmin
-        .from("drinks")
-        .select("id,name")
-        .in("id", selectedIds);
-      if (drinksError)
-        throw new ProposalGenerationError(
-          "mapping_incomplete",
-          "Não foi possível carregar os drinks desta versão.",
-        );
-      const namesById = new Map((drinkRows || []).map((drink: any) => [drink.id, drink.name]));
-      resolvedDrinkNames = selectedIds
-        .map((id: string) => namesById.get(id))
-        .filter(
-          (name: unknown): name is string => typeof name === "string" && Boolean(name.trim()),
-        );
-    } else if (Array.isArray(budget.selected_drinks)) {
-      // Compatibilidade explícita com versões antigas que congelavam nomes/objetos.
-      resolvedDrinkNames = budget.selected_drinks;
-    }
+    const resolvedDrinkNames = await resolveSelectedDrinks(
+      budget.selected_drinks,
+      budgetVersionId,
+      async (ids) => await supabaseAdmin.from("drinks").select("id,nome").in("id", ids),
+    );
     const resolvedBudget = { ...budget, selected_drinks: resolvedDrinkNames };
     const { data: mappings, error: mappingsError } = await supabaseAdmin
       .from("proposal_template_field_mappings")

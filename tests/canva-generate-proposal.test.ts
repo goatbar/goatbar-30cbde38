@@ -4,6 +4,7 @@ import {
   buildAutofillData,
   getMissingCanvaMappingKeys,
   normalizeProposalEventType,
+  resolveSelectedDrinks,
 } from "../supabase/functions/canva-generate-proposal/logic";
 import {
   formatCanvaGenerationError,
@@ -99,6 +100,131 @@ describe("seleção e mappings da proposta", () => {
         ["INO"],
       ),
     ).toEqual(["INA"]);
+  });
+});
+
+describe("resolução dos drinks versionados", () => {
+  const rows = [
+    { id: "drink-1", nome: "Moscow Mule" },
+    { id: "drink-2", nome: "Fitzgerald" },
+    { id: "drink-3", nome: "Negroni" },
+  ];
+  const successfulQuery = vi.fn(async (ids: string[]) => ({
+    data: rows.filter((row) => ids.includes(row.id)),
+    error: null,
+  }));
+
+  it.each([
+    [
+      { ids: ["drink-1", "drink-2"], copos: {}, descricaoBebidas: "" },
+      ["Moscow Mule", "Fitzgerald"],
+    ],
+    [
+      ["drink-1", "drink-2"],
+      ["Moscow Mule", "Fitzgerald"],
+    ],
+    [
+      [{ id: "drink-1" }, { id: "drink-2" }],
+      ["Moscow Mule", "Fitzgerald"],
+    ],
+    ['{"ids":["drink-1"]}', ["Moscow Mule"]],
+  ])("resolve o formato persistido/histórico %#", async (selected, expected) => {
+    await expect(resolveSelectedDrinks(selected, "version-1", successfulQuery)).resolves.toEqual(
+      expected,
+    );
+  });
+
+  it("aceita objetos históricos hidratados sem produzir [object Object]", async () => {
+    const query = vi.fn();
+    await expect(
+      resolveSelectedDrinks([{ id: "old", nome: "Drink congelado" }], "version-1", query),
+    ).resolves.toEqual(["Drink congelado"]);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("deixa uma lista legitimamente vazia para a validação required", async () => {
+    const query = vi.fn();
+    const names = await resolveSelectedDrinks({ ids: [] }, "version-1", query);
+    expect(names).toEqual([]);
+    expect(query).not.toHaveBeenCalled();
+    expect(() =>
+      buildAutofillData(
+        [mapping("DRINKS", "package.drinks_list", { required: true })],
+        ["DRINKS"],
+        event,
+        { ...budget, selected_drinks: names },
+      ),
+    ).toThrowError(expect.objectContaining({ code: "required_field_empty" }));
+  });
+
+  it("classifica null e formatos sem IDs como selected_drinks_invalid", async () => {
+    await expect(resolveSelectedDrinks(null, "version-1", successfulQuery)).rejects.toMatchObject({
+      code: "selected_drinks_invalid",
+      details: { details: { detected_shape: "null" } },
+    });
+    await expect(
+      resolveSelectedDrinks({ copos: {} }, "version-1", successfulQuery),
+    ).rejects.toMatchObject({
+      code: "selected_drinks_invalid",
+    });
+  });
+
+  it("diferencia um ou vários IDs inexistentes", async () => {
+    await expect(
+      resolveSelectedDrinks({ ids: ["drink-1", "missing-1"] }, "version-1", successfulQuery),
+    ).rejects.toMatchObject({
+      code: "drinks_not_found",
+      details: { details: { requested_count: 2, found_count: 1, missing_ids: ["missing-1"] } },
+    });
+    await expect(
+      resolveSelectedDrinks(["missing-1", "missing-2"], "version-1", successfulQuery),
+    ).rejects.toMatchObject({
+      code: "drinks_not_found",
+      details: {
+        details: { requested_count: 2, found_count: 0, missing_ids: ["missing-1", "missing-2"] },
+      },
+    });
+  });
+
+  it("classifica erro PostgREST sem convertê-lo em required_field_empty", async () => {
+    const query = vi.fn(async () => ({
+      data: null,
+      error: { code: "42703", message: "column drinks.name does not exist" },
+    }));
+    await expect(
+      resolveSelectedDrinks({ ids: ["drink-1"] }, "version-1", query),
+    ).rejects.toMatchObject({
+      code: "drinks_query_failed",
+      status: 500,
+      details: { details: { db_code: "42703", requested_count: 1 } },
+    });
+  });
+
+  it("preserva ordem e duplicatas, retorna nomes em vez de IDs e mantém BEBIDAS independente", async () => {
+    const names = await resolveSelectedDrinks(
+      { ids: ["drink-2", "drink-1", "drink-2"] },
+      "version-1",
+      successfulQuery,
+    );
+    expect(names).toEqual(["Fitzgerald", "Moscow Mule", "Fitzgerald"]);
+    const data = buildAutofillData(
+      [mapping("DRINKS", "package.drinks_list"), mapping("BEBIDAS", "budget.beverages")],
+      ["DRINKS", "BEBIDAS"],
+      event,
+      { ...budget, selected_drinks: names },
+    );
+    expect(data.DRINKS.text).toBe("Fitzgerald, Moscow Mule, Fitzgerald");
+    expect(data.DRINKS.text).not.toContain("drink-");
+    expect(data.DRINKS.text).not.toContain("[object Object]");
+    expect(data.BEBIDAS.text).toBe("Água, Refrigerante");
+  });
+
+  it.each([
+    ["drinks_query_failed", "Não foi possível carregar os drinks desta versão."],
+    ["drinks_not_found", "Alguns drinks desta versão não foram encontrados no cadastro."],
+    ["selected_drinks_invalid", "Os dados de drinks desta versão estão em um formato inválido."],
+  ])("mantém a classificação %s amigável no frontend", (error_code, expected) => {
+    expect(formatCanvaGenerationError({ error_code })).toBe(expected);
   });
 });
 
