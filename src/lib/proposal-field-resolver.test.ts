@@ -71,6 +71,11 @@ describe("campos oficiais Canva", () => {
     const full = mergeOfficialCanvaFields(OFFICIAL_CANVA_PROPOSAL_FIELDS.map((key) => ({ key })));
     expect(new Set(full.map((field) => field.key)).size).toBe(15);
   });
+  it("mantém Data Fields extras fora das 15 linhas oficiais", () => {
+    const fields = mergeOfficialCanvaFields([{ key: "CAMPO_EXTRA_CANVA" }]);
+    expect(fields).toHaveLength(15);
+    expect(fields.map((field) => field.key)).not.toContain("CAMPO_EXTRA_CANVA");
+  });
   it("não reintroduz INICIAIS_NOIVOS mesmo quando o dataset legado ainda o contém", () => {
     expect(
       mergeOfficialCanvaFields([{ key: "INICIAIS_NOIVOS" }]).map((field) => field.key),
@@ -112,6 +117,17 @@ describe("campos oficiais Canva", () => {
 });
 
 describe("resolver", () => {
+  it("resolve os nomes hidratados do formato real { ids } sem serializar objetos", () => {
+    const value = resolveProposalField("package.drinks_list", {
+      ...context,
+      budget: {
+        ...context.budget,
+        selected_drinks: { names: ["Moscow Mule", "Fitzgerald"] },
+      },
+    });
+    expect(value).toEqual(["Moscow Mule", "Fitzgerald"]);
+    expect(formatProposalFieldValue(value)).toBe("Moscow Mule, Fitzgerald");
+  });
   it("resolve bebidas como lista e formata separadamente", () => {
     const value = resolveProposalField("budget.beverages", context);
     expect(value).toEqual(["Água", "Espumante"]);

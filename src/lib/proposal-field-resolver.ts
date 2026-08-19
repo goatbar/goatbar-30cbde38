@@ -6,6 +6,12 @@ export interface ProposalFieldContext {
 export type ProposalFieldValue = string | number | string[] | null;
 
 function selectedDrinkNames(selectedDrinks: unknown): string[] {
+  // Versões atuais persistem `{ ids, copos, descricaoBebidas }`; a Edge Function
+  // troca os ids pelos nomes do catálogo antes de chamar o resolver.
+  if (selectedDrinks && !Array.isArray(selectedDrinks) && typeof selectedDrinks === "object") {
+    const container = selectedDrinks as Record<string, unknown>;
+    selectedDrinks = container.names ?? container.items ?? container.ids;
+  }
   if (!Array.isArray(selectedDrinks)) return [];
   return selectedDrinks
     .map((drink) => {
@@ -15,7 +21,7 @@ function selectedDrinkNames(selectedDrinks: unknown): string[] {
       const name = item.nome ?? item.name;
       return typeof name === "string" ? name : null;
     })
-    .filter((name): name is string => Boolean(name));
+    .filter((name): name is string => Boolean(name?.trim()));
 }
 
 export function resolveExplicitInitial(name: string | null | undefined): string | null {
