@@ -1,3 +1,7 @@
 project_id = "xdqgglrxidmegujhkygj"
 [functions.assinafy-webhook]
 verify_jwt = false
+
+[functions.canva-oauth-callback]
+verify_jwt = false
+

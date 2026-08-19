@@ -1323,12 +1323,84 @@ export type Database = {
           },
         ]
       }
+      canva_oauth_sessions: {
+        Row: {
+          code_verifier: string
+          created_at: string
+          expires_at: string
+          id: string
+          state: string
+          user_id: string
+        }
+        Insert: {
+          code_verifier: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          state: string
+          user_id: string
+        }
+        Update: {
+          code_verifier?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          state?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      canva_integrations: {
+        Row: {
+          access_token: string
+          access_token_expires_at: string
+          canva_user_id: string | null
+          created_at: string
+          id: string
+          refresh_token: string
+          scopes: string[] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          access_token_expires_at: string
+          canva_user_id?: string | null
+          created_at?: string
+          id?: string
+          refresh_token: string
+          scopes?: string[] | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          access_token_expires_at?: string
+          canva_user_id?: string | null
+          created_at?: string
+          id?: string
+          refresh_token?: string
+          scopes?: string[] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      canva_rotate_tokens: {
+        Args: {
+          p_user_id: string
+          p_expected_refresh_token: string
+          p_new_access_token: string
+          p_new_refresh_token: string
+          p_new_expires_at: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
