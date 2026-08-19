@@ -104,6 +104,8 @@ export interface Evento {
   id: string;
   nome: string;
   cliente: string;
+  nomeNoivo?: string;
+  nomeNoiva?: string;
   telefone: string;
   email: string;
   data: string;
@@ -155,6 +157,7 @@ export interface Evento {
   descontoMotivo?: string;
   descontos?: { valor: number; motivo: string; deduzirCustoDrinks?: boolean }[];
   descricaoBebidas?: string;
+  bebidas: string[];
 }
 
 export interface Contrato {

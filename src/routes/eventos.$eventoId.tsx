@@ -331,6 +331,8 @@ function EventoInterna() {
     // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     evento_nome: ev.event_name || "",
     cliente: ev.client_name,
+    nomeNoivo: ev.groom_name || "",
+    nomeNoiva: ev.bride_name || "",
     telefone: ev.phone || "",
     email: ev.email || "",
     data: ev.date,
@@ -379,6 +381,7 @@ function EventoInterna() {
     descontoMotivo: "",
     descontos: [],
     descricaoBebidas: "",
+    bebidas: [],
   });
 
   const mapBudgetToDraft = (ev: RealEvent, b: BudgetVersion): Evento => ({
@@ -387,6 +390,8 @@ function EventoInterna() {
     // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     evento_nome: ev.event_name || "",
     cliente: ev.client_name,
+    nomeNoivo: ev.groom_name || "",
+    nomeNoiva: ev.bride_name || "",
     telefone: ev.phone || "",
     email: ev.email || "",
     data: ev.date,
@@ -442,6 +447,9 @@ function EventoInterna() {
     descontoMotivo: b.discount_description || "",
     descontos: parseDiscountsFromDescription(b.discount_value, b.discount_description),
     descricaoBebidas: (b.selected_drinks as any)?.descricaoBebidas || "",
+    bebidas: Array.isArray(b.beverages)
+      ? b.beverages.filter((item): item is string => typeof item === "string")
+      : [],
   });
 
   const [draft, setDraft] = useState<Evento | null>(null);
@@ -493,6 +501,7 @@ function EventoInterna() {
         pending_percentage: calc.percPendente,
         pending_value: calc.valorPendente,
         pending_payment_date: draft.pagamento.dataPagamento,
+        beverages: draft.bebidas,
         selected_drinks: {
           ids: draft.drinks,
           copos: draft.coposVinculados,
@@ -506,6 +515,8 @@ function EventoInterna() {
       // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       await eventBudgetService.updateEvent(evento.id, {
         client_name: draft.cliente,
+        groom_name: draft.nomeNoivo || null,
+        bride_name: draft.nomeNoiva || null,
         // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
         event_name: draft.evento_nome,
         phone: draft.telefone,
@@ -1277,6 +1288,20 @@ function EventoInterna() {
                 onChange={(v) => setDraft((p) => (p ? { ...p, evento_nome: v } : null))}
                 icon={<Users className="h-3 w-3 text-primary/60" />}
               />
+              <HeaderField
+                label="Nome do noivo"
+                value={draft.nomeNoivo || ""}
+                isEditing={isEditingHeader}
+                onChange={(v) => setDraft((p) => (p ? { ...p, nomeNoivo: v } : null))}
+                icon={<Users className="h-3 w-3 text-primary/60" />}
+              />
+              <HeaderField
+                label="Nome da noiva"
+                value={draft.nomeNoiva || ""}
+                isEditing={isEditingHeader}
+                onChange={(v) => setDraft((p) => (p ? { ...p, nomeNoiva: v } : null))}
+                icon={<Users className="h-3 w-3 text-primary/60" />}
+              />
             </div>
 
             {/* Coluna 2: Contato */}
@@ -1505,7 +1530,9 @@ function EventoInterna() {
                       />
                     </div>
                     <div>
-                      <label className="label-eyebrow block mb-2">{ADDITIONAL_COST_LABEL} (%)</label>
+                      <label className="label-eyebrow block mb-2">
+                        {ADDITIONAL_COST_LABEL} (%)
+                      </label>
                       <input
                         type="number"
                         value={draft.markupAdicionalDrinks || ""}
@@ -1581,6 +1608,34 @@ function EventoInterna() {
                           </div>
                         ))}
                     </div>
+                  </div>
+
+                  <div className="space-y-2 mt-6 border-t border-border/40 pt-6">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                      Bebidas
+                    </label>
+                    <textarea
+                      aria-label="Bebidas"
+                      placeholder={"Uma bebida por linha (ex: Água\nRefrigerante)"}
+                      value={draft.bebidas.join("\n")}
+                      onChange={(e) =>
+                        setDraft((p) =>
+                          p
+                            ? {
+                                ...p,
+                                bebidas: e.target.value
+                                  .split("\n")
+                                  .map((item) => item.trim())
+                                  .filter(Boolean),
+                              }
+                            : null,
+                        )
+                      }
+                      className="w-full h-24 p-3 rounded-xl bg-input border border-border text-xs font-medium focus:ring-2 focus:ring-primary/20 outline-none resize-none"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Itens deste orçamento; separados dos coquetéis selecionados acima.
+                    </p>
                   </div>
 
                   <div className="space-y-2 mt-6 border-t border-border/40 pt-6">
@@ -3797,13 +3852,15 @@ function ProposalModal({
             : [],
           welcomeDrinks: draft?.hasWelcomeDrinks
             ? (calc?.welcomeDrinks.distribuicao || []).map(
-                (item: import("@/lib/additional-budget-items").WelcomeDrinkDistribution) => `${item.nameSnapshot}: ${item.quantidade} unidades`,
+                (item: import("@/lib/additional-budget-items").WelcomeDrinkDistribution) =>
+                  `${item.nameSnapshot}: ${item.quantidade} unidades`,
               )
             : [],
           welcomeDrinksTotal: draft?.hasWelcomeDrinks ? calc?.welcomeDrinks.valorFinal || 0 : 0,
           shots: draft?.hasShots
             ? (draft.shotsItems || []).map(
-                (item: import("@/lib/additional-budget-items").ShotBudgetItem) => `${item.nome}: ${item.quantidade} × ${fmtBRL(item.valorUnitario)}`,
+                (item: import("@/lib/additional-budget-items").ShotBudgetItem) =>
+                  `${item.nome}: ${item.quantidade} × ${fmtBRL(item.valorUnitario)}`,
               )
             : [],
           shotsTotal: draft?.hasShots ? calc?.shotsTotal || 0 : 0,

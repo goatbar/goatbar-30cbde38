@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 export interface Event {
   id: string;
   client_name: string;
+  groom_name?: string | null;
+  bride_name?: string | null;
   event_name?: string;
   phone?: string;
   email?: string;
@@ -35,6 +37,7 @@ export interface BudgetVersion {
 
   // Budget Details
   selected_drinks: any;
+  beverages: any;
   drinks_per_person: number;
   drinks_markup_percentage: number;
   drinks_cost_sum: number;

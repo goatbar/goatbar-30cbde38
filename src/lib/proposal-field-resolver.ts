@@ -20,9 +20,17 @@ function selectedDrinkNames(selectedDrinks: unknown): string[] {
     .filter((name): name is string => Boolean(name));
 }
 
+export function resolveExplicitInitial(name: string | null | undefined): string | null {
+  const normalized = name?.trim();
+  return normalized ? Array.from(normalized)[0]?.toLocaleUpperCase("pt-BR") || null : null;
+}
+
 export function resolveCoupleInitials(clientName: string | null | undefined): string | null {
   if (!clientName?.trim()) return null;
-  const names = clientName.trim().split(/\s+(?:&|e)\s+|\s*\/\s*/i).filter(Boolean);
+  const names = clientName
+    .trim()
+    .split(/\s+(?:&|e)\s+|\s*\/\s*/i)
+    .filter(Boolean);
   if (names.length !== 2) return null;
   const initials = names.map((name) => Array.from(name.trim())[0]?.toLocaleUpperCase("pt-BR"));
   return initials.every(Boolean) ? `${initials[0]} | ${initials[1]}` : null;
@@ -41,23 +49,43 @@ export function subtractUtcDays(date: string | null | undefined, days: number): 
 /** Resolve somente dados brutos; apresentação deve ser feita por formatProposalFieldValue. */
 export function resolveProposalField(
   sourceFieldKey: string,
-  { event, budget }: ProposalFieldContext
+  { event, budget }: ProposalFieldContext,
 ): ProposalFieldValue {
   switch (sourceFieldKey) {
-    case "event.event_name": return event.event_name || event.event_type || null;
-    case "event.event_date": return event.date || null;
-    case "event.guest_count": return event.guests;
-    case "event.duration_hours": return event.duration_hours ?? null;
-    case "budget.created_at": return budget.created_at || null;
-    case "budget.total_drinks": return event.guests * budget.drinks_per_person;
-    case "budget.total_value": return budget.final_budget_value;
-    case "package.drinks_list": return selectedDrinkNames(budget.selected_drinks);
-    case "budget.bartenders_count": return budget.bartender_quantity;
-    case "budget.copeiras_count": return budget.copeira_quantity;
-    case "budget.bar_keepers_count": return budget.keeper_quantity;
-    case "computed.couple_initials": return resolveCoupleInitials(event.client_name);
-    case "computed.final_payment_date": return subtractUtcDays(event.date, 7);
-    default: return null;
+    case "event.event_name":
+      return event.event_name || event.event_type || null;
+    case "event.event_date":
+      return event.date || null;
+    case "event.guest_count":
+      return event.guests;
+    case "event.duration_hours":
+      return event.duration_hours ?? null;
+    case "budget.created_at":
+      return budget.created_at || null;
+    case "budget.total_drinks":
+      return event.guests * budget.drinks_per_person;
+    case "budget.total_value":
+      return budget.final_budget_value;
+    case "package.drinks_list":
+      return selectedDrinkNames(budget.selected_drinks);
+    case "budget.beverages":
+      return selectedDrinkNames(budget.beverages);
+    case "budget.bartenders_count":
+      return budget.bartender_quantity;
+    case "budget.copeiras_count":
+      return budget.copeira_quantity;
+    case "budget.bar_keepers_count":
+      return budget.keeper_quantity;
+    case "computed.couple_initials":
+      return resolveCoupleInitials(event.client_name);
+    case "computed.groom_initial":
+      return resolveExplicitInitial(event.groom_name);
+    case "computed.bride_initial":
+      return resolveExplicitInitial(event.bride_name);
+    case "computed.final_payment_date":
+      return subtractUtcDays(event.date, 7);
+    default:
+      return null;
   }
 }
 
