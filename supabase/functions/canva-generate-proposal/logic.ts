@@ -23,6 +23,141 @@ export class ProposalGenerationError extends Error {
   }
 }
 
+type DrinkRow = { id: string; nome: string };
+type DrinksQueryResult = { data: DrinkRow[] | null; error: any };
+
+function selectedDrinksShape(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  return typeof value === "object" ? "object" : typeof value === "string" ? "string" : "unknown";
+}
+
+/** Resolve o formato versionado sem confundir IDs do catálogo com nomes para o Canva. */
+export async function resolveSelectedDrinks(
+  selectedDrinks: unknown,
+  budgetVersionId: string,
+  queryDrinks: (ids: string[]) => Promise<DrinksQueryResult>,
+): Promise<string[]> {
+  const detectedShape = selectedDrinksShape(selectedDrinks);
+  let value = selectedDrinks;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      throw new ProposalGenerationError(
+        "selected_drinks_invalid",
+        "Os dados de drinks desta versão estão em um formato inválido.",
+        400,
+        {
+          details: { budget_version_id: budgetVersionId, detected_shape: detectedShape },
+        },
+      );
+    }
+  }
+
+  if (value === null || (!Array.isArray(value) && typeof value !== "object")) {
+    throw new ProposalGenerationError(
+      "selected_drinks_invalid",
+      "Os dados de drinks desta versão estão em um formato inválido.",
+      400,
+      {
+        details: { budget_version_id: budgetVersionId, detected_shape: detectedShape },
+      },
+    );
+  }
+
+  const candidate = Array.isArray(value) ? value : (value as Record<string, unknown>).ids;
+  if (!Array.isArray(candidate)) {
+    throw new ProposalGenerationError(
+      "selected_drinks_invalid",
+      "Os dados de drinks desta versão estão em um formato inválido.",
+      400,
+      {
+        details: { budget_version_id: budgetVersionId, detected_shape: detectedShape },
+      },
+    );
+  }
+  if (candidate.length === 0) return [];
+
+  // Algumas versões históricas guardavam objetos já hidratados. Eles são snapshots,
+  // não são convertidos em IDs nem misturados com budget.beverages.
+  const hydratedNames = candidate.map((item) => {
+    if (!item || typeof item !== "object") return null;
+    const record = item as Record<string, unknown>;
+    const name = record.nome ?? record.name;
+    return typeof name === "string" && name.trim() ? name.trim() : null;
+  });
+  if (hydratedNames.every((name) => name !== null)) return hydratedNames as string[];
+
+  const ids = candidate.map((item) =>
+    typeof item === "string"
+      ? item.trim()
+      : item && typeof item === "object" && typeof (item as Record<string, unknown>).id === "string"
+        ? ((item as Record<string, unknown>).id as string).trim()
+        : "",
+  );
+  if (ids.some((id) => !id)) {
+    throw new ProposalGenerationError(
+      "selected_drinks_invalid",
+      "Os dados de drinks desta versão estão em um formato inválido.",
+      400,
+      {
+        details: { budget_version_id: budgetVersionId, detected_shape: detectedShape },
+      },
+    );
+  }
+
+  const uniqueIds = [...new Set(ids)];
+  console.info("[canva-generate-proposal][drinks]", {
+    stage: "resolve_selected_drinks",
+    budget_version_id: budgetVersionId,
+    selected_drinks_shape: detectedShape,
+    requested_count: uniqueIds.length,
+  });
+  const { data, error } = await queryDrinks(uniqueIds);
+  console.info("[canva-generate-proposal][drinks]", {
+    stage: "resolve_selected_drinks_result",
+    requested_count: uniqueIds.length,
+    found_count: data?.length ?? 0,
+    has_query_error: Boolean(error),
+    db_code: error?.code ?? null,
+  });
+  if (error) {
+    throw new ProposalGenerationError(
+      "drinks_query_failed",
+      "Não foi possível carregar os drinks desta versão.",
+      500,
+      {
+        details: {
+          budget_version_id: budgetVersionId,
+          requested_count: uniqueIds.length,
+          db_code: error.code ?? null,
+          db_message: error.message ?? null,
+        },
+      },
+    );
+  }
+
+  const byId = new Map((data ?? []).map((drink) => [drink.id, drink.nome]));
+  const missingIds = uniqueIds.filter((id) => !byId.has(id));
+  if (missingIds.length) {
+    throw new ProposalGenerationError(
+      "drinks_not_found",
+      "Alguns drinks desta versão não foram encontrados no cadastro.",
+      404,
+      {
+        details: {
+          budget_version_id: budgetVersionId,
+          requested_count: uniqueIds.length,
+          found_count: uniqueIds.length - missingIds.length,
+          missing_ids: missingIds,
+        },
+      },
+    );
+  }
+  return ids.map((id) => byId.get(id)!).filter((name) => typeof name === "string" && name.trim());
+}
+
 export function isEmptyProposalValue(value: unknown) {
   if (value == null) return true;
   if (typeof value === "string") return !value.trim();
