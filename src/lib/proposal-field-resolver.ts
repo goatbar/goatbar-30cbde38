@@ -1,8 +1,6 @@
-import type { BudgetVersion, Event } from "@/services/event-budget-service";
-
 export interface ProposalFieldContext {
-  event: Event & { duration_hours?: number | null };
-  budget: BudgetVersion;
+  event: Record<string, any> & { duration_hours?: number | null };
+  budget: Record<string, any>;
 }
 
 export type ProposalFieldValue = string | number | string[] | null;
@@ -56,16 +54,30 @@ export function resolveProposalField(
       return event.event_name || event.event_type || null;
     case "event.event_date":
       return event.date || null;
+    case "event.event_type":
+      return event.event_type || null;
+    case "event.event_time":
+      return event.event_time || null;
+    case "event.location":
+      return event.event_location || event.city || null;
     case "event.guest_count":
       return event.guests;
     case "event.duration_hours":
       return event.duration_hours ?? null;
     case "budget.created_at":
       return budget.created_at || null;
+    case "computed.proposal_date":
+      return budget.created_at || null;
     case "budget.total_drinks":
       return event.guests * budget.drinks_per_person;
     case "budget.total_value":
       return budget.final_budget_value;
+    case "budget.discount_value":
+      return budget.discount_value;
+    case "budget.payment_terms":
+      return budget.payment_method || null;
+    case "package.drinks_count":
+      return selectedDrinkNames(budget.selected_drinks).length;
     case "package.drinks_list":
       return selectedDrinkNames(budget.selected_drinks);
     case "budget.beverages":

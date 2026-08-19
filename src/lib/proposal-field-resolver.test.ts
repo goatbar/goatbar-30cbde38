@@ -45,11 +45,22 @@ describe("campos oficiais Canva", () => {
     const full = mergeOfficialCanvaFields(OFFICIAL_CANVA_PROPOSAL_FIELDS.map((key) => ({ key })));
     expect(new Set(full.map((field) => field.key)).size).toBe(15);
   });
+  it("não reintroduz INICIAIS_NOIVOS mesmo quando o dataset legado ainda o contém", () => {
+    expect(mergeOfficialCanvaFields([{ key: "INICIAIS_NOIVOS" }]).map((field) => field.key)).not.toContain("INICIAIS_NOIVOS");
+  });
   it("inclui INO, INA e BEBIDAS, mas não oferece o legado", () => {
     expect(OFFICIAL_CANVA_PROPOSAL_FIELDS).toEqual(
       expect.arrayContaining(["INO", "INA", "BEBIDAS"]),
     );
     expect(OFFICIAL_CANVA_PROPOSAL_FIELDS).not.toContain("INICIAIS_NOIVOS");
+  });
+  it("sugere as fontes oficiais separadas para INO, INA e BEBIDAS", async () => {
+    const { suggestAutoMatches } = await import("./proposal-field-catalog");
+    expect(suggestAutoMatches([{ key: "INO" }, { key: "INA" }, { key: "BEBIDAS" }])).toEqual({
+      INO: "computed.groom_initial",
+      INA: "computed.bride_initial",
+      BEBIDAS: "budget.beverages",
+    });
   });
 });
 

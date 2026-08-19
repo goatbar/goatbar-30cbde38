@@ -86,6 +86,11 @@ import {
 } from "@/lib/contract-state";
 import { cancelAssinafySignature, type AssinafyDiagnostic } from "@/services/assinafy-service";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
+import {
+  friendlyCanvaProposalError,
+  generateCanvaProposal,
+  getProposalGenerationFlow,
+} from "@/lib/proposal-generation";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
   component: EventoInterna,
@@ -210,6 +215,43 @@ function EventoInterna() {
   const [showProposalModal, setShowProposalModal] = useState(false);
   const [existingProposal, setExistingProposal] = useState<GeneratedProposal | null>(null);
   const [proposalTemplate, setProposalTemplate] = useState<ProposalTemplate | null>(null);
+  const [canvaGeneration, setCanvaGeneration] = useState<{
+    open: boolean;
+    status: "loading" | "success" | "error";
+    pdfUrl?: string;
+    message?: string;
+  }>({ open: false, status: "loading" });
+
+  const handleGenerateProposal = async () => {
+    const evType = evento?.event_type?.toLowerCase() || "";
+    const mappedType: "casamento" | "aniversario" | "comemoracao" = evType.includes("casamento")
+      ? "casamento"
+      : evType.includes("aniversario") || evType.includes("aniversário")
+        ? "aniversario"
+        : "comemoracao";
+    try {
+      const template = await proposalTemplatesService.getDefaultTemplate(mappedType);
+      setProposalTemplate(template);
+      if (!template) {
+        throw new Error("Nenhum modelo de proposta ativo foi configurado para este tipo de evento.");
+      }
+      if (getProposalGenerationFlow(template) === "internal") {
+        setShowProposalModal(true);
+        return;
+      }
+      if (!currentBudget?.id) {
+        toast.error("Salve uma versão do orçamento antes de gerar a proposta.");
+        return;
+      }
+      setCanvaGeneration({ open: true, status: "loading" });
+      const result = await generateCanvaProposal(eventoId, currentBudget.id);
+      setExistingProposal(result.proposal);
+      setCanvaGeneration({ open: true, status: "success", pdfUrl: result.pdf_url });
+    } catch (error) {
+      const message = friendlyCanvaProposalError(error);
+      setCanvaGeneration({ open: true, status: "error", message });
+    }
+  };
 
   useEffect(() => {
     loadAllData();
@@ -2579,24 +2621,7 @@ function EventoInterna() {
                   <div className="flex gap-2 flex-wrap">
                     <PrimaryButton
                       className="h-10 text-[11px] font-bold flex-1"
-                      onClick={async () => {
-                        // Try to find default template for this event type
-                        const evType = evento?.event_type?.toLowerCase() || "";
-                        const mappedType: "casamento" | "aniversario" | "comemoracao" =
-                          evType.includes("casamento")
-                            ? "casamento"
-                            : evType.includes("aniversario") || evType.includes("aniversário")
-                              ? "aniversario"
-                              : "comemoracao";
-                        try {
-                          const tmpl =
-                            await proposalTemplatesService.getDefaultTemplate(mappedType);
-                          setProposalTemplate(tmpl);
-                        } catch {
-                          setProposalTemplate(null);
-                        }
-                        setShowProposalModal(true);
-                      }}
+                      onClick={handleGenerateProposal}
                     >
                       <FileTextIcon className="h-4 w-4" />
                       {existingProposal ? "VER / EDITAR PROPOSTA" : "GERAR PROPOSTA COMERCIAL"}
@@ -3757,6 +3782,12 @@ function EventoInterna() {
           }}
         />
       )}
+      {canvaGeneration.open && (
+        <CanvaProposalGenerationModal
+          state={canvaGeneration}
+          onClose={() => setCanvaGeneration((value) => ({ ...value, open: false }))}
+        />
+      )}
 
       {/* CONTRACT REVISION & VALIDATION MODAL */}
       <ContractReviewModal
@@ -3795,6 +3826,47 @@ function EventoInterna() {
 // ------------------------------------------------------------
 // PROPOSAL MODAL COMPONENT
 // ------------------------------------------------------------
+function CanvaProposalGenerationModal({
+  state,
+  onClose,
+}: {
+  state: { status: "loading" | "success" | "error"; pdfUrl?: string; message?: string };
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/90 p-4 backdrop-blur-md">
+      <div className="w-full max-w-lg rounded-2xl border border-border bg-surface p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-display text-lg font-semibold">
+              {state.status === "success" ? "Proposta gerada com sucesso" : state.status === "error" ? "Não foi possível gerar a proposta" : "Gerando proposta comercial..."}
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">Modelo Canva associado ao tipo deste evento</p>
+          </div>
+          {state.status !== "loading" && <button onClick={onClose} aria-label="Fechar">✕</button>}
+        </div>
+        {state.status === "loading" && (
+          <div className="mt-6 space-y-3 text-sm">
+            {["Carregando dados do evento", "Preparando template Canva", "Preenchendo campos", "Exportando PDF"].map((step, index) => (
+              <div key={step} className="flex items-center gap-3 text-muted-foreground">
+                <Loader2 className={`h-4 w-4 ${index === 0 ? "animate-spin text-primary" : ""}`} /> {step}
+              </div>
+            ))}
+          </div>
+        )}
+        {state.status === "error" && <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{state.message}</div>}
+        {state.status === "success" && state.pdfUrl && (
+          <div className="mt-6 flex flex-wrap gap-3">
+            <a className="flex-1 rounded-xl bg-primary px-4 py-3 text-center text-xs font-bold text-primary-foreground" href={state.pdfUrl} target="_blank" rel="noreferrer">Visualizar PDF</a>
+            <a className="flex-1 rounded-xl border border-border px-4 py-3 text-center text-xs font-bold" href={state.pdfUrl} download>Baixar PDF</a>
+          </div>
+        )}
+        {state.status === "error" && <button className="mt-4 w-full rounded-xl border border-border px-4 py-3 text-xs font-bold" onClick={onClose}>Fechar</button>}
+      </div>
+    </div>
+  );
+}
+
 function ProposalModal({
   evento,
   draft,
