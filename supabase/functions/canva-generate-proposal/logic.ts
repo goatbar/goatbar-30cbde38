@@ -625,11 +625,70 @@ async function jsonRequest(fetcher: Fetch, url: string, token: string, init?: Re
     },
   });
   const body = await response.json().catch(() => ({}));
+  if (response.status === 429 && url === "https://api.canva.com/rest/v1/autofills") {
+    const details = redactCanvaResponse(body);
+    const requestId = response.headers.get("x-request-id") ||
+      response.headers.get("x-trace-id") || response.headers.get("trace-id") ||
+      findString(details, ["request_id", "requestId", "trace_id", "traceId"]);
+    const errorCode = findString(details, ["code", "error_code"]);
+    const upsellUrl = findString(details, ["upsell_url"]);
+    const quotaFields = collectDiagnosticFields(details);
+    console.warn("[canva-generate-proposal][autofill-429]", {
+      status: response.status,
+      has_upsell_url: Boolean(upsellUrl),
+      error_code: errorCode,
+      request_id: requestId,
+      quota_fields_present: quotaFields,
+    });
+    throw new ProposalGenerationError(
+      "canva_autofill_quota_exceeded",
+      findString(details, ["message"]) || "A cota de Autofill informada pela Canva foi excedida.",
+      429,
+      {
+        upsell_url: upsellUrl,
+        canva_details: { ...details, ...(requestId ? { request_id: requestId } : {}) },
+      },
+    );
+  }
   if (!response.ok)
     throw new Error(
       `Canva HTTP ${response.status}: ${body?.message || body?.error?.message || "erro desconhecido"}`,
     );
   return body;
+}
+
+const SENSITIVE_CANVA_KEYS = /^(access_token|refresh_token|authorization|client_secret|token|secret)$/i;
+const DIAGNOSTIC_CANVA_KEYS = /(quota|entitlement|plan|workspace|team|account)/i;
+
+/** Preserve Canva diagnostics while ensuring credentials can never cross the API boundary. */
+export function redactCanvaResponse(value: any): any {
+  if (Array.isArray(value)) return value.map(redactCanvaResponse);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => [
+    key,
+    SENSITIVE_CANVA_KEYS.test(key) ? "[REDACTED]" : redactCanvaResponse(child),
+  ]));
+}
+
+function findString(value: any, keys: string[]): string | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  for (const [key, child] of Object.entries(value)) {
+    if (keys.includes(key) && typeof child === "string") return child;
+    const nested = findString(child, keys);
+    if (nested) return nested;
+  }
+  return undefined;
+}
+
+export function collectDiagnosticFields(value: any, prefix = ""): string[] {
+  if (!value || typeof value !== "object") return [];
+  return [...new Set(Object.entries(value).flatMap(([key, child]) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    return [
+      ...(DIAGNOSTIC_CANVA_KEYS.test(key) ? [path] : []),
+      ...collectDiagnosticFields(child, path),
+    ];
+  }))];
 }
 
 async function pollJob(
