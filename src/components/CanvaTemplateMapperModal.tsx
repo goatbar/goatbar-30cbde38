@@ -38,13 +38,18 @@ import {
 import {
   PROPOSAL_FIELD_CATALOG,
   PROPOSAL_FORMATTERS,
-  mergeOfficialCanvaFields,
   auditCanvaFields,
   normalizeCanvaFieldKey,
   OFFICIAL_CANVA_PROPOSAL_FIELDS,
   getFieldCatalogItem,
   type ProposalCatalogField,
 } from "@/lib/proposal-field-catalog";
+import {
+  buildOfficialCanvaMapperFields,
+  filterOfficialCanvaMapperFields,
+  isCanvaMapperFieldMapped,
+  type CanvaMapperFieldFilter,
+} from "@/lib/canva-mapper-fields";
 import { PrimaryButton, GhostButton } from "@/components/ui-bits";
 
 interface CanvaTemplateMapperModalProps {
@@ -69,8 +74,6 @@ export interface CanvaFieldState {
   existsInCanva: boolean;
   expectedKey: string;
 }
-
-type FieldFilter = "all" | "mapped" | "unmapped" | "valid" | "missing";
 
 export function CanvaTemplateMapperModal({
   template,
@@ -110,7 +113,7 @@ export function CanvaTemplateMapperModal({
   >([]);
   const [selectedFieldIndex, setSelectedFieldIndex] = useState<number | null>(null);
   const [fieldSearch, setFieldSearch] = useState("");
-  const [fieldFilter, setFieldFilter] = useState<FieldFilter>("all");
+  const [fieldFilter, setFieldFilter] = useState<CanvaMapperFieldFilter>("all");
   const [legacyMappings, setLegacyMappings] = useState<ProposalTemplateFieldMapping[]>([]);
 
   // Visual preview zoom state
@@ -137,6 +140,8 @@ export function CanvaTemplateMapperModal({
     try {
       // 1. Fetch existing stored mappings from database
       const existingMappings = await proposalTemplatesService.listFieldMappings(template.id);
+      // The local catalog is rendered even before (or without) a successful Canva dataset fetch.
+      setFields(buildOfficialCanvaMapperFields([], existingMappings));
 
       // 2. If a brand template is linked, fetch Data Fields from Canva
       if (template.canva_brand_template_id) {
@@ -183,7 +188,6 @@ export function CanvaTemplateMapperModal({
       setCanvaConnected(true);
       const realDatasetFields = res.fields || [];
       setCanvaDatasetFields(realDatasetFields);
-      const canvaFields = mergeOfficialCanvaFields(realDatasetFields);
 
       // Current mappings from state or existing records
       const currentMappings = existingMappings || [
@@ -200,51 +204,12 @@ export function CanvaTemplateMapperModal({
         ...legacyMappings,
       ];
 
-      const mappingsMap = new Map(
-        currentMappings.map((m) => [normalizeCanvaFieldKey(m.canva_field_key), m]),
-      );
       setLegacyMappings(
         currentMappings.filter(
           (m) => normalizeCanvaFieldKey(m.canva_field_key) === "INICIAIS_NOIVOS",
         ),
       );
-      const canvaKeySet = new Set(realDatasetFields.map((f) => normalizeCanvaFieldKey(f.key)));
-      const nextFields: CanvaFieldState[] = [];
-      let idxCounter = 1;
-
-      // Campos oficiais sempre vêm primeiro; metadata e extras da Canva são mesclados por key.
-      for (const cf of canvaFields) {
-        const normalizedKey = normalizeCanvaFieldKey(cf.key);
-        const existing = mappingsMap.get(normalizedKey);
-        const expectedKey =
-          OFFICIAL_CANVA_PROPOSAL_FIELDS.find(
-            (key) => normalizeCanvaFieldKey(key) === normalizedKey,
-          ) || cf.key;
-        const sourceType: SourceType =
-          existing?.source_type === "static"
-            ? "static"
-            : existing?.source_type === "none"
-              ? "none"
-              : "field";
-
-        nextFields.push({
-          index: idxCounter++,
-          key: cf.key,
-          name: cf.name || cf.key,
-          type: cf.type || "text",
-          source_type: sourceType,
-          source_field_key: existing?.source_field_key || null,
-          static_value: existing?.static_value || null,
-          formatter:
-            existing?.formatter || (cf.key.toLowerCase().includes("valor") ? "currency" : "raw"),
-          required: Boolean(existing?.required),
-          isRemoved: false,
-          existsInCanva: canvaKeySet.has(normalizedKey),
-          expectedKey,
-        });
-      }
-
-      setFields(nextFields);
+      setFields(buildOfficialCanvaMapperFields(realDatasetFields, currentMappings));
       setSelectedFieldIndex(null);
     } catch (err: any) {
       setApiError(err?.message || "Falha ao sincronizar campos do Canva.");
@@ -383,26 +348,7 @@ export function CanvaTemplateMapperModal({
     activeFields.length > 0 && unmappedCount === 0 && mappingAudit.missingMappingKeys.length === 0;
 
   // Filtered fields list by search
-  const filteredFields = fields.filter((f) => {
-    const isMapped =
-      f.source_type === "none" ||
-      (f.source_type === "field" && Boolean(f.source_field_key)) ||
-      (f.source_type === "static" && Boolean(f.static_value?.trim()));
-    const matchesFilter =
-      fieldFilter === "all" ||
-      (fieldFilter === "mapped" && isMapped) ||
-      (fieldFilter === "unmapped" && !isMapped) ||
-      (fieldFilter === "valid" && f.existsInCanva) ||
-      (fieldFilter === "missing" && !f.existsInCanva);
-    const query = fieldSearch.trim().toLowerCase();
-    return (
-      matchesFilter &&
-      (!query ||
-        [f.key, f.expectedKey, f.name, f.source_field_key || ""].some((value) =>
-          value.toLowerCase().includes(query),
-        ))
-    );
-  });
+  const filteredFields = filterOfficialCanvaMapperFields(fields, fieldSearch, fieldFilter);
 
   const selectedField = selectedFieldIndex !== null ? fields[selectedFieldIndex] : null;
 
@@ -675,7 +621,7 @@ export function CanvaTemplateMapperModal({
                 <select
                   aria-label="Filtrar campos"
                   value={fieldFilter}
-                  onChange={(e) => setFieldFilter(e.target.value as FieldFilter)}
+                  onChange={(e) => setFieldFilter(e.target.value as CanvaMapperFieldFilter)}
                   className="h-8 rounded-lg bg-input border border-border px-2 text-xs"
                 >
                   <option value="all">Todos</option>
@@ -768,10 +714,7 @@ export function CanvaTemplateMapperModal({
                   {filteredFields.map((field) => {
                     const originalIndex = fields.indexOf(field);
                     const isSelected = selectedFieldIndex === originalIndex;
-                    const isMapped =
-                      field.source_type === "none" ||
-                      (field.source_type === "field" && Boolean(field.source_field_key)) ||
-                      (field.source_type === "static" && Boolean(field.static_value?.trim()));
+                    const isMapped = isCanvaMapperFieldMapped(field);
                     const divergent = field.existsInCanva && field.key !== field.expectedKey;
                     const status = !field.existsInCanva
                       ? "⚠ AUSENTE NO CANVA"
