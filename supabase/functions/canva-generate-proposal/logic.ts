@@ -215,7 +215,11 @@ export function buildAutofillData(
           "mapping_incomplete",
           `O Data Field "${mapping.canva_field_key}" não possui uma origem configurada.`,
         );
-      raw = resolveProposalField(mapping.source_field_key, { event, budget });
+      raw = resolveProposalField(mapping.source_field_key, {
+        event,
+        budget,
+        hydratedData: { selectedDrinkNames: budget.selectedDrinkNames ?? budget.selected_drinks },
+      });
     }
     if (mapping.required && isEmptyProposalValue(raw)) {
       throw new ProposalGenerationError(

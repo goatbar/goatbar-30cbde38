@@ -101,7 +101,7 @@ serve(async (req: Request) => {
       budgetVersionId,
       async (ids) => await supabaseAdmin.from("drinks").select("id,nome").in("id", ids),
     );
-    const resolvedBudget = { ...budget, selected_drinks: resolvedDrinkNames };
+    const resolvedBudget = { ...budget, selectedDrinkNames: resolvedDrinkNames };
     const { data: mappings, error: mappingsError } = await supabaseAdmin
       .from("proposal_template_field_mappings")
       .select("*")
@@ -137,7 +137,11 @@ serve(async (req: Request) => {
     for (const mapping of mappings || []) {
       const raw =
         mapping.source_type === "field" && mapping.source_field_key
-          ? resolveProposalField(mapping.source_field_key, { event, budget: resolvedBudget })
+          ? resolveProposalField(mapping.source_field_key, {
+              event,
+              budget,
+              hydratedData: { selectedDrinkNames: resolvedDrinkNames },
+            })
           : mapping.static_value;
       console.log("[canva-generate-proposal] mapping audit", {
         stage: "resolve_mappings",
