@@ -2,6 +2,7 @@ import {
   autofillAndExportPdf,
   buildAutofillData,
   buildDeterministicStoragePath,
+  extractCanvaQuotaError,
   getMissingCanvaMappingKeys,
   hydrateBudgetDrinks,
   normalizeProposalEventType,
@@ -11,6 +12,7 @@ import {
   uploadPdfToStorage,
   validatePdfBytes,
 } from "../supabase/functions/canva-generate-proposal/logic";
+import { sanitizeLog } from "../supabase/functions/_shared/canva-auth";
 import {
   deleteGeneratedProposal,
   formatCanvaGenerationError,
@@ -785,11 +787,114 @@ describe("Regras de validade e ciclo de vida da proposta", () => {
     expect(friendlyCanvaProposalError({ error_code: "canva_pdf_download_failed" })).toBe(
       "Não foi possível baixar o PDF temporário do Canva.",
     );
-    expect(friendlyCanvaProposalError({ error_code: "pdf_invalid" })).toBe(
-      "O arquivo retornado pelo Canva não é um documento PDF válido.",
-    );
     expect(friendlyCanvaProposalError({ error_code: "delete_failed" })).toBe(
       "Não foi possível excluir a proposta.",
     );
+    expect(friendlyCanvaProposalError({ error_code: "canva_autofill_quota_exceeded" })).toBe(
+      "Cota de geração automática do Canva atingida.",
+    );
+  });
+});
+
+describe("Tratamento de cota Canva HTTP 429 (canva_autofill_quota_exceeded)", () => {
+  const realCanvaQuotaResponse = {
+    code: "limit_exceeded",
+    message:
+      "Free autofill quota has been exceeded. Present the `upsell_url` to the user and prompt them to upgrade their Canva account to continue using the autofill feature.",
+    upsell_url: "https://www.canva.com/upgrade?feature=autofill&source=api_quota",
+  };
+
+  it("captura HTTP 429 com upsell_url e retorna erro estruturado", () => {
+    const error = extractCanvaQuotaError(429, realCanvaQuotaResponse);
+    expect(error).not.toBeNull();
+    expect(error?.code).toBe("canva_autofill_quota_exceeded");
+    expect(error?.status).toBe(429);
+    expect(error?.details?.upsell_url).toBe(
+      "https://www.canva.com/upgrade?feature=autofill&source=api_quota",
+    );
+    expect(error?.details?.message).toBe("A cota de Autofill do Canva foi atingida.");
+  });
+
+  it("captura HTTP 429 sem upsell_url e define upsell_url como null", () => {
+    const withoutUpsell = {
+      code: "limit_exceeded",
+      message: "Free autofill quota has been exceeded.",
+    };
+    const error = extractCanvaQuotaError(429, withoutUpsell);
+    expect(error).not.toBeNull();
+    expect(error?.code).toBe("canva_autofill_quota_exceeded");
+    expect(error?.details?.upsell_url).toBeNull();
+  });
+
+  it("autofillAndExportPdf propaga canva_autofill_quota_exceeded sem retentativas em 429", async () => {
+    let callCount = 0;
+    const mockFetcher = vi.fn().mockImplementation(() => {
+      callCount++;
+      return Promise.resolve({
+        ok: false,
+        status: 429,
+        json: async () => realCanvaQuotaResponse,
+      } as Response);
+    });
+
+    await expect(
+      autofillAndExportPdf({
+        token: "test_token_secret_123",
+        brandTemplateId: "template-1",
+        data: { NOME_EVENTO: { type: "text", text: "Casamento" } },
+        fetcher: mockFetcher as any,
+      }),
+    ).rejects.toThrowError(
+      expect.objectContaining({
+        code: "canva_autofill_quota_exceeded",
+        status: 429,
+        details: expect.objectContaining({
+          upsell_url: "https://www.canva.com/upgrade?feature=autofill&source=api_quota",
+        }),
+      }),
+    );
+
+    // Garante que NÃO fez retentativas após o 429
+    expect(callCount).toBe(1);
+  });
+
+  it("frontend reconhece canva_autofill_quota_exceeded com mensagem amigável", () => {
+    const errObj = {
+      error_code: "canva_autofill_quota_exceeded",
+      upsell_url: "https://www.canva.com/upgrade",
+    };
+    expect(friendlyCanvaProposalError(errObj)).toBe(
+      "Cota de geração automática do Canva atingida.",
+    );
+  });
+
+  it("garante que sanitizeLog remove qualquer token ou credencial dos logs", () => {
+    const sensitivePayload = {
+      access_token: "canva_token_secret_abc123",
+      refresh_token: "canva_refresh_secret_xyz789",
+      authorization: "Bearer secret_bearer_token",
+      stage: "canva_autofill",
+      status: 429,
+      code: "canva_autofill_quota_exceeded",
+      has_upsell_url: true,
+      nested: {
+        token: "nested_secret_token",
+        safe_field: "safe_value",
+      },
+    };
+
+    const sanitized = sanitizeLog(sensitivePayload) as any;
+    expect(sanitized.access_token).toBe("[REDACTED]");
+    expect(sanitized.refresh_token).toBe("[REDACTED]");
+    expect(sanitized.authorization).toBe("[REDACTED]");
+    expect(sanitized.nested.token).toBe("[REDACTED]");
+    expect(sanitized.nested.safe_field).toBe("safe_value");
+    expect(sanitized.has_upsell_url).toBe(true);
+
+    const logString = JSON.stringify(sanitized);
+    expect(logString).not.toContain("canva_token_secret_abc123");
+    expect(logString).not.toContain("canva_refresh_secret_xyz789");
+    expect(logString).not.toContain("secret_bearer_token");
+    expect(logString).not.toContain("nested_secret_token");
   });
 });

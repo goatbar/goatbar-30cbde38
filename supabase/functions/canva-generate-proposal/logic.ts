@@ -615,6 +615,45 @@ export function buildAutofillData(
 type Fetch = typeof fetch;
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+export function extractCanvaQuotaError(status: number, body: any): ProposalGenerationError | null {
+  const code = body?.code || body?.error?.code || "";
+  const message = body?.message || body?.error?.message || "";
+  const upsellUrl =
+    body?.upsell_url ||
+    body?.upsellUrl ||
+    body?.error?.upsell_url ||
+    body?.error?.upsellUrl ||
+    null;
+
+  const isQuota =
+    status === 429 ||
+    code === "limit_exceeded" ||
+    code === "quota_exceeded" ||
+    message.toLowerCase().includes("quota") ||
+    message.toLowerCase().includes("limit_exceeded");
+
+  if (isQuota) {
+    console.error("[canva-generate-proposal] Canva 429 Quota Exceeded", {
+      stage: "canva_autofill",
+      status: 429,
+      code: "canva_autofill_quota_exceeded",
+      has_upsell_url: Boolean(upsellUrl),
+    });
+    return new ProposalGenerationError(
+      "canva_autofill_quota_exceeded",
+      "A cota de Autofill do Canva foi atingida.",
+      429,
+      {
+        code: "canva_autofill_quota_exceeded",
+        message: "A cota de Autofill do Canva foi atingida.",
+        upsell_url: upsellUrl,
+        canva_message: message || undefined,
+      },
+    );
+  }
+  return null;
+}
+
 async function jsonRequest(fetcher: Fetch, url: string, token: string, init?: RequestInit) {
   const response = await fetcher(url, {
     ...init,
@@ -625,10 +664,13 @@ async function jsonRequest(fetcher: Fetch, url: string, token: string, init?: Re
     },
   });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok)
+  if (!response.ok) {
+    const quotaError = extractCanvaQuotaError(response.status, body);
+    if (quotaError) throw quotaError;
     throw new Error(
       `Canva HTTP ${response.status}: ${body?.message || body?.error?.message || "erro desconhecido"}`,
     );
+  }
   return body;
 }
 
@@ -643,12 +685,15 @@ async function pollJob(
     const body = await jsonRequest(fetcher, url, token);
     const job = body.job || body;
     if (job.status === "success") return job;
-    if (job.status === "failed")
+    if (job.status === "failed") {
+      const quotaError = extractCanvaQuotaError(429, job.error || job);
+      if (quotaError) throw quotaError;
       throw new ProposalGenerationError(
         failureCode,
         `O job do Canva falhou: ${job.error?.message || "sem detalhes"}`,
         502,
       );
+    }
     await sleep(Math.min(500 + attempt * 250, 2000));
   }
   throw new ProposalGenerationError(failureCode, "Tempo limite aguardando o Canva.", 504);

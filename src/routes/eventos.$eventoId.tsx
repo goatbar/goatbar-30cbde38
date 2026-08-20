@@ -228,6 +228,8 @@ function EventoInterna() {
     status: "loading" | "success" | "error";
     pdfUrl?: string;
     message?: string;
+    code?: string;
+    upsellUrl?: string | null;
   }>({ open: false, status: "loading" });
 
   const handleGenerateProposal = async () => {
@@ -258,9 +260,11 @@ function EventoInterna() {
       const result = await generateCanvaProposal(eventoId, currentBudget.id);
       setExistingProposal(result.proposal);
       setCanvaGeneration({ open: true, status: "success", pdfUrl: result.pdf_url });
-    } catch (error) {
+    } catch (error: any) {
       const message = friendlyCanvaProposalError(error);
-      setCanvaGeneration({ open: true, status: "error", message });
+      const code = error?.code || error?.error_code;
+      const upsellUrl = error?.upsellUrl || error?.upsell_url || null;
+      setCanvaGeneration({ open: true, status: "error", message, code, upsellUrl });
     }
   };
 
@@ -3961,38 +3965,110 @@ function CanvaProposalGenerationModal({
   state,
   onClose,
 }: {
-  state: { status: "loading" | "success" | "error"; pdfUrl?: string; message?: string };
+  state: {
+    status: "loading" | "success" | "error";
+    pdfUrl?: string;
+    message?: string;
+    code?: string;
+    upsellUrl?: string | null;
+  };
   onClose: () => void;
 }) {
+  const isQuotaExceeded =
+    state.code === "canva_autofill_quota_exceeded" ||
+    Boolean(state.upsellUrl) ||
+    state.message?.toLowerCase().includes("cota");
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/90 p-4 backdrop-blur-md">
       <div className="w-full max-w-lg rounded-2xl border border-border bg-surface p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="font-display text-lg font-semibold">
-              {state.status === "success" ? "Proposta gerada com sucesso" : state.status === "error" ? "Não foi possível gerar a proposta" : "Gerando proposta comercial..."}
+              {state.status === "success"
+                ? "Proposta gerada com sucesso"
+                : state.status === "error"
+                  ? isQuotaExceeded
+                    ? "Cota de geração automática do Canva atingida"
+                    : "Não foi possível gerar a proposta"
+                  : "Gerando proposta comercial..."}
             </h2>
-            <p className="mt-1 text-xs text-muted-foreground">Modelo Canva associado ao tipo deste evento</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Modelo Canva associado ao tipo deste evento
+            </p>
           </div>
-          {state.status !== "loading" && <button onClick={onClose} aria-label="Fechar">✕</button>}
+          {state.status !== "loading" && (
+            <button onClick={onClose} aria-label="Fechar" className="text-muted-foreground hover:text-foreground">
+              ✕
+            </button>
+          )}
         </div>
         {state.status === "loading" && (
           <div className="mt-6 space-y-3 text-sm">
-            {["Carregando dados do evento", "Preparando template Canva", "Preenchendo campos", "Exportando PDF"].map((step, index) => (
+            {[
+              "Carregando dados do evento",
+              "Preparando template Canva",
+              "Preenchendo campos",
+              "Exportando PDF",
+            ].map((step, index) => (
               <div key={step} className="flex items-center gap-3 text-muted-foreground">
-                <Loader2 className={`h-4 w-4 ${index === 0 ? "animate-spin text-primary" : ""}`} /> {step}
+                <Loader2 className={`h-4 w-4 ${index === 0 ? "animate-spin text-primary" : ""}`} />{" "}
+                {step}
               </div>
             ))}
           </div>
         )}
-        {state.status === "error" && <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{state.message}</div>}
-        {state.status === "success" && state.pdfUrl && (
-          <div className="mt-6 flex flex-wrap gap-3">
-            <a className="flex-1 rounded-xl bg-primary px-4 py-3 text-center text-xs font-bold text-primary-foreground" href={state.pdfUrl} target="_blank" rel="noreferrer">Visualizar PDF</a>
-            <a className="flex-1 rounded-xl border border-border px-4 py-3 text-center text-xs font-bold" href={state.pdfUrl} download>Baixar PDF</a>
+        {state.status === "error" && (
+          <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300 space-y-2">
+            <div>{state.message}</div>
+            {isQuotaExceeded && (
+              <p className="text-xs text-red-300/80">
+                A sua conta do Canva atingiu o limite gratuito de preenchimento automático (Autofill).
+              </p>
+            )}
           </div>
         )}
-        {state.status === "error" && <button className="mt-4 w-full rounded-xl border border-border px-4 py-3 text-xs font-bold" onClick={onClose}>Fechar</button>}
+        {state.status === "success" && state.pdfUrl && (
+          <div className="mt-6 flex flex-wrap gap-3">
+            <a
+              className="flex-1 rounded-xl bg-primary px-4 py-3 text-center text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all"
+              href={state.pdfUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Visualizar PDF
+            </a>
+            <a
+              className="flex-1 rounded-xl border border-border px-4 py-3 text-center text-xs font-bold hover:bg-muted transition-all"
+              href={state.pdfUrl}
+              download
+            >
+              Baixar PDF
+            </a>
+          </div>
+        )}
+        {state.status === "error" && (
+          <div className="mt-4 flex flex-wrap gap-3">
+            {state.upsellUrl && (
+              <a
+                href={state.upsellUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-3 text-center text-xs font-bold text-white shadow-md hover:from-purple-500 hover:to-indigo-500 transition-all"
+              >
+                Ver opções no Canva
+              </a>
+            )}
+            <button
+              className={`rounded-xl border border-border px-4 py-3 text-xs font-bold hover:bg-muted transition-all ${
+                state.upsellUrl ? "w-auto" : "w-full"
+              }`}
+              onClick={onClose}
+            >
+              Fechar
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
