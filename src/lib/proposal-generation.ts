@@ -22,12 +22,12 @@ export const CANVA_PROPOSAL_ERROR_MESSAGES: Record<string, string> = {
     "O Brand Template não possui um dos Data Fields mapeados. Atualize o template no Canva ou sincronize os campos.",
   canva_fields_missing: "Existem campos mapeados que ainda não são Data Fields do Canva.",
   canva_autofill_failed: "O Canva não conseguiu preencher o modelo. Tente novamente.",
+  canva_autofill_quota_exceeded: "Cota de geração automática do Canva atingida.",
   canva_export_failed: "O Canva não conseguiu exportar a proposta em PDF. Tente novamente.",
   canva_pdf_download_failed: "Não foi possível baixar o PDF temporário do Canva.",
   pdf_invalid: "O arquivo retornado pelo Canva não é um documento PDF válido.",
   storage_failed: "O PDF foi gerado, mas não pôde ser salvo no Goat Bar.",
   storage_upload_failed: "Não foi possível salvar o PDF gerado. A proposta não foi registrada.",
-  canva_autofill_quota_exceeded: "Cota de geração automática do Canva atingida.",
   selected_drinks_invalid_format: "Os drinks desta versão estão em um formato antigo ou inválido.",
   selected_drink_not_found: "Um ou mais drinks desta versão não existem mais no cadastro.",
   selected_drinks_query_failed: "Não foi possível consultar os drinks desta versão.",
@@ -74,6 +74,32 @@ export function friendlyCanvaProposalError(value: any): string {
   );
 }
 
+export type CanvaGenerationDiagnostic = {
+  code: string;
+  status: number;
+  message: string;
+  upsell_url?: string;
+  canva_details?: Record<string, unknown>;
+  canva_account?: { canva_user_id?: string | null; display_name?: string | null };
+  integration_audit?: Record<string, unknown>;
+};
+
+export class CanvaGenerationError extends Error {
+  constructor(public diagnostic: CanvaGenerationDiagnostic) {
+    super(friendlyCanvaProposalError(diagnostic));
+    this.name = "CanvaGenerationError";
+  }
+}
+
+export function getCanvaQuotaPresentation(diagnostic?: CanvaGenerationDiagnostic) {
+  return {
+    message: "A Canva ainda está identificando esta integração como sem cota de Autofill.",
+    upsellUrl: diagnostic?.upsell_url,
+    accountLabel: diagnostic?.canva_account?.display_name || "Nome não informado",
+    canvaUserId: diagnostic?.canva_account?.canva_user_id || "Não informado",
+  };
+}
+
 export function formatCanvaGenerationError(value: any): string {
   const code = value?.error_code || value?.code || value?.context?.error_code;
   const message =
@@ -108,6 +134,17 @@ export async function generateCanvaProposal(eventId: string, budgetVersionId: st
     const message = formatCanvaGenerationError(body || error);
     const upsellUrl = body.upsell_url || body.upsellUrl || null;
     const missingFields = Array.isArray(body.missing_fields) ? body.missing_fields : undefined;
+    if (code === "canva_autofill_quota_exceeded") {
+      throw new CanvaGenerationError({
+        code,
+        status: body.status ?? 429,
+        message: body.error || message,
+        upsell_url: upsellUrl,
+        canva_details: body.canva_details,
+        canva_account: body.canva_account,
+        integration_audit: body.integration_audit,
+      });
+    }
     throw new CanvaProposalError(message, code, upsellUrl, missingFields);
   }
   return data as { proposal: GeneratedProposal; canva_design_id: string; pdf_url: string };

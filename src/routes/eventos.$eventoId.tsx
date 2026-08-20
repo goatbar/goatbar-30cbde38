@@ -93,6 +93,8 @@ import { cancelAssinafySignature, type AssinafyDiagnostic } from "@/services/ass
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import {
   deleteGeneratedProposal,
+  CanvaGenerationDiagnostic,
+  CanvaGenerationError,
   friendlyCanvaProposalError,
   generateCanvaProposal,
   getProposalGenerationFlow,
@@ -230,6 +232,7 @@ function EventoInterna() {
     message?: string;
     code?: string;
     upsellUrl?: string | null;
+    diagnostic?: CanvaGenerationDiagnostic;
   }>({ open: false, status: "loading" });
 
   const handleGenerateProposal = async () => {
@@ -262,9 +265,19 @@ function EventoInterna() {
       setCanvaGeneration({ open: true, status: "success", pdfUrl: result.pdf_url });
     } catch (error: any) {
       const message = friendlyCanvaProposalError(error);
-      const code = error?.code || error?.error_code;
-      const upsellUrl = error?.upsellUrl || error?.upsell_url || null;
-      setCanvaGeneration({ open: true, status: "error", message, code, upsellUrl });
+      const code = error?.code || error?.error_code || error?.diagnostic?.code;
+      const upsellUrl =
+        error?.upsellUrl || error?.upsell_url || error?.diagnostic?.upsell_url || null;
+      const diagnostic =
+        error instanceof CanvaGenerationError ? error.diagnostic : undefined;
+      setCanvaGeneration({
+        open: true,
+        status: "error",
+        message,
+        code,
+        upsellUrl,
+        diagnostic,
+      });
     }
   };
 
@@ -3971,13 +3984,17 @@ function CanvaProposalGenerationModal({
     message?: string;
     code?: string;
     upsellUrl?: string | null;
+    diagnostic?: CanvaGenerationDiagnostic;
   };
   onClose: () => void;
 }) {
   const isQuotaExceeded =
     state.code === "canva_autofill_quota_exceeded" ||
-    Boolean(state.upsellUrl) ||
+    state.diagnostic?.code === "canva_autofill_quota_exceeded" ||
+    Boolean(state.upsellUrl || state.diagnostic?.upsell_url) ||
     state.message?.toLowerCase().includes("cota");
+
+  const effectiveUpsellUrl = state.upsellUrl || state.diagnostic?.upsell_url || null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/90 p-4 backdrop-blur-md">
@@ -4026,6 +4043,12 @@ function CanvaProposalGenerationModal({
                 A sua conta do Canva atingiu o limite gratuito de preenchimento automático (Autofill).
               </p>
             )}
+            {state.diagnostic?.canva_account && (
+              <div className="text-xs text-muted-foreground pt-1 border-t border-red-500/20">
+                <p>Conta Canva conectada: {state.diagnostic.canva_account.display_name || "Nome não informado"}</p>
+                <p>canva_user_id: {state.diagnostic.canva_account.canva_user_id || "Não informado"}</p>
+              </div>
+            )}
           </div>
         )}
         {state.status === "success" && state.pdfUrl && (
@@ -4049,9 +4072,9 @@ function CanvaProposalGenerationModal({
         )}
         {state.status === "error" && (
           <div className="mt-4 flex flex-wrap gap-3">
-            {state.upsellUrl && (
+            {effectiveUpsellUrl && (
               <a
-                href={state.upsellUrl}
+                href={effectiveUpsellUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="flex-1 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-3 text-center text-xs font-bold text-white shadow-md hover:from-purple-500 hover:to-indigo-500 transition-all"
@@ -4061,7 +4084,7 @@ function CanvaProposalGenerationModal({
             )}
             <button
               className={`rounded-xl border border-border px-4 py-3 text-xs font-bold hover:bg-muted transition-all ${
-                state.upsellUrl ? "w-auto" : "w-full"
+                effectiveUpsellUrl ? "w-auto" : "w-full"
               }`}
               onClick={onClose}
             >

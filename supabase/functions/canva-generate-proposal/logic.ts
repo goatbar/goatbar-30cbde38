@@ -615,14 +615,57 @@ export function buildAutofillData(
 type Fetch = typeof fetch;
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export function extractCanvaQuotaError(status: number, body: any): ProposalGenerationError | null {
-  const code = body?.code || body?.error?.code || "";
-  const message = body?.message || body?.error?.message || "";
+const SENSITIVE_CANVA_KEYS = /^(access_token|refresh_token|authorization|client_secret|token|secret)$/i;
+const DIAGNOSTIC_CANVA_KEYS = /(quota|entitlement|plan|workspace|team|account)/i;
+
+/** Preserve Canva diagnostics while ensuring credentials can never cross the API boundary. */
+export function redactCanvaResponse(value: any): any {
+  if (Array.isArray(value)) return value.map(redactCanvaResponse);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => [
+    key,
+    SENSITIVE_CANVA_KEYS.test(key) ? "[REDACTED]" : redactCanvaResponse(child),
+  ]));
+}
+
+function findString(value: any, keys: string[]): string | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  for (const [key, child] of Object.entries(value)) {
+    if (keys.includes(key) && typeof child === "string") return child;
+    const nested = findString(child, keys);
+    if (nested) return nested;
+  }
+  return undefined;
+}
+
+export function collectDiagnosticFields(value: any, prefix = ""): string[] {
+  if (!value || typeof value !== "object") return [];
+  return [...new Set(Object.entries(value).flatMap(([key, child]) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    return [
+      ...(DIAGNOSTIC_CANVA_KEYS.test(key) ? [path] : []),
+      ...collectDiagnosticFields(child, path),
+    ];
+  }))];
+}
+
+export function extractCanvaQuotaError(
+  status: number,
+  body: any,
+  responseHeaders?: Headers,
+): ProposalGenerationError | null {
+  const code = body?.code || body?.error?.code || findString(body, ["code", "error_code"]) || "";
+  const message =
+    body?.message ||
+    body?.error?.message ||
+    findString(body, ["message"]) ||
+    "";
   const upsellUrl =
     body?.upsell_url ||
     body?.upsellUrl ||
     body?.error?.upsell_url ||
     body?.error?.upsellUrl ||
+    findString(body, ["upsell_url", "upsellUrl"]) ||
     null;
 
   const isQuota =
@@ -633,12 +676,23 @@ export function extractCanvaQuotaError(status: number, body: any): ProposalGener
     message.toLowerCase().includes("limit_exceeded");
 
   if (isQuota) {
+    const details = redactCanvaResponse(body);
+    const requestId =
+      responseHeaders?.get("x-request-id") ||
+      responseHeaders?.get("x-trace-id") ||
+      responseHeaders?.get("trace-id") ||
+      findString(details, ["request_id", "requestId", "trace_id", "traceId"]);
+    const quotaFields = collectDiagnosticFields(details);
+
     console.error("[canva-generate-proposal] Canva 429 Quota Exceeded", {
       stage: "canva_autofill",
       status: 429,
       code: "canva_autofill_quota_exceeded",
       has_upsell_url: Boolean(upsellUrl),
+      request_id: requestId,
+      quota_fields_present: quotaFields,
     });
+
     return new ProposalGenerationError(
       "canva_autofill_quota_exceeded",
       "A cota de Autofill do Canva foi atingida.",
@@ -648,6 +702,7 @@ export function extractCanvaQuotaError(status: number, body: any): ProposalGener
         message: "A cota de Autofill do Canva foi atingida.",
         upsell_url: upsellUrl,
         canva_message: message || undefined,
+        canva_details: { ...details, ...(requestId ? { request_id: requestId } : {}) },
       },
     );
   }
@@ -665,7 +720,7 @@ async function jsonRequest(fetcher: Fetch, url: string, token: string, init?: Re
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const quotaError = extractCanvaQuotaError(response.status, body);
+    const quotaError = extractCanvaQuotaError(response.status, body, response.headers);
     if (quotaError) throw quotaError;
     throw new Error(
       `Canva HTTP ${response.status}: ${body?.message || body?.error?.message || "erro desconhecido"}`,
