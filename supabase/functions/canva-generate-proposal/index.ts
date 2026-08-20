@@ -9,9 +9,9 @@ import {
   autofillAndExportPdf,
   buildAutofillData,
   getMissingCanvaMappingKeys,
+  hydrateBudgetDrinks,
   normalizeProposalEventType,
   ProposalGenerationError,
-  resolveSelectedDrinks,
 } from "./logic.ts";
 import { resolveProposalField } from "../../../src/lib/proposal-field-resolver.ts";
 
@@ -96,12 +96,24 @@ serve(async (req: Request) => {
         "A versão do orçamento selecionada não foi encontrada.",
         404,
       );
-    const resolvedDrinkNames = await resolveSelectedDrinks(
+    const { resolvedDrinkNames, normalized } = await hydrateBudgetDrinks(
       budget.selected_drinks,
-      budgetVersionId,
-      async (ids) => await supabaseAdmin.from("drinks").select("id,nome").in("id", ids),
+      supabaseAdmin,
+      { event_id: eventId, budget_version_id: budgetVersionId },
     );
-    const resolvedBudget = { ...budget, selectedDrinkNames: resolvedDrinkNames };
+    console.log("[canva-generate-proposal] hydrate_selected_drinks", {
+      stage: "hydrate_selected_drinks",
+      event_id: eventId,
+      budget_version_id: budgetVersionId,
+      selected_drinks_type: normalized.rawType,
+      selected_drinks_is_array: normalized.isArray,
+      selected_drinks_has_ids: normalized.hasIds,
+      selected_drinks_ids_count: normalized.idsCount,
+      selected_drinks_ids_types: normalized.idsTypes,
+      query_error_code: null,
+      query_error_message: null,
+    });
+    const resolvedBudget = { ...budget, selected_drinks: resolvedDrinkNames };
     const { data: mappings, error: mappingsError } = await supabaseAdmin
       .from("proposal_template_field_mappings")
       .select("*")

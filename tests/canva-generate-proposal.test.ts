@@ -3,11 +3,14 @@ import {
   autofillAndExportPdf,
   buildAutofillData,
   getMissingCanvaMappingKeys,
+  hydrateBudgetDrinks,
   normalizeProposalEventType,
+  normalizeSelectedDrinks,
   resolveSelectedDrinks,
 } from "../supabase/functions/canva-generate-proposal/logic";
 import {
   formatCanvaGenerationError,
+  friendlyCanvaProposalError,
   getProposalGenerationFlow,
 } from "../src/lib/proposal-generation";
 
@@ -283,5 +286,262 @@ describe("Canva Autofill e Export", () => {
         sleep: async () => {},
       }),
     ).rejects.toMatchObject({ code: "canva_export_failed" });
+  });
+});
+
+describe("Normalização e hidratação de selected_drinks", () => {
+  it("normaliza formato atual com ids, copos e descricaoBebidas", () => {
+    const normalized = normalizeSelectedDrinks({
+      ids: ["id-1", "id-2"],
+      copos: { "id-1": "Taça" },
+      descricaoBebidas: "Bebidas padrão",
+    });
+    expect(normalized).toMatchObject({
+      isValid: true,
+      isEmpty: false,
+      format: "ids_object",
+      ids: ["id-1", "id-2"],
+      hasIds: true,
+      idsCount: 2,
+    });
+  });
+
+  it("normaliza array de IDs", () => {
+    const normalized = normalizeSelectedDrinks(["id-1", "id-2"]);
+    expect(normalized).toMatchObject({
+      isValid: true,
+      isEmpty: false,
+      format: "ids_array",
+      ids: ["id-1", "id-2"],
+    });
+  });
+
+  it("normaliza array de objetos com id e nome", () => {
+    const normalized = normalizeSelectedDrinks([
+      { id: "id-1", nome: "Mojito" },
+      { id: "id-2", nome: "Negroni" },
+    ]);
+    expect(normalized).toMatchObject({
+      isValid: true,
+      isEmpty: false,
+      format: "hydrated_array",
+      ids: ["id-1", "id-2"],
+      hydratedNames: ["Mojito", "Negroni"],
+    });
+  });
+
+  it("normaliza array de objetos legados sem id mas com nome ou name", () => {
+    const normalized = normalizeSelectedDrinks([
+      { nome: "Moscow Mule" },
+      { name: "Fitzgerald" },
+    ]);
+    expect(normalized).toMatchObject({
+      isValid: true,
+      isEmpty: false,
+      format: "hydrated_array",
+      ids: [],
+      hydratedNames: ["Moscow Mule", "Fitzgerald"],
+    });
+  });
+
+  it("normaliza array com drink_id", () => {
+    const normalized = normalizeSelectedDrinks([{ drink_id: "id-1" }]);
+    expect(normalized).toMatchObject({
+      isValid: true,
+      isEmpty: false,
+      ids: ["id-1"],
+    });
+  });
+
+  it("normaliza objeto com names", () => {
+    const normalized = normalizeSelectedDrinks({ names: ["Moscow Mule", "Fitzgerald"] });
+    expect(normalized).toMatchObject({
+      isValid: true,
+      isEmpty: false,
+      format: "names_object",
+      hydratedNames: ["Moscow Mule", "Fitzgerald"],
+    });
+  });
+
+  it("normaliza vazio para null, undefined, array vazio e objeto vazio", () => {
+    expect(normalizeSelectedDrinks(null).isEmpty).toBe(true);
+    expect(normalizeSelectedDrinks(undefined).isEmpty).toBe(true);
+    expect(normalizeSelectedDrinks([]).isEmpty).toBe(true);
+    expect(normalizeSelectedDrinks({}).isEmpty).toBe(true);
+    expect(normalizeSelectedDrinks({ ids: [] }).isEmpty).toBe(true);
+  });
+
+  it("identifica formato inválido com tipos primitivos ou corrompidos", () => {
+    expect(normalizeSelectedDrinks(123).isValid).toBe(false);
+    expect(normalizeSelectedDrinks("string-invalida").isValid).toBe(false);
+    expect(normalizeSelectedDrinks({ ids: "nao-eh-array" }).isValid).toBe(false);
+    expect(normalizeSelectedDrinks([123, 456]).isValid).toBe(false);
+  });
+
+  it("hidrata drinks consultando tabela drinks com id e nome e preserva ordem original", async () => {
+    const mockDb = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({
+            data: [
+              { id: "id-2", nome: "Negroni" },
+              { id: "id-1", nome: "Gin Tônica" },
+            ],
+            error: null,
+          }),
+        }),
+      }),
+    };
+
+    const result = await hydrateBudgetDrinks(
+      { ids: ["id-1", "id-2"] },
+      mockDb as any,
+      { event_id: "evt-1", budget_version_id: "bv-1" },
+    );
+
+    expect(mockDb.from).toHaveBeenCalledWith("drinks");
+    expect(result.resolvedDrinkNames).toEqual(["Gin Tônica", "Negroni"]);
+  });
+
+  it("lança selected_drink_not_found quando drink não existe no cadastro", async () => {
+    const mockDb = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({
+            data: [{ id: "id-1", nome: "Gin Tônica" }],
+            error: null,
+          }),
+        }),
+      }),
+    };
+
+    await expect(
+      hydrateBudgetDrinks({ ids: ["id-1", "id-missing"] }, mockDb as any),
+    ).rejects.toMatchObject({
+      code: "selected_drink_not_found",
+      details: { missing_count: 1, expected_count: 2, found_count: 1 },
+    });
+  });
+
+  it("lança selected_drinks_query_failed quando Supabase retorna erro de banco", async () => {
+    const mockDb = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({
+            data: null,
+            error: { code: "PGRST204", message: "Could not find column" },
+          }),
+        }),
+      }),
+    };
+
+    await expect(
+      hydrateBudgetDrinks({ ids: ["id-1"] }, mockDb as any),
+    ).rejects.toMatchObject({
+      code: "selected_drinks_query_failed",
+      details: { query_error_code: "PGRST204" },
+    });
+  });
+
+  it("não consulta banco se selected_drinks estiver vazio", async () => {
+    const mockDb = {
+      from: vi.fn(),
+    };
+
+    const result = await hydrateBudgetDrinks({ ids: [] }, mockDb as any);
+    expect(mockDb.from).not.toHaveBeenCalled();
+    expect(result.resolvedDrinkNames).toEqual([]);
+  });
+
+  it("usa hydratedNames diretamente para estruturas legadas", async () => {
+    const mockDb = {
+      from: vi.fn(),
+    };
+
+    const result = await hydrateBudgetDrinks(
+      [{ nome: "Moscow Mule" }, { nome: "Fitzgerald" }],
+      mockDb as any,
+    );
+    expect(mockDb.from).not.toHaveBeenCalled();
+    expect(result.resolvedDrinkNames).toEqual(["Moscow Mule", "Fitzgerald"]);
+  });
+
+  it("reproduz fixture real do evento 9b92e891-f666-4846-b6bd-8f2583726340 com sucesso", async () => {
+    const realEventId = "9b92e891-f666-4846-b6bd-8f2583726340";
+    const realBudgetFixture = {
+      id: "bv-real-123",
+      event_id: realEventId,
+      selected_drinks: {
+        ids: ["uuid-drink-a", "uuid-drink-b"],
+        copos: { "uuid-drink-a": "Taça" },
+        descricaoBebidas: "Bebidas padrão",
+      },
+      drinks_per_person: 4,
+      final_budget_value: 12000,
+    };
+
+    const mockDb = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({
+            data: [
+              { id: "uuid-drink-a", nome: "Gin Tropical" },
+              { id: "uuid-drink-b", nome: "Aperol Spritz" },
+            ],
+            error: null,
+          }),
+        }),
+      }),
+    };
+
+    const { resolvedDrinkNames } = await hydrateBudgetDrinks(
+      realBudgetFixture.selected_drinks,
+      mockDb as any,
+      { event_id: realEventId, budget_version_id: realBudgetFixture.id },
+    );
+
+    const resolvedBudget = { ...realBudgetFixture, selected_drinks: resolvedDrinkNames };
+    const autofill = buildAutofillData(
+      [
+        mapping("DRINKS", "budget.selected_drinks"),
+        mapping("QUANTIDADE_DRINKS", "computed.total_drinks"),
+      ],
+      ["DRINKS", "QUANTIDADE_DRINKS"],
+      { ...event, id: realEventId },
+      resolvedBudget,
+    );
+
+    expect(autofill.DRINKS.text).toBe("Gin Tropical, Aperol Spritz");
+    expect(autofill.QUANTIDADE_DRINKS.text).toBe("600");
+  });
+});
+
+describe("Mensagens amigáveis de erro de proposta no frontend", () => {
+  it("diferencia selected_drinks_invalid_format", () => {
+    expect(
+      friendlyCanvaProposalError({ error_code: "selected_drinks_invalid_format" }),
+    ).toBe("Os drinks desta versão estão em um formato antigo ou inválido.");
+  });
+
+  it("diferencia selected_drink_not_found", () => {
+    expect(
+      friendlyCanvaProposalError({ error_code: "selected_drink_not_found" }),
+    ).toBe("Um ou mais drinks desta versão não existem mais no cadastro.");
+  });
+
+  it("diferencia selected_drinks_query_failed", () => {
+    expect(
+      friendlyCanvaProposalError({ error_code: "selected_drinks_query_failed" }),
+    ).toBe("Não foi possível consultar os drinks desta versão.");
+  });
+
+  it("diferencia required_field_empty para drinks", () => {
+    expect(
+      friendlyCanvaProposalError({
+        error_code: "required_field_empty",
+        field: "DRINKS",
+        source_key: "package.drinks_list",
+      }),
+    ).toBe("Esta versão do orçamento não possui drinks selecionados.");
   });
 });

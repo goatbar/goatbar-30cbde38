@@ -24,12 +24,24 @@ export const CANVA_PROPOSAL_ERROR_MESSAGES: Record<string, string> = {
   canva_autofill_failed: "O Canva não conseguiu preencher o modelo. Tente novamente.",
   canva_export_failed: "O Canva não conseguiu exportar a proposta em PDF. Tente novamente.",
   storage_failed: "O PDF foi gerado, mas não pôde ser salvo no Goat Bar.",
+  selected_drinks_invalid_format: "Os drinks desta versão estão em um formato antigo ou inválido.",
+  selected_drink_not_found: "Um ou mais drinks desta versão não existem mais no cadastro.",
+  selected_drinks_query_failed: "Não foi possível consultar os drinks desta versão.",
 };
 
 export function friendlyCanvaProposalError(value: any): string {
   const code = value?.error_code || value?.context?.error_code;
-  if (code === "required_field_empty" && value?.field) {
-    return `Não foi possível gerar a proposta porque o campo ${value.field} não possui dados na versão deste orçamento.`;
+  if (code === "required_field_empty") {
+    if (
+      value?.field === "DRINKS" ||
+      value?.source_key === "package.drinks_list" ||
+      value?.source_key === "package.drinks_count"
+    ) {
+      return "Esta versão do orçamento não possui drinks selecionados.";
+    }
+    if (value?.field) {
+      return `Não foi possível gerar a proposta porque o campo ${value.field} não possui dados na versão deste orçamento.`;
+    }
   }
   return (
     value?.error ||

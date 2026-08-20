@@ -165,6 +165,359 @@ export function isEmptyProposalValue(value: unknown) {
   return false;
 }
 
+export type NormalizedSelectedDrinks = {
+  ids: string[];
+  hydratedNames: string[];
+  isEmpty: boolean;
+  isValid: boolean;
+  format: "empty" | "ids_object" | "ids_array" | "hydrated_array" | "names_object" | "invalid";
+  rawType: string;
+  isArray: boolean;
+  hasIds: boolean;
+  idsCount: number;
+  idsTypes: string[];
+};
+
+export function normalizeSelectedDrinks(value: unknown): NormalizedSelectedDrinks {
+  if (value == null) {
+    return {
+      ids: [],
+      hydratedNames: [],
+      isEmpty: true,
+      isValid: true,
+      format: "empty",
+      rawType: value === null ? "null" : "undefined",
+      isArray: false,
+      hasIds: false,
+      idsCount: 0,
+      idsTypes: [],
+    };
+  }
+
+  const rawType = typeof value;
+  const isArray = Array.isArray(value);
+
+  if (isArray) {
+    if (value.length === 0) {
+      return {
+        ids: [],
+        hydratedNames: [],
+        isEmpty: true,
+        isValid: true,
+        format: "empty",
+        rawType,
+        isArray: true,
+        hasIds: false,
+        idsCount: 0,
+        idsTypes: [],
+      };
+    }
+
+    const elementTypes = [...new Set(value.map((v) => (v === null ? "null" : typeof v)))];
+    const allStrings = value.every((v) => typeof v === "string");
+    if (allStrings) {
+      const ids = (value as string[]).map((s) => s.trim()).filter(Boolean);
+      return {
+        ids,
+        hydratedNames: [],
+        isEmpty: ids.length === 0,
+        isValid: true,
+        format: "ids_array",
+        rawType,
+        isArray: true,
+        hasIds: ids.length > 0,
+        idsCount: ids.length,
+        idsTypes: ["string"],
+      };
+    }
+
+    const allObjects = value.every((v) => v !== null && typeof v === "object" && !Array.isArray(v));
+    if (allObjects) {
+      const ids: string[] = [];
+      const hydratedNames: string[] = [];
+      for (const item of value as Record<string, unknown>[]) {
+        const id =
+          typeof item.id === "string"
+            ? item.id.trim()
+            : typeof item.drink_id === "string"
+              ? item.drink_id.trim()
+              : null;
+        if (id) ids.push(id);
+        const name =
+          typeof item.nome === "string"
+            ? item.nome.trim()
+            : typeof item.name === "string"
+              ? item.name.trim()
+              : null;
+        if (name) hydratedNames.push(name);
+      }
+      return {
+        ids,
+        hydratedNames,
+        isEmpty: ids.length === 0 && hydratedNames.length === 0,
+        isValid: true,
+        format: "hydrated_array",
+        rawType,
+        isArray: true,
+        hasIds: ids.length > 0,
+        idsCount: ids.length,
+        idsTypes: ids.length > 0 ? ["string"] : [],
+      };
+    }
+
+    return {
+      ids: [],
+      hydratedNames: [],
+      isEmpty: false,
+      isValid: false,
+      format: "invalid",
+      rawType,
+      isArray: true,
+      hasIds: false,
+      idsCount: 0,
+      idsTypes: elementTypes,
+    };
+  }
+
+  if (rawType === "object") {
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj);
+    if (keys.length === 0) {
+      return {
+        ids: [],
+        hydratedNames: [],
+        isEmpty: true,
+        isValid: true,
+        format: "empty",
+        rawType,
+        isArray: false,
+        hasIds: false,
+        idsCount: 0,
+        idsTypes: [],
+      };
+    }
+
+    if ("ids" in obj) {
+      if (Array.isArray(obj.ids)) {
+        const idTypes = [...new Set(obj.ids.map((v) => (v === null ? "null" : typeof v)))];
+        const ids = obj.ids
+          .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+          .map((v) => v.trim());
+        return {
+          ids,
+          hydratedNames: [],
+          isEmpty: ids.length === 0,
+          isValid: true,
+          format: "ids_object",
+          rawType,
+          isArray: false,
+          hasIds: ids.length > 0,
+          idsCount: ids.length,
+          idsTypes: idTypes,
+        };
+      }
+      return {
+        ids: [],
+        hydratedNames: [],
+        isEmpty: false,
+        isValid: false,
+        format: "invalid",
+        rawType,
+        isArray: false,
+        hasIds: false,
+        idsCount: 0,
+        idsTypes: [typeof obj.ids],
+      };
+    }
+
+    if ("names" in obj && Array.isArray(obj.names)) {
+      const names = obj.names
+        .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+        .map((v) => v.trim());
+      return {
+        ids: [],
+        hydratedNames: names,
+        isEmpty: names.length === 0,
+        isValid: true,
+        format: "names_object",
+        rawType,
+        isArray: false,
+        hasIds: false,
+        idsCount: 0,
+        idsTypes: [],
+      };
+    }
+
+    const list = obj.items || obj.drinks;
+    if (Array.isArray(list)) {
+      return normalizeSelectedDrinks(list);
+    }
+
+    if (keys.every((k) => k === "copos" || k === "descricaoBebidas")) {
+      return {
+        ids: [],
+        hydratedNames: [],
+        isEmpty: true,
+        isValid: true,
+        format: "ids_object",
+        rawType,
+        isArray: false,
+        hasIds: false,
+        idsCount: 0,
+        idsTypes: [],
+      };
+    }
+
+    return {
+      ids: [],
+      hydratedNames: [],
+      isEmpty: false,
+      isValid: false,
+      format: "invalid",
+      rawType,
+      isArray: false,
+      hasIds: false,
+      idsCount: 0,
+      idsTypes: [],
+    };
+  }
+
+  return {
+    ids: [],
+    hydratedNames: [],
+    isEmpty: false,
+    isValid: false,
+    format: "invalid",
+    rawType,
+    isArray: false,
+    hasIds: false,
+    idsCount: 0,
+    idsTypes: [],
+  };
+}
+
+export type DrinksQueryClient = {
+  from(table: string): {
+    select(columns: string): {
+      in(column: string, values: string[]): Promise<{ data: any[] | null; error: any }>;
+    };
+  };
+};
+
+export async function hydrateBudgetDrinks(
+  selectedDrinksRaw: unknown,
+  dbClient: DrinksQueryClient,
+  context?: { event_id?: string; budget_version_id?: string },
+): Promise<{ resolvedDrinkNames: string[]; normalized: NormalizedSelectedDrinks }> {
+  const normalized = normalizeSelectedDrinks(selectedDrinksRaw);
+
+  if (!normalized.isValid) {
+    console.error("[hydrate_selected_drinks] invalid format", {
+      stage: "hydrate_selected_drinks",
+      event_id: context?.event_id,
+      budget_version_id: context?.budget_version_id,
+      selected_drinks_type: normalized.rawType,
+      selected_drinks_is_array: normalized.isArray,
+      selected_drinks_has_ids: normalized.hasIds,
+      selected_drinks_ids_count: normalized.idsCount,
+      selected_drinks_ids_types: normalized.idsTypes,
+      query_error_code: null,
+      query_error_message: "Formato inválido de selected_drinks",
+    });
+    throw new ProposalGenerationError(
+      "selected_drinks_invalid_format",
+      "Os drinks desta versão estão em um formato antigo ou inválido.",
+      400,
+      {
+        type: normalized.rawType,
+        is_array: normalized.isArray,
+        keys:
+          selectedDrinksRaw && typeof selectedDrinksRaw === "object"
+            ? Object.keys(selectedDrinksRaw as object)
+            : [],
+      },
+    );
+  }
+
+  if (normalized.isEmpty) {
+    return { resolvedDrinkNames: [], normalized };
+  }
+
+  if (normalized.ids.length > 0) {
+    const { data: drinkRows, error: drinksError } = await dbClient
+      .from("drinks")
+      .select("id, nome")
+      .in("id", normalized.ids);
+
+    if (drinksError) {
+      console.error("[hydrate_selected_drinks] query error", {
+        stage: "hydrate_selected_drinks",
+        event_id: context?.event_id,
+        budget_version_id: context?.budget_version_id,
+        selected_drinks_type: normalized.rawType,
+        selected_drinks_is_array: normalized.isArray,
+        selected_drinks_has_ids: normalized.hasIds,
+        selected_drinks_ids_count: normalized.idsCount,
+        selected_drinks_ids_types: normalized.idsTypes,
+        query_error_code: drinksError.code || null,
+        query_error_message: drinksError.message || null,
+      });
+      throw new ProposalGenerationError(
+        "selected_drinks_query_failed",
+        "Não foi possível consultar os drinks desta versão.",
+        500,
+        { query_error_code: drinksError.code },
+      );
+    }
+
+    const namesById = new Map<string, string>();
+    for (const row of drinkRows || []) {
+      if (row && typeof row.id === "string" && typeof row.nome === "string") {
+        namesById.set(row.id, row.nome);
+      }
+    }
+
+    const missingIds = normalized.ids.filter((id) => !namesById.has(id));
+    if (missingIds.length > 0) {
+      console.warn("[hydrate_selected_drinks] drink not found in catalog", {
+        stage: "hydrate_selected_drinks",
+        event_id: context?.event_id,
+        budget_version_id: context?.budget_version_id,
+        selected_drinks_type: normalized.rawType,
+        selected_drinks_is_array: normalized.isArray,
+        selected_drinks_has_ids: normalized.hasIds,
+        selected_drinks_ids_count: normalized.idsCount,
+        selected_drinks_ids_types: normalized.idsTypes,
+        missing_count: missingIds.length,
+        query_error_code: null,
+        query_error_message: null,
+      });
+      throw new ProposalGenerationError(
+        "selected_drink_not_found",
+        "Um ou mais drinks desta versão não existem mais no cadastro.",
+        400,
+        {
+          missing_count: missingIds.length,
+          expected_count: normalized.ids.length,
+          found_count: (drinkRows || []).length,
+        },
+      );
+    }
+
+    const resolvedDrinkNames = normalized.ids
+      .map((id) => namesById.get(id))
+      .filter((nome): nome is string => typeof nome === "string" && Boolean(nome.trim()));
+
+    return { resolvedDrinkNames, normalized };
+  }
+
+  if (normalized.hydratedNames.length > 0) {
+    return { resolvedDrinkNames: normalized.hydratedNames, normalized };
+  }
+
+  return { resolvedDrinkNames: [], normalized };
+}
+
 export function getMissingCanvaMappingKeys(mappings: Mapping[], datasetKeys: string[]) {
   const available = new Set(datasetKeys);
   return [
