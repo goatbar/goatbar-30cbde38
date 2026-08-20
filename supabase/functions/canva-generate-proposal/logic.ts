@@ -574,6 +574,21 @@ export function buildAutofillData(
         hydratedData: { selectedDrinkNames: budget.selectedDrinkNames ?? budget.selected_drinks },
       });
     }
+    if (
+      mapping.canva_field_key === "QUANTIDADE_DRINKS" ||
+      mapping.source_field_key === "computed.total_drinks" ||
+      mapping.source_field_key === "budget.total_drinks"
+    ) {
+      console.log("[canva-generate-proposal] QUANTIDADE_DRINKS audit", {
+        mapping_key: mapping.canva_field_key,
+        source_key: mapping.source_field_key,
+        guests_present: event?.guests != null && String(event?.guests).trim() !== "",
+        drinks_per_person_present:
+          budget?.drinks_per_person != null && String(budget?.drinks_per_person).trim() !== "",
+        computed_type: typeof raw,
+        computed_valid: typeof raw === "number" && !Number.isNaN(raw),
+      });
+    }
     if (mapping.required && isEmptyProposalValue(raw)) {
       throw new ProposalGenerationError(
         "required_field_empty",

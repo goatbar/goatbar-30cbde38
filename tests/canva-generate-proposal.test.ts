@@ -545,3 +545,57 @@ describe("Mensagens amigáveis de erro de proposta no frontend", () => {
     ).toBe("Esta versão do orçamento não possui drinks selecionados.");
   });
 });
+
+describe("Autofill de QUANTIDADE_DRINKS com cálculo automático", () => {
+  it("não bloqueia quando required=true e cálculo é válido (guests=150, drinks_per_person=4 -> 600)", () => {
+    const data = buildAutofillData(
+      [mapping("QUANTIDADE_DRINKS", "computed.total_drinks", { required: true })],
+      ["QUANTIDADE_DRINKS"],
+      { guests: 150 },
+      { drinks_per_person: 4 },
+    );
+    expect(data.QUANTIDADE_DRINKS.text).toBe("600");
+  });
+
+  it("não bloqueia quando guests=0 e drinks_per_person=4 -> 0", () => {
+    const data = buildAutofillData(
+      [mapping("QUANTIDADE_DRINKS", "computed.total_drinks", { required: true })],
+      ["QUANTIDADE_DRINKS"],
+      { guests: 0 },
+      { drinks_per_person: 4 },
+    );
+    expect(data.QUANTIDADE_DRINKS.text).toBe("0");
+  });
+
+  it("bloqueia com required_field_empty quando guests=null e required=true", () => {
+    expect(() =>
+      buildAutofillData(
+        [mapping("QUANTIDADE_DRINKS", "computed.total_drinks", { required: true })],
+        ["QUANTIDADE_DRINKS"],
+        { guests: null },
+        { drinks_per_person: 4 },
+      ),
+    ).toThrowError(expect.objectContaining({ code: "required_field_empty" }));
+  });
+
+  it("bloqueia com required_field_empty quando drinks_per_person=null e required=true", () => {
+    expect(() =>
+      buildAutofillData(
+        [mapping("QUANTIDADE_DRINKS", "computed.total_drinks", { required: true })],
+        ["QUANTIDADE_DRINKS"],
+        { guests: 150 },
+        { drinks_per_person: null },
+      ),
+    ).toThrowError(expect.objectContaining({ code: "required_field_empty" }));
+  });
+
+  it("funciona com alias legado budget.total_drinks", () => {
+    const data = buildAutofillData(
+      [mapping("QUANTIDADE_DRINKS", "budget.total_drinks", { required: true })],
+      ["QUANTIDADE_DRINKS"],
+      { guests: 200 },
+      { drinks_per_person: 5 },
+    );
+    expect(data.QUANTIDADE_DRINKS.text).toBe("1000");
+  });
+});

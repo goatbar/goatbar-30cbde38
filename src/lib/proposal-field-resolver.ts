@@ -11,6 +11,10 @@ export const LEGACY_SOURCE_ALIASES = {
   "event.guest_count": "event.guests",
   "computed.proposal_date": "budget.created_at",
   "budget.total_drinks": "computed.total_drinks",
+  "package.drinks_count": "computed.total_drinks",
+  "package.total_drinks": "computed.total_drinks",
+  "budget.quantity_drinks": "computed.total_drinks",
+  "budget.drinks_count": "computed.total_drinks",
   "budget.total_value": "budget.final_budget_value",
   "package.drinks_list": "budget.selected_drinks",
   "budget.bartenders_count": "budget.bartender_quantity",
@@ -54,6 +58,13 @@ export function subtractUtcDays(date: string | null | undefined, days: number): 
   return value.toISOString().slice(0, 10);
 }
 
+function parseNumericValue(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
 const list = (value: unknown): string[] =>
   Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
@@ -69,15 +80,16 @@ export const PROPOSAL_FIELD_RESOLVERS: Record<
   "computed.groom_initial": ({ event }) => resolveExplicitInitial(event.groom_name),
   "computed.bride_initial": ({ event }) => resolveExplicitInitial(event.bride_name),
   "event.guests": ({ event }) => event.guests ?? null,
-  "budget.selected_drinks": ({ hydratedData }) => list(hydratedData?.selectedDrinkNames),
+  "budget.selected_drinks": ({ hydratedData, budget }) =>
+    list(hydratedData?.selectedDrinkNames ?? budget?.selected_drinks ?? budget?.selectedDrinkNames),
   "budget.beverages": ({ budget }) => list(budget.beverages),
   "budget.bartender_quantity": ({ budget }) => budget.bartender_quantity ?? null,
   "budget.copeira_quantity": ({ budget }) => budget.copeira_quantity ?? null,
   "budget.keeper_quantity": ({ budget }) => budget.keeper_quantity ?? null,
   "computed.total_drinks": ({ event, budget }) => {
-    const guests = Number(event.guests);
-    const perPerson = Number(budget.drinks_per_person);
-    return Number.isFinite(guests) && Number.isFinite(perPerson) ? guests * perPerson : null;
+    const guests = parseNumericValue(event?.guests);
+    const perPerson = parseNumericValue(budget?.drinks_per_person);
+    return guests !== null && perPerson !== null ? guests * perPerson : null;
   },
   "budget.final_budget_value": ({ budget }) => budget.final_budget_value ?? null,
   "computed.final_payment_date": ({ event }) => subtractUtcDays(event.date, 7),

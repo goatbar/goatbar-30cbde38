@@ -201,3 +201,83 @@ describe("matriz canônica dos 15 campos", () => {
       expect(value).not.toMatch(/undefined|null|NaN|\[object Object\]|^[0-9a-f-]{36}$/);
   });
 });
+
+describe("cálculo automático de QUANTIDADE_DRINKS (computed.total_drinks)", () => {
+  it("calcula guests * drinks_per_person com números", () => {
+    const res = resolveProposalField("computed.total_drinks", {
+      event: { guests: 150 },
+      budget: { drinks_per_person: 4 },
+    });
+    expect(res).toBe(600);
+  });
+
+  it("calcula guests * drinks_per_person com strings numéricas", () => {
+    const res = resolveProposalField("computed.total_drinks", {
+      event: { guests: "150" },
+      budget: { drinks_per_person: "4" },
+    });
+    expect(res).toBe(600);
+  });
+
+  it("calcula 0 quando guests é 0", () => {
+    const res = resolveProposalField("computed.total_drinks", {
+      event: { guests: 0 },
+      budget: { drinks_per_person: 4 },
+    });
+    expect(res).toBe(0);
+  });
+
+  it("retorna null quando drinks_per_person é null ou undefined", () => {
+    expect(
+      resolveProposalField("computed.total_drinks", {
+        event: { guests: 150 },
+        budget: { drinks_per_person: null },
+      }),
+    ).toBeNull();
+    expect(
+      resolveProposalField("computed.total_drinks", {
+        event: { guests: 150 },
+        budget: { drinks_per_person: undefined },
+      }),
+    ).toBeNull();
+  });
+
+  it("retorna null quando guests é null ou undefined", () => {
+    expect(
+      resolveProposalField("computed.total_drinks", {
+        event: { guests: null },
+        budget: { drinks_per_person: 4 },
+      }),
+    ).toBeNull();
+    expect(
+      resolveProposalField("computed.total_drinks", {
+        event: { guests: undefined },
+        budget: { drinks_per_person: 4 },
+      }),
+    ).toBeNull();
+  });
+
+  it("resolve aliases legados para computed.total_drinks", () => {
+    const ctx = {
+      event: { guests: 100 },
+      budget: { drinks_per_person: 5 },
+    };
+    expect(resolveProposalField("budget.total_drinks", ctx)).toBe(500);
+    expect(resolveProposalField("package.drinks_count", ctx)).toBe(500);
+    expect(resolveProposalField("package.total_drinks", ctx)).toBe(500);
+    expect(resolveProposalField("budget.quantity_drinks", ctx)).toBe(500);
+    expect(resolveProposalField("budget.drinks_count", ctx)).toBe(500);
+  });
+
+  it("não confunde com a quantidade de tipos de drinks selecionados", () => {
+    const ctx = {
+      event: { guests: 150 },
+      budget: {
+        drinks_per_person: 4,
+        selected_drinks: ["d1", "d2", "d3", "d4", "d5", "d6", "d7"],
+      },
+    };
+    expect(resolveProposalField("computed.total_drinks", ctx)).toBe(600);
+    expect(resolveProposalField("computed.total_drinks", ctx)).not.toBe(7);
+  });
+});
