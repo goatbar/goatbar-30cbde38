@@ -713,3 +713,67 @@ export async function autofillAndExportPdf(args: {
     throw new ProposalGenerationError("canva_export_failed", String(error), 502);
   }
 }
+
+export function validatePdfBytes(pdf: Uint8Array): void {
+  if (!pdf || !pdf.length || pdf.length < 4) {
+    throw new ProposalGenerationError(
+      "pdf_invalid",
+      "O arquivo exportado pelo Canva está vazio ou corrompido.",
+      502,
+    );
+  }
+  const magic = new TextDecoder().decode(pdf.subarray(0, 4));
+  if (magic !== "%PDF") {
+    throw new ProposalGenerationError(
+      "pdf_invalid",
+      "O arquivo retornado pelo Canva não é um documento PDF válido.",
+      502,
+    );
+  }
+}
+
+export function buildDeterministicStoragePath(
+  eventId: string,
+  budgetVersionId: string,
+  proposalId: string,
+): string {
+  return `events/${eventId}/budgets/${budgetVersionId}/proposals/${proposalId}.pdf`;
+}
+
+export async function uploadPdfToStorage(
+  storageClient: any,
+  bucketName: string,
+  storagePath: string,
+  pdfBytes: Uint8Array,
+): Promise<{ error: any }> {
+  let { error: uploadError } = await storageClient
+    .from(bucketName)
+    .upload(storagePath, pdfBytes, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+
+  // If bucket does not exist, attempt creation and retry upload
+  if (
+    uploadError &&
+    (uploadError.message?.toLowerCase().includes("bucket not found") ||
+      (uploadError as any).statusCode === "404" ||
+      (uploadError as any).status === 404)
+  ) {
+    console.warn(`[storage] Bucket '${bucketName}' not found. Attempting creation...`);
+    const { error: createError } = await storageClient.createBucket(bucketName, {
+      public: true,
+    });
+    if (!createError || createError.message?.toLowerCase().includes("already exists")) {
+      const retryResult = await storageClient
+        .from(bucketName)
+        .upload(storagePath, pdfBytes, {
+          contentType: "application/pdf",
+          upsert: true,
+        });
+      uploadError = retryResult.error;
+    }
+  }
+
+  return { error: uploadError };
+}

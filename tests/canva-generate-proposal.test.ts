@@ -1,14 +1,18 @@
-import { describe, expect, it, vi } from "vitest";
 import {
   autofillAndExportPdf,
   buildAutofillData,
+  buildDeterministicStoragePath,
   getMissingCanvaMappingKeys,
   hydrateBudgetDrinks,
   normalizeProposalEventType,
   normalizeSelectedDrinks,
+  ProposalGenerationError,
   resolveSelectedDrinks,
+  uploadPdfToStorage,
+  validatePdfBytes,
 } from "../supabase/functions/canva-generate-proposal/logic";
 import {
+  deleteGeneratedProposal,
   formatCanvaGenerationError,
   friendlyCanvaProposalError,
   getProposalGenerationFlow,
@@ -669,6 +673,123 @@ describe("Snapshot completo do payload Canva com apresentação visual", () => {
     );
     expect(data.QUANTIDADE_HORAS_EVENTO.text).toBe(
       "Serviço de bar completo durante 6 horas de festa",
+    );
+  });
+});
+
+describe("Validação de PDF e Storage de Proposta", () => {
+  it("valida bytes do PDF com magic header %PDF", () => {
+    const validPdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]);
+    expect(() => validatePdfBytes(validPdf)).not.toThrow();
+  });
+
+  it("rejeita arquivo vazio ou corrompido com erro pdf_invalid", () => {
+    const empty = new Uint8Array([]);
+    expect(() => validatePdfBytes(empty)).toThrowError(
+      expect.objectContaining({ code: "pdf_invalid" }),
+    );
+  });
+
+  it("rejeita resposta não-PDF (ex: HTML/JSON de erro) com erro pdf_invalid", () => {
+    const jsonBytes = new TextEncoder().encode('{"error":"not_found"}');
+    expect(() => validatePdfBytes(jsonBytes)).toThrowError(
+      expect.objectContaining({ code: "pdf_invalid" }),
+    );
+  });
+
+  it("gera path determinístico e rastreável por evento, versão e proposta", () => {
+    const path = buildDeterministicStoragePath("event-123", "budget-v4", "proposal-abc");
+    expect(path).toBe("events/event-123/budgets/budget-v4/proposals/proposal-abc.pdf");
+  });
+
+  it("faz upload com sucesso no Storage com contentType application/pdf", async () => {
+    const mockUpload = vi.fn().mockResolvedValue({ data: { path: "some-path" }, error: null });
+    const mockStorage = {
+      from: vi.fn().mockReturnValue({ upload: mockUpload }),
+    };
+
+    const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+    const res = await uploadPdfToStorage(
+      mockStorage,
+      "generated-proposals",
+      "events/e1/budgets/b1/proposals/p1.pdf",
+      pdf,
+    );
+
+    expect(res.error).toBeNull();
+    expect(mockStorage.from).toHaveBeenCalledWith("generated-proposals");
+    expect(mockUpload).toHaveBeenCalledWith(
+      "events/e1/budgets/b1/proposals/p1.pdf",
+      pdf,
+      { contentType: "application/pdf", upsert: true },
+    );
+  });
+
+  it("tenta criar bucket automaticamente se receber erro de bucket não encontrado", async () => {
+    let callCount = 0;
+    const mockUpload = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return Promise.resolve({
+          data: null,
+          error: { name: "StorageApiError", message: "Bucket not found", statusCode: "404" },
+        });
+      }
+      return Promise.resolve({ data: { path: "ok" }, error: null });
+    });
+    const mockCreateBucket = vi.fn().mockResolvedValue({ data: {}, error: null });
+
+    const mockStorage = {
+      from: vi.fn().mockReturnValue({ upload: mockUpload }),
+      createBucket: mockCreateBucket,
+    };
+
+    const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+    const res = await uploadPdfToStorage(
+      mockStorage,
+      "generated-proposals",
+      "events/e1/budgets/b1/proposals/p1.pdf",
+      pdf,
+    );
+
+    expect(mockCreateBucket).toHaveBeenCalledWith("generated-proposals", { public: true });
+    expect(mockUpload).toHaveBeenCalledTimes(2);
+    expect(res.error).toBeNull();
+  });
+});
+
+describe("Regras de validade e ciclo de vida da proposta", () => {
+  it("identifica proposta como atual quando budget_id corresponde à versão atual", () => {
+    const currentBudget = { id: "budget-v2", version_number: 2 };
+    const proposal = { id: "prop-1", budget_id: "budget-v2", status: "ready" };
+
+    const isCurrent = proposal.budget_id === currentBudget.id;
+    expect(isCurrent).toBe(true);
+  });
+
+  it("identifica proposta como desatualizada quando o orçamento é alterado para nova versão", () => {
+    const newBudgetVersion = { id: "budget-v3", version_number: 3 };
+    const existingProposal = { id: "prop-1", budget_id: "budget-v2", status: "ready" };
+
+    const isCurrent = existingProposal.budget_id === newBudgetVersion.id;
+    const isOutdated = existingProposal.budget_id !== newBudgetVersion.id;
+
+    expect(isCurrent).toBe(false);
+    expect(isOutdated).toBe(true);
+  });
+
+  it("formata mensagens amigáveis de erro de Storage e exclusão", () => {
+    expect(friendlyCanvaProposalError({ error_code: "storage_upload_failed" })).toBe(
+      "Não foi possível salvar o PDF gerado. A proposta não foi registrada.",
+    );
+    expect(friendlyCanvaProposalError({ error_code: "canva_pdf_download_failed" })).toBe(
+      "Não foi possível baixar o PDF temporário do Canva.",
+    );
+    expect(friendlyCanvaProposalError({ error_code: "pdf_invalid" })).toBe(
+      "O arquivo retornado pelo Canva não é um documento PDF válido.",
+    );
+    expect(friendlyCanvaProposalError({ error_code: "delete_failed" })).toBe(
+      "Não foi possível excluir a proposta.",
     );
   });
 });

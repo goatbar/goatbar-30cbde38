@@ -325,9 +325,23 @@ export const generatedProposalsService = {
       .from("generated_proposals")
       .select("*")
       .eq("event_id", eventId)
+      .neq("status", "deleted")
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
     if (error) throw error;
-    return data as GeneratedProposal | null;
+    return (data as unknown as GeneratedProposal) || null;
+  },
+
+  async listProposalsByEventId(eventId: string) {
+    const { data, error } = await supabase
+      .from("generated_proposals")
+      .select("*")
+      .eq("event_id", eventId)
+      .neq("status", "deleted")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return ((data || []) as unknown) as GeneratedProposal[];
   },
 
   async saveProposal(payload: Omit<GeneratedProposal, "id"> & { id?: string }) {

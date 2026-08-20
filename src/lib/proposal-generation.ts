@@ -23,10 +23,16 @@ export const CANVA_PROPOSAL_ERROR_MESSAGES: Record<string, string> = {
   canva_fields_missing: "Existem campos mapeados que ainda não são Data Fields do Canva.",
   canva_autofill_failed: "O Canva não conseguiu preencher o modelo. Tente novamente.",
   canva_export_failed: "O Canva não conseguiu exportar a proposta em PDF. Tente novamente.",
+  canva_pdf_download_failed: "Não foi possível baixar o PDF temporário do Canva.",
+  pdf_invalid: "O arquivo retornado pelo Canva não é um documento PDF válido.",
   storage_failed: "O PDF foi gerado, mas não pôde ser salvo no Goat Bar.",
+  storage_upload_failed: "Não foi possível salvar o PDF gerado. A proposta não foi registrada.",
   selected_drinks_invalid_format: "Os drinks desta versão estão em um formato antigo ou inválido.",
   selected_drink_not_found: "Um ou mais drinks desta versão não existem mais no cadastro.",
   selected_drinks_query_failed: "Não foi possível consultar os drinks desta versão.",
+  delete_failed: "Não foi possível excluir a proposta.",
+  proposal_not_found: "A proposta não foi encontrada.",
+  unauthorized: "Acesso não autorizado para esta operação.",
 };
 
 export function friendlyCanvaProposalError(value: any): string {
@@ -84,4 +90,15 @@ export async function generateCanvaProposal(eventId: string, budgetVersionId: st
     throw new Error(formatCanvaGenerationError(body || error));
   }
   return data as { proposal: GeneratedProposal; canva_design_id: string; pdf_url: string };
+}
+
+export async function deleteGeneratedProposal(proposalId: string) {
+  const { data, error } = await supabase.functions.invoke("canva-delete-generated-proposal", {
+    body: { generated_proposal_id: proposalId },
+  });
+  if (error || data?.error_code) {
+    const body = data || (await readFunctionErrorBody(error));
+    throw new Error(formatCanvaGenerationError(body || error));
+  }
+  return data as { success: boolean; deleted_proposal_id: string };
 }

@@ -92,6 +92,7 @@ import {
 import { cancelAssinafySignature, type AssinafyDiagnostic } from "@/services/assinafy-service";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import {
+  deleteGeneratedProposal,
   friendlyCanvaProposalError,
   generateCanvaProposal,
   getProposalGenerationFlow,
@@ -220,6 +221,8 @@ function EventoInterna() {
   const [showProposalModal, setShowProposalModal] = useState(false);
   const [existingProposal, setExistingProposal] = useState<GeneratedProposal | null>(null);
   const [proposalTemplate, setProposalTemplate] = useState<ProposalTemplate | null>(null);
+  const [showDeleteProposalDialog, setShowDeleteProposalDialog] = useState(false);
+  const [isDeletingProposal, setIsDeletingProposal] = useState(false);
   const [canvaGeneration, setCanvaGeneration] = useState<{
     open: boolean;
     status: "loading" | "success" | "error";
@@ -228,6 +231,9 @@ function EventoInterna() {
   }>({ open: false, status: "loading" });
 
   const handleGenerateProposal = async () => {
+    if (canvaGeneration.status === "loading" && canvaGeneration.open) {
+      return; // prevent duplicate clicks
+    }
     const evType = evento?.event_type?.toLowerCase() || "";
     const mappedType: "casamento" | "aniversario" | "comemoracao" = evType.includes("casamento")
       ? "casamento"
@@ -255,6 +261,21 @@ function EventoInterna() {
     } catch (error) {
       const message = friendlyCanvaProposalError(error);
       setCanvaGeneration({ open: true, status: "error", message });
+    }
+  };
+
+  const handleDeleteProposal = async () => {
+    if (!existingProposal?.id) return;
+    try {
+      setIsDeletingProposal(true);
+      await deleteGeneratedProposal(existingProposal.id);
+      toast.success("Proposta excluída com sucesso.");
+      setExistingProposal(null);
+      setShowDeleteProposalDialog(false);
+    } catch (err: any) {
+      toast.error(err?.message || "Não foi possível excluir a proposta.");
+    } finally {
+      setIsDeletingProposal(false);
     }
   };
 
@@ -2609,39 +2630,145 @@ function EventoInterna() {
                   </div>
                 </SectionCard>
 
-                {/* GERAR PROPOSTA COMERCIAL BUTTON */}
-                <div className="p-5 bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/25 rounded-2xl flex flex-col gap-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <FileTextIcon className="h-5 w-5 text-primary" />
-                    <span className="font-display font-semibold text-sm">
-                      Proposta Comercial em PDF
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {existingProposal
-                      ? "Proposta já gerada. Clique para ver, editar ou baixar novamente."
-                      : "Gere e personalize uma proposta comercial em PDF baseada no orçamento atual."}
-                  </p>
-                  <div className="flex gap-2 flex-wrap">
-                    <PrimaryButton
-                      className="h-10 text-[11px] font-bold flex-1"
-                      onClick={handleGenerateProposal}
-                    >
-                      <FileTextIcon className="h-4 w-4" />
-                      {existingProposal ? "VER / EDITAR PROPOSTA" : "GERAR PROPOSTA COMERCIAL"}
-                    </PrimaryButton>
-                    {existingProposal?.final_pdf_url && (
-                      <a
-                        href={existingProposal.final_pdf_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl border border-border bg-background hover:bg-muted text-xs font-bold transition-all text-foreground"
-                      >
-                        <Download className="h-4 w-4" /> Baixar PDF
-                      </a>
-                    )}
-                  </div>
-                </div>
+                {/* GERAR PROPOSTA COMERCIAL BUTTON & LIFECYCLE */}
+                {(() => {
+                  const isProposalCurrent = Boolean(
+                    existingProposal &&
+                      currentBudget?.id &&
+                      existingProposal.budget_id === currentBudget.id,
+                  );
+                  const isProposalOutdated = Boolean(
+                    existingProposal &&
+                      currentBudget?.id &&
+                      existingProposal.budget_id !== currentBudget.id,
+                  );
+
+                  return (
+                    <div className="p-5 bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/25 rounded-2xl flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <FileTextIcon className="h-5 w-5 text-primary" />
+                          <span className="font-display font-semibold text-sm">
+                            Proposta Comercial em PDF
+                          </span>
+                        </div>
+                        {existingProposal && isProposalCurrent && (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+                            Versão Atual
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Aviso de Proposta Desatualizada */}
+                      {isProposalOutdated && (
+                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-700 dark:text-amber-300">
+                          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                          <div>
+                            <div className="font-bold">Proposta desatualizada</div>
+                            <div className="text-[11px] opacity-90">
+                              Esta proposta foi gerada a partir de uma versão anterior do orçamento.
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        {!existingProposal
+                          ? "Gere e personalize uma proposta comercial em PDF baseada no orçamento atual."
+                          : isProposalOutdated
+                            ? "Gere uma nova proposta com os dados do orçamento atual ou visualize a versão anterior."
+                            : "Proposta pronta para envio. Você pode visualizar, baixar, gerar novamente ou excluir."}
+                      </p>
+
+                      <div className="flex gap-2 flex-wrap items-center">
+                        {/* Botão de Geração / Regeneração */}
+                        <PrimaryButton
+                          className="h-10 text-[11px] font-bold flex-1"
+                          onClick={handleGenerateProposal}
+                          disabled={canvaGeneration.status === "loading" && canvaGeneration.open}
+                        >
+                          {canvaGeneration.status === "loading" && canvaGeneration.open ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <FileTextIcon className="h-4 w-4" />
+                          )}
+                          {!existingProposal
+                            ? "GERAR PROPOSTA COMERCIAL"
+                            : isProposalOutdated
+                              ? "GERAR PROPOSTA ATUALIZADA"
+                              : "GERAR NOVAMENTE"}
+                        </PrimaryButton>
+
+                        {/* Visualizar / Baixar PDF */}
+                        {existingProposal?.final_pdf_url && (
+                          <a
+                            href={existingProposal.final_pdf_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-xl border border-border bg-background hover:bg-muted text-xs font-bold transition-all text-foreground"
+                          >
+                            <Download className="h-4 w-4" />
+                            {isProposalOutdated ? "Ver Anterior" : "Baixar PDF"}
+                          </a>
+                        )}
+
+                        {/* Botão Excluir */}
+                        {existingProposal && (
+                          <button
+                            type="button"
+                            onClick={() => setShowDeleteProposalDialog(true)}
+                            className="flex items-center justify-center h-10 px-3 rounded-xl border border-destructive/30 hover:border-destructive hover:bg-destructive/10 text-destructive text-xs font-bold transition-all"
+                            title="Excluir proposta comercial"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DA PROPOSTA */}
+                <AlertDialog.Root
+                  open={showDeleteProposalDialog}
+                  onOpenChange={setShowDeleteProposalDialog}
+                >
+                  <AlertDialog.Portal>
+                    <AlertDialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 animate-in fade-in" />
+                    <AlertDialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-surface border border-border p-6 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95">
+                      <AlertDialog.Title className="text-xl font-bold font-display text-foreground flex items-center gap-2">
+                        <Trash2 className="h-5 w-5 text-destructive" />
+                        Excluir Proposta Comercial
+                      </AlertDialog.Title>
+                      <AlertDialog.Description className="mt-3 text-sm text-muted-foreground leading-relaxed">
+                        Esta ação excluirá o PDF gerado desta proposta. O orçamento e o modelo não
+                        serão alterados.
+                      </AlertDialog.Description>
+                      <div className="mt-6 flex justify-end gap-3">
+                        <AlertDialog.Cancel asChild>
+                          <button
+                            type="button"
+                            disabled={isDeletingProposal}
+                            className="px-4 py-2 rounded-xl text-sm font-semibold hover:bg-muted text-muted-foreground transition-all"
+                          >
+                            Cancelar
+                          </button>
+                        </AlertDialog.Cancel>
+                        <AlertDialog.Action asChild>
+                          <button
+                            type="button"
+                            onClick={handleDeleteProposal}
+                            disabled={isDeletingProposal}
+                            className="px-4 py-2 rounded-xl text-sm font-bold bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all flex items-center gap-2"
+                          >
+                            {isDeletingProposal && <Loader2 className="h-4 w-4 animate-spin" />}
+                            Excluir Proposta
+                          </button>
+                        </AlertDialog.Action>
+                      </div>
+                    </AlertDialog.Content>
+                  </AlertDialog.Portal>
+                </AlertDialog.Root>
 
                 {/* VERSÕES RÁPIDAS */}
                 <SectionCard title="Versões Recentes" className="bg-surface/50 border-dashed">

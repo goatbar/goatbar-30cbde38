@@ -8,10 +8,13 @@ import {
 import {
   autofillAndExportPdf,
   buildAutofillData,
+  buildDeterministicStoragePath,
   getMissingCanvaMappingKeys,
   hydrateBudgetDrinks,
   normalizeProposalEventType,
   ProposalGenerationError,
+  uploadPdfToStorage,
+  validatePdfBytes,
 } from "./logic.ts";
 import { resolveProposalField } from "../../../src/lib/proposal-field-resolver.ts";
 
@@ -176,62 +179,103 @@ serve(async (req: Request) => {
       data: autofillData,
     });
     const pdfResponse = await fetch(generated.downloadUrl);
-    if (!pdfResponse.ok)
+    if (!pdfResponse.ok) {
       throw new ProposalGenerationError(
-        "storage_failed",
+        "canva_pdf_download_failed",
         "Não foi possível baixar o PDF temporário do Canva.",
         502,
       );
-    const pdf = new Uint8Array(await pdfResponse.arrayBuffer());
-    const storagePath = `propostas/${eventId}_canva_${Date.now()}.pdf`;
-    const { error: storageError } = await supabaseAdmin.storage
-      .from("generated-proposals")
-      .upload(storagePath, pdf, { contentType: "application/pdf", upsert: false });
-    if (storageError)
+    }
+    const pdfBuffer = await pdfResponse.arrayBuffer();
+    const pdf = new Uint8Array(pdfBuffer);
+    validatePdfBytes(pdf);
+
+    const proposalId = crypto.randomUUID();
+    const storagePath = buildDeterministicStoragePath(eventId, budget.id, proposalId);
+
+    const { error: storageError } = await uploadPdfToStorage(
+      supabaseAdmin.storage,
+      "generated-proposals",
+      storagePath,
+      pdf,
+    );
+
+    if (storageError) {
+      console.error("[canva-generate-proposal] storage_upload error", {
+        stage: "storage_upload",
+        bucket: "generated-proposals",
+        storage_path: storagePath,
+        byte_length: pdf.byteLength,
+        content_type: "application/pdf",
+        storage_error_name: storageError.name,
+        storage_error_message: storageError.message,
+        storage_status: (storageError as any)?.status || (storageError as any)?.statusCode,
+      });
       throw new ProposalGenerationError(
-        "storage_failed",
+        "storage_upload_failed",
         "Não foi possível salvar o PDF no Storage.",
         500,
+        {
+          stage: "storage_upload",
+          storage_error_message: storageError.message,
+        },
       );
+    }
+
     const { data: publicData } = supabaseAdmin.storage
       .from("generated-proposals")
       .getPublicUrl(storagePath);
     const proposalData = Object.fromEntries(
       Object.entries(autofillData).map(([key, value]) => [key, value.text]),
     );
-    const { data: existing } = await supabaseAdmin
-      .from("generated_proposals")
-      .select("id")
-      .eq("event_id", eventId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+
     const record = {
+      id: proposalId,
       event_id: eventId,
       budget_id: budget.id,
       template_id: template.id,
       proposal_data: proposalData,
       final_pdf_url: publicData.publicUrl,
-      status: "downloaded",
+      status: "ready",
       canva_design_id: generated.designId,
       generated_at: new Date().toISOString(),
       storage_path: storagePath,
       updated_at: new Date().toISOString(),
     };
-    const query = existing?.id
-      ? supabaseAdmin.from("generated_proposals").update(record).eq("id", existing.id)
-      : supabaseAdmin.from("generated_proposals").insert(record);
-    const { data: proposal, error: persistError } = await query.select().single();
-    if (persistError)
+
+    const { data: proposal, error: persistError } = await supabaseAdmin
+      .from("generated_proposals")
+      .insert(record)
+      .select()
+      .single();
+
+    if (persistError) {
+      console.error("[canva-generate-proposal] persist error", persistError);
+      // Cleanup orphan storage file on persist error
+      await supabaseAdmin.storage
+        .from("generated-proposals")
+        .remove([storagePath])
+        .catch(() => {});
       throw new ProposalGenerationError(
-        "storage_failed",
-        "PDF salvo, mas a proposta não pôde ser registrada.",
+        "storage_upload_failed",
+        "PDF gerado, mas o registro da proposta não pôde ser salvo.",
         500,
       );
+    }
+
+    // Mark previous ready proposals for this event as superseded to preserve history
+    await supabaseAdmin
+      .from("generated_proposals")
+      .update({ status: "superseded", updated_at: new Date().toISOString() })
+      .eq("event_id", eventId)
+      .neq("id", proposalId)
+      .eq("status", "ready");
+
     return json({
       proposal,
       canva_design_id: generated.designId,
       pdf_url: publicData.publicUrl,
+      storage_path: storagePath,
       jobs: { autofill: generated.autofillJobId, export: generated.exportJobId },
     });
   } catch (error) {
