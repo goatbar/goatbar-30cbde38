@@ -120,10 +120,7 @@ describe("resolver", () => {
   it("resolve os nomes hidratados do formato real { ids } sem serializar objetos", () => {
     const value = resolveProposalField("package.drinks_list", {
       ...context,
-      budget: {
-        ...context.budget,
-        selected_drinks: { names: ["Moscow Mule", "Fitzgerald"] },
-      },
+      hydratedData: { selectedDrinkNames: ["Moscow Mule", "Fitzgerald"] },
     });
     expect(value).toEqual(["Moscow Mule", "Fitzgerald"]);
     expect(formatProposalFieldValue(value)).toBe("Moscow Mule, Fitzgerald");
@@ -151,5 +148,56 @@ describe("resolver", () => {
       false,
     );
     expect(resolveProposalField("computed.couple_initials", context)).toBe("R | P");
+  });
+});
+
+describe("matriz canônica dos 15 campos", () => {
+  it("mantém cada opção do catálogo conectada a um resolver explícito", async () => {
+    const { hasProposalFieldResolver } = await import("./proposal-field-resolver");
+    for (const field of PROPOSAL_FIELD_CATALOG)
+      expect(hasProposalFieldResolver(field.key)).toBe(true);
+    expect(PROPOSAL_FIELD_CATALOG).toHaveLength(15);
+  });
+
+  it("resolve e formata o payload completo sem valores técnicos acidentais", async () => {
+    const { OFFICIAL_CANVA_SOURCE_MAP } = await import("./proposal-field-catalog");
+    const complete = {
+      event: { ...context.event, event_name: "Casamento Roberta e Paulo", duration_hours: 6 },
+      budget: context.budget,
+      hydratedData: { selectedDrinkNames: ["Moscow Mule", "Fitzgerald"] },
+    };
+    const formatters: Record<string, string> = {
+      DATA_ORCAMENTO: "date_short",
+      DATA_EVENTO: "date_short",
+      VALOR_INVESTIMENTO: "currency",
+      DATA_FINAL_PAGAMENTO: "date_short",
+      QUANTIDADE_PESSOAS: "integer",
+      QUANTIDADE_DRINKS: "integer",
+    };
+    const payload = Object.fromEntries(
+      OFFICIAL_CANVA_PROPOSAL_FIELDS.map((canvaKey) => {
+        const raw = resolveProposalField(OFFICIAL_CANVA_SOURCE_MAP[canvaKey], complete);
+        return [canvaKey, formatProposalFieldValue(raw, formatters[canvaKey] || "raw")];
+      }),
+    );
+    expect(payload).toEqual({
+      NOME_EVENTO: "Casamento Roberta e Paulo",
+      DATA_ORCAMENTO: "18/08/2026",
+      DATA_EVENTO: "20/10/2026",
+      INO: "P",
+      INA: "R",
+      QUANTIDADE_PESSOAS: "150",
+      DRINKS: "Moscow Mule, Fitzgerald",
+      BEBIDAS: "Água com gás, Refrigerante zero, Vinho branco",
+      QTD_BARTENDERS: "3",
+      QTD_COPEIRAS: "1",
+      QTD_BAR_KEEPERS: "2",
+      QUANTIDADE_DRINKS: "600",
+      VALOR_INVESTIMENTO: "R$ 6.850,00",
+      DATA_FINAL_PAGAMENTO: "13/10/2026",
+      QUANTIDADE_HORAS_EVENTO: "6",
+    });
+    for (const value of Object.values(payload))
+      expect(value).not.toMatch(/undefined|null|NaN|\[object Object\]|^[0-9a-f-]{36}$/);
   });
 });

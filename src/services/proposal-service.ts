@@ -4,6 +4,7 @@ import { proposalTemplateConfigs, type EventTemplateType, type FieldConfig } fro
 import type { ProposalTemplateField } from "@/lib/proposal-template-mapper";
 
 import { isValidSourceFieldKey } from "@/lib/proposal-field-catalog";
+import { canonicalizeProposalSourceKey } from "@/lib/proposal-field-resolver";
 
 export interface ProposalTemplate {
   id: string;
@@ -250,7 +251,9 @@ export const proposalTemplatesService = {
         canva_field_key: m.canva_field_key,
         canva_field_type: m.canva_field_type || "text",
         source_type: sourceType,
-        source_field_key: sourceType === "field" ? (m.source_field_key || null) : null,
+        source_field_key: sourceType === "field" && m.source_field_key
+          ? canonicalizeProposalSourceKey(m.source_field_key)
+          : null,
         static_value: sourceType === "static" ? (m.static_value ? String(m.static_value).trim() : null) : null,
         formatter: m.formatter || "raw",
         required: Boolean(m.required),

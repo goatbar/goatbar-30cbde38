@@ -192,11 +192,11 @@ describe("3. Canva Brand Template Dataset (Data Fields)", () => {
 
 describe("4. Goat Bar Field Catalog & Server-Side Validation", () => {
   it("validates official catalog keys correctly", () => {
-    expect(isValidSourceFieldKey("event.client_name")).toBe(true);
+    expect(isValidSourceFieldKey("event.client_name")).toBe(false);
     expect(isValidSourceFieldKey("event.event_date")).toBe(true);
     expect(isValidSourceFieldKey("budget.total_value")).toBe(true);
     expect(isValidSourceFieldKey("package.drinks_list")).toBe(true);
-    expect(isValidSourceFieldKey("computed.event_date_formatted")).toBe(true);
+    expect(isValidSourceFieldKey("computed.event_date_formatted")).toBe(false);
 
     // Rejects invalid/arbitrary source field keys
     expect(isValidSourceFieldKey("arbitrary_injected_field")).toBe(false);
@@ -217,7 +217,7 @@ describe("4. Goat Bar Field Catalog & Server-Side Validation", () => {
     ];
 
     await expect(
-      proposalTemplatesService.saveFieldMappings("template-123", invalidMappings as any)
+      proposalTemplatesService.saveFieldMappings("template-123", invalidMappings as any),
     ).rejects.toThrow(/Campo de origem inválido/);
   });
 
@@ -234,7 +234,7 @@ describe("4. Goat Bar Field Catalog & Server-Side Validation", () => {
     ];
 
     await expect(
-      proposalTemplatesService.saveFieldMappings("template-123", invalidTypeMappings as any)
+      proposalTemplatesService.saveFieldMappings("template-123", invalidTypeMappings as any),
     ).rejects.toThrow(/Tipo de origem inválido/);
   });
 
@@ -281,11 +281,11 @@ describe("4. Goat Bar Field Catalog & Server-Side Validation", () => {
 
     const suggestions = suggestAutoMatches(canvaFields);
 
-    expect(suggestions["CLIENT_NAME"]).toBe("event.client_name");
-    expect(suggestions["DATA_EVENTO"]).toBe("event.event_date");
-    expect(suggestions["TOTAL_VALUE"]).toBe("budget.total_value");
-    expect(suggestions["GUESTS"]).toBe("event.guest_count");
-    expect(suggestions["LISTA_DRINKS"]).toBe("package.drinks_list");
+    expect(suggestions["CLIENT_NAME"]).toBeUndefined();
+    expect(suggestions["DATA_EVENTO"]).toBe("event.date");
+    expect(suggestions["TOTAL_VALUE"]).toBe("budget.final_budget_value");
+    expect(suggestions["GUESTS"]).toBe("event.guests");
+    expect(suggestions["LISTA_DRINKS"]).toBe("budget.selected_drinks");
   });
 });
 
