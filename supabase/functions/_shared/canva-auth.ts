@@ -2,6 +2,7 @@
 // Official Canva Connect API authentication, token lifecycle, and brand templates helper
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { summarizeCanvaIntegrations } from "./canva-integration-audit.ts";
 
 export const CANVA_AUTH_URL = "https://www.canva.com/api/oauth/authorize";
 export const CANVA_TOKEN_URL = "https://api.canva.com/rest/v1/oauth/token";
@@ -269,6 +270,8 @@ export async function getValidCanvaAccessToken(
   config?: CanvaConfig
 ): Promise<string> {
   // 1. Fetch current integration record
+  // user_id is UNIQUE in the schema, so this is the single current row (there is no
+  // process cache). The separate audit query detects legacy duplicate rows.
   const { data: integration, error } = await supabaseAdmin
     .from("canva_integrations")
     .select("user_id, access_token, refresh_token, access_token_expires_at")
@@ -330,6 +333,34 @@ export async function getValidCanvaAccessToken(
   }
 
   return newTokens.access_token;
+}
+
+export interface CanvaIntegrationAudit {
+  user_id: string;
+  canva_user_id: string | null;
+  scopes: string[];
+  updated_at: string;
+  access_token_expires_at: string;
+  integration_count: number;
+  duplicate_integration: boolean;
+  token_matches_latest_integration: boolean;
+}
+
+/** Returns only non-secret integration metadata, always selecting the newest row. */
+export async function auditCanvaIntegration(
+  userId: string,
+  supabaseAdmin: SupabaseClient,
+  accessTokenUsed: string,
+): Promise<CanvaIntegrationAudit> {
+  const { data, error } = await supabaseAdmin
+    .from("canva_integrations")
+    .select("user_id, canva_user_id, scopes, updated_at, access_token_expires_at, access_token")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false });
+  if (error || !data?.length) {
+    throw new CanvaApiError(404, "integration_not_found", "Conexão com Canva não encontrada para este usuário.");
+  }
+  return summarizeCanvaIntegrations(data, accessTokenUsed)!;
 }
 
 /**

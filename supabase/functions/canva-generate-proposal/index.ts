@@ -3,6 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   getCanvaBrandTemplateDataset,
   getValidCanvaAccessToken,
+  auditCanvaIntegration,
+  fetchCanvaUserProfile,
   sanitizeLog,
 } from "../_shared/canva-auth.ts";
 import {
@@ -128,6 +130,13 @@ serve(async (req: Request) => {
       );
 
     const token = await getValidCanvaAccessToken(user.id, supabaseAdmin);
+    const integrationAudit = await auditCanvaIntegration(user.id, supabaseAdmin, token);
+    const canvaProfile = await fetchCanvaUserProfile(token).catch(() => ({ id: null, display_name: null }));
+    console.info("[canva-generate-proposal][integration-audit]", {
+      ...integrationAudit,
+      profile_user_id: canvaProfile.id,
+      profile_matches_integration: Boolean(canvaProfile.id && canvaProfile.id === integrationAudit.canva_user_id),
+    });
     const dataset = await getCanvaBrandTemplateDataset(token, template.canva_brand_template_id);
     const mappingKeys = (mappings || []).map((mapping) => mapping.canva_field_key);
     const datasetKeys = dataset.fields.map((field) => field.key);
@@ -173,11 +182,26 @@ serve(async (req: Request) => {
       });
     }
     const autofillData = buildAutofillData(mappings || [], datasetKeys, event, resolvedBudget);
-    const generated = await autofillAndExportPdf({
-      token,
-      brandTemplateId: template.canva_brand_template_id,
-      data: autofillData,
-    });
+    let generated;
+    try {
+      generated = await autofillAndExportPdf({
+        token,
+        brandTemplateId: template.canva_brand_template_id,
+        data: autofillData,
+      });
+    } catch (error) {
+      if (error instanceof ProposalGenerationError && error.status === 429) {
+        error.details = {
+          ...error.details,
+          canva_account: {
+            canva_user_id: integrationAudit.canva_user_id,
+            display_name: canvaProfile.display_name,
+          },
+          integration_audit: integrationAudit,
+        };
+      }
+      throw error;
+    }
     const pdfResponse = await fetch(generated.downloadUrl);
     if (!pdfResponse.ok) {
       throw new ProposalGenerationError(
@@ -283,6 +307,8 @@ serve(async (req: Request) => {
     const known = error instanceof ProposalGenerationError;
     return json(
       {
+        code: known ? error.code : "canva_autofill_failed",
+        status: known ? error.status : 500,
         error_code: known ? error.code : "canva_autofill_failed",
         error: known ? error.message : "Não foi possível gerar a proposta no Canva.",
         ...(known ? error.details : {}),

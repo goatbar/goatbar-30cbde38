@@ -93,6 +93,7 @@ import { cancelAssinafySignature, type AssinafyDiagnostic } from "@/services/ass
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import {
   deleteGeneratedProposal,
+  CanvaGenerationError,
   friendlyCanvaProposalError,
   generateCanvaProposal,
   getProposalGenerationFlow,
@@ -228,6 +229,7 @@ function EventoInterna() {
     status: "loading" | "success" | "error";
     pdfUrl?: string;
     message?: string;
+    diagnostic?: CanvaGenerationError["diagnostic"];
   }>({ open: false, status: "loading" });
 
   const handleGenerateProposal = async () => {
@@ -260,7 +262,12 @@ function EventoInterna() {
       setCanvaGeneration({ open: true, status: "success", pdfUrl: result.pdf_url });
     } catch (error) {
       const message = friendlyCanvaProposalError(error);
-      setCanvaGeneration({ open: true, status: "error", message });
+      setCanvaGeneration({
+        open: true,
+        status: "error",
+        message,
+        diagnostic: error instanceof CanvaGenerationError ? error.diagnostic : undefined,
+      });
     }
   };
 
@@ -3961,7 +3968,7 @@ function CanvaProposalGenerationModal({
   state,
   onClose,
 }: {
-  state: { status: "loading" | "success" | "error"; pdfUrl?: string; message?: string };
+  state: { status: "loading" | "success" | "error"; pdfUrl?: string; message?: string; diagnostic?: CanvaGenerationError["diagnostic"] };
   onClose: () => void;
 }) {
   return (
@@ -3985,7 +3992,22 @@ function CanvaProposalGenerationModal({
             ))}
           </div>
         )}
-        {state.status === "error" && <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{state.message}</div>}
+        {state.status === "error" && (
+          <div className="mt-6 space-y-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+            <p>{state.message}</p>
+            {state.diagnostic?.canva_account && (
+              <div className="text-xs text-muted-foreground">
+                <p>Conta Canva conectada: {state.diagnostic.canva_account.display_name || "Nome não informado"}</p>
+                <p>canva_user_id: {state.diagnostic.canva_account.canva_user_id || "Não informado"}</p>
+              </div>
+            )}
+            {state.diagnostic?.upsell_url && (
+              <a className="inline-block font-bold text-primary underline" href={state.diagnostic.upsell_url} target="_blank" rel="noreferrer">
+                Abrir informações da Canva
+              </a>
+            )}
+          </div>
+        )}
         {state.status === "success" && state.pdfUrl && (
           <div className="mt-6 flex flex-wrap gap-3">
             <a className="flex-1 rounded-xl bg-primary px-4 py-3 text-center text-xs font-bold text-primary-foreground" href={state.pdfUrl} target="_blank" rel="noreferrer">Visualizar PDF</a>
