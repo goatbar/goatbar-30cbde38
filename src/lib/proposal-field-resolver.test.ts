@@ -8,6 +8,10 @@ import {
   PROPOSAL_FIELD_CATALOG,
 } from "./proposal-field-catalog";
 import {
+  formatBulletList,
+  formatCanvaProposalField,
+  formatCurrency,
+  formatDateDot,
   formatProposalFieldValue,
   resolveExplicitInitial,
   resolveProposalField,
@@ -279,5 +283,95 @@ describe("cálculo automático de QUANTIDADE_DRINKS (computed.total_drinks)", ()
     };
     expect(resolveProposalField("computed.total_drinks", ctx)).toBe(600);
     expect(resolveProposalField("computed.total_drinks", ctx)).not.toBe(7);
+  });
+});
+
+describe("Apresentação visual da proposta Canva (formatCanvaProposalField)", () => {
+  const fixture = {
+    event: {
+      guests: 82,
+      duration_hours: 6,
+      date: "2026-11-14",
+    },
+    budget: {
+      bartender_quantity: 2,
+      keeper_quantity: 1,
+      copeira_quantity: 0,
+      drinks_per_person: 3,
+      final_budget_value: 2035.34,
+      created_at: "2026-08-19",
+    },
+    drinks: [
+      "Caipivodka limão cravo e mel",
+      "Caip Maracujá com baunilha",
+      "Caipivodka Morango",
+      "Fitzgerald",
+      "Tom Collins",
+      "Moscow Mule",
+    ],
+    beverages: ["Gin O'gin ou Gordons", "Vodka Smirnoff"],
+    finalPaymentDate: "2026-11-07",
+  };
+
+  it("formata QUANTIDADE_PESSOAS com texto contextualizado completo e singular/plural", () => {
+    expect(formatCanvaProposalField("QUANTIDADE_PESSOAS", 82)).toBe(
+      "Preparamos uma proposta especial para você:\nNúmero de convidados: 82 pessoas",
+    );
+    expect(formatCanvaProposalField("QUANTIDADE_PESSOAS", 1)).toBe(
+      "Preparamos uma proposta especial para você:\nNúmero de convidados: 1 pessoa",
+    );
+  });
+
+  it("formata QUANTIDADE_HORAS_EVENTO com texto contextualizado e singular/plural", () => {
+    expect(formatCanvaProposalField("QUANTIDADE_HORAS_EVENTO", 6)).toBe(
+      "Serviço de bar completo durante 6 horas de festa",
+    );
+    expect(formatCanvaProposalField("QUANTIDADE_HORAS_EVENTO", 1)).toBe(
+      "Serviço de bar completo durante 1 hora de festa",
+    );
+  });
+
+  it("formata equipe mantendo os rótulos de cada função", () => {
+    expect(formatCanvaProposalField("QTD_BARTENDERS", 2)).toBe("2 Bartenders");
+    expect(formatCanvaProposalField("QTD_BARTENDERS", 1)).toBe("1 Bartender");
+    expect(formatCanvaProposalField("QTD_BAR_KEEPERS", 1)).toBe("1 Bar Keeper");
+    expect(formatCanvaProposalField("QTD_BAR_KEEPERS", 2)).toBe("2 Bar Keepers");
+    expect(formatCanvaProposalField("QTD_COPEIRAS", 0)).toBe("0 Copeiras");
+    expect(formatCanvaProposalField("QTD_COPEIRAS", 1)).toBe("1 Copeira");
+  });
+
+  it("formata DRINKS e BEBIDAS com bullets", () => {
+    expect(formatCanvaProposalField("DRINKS", fixture.drinks)).toBe(
+      "• Caipivodka limão cravo e mel\n• Caip Maracujá com baunilha\n• Caipivodka Morango\n• Fitzgerald\n• Tom Collins\n• Moscow Mule",
+    );
+    expect(formatCanvaProposalField("BEBIDAS", fixture.beverages)).toBe(
+      "• Gin O'gin ou Gordons\n• Vodka Smirnoff",
+    );
+  });
+
+  it("formata datas no padrão DD.MM.AAAA com ponto", () => {
+    expect(formatCanvaProposalField("DATA_EVENTO", "2026-11-14")).toBe("14.11.2026");
+    expect(formatCanvaProposalField("DATA_ORCAMENTO", "2026-08-19")).toBe("19.08.2026");
+  });
+
+  it("formata DATA_FINAL_PAGAMENTO com o bloco completo de formas de pagamento", () => {
+    expect(formatCanvaProposalField("DATA_FINAL_PAGAMENTO", "2026-11-07")).toBe(
+      "Formas de pagamento:\n\n• 30% na assinatura do contrato -\n  Restante até dia 07.11.2026\n• 5% de desconto para pagamento à vista\n• Parcelamento no cartão ou boleto (a consultar)",
+    );
+  });
+
+  it("formata VALOR_INVESTIMENTO com o bloco de Investimento", () => {
+    expect(formatCanvaProposalField("VALOR_INVESTIMENTO", 2035.34)).toMatch(
+      /Investimento:\n(R\$\s*2\.035,34)/,
+    );
+  });
+
+  it("formata QUANTIDADE_DRINKS com texto explicativo de doses previstas", () => {
+    expect(formatCanvaProposalField("QUANTIDADE_DRINKS", 246)).toBe(
+      "Previsão de 246 drinks durante o evento",
+    );
+    expect(formatCanvaProposalField("QUANTIDADE_DRINKS", 1)).toBe(
+      "Previsão de 1 drink durante o evento",
+    );
   });
 });

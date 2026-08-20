@@ -131,8 +131,14 @@ export const PROPOSAL_FORMATTERS: FieldFormatterOption[] = [
     description: "Formata valores numéricos como reais.",
   },
   { key: "date_short", label: "Data Curta (DD/MM/AAAA)", description: "Exemplo: 20/10/2026" },
+  { key: "date_canva", label: "Data Canva (DD.MM.AAAA)", description: "Exemplo: 20.10.2026" },
   { key: "date_long", label: "Data por Extenso", description: "Exemplo: 20 de Outubro de 2026" },
   { key: "integer", label: "Número Inteiro", description: "Remove casas decimais." },
+  {
+    key: "bullet_list",
+    label: "Lista com Marcadores (•)",
+    description: "Insere cada item em uma linha com bullet.",
+  },
   {
     key: "uppercase",
     label: "TUDO EM MAIÚSCULAS",

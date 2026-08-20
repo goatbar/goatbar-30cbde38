@@ -1,4 +1,5 @@
 import {
+  formatCanvaProposalField,
   formatProposalFieldValue,
   resolveProposalField,
 } from "../../../src/lib/proposal-field-resolver.ts";
@@ -597,7 +598,10 @@ export function buildAutofillData(
         { field: mapping.canva_field_key, source_key: mapping.source_field_key },
       );
     }
-    const value = formatProposalFieldValue(raw, mapping.formatter || "raw");
+    const value =
+      mapping.formatter && mapping.formatter !== "raw"
+        ? formatProposalFieldValue(raw, mapping.formatter)
+        : formatCanvaProposalField(mapping.canva_field_key, raw, mapping.formatter || "raw");
     data[mapping.canva_field_key] = { type: "text", text: value };
   }
   if (!Object.keys(data).length)

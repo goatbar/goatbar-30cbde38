@@ -117,12 +117,45 @@ export function resolveProposalField(
   return PROPOSAL_FIELD_RESOLVERS[canonical]?.(context) ?? null;
 }
 
+export function formatDateDot(value: unknown): string {
+  if (!value || typeof value !== "string") return "";
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.slice(0, 10));
+  if (!match) return String(value);
+  const [, year, month, day] = match;
+  return `${day}.${month}.${year}`;
+}
+
+export function formatBulletList(value: unknown): string {
+  if (!value) return "";
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === "string" ? item.trim() : String(item).trim()))
+      .filter(Boolean)
+      .map((item) => (item.startsWith("•") ? item : `• ${item}`))
+      .join("\n");
+  }
+  return String(value);
+}
+
+export function formatCurrency(value: unknown): string {
+  if (value == null) return "";
+  const num = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(num)) return String(value);
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(num);
+}
+
 export function formatProposalFieldValue(value: ProposalFieldValue, formatter = "raw"): string {
   if (value == null) return "";
+  if (formatter === "bullet_list" || formatter === "canva_bullet_list") {
+    return formatBulletList(value);
+  }
   if (Array.isArray(value)) return value.join(", ");
   if (formatter === "currency" && typeof value === "number")
-    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+    return formatCurrency(value);
   if (formatter === "integer" && typeof value === "number") return Math.round(value).toString();
+  if ((formatter === "date_canva" || formatter === "date_dot") && typeof value === "string") {
+    return formatDateDot(value);
+  }
   if ((formatter === "date_short" || formatter === "date_long") && typeof value === "string") {
     const [year, month, day] = value.slice(0, 10).split("-");
     if (formatter === "date_short") return year && month && day ? `${day}/${month}/${year}` : value;
@@ -139,4 +172,71 @@ export function formatProposalFieldValue(value: ProposalFieldValue, formatter = 
   if (formatter === "uppercase") return String(value).toLocaleUpperCase("pt-BR");
   if (formatter === "lowercase") return String(value).toLocaleLowerCase("pt-BR");
   return String(value);
+}
+
+export const CANVA_PROPOSAL_PRESENTERS: Record<
+  string,
+  (value: ProposalFieldValue, formatter?: string) => string
+> = {
+  DATA_ORCAMENTO: (v) => formatDateDot(v),
+  DATA_EVENTO: (v) => formatDateDot(v),
+  DATA_FINAL_PAGAMENTO: (v) => {
+    const dateStr = formatDateDot(v);
+    if (!dateStr) return "";
+    return `Formas de pagamento:\n\n• 30% na assinatura do contrato -\n  Restante até dia ${dateStr}\n• 5% de desconto para pagamento à vista\n• Parcelamento no cartão ou boleto (a consultar)`;
+  },
+  QUANTIDADE_PESSOAS: (v) => {
+    const n = parseNumericValue(v);
+    if (n === null) return "";
+    const label = n === 1 ? "1 pessoa" : `${n} pessoas`;
+    return `Preparamos uma proposta especial para você:\nNúmero de convidados: ${label}`;
+  },
+  QUANTIDADE_HORAS_EVENTO: (v) => {
+    const n = parseNumericValue(v);
+    if (n === null) return "";
+    const label = n === 1 ? "1 hora" : `${n} horas`;
+    return `Serviço de bar completo durante ${label} de festa`;
+  },
+  QTD_BARTENDERS: (v) => {
+    const n = parseNumericValue(v);
+    if (n === null) return "";
+    return n === 1 ? "1 Bartender" : `${n} Bartenders`;
+  },
+  QTD_BAR_KEEPERS: (v) => {
+    const n = parseNumericValue(v);
+    if (n === null) return "";
+    return n === 1 ? "1 Bar Keeper" : `${n} Bar Keepers`;
+  },
+  QTD_COPEIRAS: (v) => {
+    const n = parseNumericValue(v);
+    if (n === null) return "";
+    return n === 1 ? "1 Copeira" : `${n} Copeiras`;
+  },
+  QUANTIDADE_DRINKS: (v) => {
+    const n = parseNumericValue(v);
+    if (n === null) return "";
+    return n === 1 ? "Previsão de 1 drink durante o evento" : `Previsão de ${n} drinks durante o evento`;
+  },
+  DRINKS: (v) => formatBulletList(v),
+  BEBIDAS: (v) => formatBulletList(v),
+  VALOR_INVESTIMENTO: (v) => {
+    const formatted = formatCurrency(v);
+    return formatted ? `Investimento:\n${formatted}` : "";
+  },
+  INO: (v) => (v == null ? "" : String(v)),
+  INA: (v) => (v == null ? "" : String(v)),
+  NOME_EVENTO: (v) => (v == null ? "" : String(v)),
+};
+
+export function formatCanvaProposalField(
+  canvaKey: string,
+  value: ProposalFieldValue,
+  formatter = "raw",
+): string {
+  if (value == null) return "";
+  const presenter = CANVA_PROPOSAL_PRESENTERS[canvaKey];
+  if (presenter) {
+    return presenter(value, formatter);
+  }
+  return formatProposalFieldValue(value, formatter);
 }

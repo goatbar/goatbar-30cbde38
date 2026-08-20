@@ -65,7 +65,7 @@ describe("seleção e mappings da proposta", () => {
     );
     expect(data.INO.text).toBe("G");
     expect(data.INA.text).toBe("M");
-    expect(data.BEBIDAS.text).toBe("Água, Refrigerante");
+    expect(data.BEBIDAS.text).toBe("• Água\n• Refrigerante");
   });
   it("ignora INICIAIS_NOIVOS legado em novas gerações", () => {
     const data = buildAutofillData(
@@ -216,10 +216,10 @@ describe("resolução dos drinks versionados", () => {
       event,
       { ...budget, selected_drinks: names },
     );
-    expect(data.DRINKS.text).toBe("Fitzgerald, Moscow Mule, Fitzgerald");
+    expect(data.DRINKS.text).toBe("• Fitzgerald\n• Moscow Mule\n• Fitzgerald");
     expect(data.DRINKS.text).not.toContain("drink-");
     expect(data.DRINKS.text).not.toContain("[object Object]");
-    expect(data.BEBIDAS.text).toBe("Água, Refrigerante");
+    expect(data.BEBIDAS.text).toBe("• Água\n• Refrigerante");
   });
 
   it.each([
@@ -511,8 +511,8 @@ describe("Normalização e hidratação de selected_drinks", () => {
       resolvedBudget,
     );
 
-    expect(autofill.DRINKS.text).toBe("Gin Tropical, Aperol Spritz");
-    expect(autofill.QUANTIDADE_DRINKS.text).toBe("600");
+    expect(autofill.DRINKS.text).toBe("• Gin Tropical\n• Aperol Spritz");
+    expect(autofill.QUANTIDADE_DRINKS.text).toBe("Previsão de 600 drinks durante o evento");
   });
 });
 
@@ -554,7 +554,7 @@ describe("Autofill de QUANTIDADE_DRINKS com cálculo automático", () => {
       { guests: 150 },
       { drinks_per_person: 4 },
     );
-    expect(data.QUANTIDADE_DRINKS.text).toBe("600");
+    expect(data.QUANTIDADE_DRINKS.text).toBe("Previsão de 600 drinks durante o evento");
   });
 
   it("não bloqueia quando guests=0 e drinks_per_person=4 -> 0", () => {
@@ -564,7 +564,7 @@ describe("Autofill de QUANTIDADE_DRINKS com cálculo automático", () => {
       { guests: 0 },
       { drinks_per_person: 4 },
     );
-    expect(data.QUANTIDADE_DRINKS.text).toBe("0");
+    expect(data.QUANTIDADE_DRINKS.text).toBe("Previsão de 0 drinks durante o evento");
   });
 
   it("bloqueia com required_field_empty quando guests=null e required=true", () => {
@@ -596,6 +596,79 @@ describe("Autofill de QUANTIDADE_DRINKS com cálculo automático", () => {
       { guests: 200 },
       { drinks_per_person: 5 },
     );
-    expect(data.QUANTIDADE_DRINKS.text).toBe("1000");
+    expect(data.QUANTIDADE_DRINKS.text).toBe("Previsão de 1000 drinks durante o evento");
+  });
+});
+
+describe("Snapshot completo do payload Canva com apresentação visual", () => {
+  it("gera todos os campos com textos contextuais, datas com ponto e bullets", () => {
+    const sampleEvent = {
+      guests: 82,
+      duration_hours: 6,
+      date: "2026-11-14",
+      event_name: "Casamento Ana e Bruno",
+      groom_name: "Bruno",
+      bride_name: "Ana",
+    };
+    const sampleBudget = {
+      bartender_quantity: 2,
+      keeper_quantity: 1,
+      copeira_quantity: 0,
+      drinks_per_person: 3,
+      final_budget_value: 2035.34,
+      created_at: "2026-08-19",
+      selected_drinks: [
+        "Caipivodka limão cravo e mel",
+        "Caip Maracujá com baunilha",
+        "Caipivodka Morango",
+        "Fitzgerald",
+        "Tom Collins",
+        "Moscow Mule",
+      ],
+      beverages: ["Gin O'gin ou Gordons", "Vodka Smirnoff"],
+    };
+    const mappings = [
+      mapping("NOME_EVENTO", "event.event_name"),
+      mapping("DATA_ORCAMENTO", "budget.created_at"),
+      mapping("DATA_EVENTO", "event.date"),
+      mapping("INO", "computed.groom_initial"),
+      mapping("INA", "computed.bride_initial"),
+      mapping("QUANTIDADE_PESSOAS", "event.guests"),
+      mapping("DRINKS", "budget.selected_drinks"),
+      mapping("BEBIDAS", "budget.beverages"),
+      mapping("QTD_BARTENDERS", "budget.bartender_quantity"),
+      mapping("QTD_COPEIRAS", "budget.copeira_quantity"),
+      mapping("QTD_BAR_KEEPERS", "budget.keeper_quantity"),
+      mapping("QUANTIDADE_DRINKS", "computed.total_drinks"),
+      mapping("VALOR_INVESTIMENTO", "budget.final_budget_value"),
+      mapping("DATA_FINAL_PAGAMENTO", "computed.final_payment_date"),
+      mapping("QUANTIDADE_HORAS_EVENTO", "event.duration_hours"),
+    ];
+    const datasetKeys = mappings.map((m) => m.canva_field_key);
+    const data = buildAutofillData(mappings, datasetKeys, sampleEvent, sampleBudget);
+
+    expect(data.NOME_EVENTO.text).toBe("Casamento Ana e Bruno");
+    expect(data.DATA_ORCAMENTO.text).toBe("19.08.2026");
+    expect(data.DATA_EVENTO.text).toBe("14.11.2026");
+    expect(data.INO.text).toBe("B");
+    expect(data.INA.text).toBe("A");
+    expect(data.QUANTIDADE_PESSOAS.text).toBe(
+      "Preparamos uma proposta especial para você:\nNúmero de convidados: 82 pessoas",
+    );
+    expect(data.DRINKS.text).toBe(
+      "• Caipivodka limão cravo e mel\n• Caip Maracujá com baunilha\n• Caipivodka Morango\n• Fitzgerald\n• Tom Collins\n• Moscow Mule",
+    );
+    expect(data.BEBIDAS.text).toBe("• Gin O'gin ou Gordons\n• Vodka Smirnoff");
+    expect(data.QTD_BARTENDERS.text).toBe("2 Bartenders");
+    expect(data.QTD_COPEIRAS.text).toBe("0 Copeiras");
+    expect(data.QTD_BAR_KEEPERS.text).toBe("1 Bar Keeper");
+    expect(data.QUANTIDADE_DRINKS.text).toBe("Previsão de 246 drinks durante o evento");
+    expect(data.VALOR_INVESTIMENTO.text).toMatch(/Investimento:\n(R\$\s*2\.035,34)/);
+    expect(data.DATA_FINAL_PAGAMENTO.text).toBe(
+      "Formas de pagamento:\n\n• 30% na assinatura do contrato -\n  Restante até dia 07.11.2026\n• 5% de desconto para pagamento à vista\n• Parcelamento no cartão ou boleto (a consultar)",
+    );
+    expect(data.QUANTIDADE_HORAS_EVENTO.text).toBe(
+      "Serviço de bar completo durante 6 horas de festa",
+    );
   });
 });
