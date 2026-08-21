@@ -99,6 +99,7 @@ import {
   generateCanvaProposal,
   getProposalGenerationFlow,
 } from "@/lib/proposal-generation";
+import { formatDateDot } from "@/lib/proposal-field-resolver";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
   component: EventoInterna,
@@ -4130,13 +4131,8 @@ function ProposalModal({
     existingProposal?.proposal_data
       ? (existingProposal.proposal_data as any)
       : {
-          proposalDate: new Date().toLocaleDateString("pt-BR"),
-          eventDate: draft?.data
-            ? (() => {
-                const [y, m, d] = (draft.data || "").split("-");
-                return `${d}/${m}/${y}`;
-              })()
-            : "---",
+          proposalDate: formatDateDot(new Date()),
+          eventDate: formatDateDot(draft?.data),
           eventTime: draft?.horario || "",
           clientName:
             draft?.evento_nome || evento?.event_name || draft?.cliente || evento?.client_name || "",
@@ -4172,15 +4168,8 @@ function ProposalModal({
           copeiras: draft?.equipe?.copeira?.qtd || 0,
           totalDrinkVarieties: (draft?.drinks || []).length,
           finalInvestment: calc?.valorTotalOrcamento || 0,
-          paymentTerms: draft?.pagamento?.formaPagamento || "A combinar",
-          includedServices: [
-            "Sistema de montagem e desmontagem da estrutura de bar",
-            "Cristalaria premium (taças e copos especiais)",
-            "Gelo e insumos de bar",
-            "Uniforme profissional da equipe Goat Bar",
-            "Harmonização entre drinks e gastronomia do evento",
-            "Direção criativa dos drinks e personalização do cardápio",
-          ],
+          paymentTerms: draft?.pagamento?.formaPagamento || "",
+          includedServices: draft?.servicosInclusos || [],
           observations: draft?.observacoes || "",
         };
 

@@ -1,4 +1,4 @@
-﻿import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   StatCard,
   SectionCard,
@@ -16,6 +16,7 @@ import {
   X,
   LayoutGrid,
   List,
+  Kanban,
   Loader2,
   Trash2,
   CheckCircle2,
@@ -25,9 +26,27 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { eventBudgetService, type Event as RealEvent } from "@/services/event-budget-service";
 import { PageHeader } from "@/components/AppShell";
 import { migrateLegacyStoreToSupabase } from "@/lib/migration";
+import { EventKanban } from "@/components/kanban/EventKanban";
+import { type KanbanColumnId } from "@/lib/kanban-pipeline";
+
+const VIEW_STORAGE_KEY = "goatbar:eventos:view";
+
+function getStoredViewMode(): "lista" | "kanban" | "calendario" {
+  if (typeof window === "undefined") return "lista";
+  try {
+    const saved = localStorage.getItem(VIEW_STORAGE_KEY);
+    if (saved === "lista" || saved === "kanban" || saved === "calendario") {
+      return saved;
+    }
+  } catch (_e) {
+    // Ignora erro de acesso a localStorage em ambientes restritos
+  }
+  return "lista";
+}
 
 export const Route = createFileRoute("/eventos/")({
   component: EventosIndex,
@@ -38,9 +57,22 @@ function EventosIndex() {
   const [eventos, setEventos] = useState<RealEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [viewMode, setViewMode] = useState<"lista" | "calendario">("lista");
+  const [viewMode, setViewModeState] = useState<"lista" | "kanban" | "calendario">(
+    getStoredViewMode,
+  );
+  const [pendingOverrides, setPendingOverrides] = useState<Record<string, KanbanColumnId>>({});
+  const [savingEventIds, setSavingEventIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<string>("pipeline");
   const [sortOrder, setSortOrder] = useState<"data" | "status">("data");
+
+  const setViewMode = (mode: "lista" | "kanban" | "calendario") => {
+    setViewModeState(mode);
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, mode);
+    } catch (_e) {
+      // Ignora erro de acesso a localStorage
+    }
+  };
   const [form, setForm] = useState({
     nome: "",
     evento_nome: "",
@@ -101,12 +133,7 @@ function EventosIndex() {
       const s = e.status?.toUpperCase() || "";
       if (statusFilter === "pipeline") {
         // Pipeline principal: exclui finalizados e cancelados
-        return ![
-          "FINALIZADO",
-          "REALIZADO",
-          "CANCELADO",
-          "PROPOSTA_RECUSADA",
-        ].includes(s);
+        return !["FINALIZADO", "REALIZADO", "CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
       }
       if (statusFilter === "ativos") {
         return !["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
@@ -181,6 +208,38 @@ function EventosIndex() {
       return ["ORCAMENTO_ENVIADO", "AGUARDANDO_RESPOSTA", "DADOS_SOLICITADOS"].includes(s);
     })
     .reduce((a, e) => a + (e.current_budget_value || 0), 0);
+
+  const handleStatusChange = async (eventId: string, newStatus: KanbanColumnId) => {
+    // Previne concorrência em requisições simultâneas para o mesmo card
+    if (savingEventIds.has(eventId)) return;
+
+    // Atualização otimista imediata na UI
+    setPendingOverrides((prev) => ({ ...prev, [eventId]: newStatus }));
+    setSavingEventIds((prev) => new Set(prev).add(eventId));
+
+    try {
+      await eventBudgetService.updateNegotiationStatus(eventId, newStatus);
+      // Sincroniza dados frescos com o Supabase
+      const data = await eventBudgetService.listEvents();
+      setEventos(data);
+    } catch (err: unknown) {
+      console.error("Erro ao atualizar status do evento:", err);
+      const errMsg = err instanceof Error ? err.message : "Falha na comunicação com o Supabase";
+      toast.error(`Erro ao atualizar status: ${errMsg}`);
+    } finally {
+      // Limpa override e lock de salvamento daquele card
+      setPendingOverrides((prev) => {
+        const next = { ...prev };
+        delete next[eventId];
+        return next;
+      });
+      setSavingEventIds((prev) => {
+        const next = new Set(prev);
+        next.delete(eventId);
+        return next;
+      });
+    }
+  };
 
   const mesmoDiaEventos = form.data
     ? eventos.filter(
@@ -264,19 +323,18 @@ function EventosIndex() {
         <SectionCard
           title="Pipeline de negociações"
           subtitle={
-            loading
-              ? "Carregando..."
-              : `${filteredEventos.length} de ${eventos.length} registros`
+            loading ? "Carregando..." : `${filteredEventos.length} de ${eventos.length} registros`
           }
           action={
             <div className="flex flex-wrap items-center gap-3">
-              {viewMode === "lista" && (
+              {viewMode !== "calendario" && (
                 <>
-                  {/* Filtro de status */}
+                  {/* Filtro de status compartilhado */}
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
                     className="h-9 px-3 rounded-lg bg-input border border-border text-xs font-medium focus:ring-1 focus:ring-primary outline-none cursor-pointer text-foreground"
+                    aria-label="Filtrar eventos por status"
                   >
                     <option value="pipeline">Pipeline (ativos)</option>
                     <option value="todos">Todos os registros</option>
@@ -286,13 +344,14 @@ function EventosIndex() {
                     <option value="cancelados">Cancelados</option>
                   </select>
 
-                  {/* Ordenação */}
+                  {/* Ordenação compartilhada */}
                   <div className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-input border border-border text-xs font-medium text-foreground">
                     <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     <select
                       value={sortOrder}
                       onChange={(e) => setSortOrder(e.target.value as "data" | "status")}
                       className="bg-transparent outline-none cursor-pointer"
+                      aria-label="Ordenar eventos"
                     >
                       <option value="data">Por data do evento</option>
                       <option value="status">Por status do orçamento</option>
@@ -303,12 +362,27 @@ function EventosIndex() {
               <div className="flex bg-background border border-border rounded-lg p-0.5">
                 <button
                   onClick={() => setViewMode("lista")}
+                  aria-pressed={viewMode === "lista"}
+                  aria-label="Visualização em Lista"
+                  title="Visualização em Lista"
                   className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${viewMode === "lista" ? "bg-surface shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   <List className="h-3.5 w-3.5" /> Lista
                 </button>
                 <button
+                  onClick={() => setViewMode("kanban")}
+                  aria-pressed={viewMode === "kanban"}
+                  aria-label="Visualização em Kanban"
+                  title="Visualização em Kanban"
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${viewMode === "kanban" ? "bg-surface shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Kanban className="h-3.5 w-3.5" /> Kanban
+                </button>
+                <button
                   onClick={() => setViewMode("calendario")}
+                  aria-pressed={viewMode === "calendario"}
+                  aria-label="Visualização em Calendário"
+                  title="Visualização em Calendário"
                   className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${viewMode === "calendario" ? "bg-surface shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   <LayoutGrid className="h-3.5 w-3.5" /> Calendário
@@ -388,24 +462,24 @@ function EventosIndex() {
                       className="hidden sm:block relative group/status"
                       onClick={(ev) => ev.preventDefault()}
                     >
-                      <StatusBadge status={e.status as any} />
+                      <StatusBadge status={(pendingOverrides[e.id] ?? e.status) as any} />
                       <select
                         className="absolute inset-0 opacity-0 cursor-pointer"
-                        value={e.status}
+                        value={pendingOverrides[e.id] ?? e.status}
+                        disabled={savingEventIds.has(e.id)}
                         onChange={(ev) => {
                           ev.preventDefault();
                           ev.stopPropagation();
-                          eventBudgetService
-                            .updateNegotiationStatus(e.id, ev.target.value)
-                            .then(() => loadEvents());
+                          handleStatusChange(e.id, ev.target.value as KanbanColumnId);
                         }}
                       >
                         <option value="novo_orcamento">Novo orçamento</option>
+                        <option value="dados_solicitados">Dados solicitados</option>
                         <option value="orcamento_enviado">Orçamento enviado</option>
                         <option value="aguardando_retorno">Aguardando retorno</option>
-                        <option value="dados_solicitados">Dados solicitados</option>
                         <option value="em_assinatura">Em assinatura</option>
                         <option value="confirmado">Confirmado</option>
+                        <option value="finalizado">Finalizado</option>
                         <option value="cancelado">Cancelado</option>
                       </select>
                     </div>
@@ -431,6 +505,14 @@ function EventosIndex() {
                 </Link>
               ))}
             </div>
+          ) : viewMode === "kanban" ? (
+            <EventKanban
+              events={filteredEventos}
+              statusFilter={statusFilter}
+              savingEventIds={savingEventIds}
+              pendingOverrides={pendingOverrides}
+              onStatusChange={handleStatusChange}
+            />
           ) : (
             <CalendarView eventosAtivos={eventosAtivos} />
           )}
@@ -460,7 +542,8 @@ function EventosIndex() {
                     <ul className="mt-2 list-disc list-inside space-y-1 opacity-80">
                       {mesmoDiaEventos.map((ev) => (
                         <li key={ev.id}>
-                          {ev.event_name || ev.client_name} ({ev.event_location}) - {ev.status.replace("_", " ")}
+                          {ev.event_name || ev.client_name} ({ev.event_location}) -{" "}
+                          {ev.status.replace("_", " ")}
                         </li>
                       ))}
                     </ul>
@@ -660,7 +743,9 @@ function CalendarView({ eventosAtivos }: { eventosAtivos: RealEvent[] }) {
                       </div>
                       <div className="text-[9px] text-muted-foreground flex justify-between items-center gap-1">
                         <span>{e.guests} conv.</span>
-                        <span className="truncate max-w-[55px] text-right">{e.city || "A definir"}</span>
+                        <span className="truncate max-w-[55px] text-right">
+                          {e.city || "A definir"}
+                        </span>
                       </div>
                     </Link>
                   ))}
@@ -673,5 +758,3 @@ function CalendarView({ eventosAtivos }: { eventosAtivos: RealEvent[] }) {
     </div>
   );
 }
-
-

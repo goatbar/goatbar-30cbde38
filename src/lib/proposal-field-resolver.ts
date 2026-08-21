@@ -11,10 +11,13 @@ export const LEGACY_SOURCE_ALIASES = {
   "event.guest_count": "event.guests",
   "computed.proposal_date": "budget.created_at",
   "budget.total_drinks": "computed.total_drinks",
-  "package.drinks_count": "computed.total_drinks",
-  "package.total_drinks": "computed.total_drinks",
-  "budget.quantity_drinks": "computed.total_drinks",
-  "budget.drinks_count": "computed.total_drinks",
+  "package.drinks_count": "computed.total_drink_varieties",
+  "package.total_drinks": "computed.total_drink_varieties",
+  "budget.quantity_drinks": "computed.total_drink_varieties",
+  "budget.drinks_count": "computed.total_drink_varieties",
+  "budget.total_drink_varieties": "computed.total_drink_varieties",
+  "package.total_drink_varieties": "computed.total_drink_varieties",
+  "budget.variedades_drinks": "computed.total_drink_varieties",
   "budget.total_value": "budget.final_budget_value",
   "package.drinks_list": "budget.selected_drinks",
   "budget.bartenders_count": "budget.bartender_quantity",
@@ -35,6 +38,7 @@ export type ProposalSourceKey =
   | "budget.copeira_quantity"
   | "budget.keeper_quantity"
   | "computed.total_drinks"
+  | "computed.total_drink_varieties"
   | "budget.final_budget_value"
   | "computed.final_payment_date"
   | "event.duration_hours";
@@ -65,16 +69,70 @@ function parseNumericValue(value: unknown): number | null {
   return Number.isFinite(num) ? num : null;
 }
 
-const list = (value: unknown): string[] =>
-  Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
-    : [];
+const list = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        if (item && typeof item === "object") {
+          const record = item as Record<string, unknown>;
+          const nome = record.nome ?? record.name;
+          if (typeof nome === "string" && nome.trim()) return nome.trim();
+        }
+        return "";
+      })
+      .filter(Boolean);
+  }
+  return [];
+};
+
+export function countDistinctDrinkVarieties(context: ProposalFieldContext): number | null {
+  const rawList =
+    context.hydratedData?.selectedDrinkNames ??
+    context.budget?.selected_drinks ??
+    context.budget?.selectedDrinkNames;
+
+  if (!rawList) return null;
+
+  if (Array.isArray(rawList)) {
+    if (rawList.length === 0) return null;
+    const names = rawList
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        if (item && typeof item === "object") {
+          const record = item as Record<string, unknown>;
+          const name = record.nome ?? record.name;
+          if (typeof name === "string" && name.trim()) return name.trim();
+          const id = record.id ?? record.drink_id;
+          if (typeof id === "string" && id.trim()) return id.trim();
+        }
+        return "";
+      })
+      .filter(Boolean);
+    const unique = new Set(names);
+    return unique.size > 0 ? unique.size : null;
+  }
+
+  if (typeof rawList === "object") {
+    const obj = rawList as Record<string, unknown>;
+    const candidate = Array.isArray(obj.ids) ? obj.ids : Array.isArray(obj.names) ? obj.names : null;
+    if (Array.isArray(candidate)) {
+      const items = candidate
+        .filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
+        .map((item) => item.trim());
+      const unique = new Set(items);
+      return unique.size > 0 ? unique.size : null;
+    }
+  }
+
+  return null;
+}
 
 export const PROPOSAL_FIELD_RESOLVERS: Record<
   ProposalSourceKey,
   (context: ProposalFieldContext) => ProposalFieldValue
 > = {
-  "event.event_name": ({ event }) => event.event_name || event.event_type || null,
+  "event.event_name": ({ event }) => event.event_name?.trim() || null,
   "budget.created_at": ({ budget }) => budget.created_at || null,
   "event.date": ({ event }) => event.date || null,
   "computed.groom_initial": ({ event }) => resolveExplicitInitial(event.groom_name),
@@ -91,6 +149,7 @@ export const PROPOSAL_FIELD_RESOLVERS: Record<
     const perPerson = parseNumericValue(budget?.drinks_per_person);
     return guests !== null && perPerson !== null ? guests * perPerson : null;
   },
+  "computed.total_drink_varieties": (context) => countDistinctDrinkVarieties(context),
   "budget.final_budget_value": ({ budget }) => budget.final_budget_value ?? null,
   "computed.final_payment_date": ({ event }) => subtractUtcDays(event.date, 7),
   "event.duration_hours": ({ event }) => event.duration_hours ?? null,
@@ -118,23 +177,72 @@ export function resolveProposalField(
 }
 
 export function formatDateDot(value: unknown): string {
-  if (!value || typeof value !== "string") return "";
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.slice(0, 10));
-  if (!match) return String(value);
-  const [, year, month, day] = match;
-  return `${day}.${month}.${year}`;
+  if (!value) return "";
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return "";
+    const day = String(value.getUTCDate()).padStart(2, "0");
+    const month = String(value.getUTCMonth() + 1).padStart(2, "0");
+    const year = String(value.getUTCFullYear());
+    return `${day}.${month}.${year}`;
+  }
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  // YYYY-MM-DD (or ISO datetime)
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return `${day}.${month}.${year}`;
+  }
+
+  // DD.MM.YYYY
+  const dotMatch = /^(\d{2})\.(\d{2})\.(\d{4})/.exec(trimmed);
+  if (dotMatch) {
+    const [, day, month, year] = dotMatch;
+    return `${day}.${month}.${year}`;
+  }
+
+  // DD/MM/YYYY
+  const slashMatch = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(trimmed);
+  if (slashMatch) {
+    const [, day, month, year] = slashMatch;
+    return `${day}.${month}.${year}`;
+  }
+
+  return "";
+}
+
+function cleanLeadingBullet(item: string): string {
+  return item.replace(/^[\s•\-\*·\u2022\u25E6\u25AA\u25CF]+/u, "").trim();
 }
 
 export function formatBulletList(value: unknown): string {
   if (!value) return "";
+  const lines: string[] = [];
+
   if (Array.isArray(value)) {
-    return value
-      .map((item) => (typeof item === "string" ? item.trim() : String(item).trim()))
-      .filter(Boolean)
-      .map((item) => (item.startsWith("•") ? item : `• ${item}`))
-      .join("\n");
+    for (const item of value) {
+      if (typeof item === "string") {
+        const sublines = item.split("\n");
+        for (const subline of sublines) {
+          const cleaned = cleanLeadingBullet(subline);
+          if (cleaned) lines.push(`• ${cleaned}`);
+        }
+      } else if (item != null) {
+        const cleaned = cleanLeadingBullet(String(item));
+        if (cleaned) lines.push(`• ${cleaned}`);
+      }
+    }
+  } else if (typeof value === "string") {
+    const sublines = value.split("\n");
+    for (const subline of sublines) {
+      const cleaned = cleanLeadingBullet(subline);
+      if (cleaned) lines.push(`• ${cleaned}`);
+    }
   }
-  return String(value);
+
+  return lines.join("\n");
 }
 
 export function formatCurrency(value: unknown): string {
@@ -153,15 +261,17 @@ export function formatProposalFieldValue(value: ProposalFieldValue, formatter = 
   if (formatter === "currency" && typeof value === "number")
     return formatCurrency(value);
   if (formatter === "integer" && typeof value === "number") return Math.round(value).toString();
-  if ((formatter === "date_canva" || formatter === "date_dot") && typeof value === "string") {
+  if (
+    (formatter === "date_canva" || formatter === "date_dot" || formatter === "date_short") &&
+    typeof value === "string"
+  ) {
     return formatDateDot(value);
   }
-  if ((formatter === "date_short" || formatter === "date_long") && typeof value === "string") {
+  if (formatter === "date_long" && typeof value === "string") {
     const [year, month, day] = value.slice(0, 10).split("-");
-    if (formatter === "date_short") return year && month && day ? `${day}/${month}/${year}` : value;
     const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
     return Number.isNaN(date.getTime())
-      ? value
+      ? formatDateDot(value)
       : new Intl.DateTimeFormat("pt-BR", {
           day: "numeric",
           month: "long",
@@ -180,49 +290,37 @@ export const CANVA_PROPOSAL_PRESENTERS: Record<
 > = {
   DATA_ORCAMENTO: (v) => formatDateDot(v),
   DATA_EVENTO: (v) => formatDateDot(v),
-  DATA_FINAL_PAGAMENTO: (v) => {
-    const dateStr = formatDateDot(v);
-    if (!dateStr) return "";
-    return `Formas de pagamento:\n\n• 30% na assinatura do contrato -\n  Restante até dia ${dateStr}\n• 5% de desconto para pagamento à vista\n• Parcelamento no cartão ou boleto (a consultar)`;
-  },
+  DATA_FINAL_PAGAMENTO: (v) => formatDateDot(v),
   QUANTIDADE_PESSOAS: (v) => {
     const n = parseNumericValue(v);
-    if (n === null) return "";
-    const label = n === 1 ? "1 pessoa" : `${n} pessoas`;
-    return `Preparamos uma proposta especial para você:\nNúmero de convidados: ${label}`;
+    return n === null ? "" : String(n);
   },
   QUANTIDADE_HORAS_EVENTO: (v) => {
     const n = parseNumericValue(v);
-    if (n === null) return "";
-    const label = n === 1 ? "1 hora" : `${n} horas`;
-    return `Serviço de bar completo durante ${label} de festa`;
+    return n === null ? "" : String(n);
   },
   QTD_BARTENDERS: (v) => {
     const n = parseNumericValue(v);
-    if (n === null) return "";
+    if (n === null || n <= 0) return "";
     return n === 1 ? "1 Bartender" : `${n} Bartenders`;
   },
   QTD_BAR_KEEPERS: (v) => {
     const n = parseNumericValue(v);
-    if (n === null) return "";
+    if (n === null || n <= 0) return "";
     return n === 1 ? "1 Bar Keeper" : `${n} Bar Keepers`;
   },
   QTD_COPEIRAS: (v) => {
     const n = parseNumericValue(v);
-    if (n === null) return "";
+    if (n === null || n <= 0) return "";
     return n === 1 ? "1 Copeira" : `${n} Copeiras`;
   },
   QUANTIDADE_DRINKS: (v) => {
     const n = parseNumericValue(v);
-    if (n === null) return "";
-    return n === 1 ? "Previsão de 1 drink durante o evento" : `Previsão de ${n} drinks durante o evento`;
+    return n === null ? "" : String(n);
   },
   DRINKS: (v) => formatBulletList(v),
   BEBIDAS: (v) => formatBulletList(v),
-  VALOR_INVESTIMENTO: (v) => {
-    const formatted = formatCurrency(v);
-    return formatted ? `Investimento:\n${formatted}` : "";
-  },
+  VALOR_INVESTIMENTO: (v) => formatCurrency(v),
   INO: (v) => (v == null ? "" : String(v)),
   INA: (v) => (v == null ? "" : String(v)),
   NOME_EVENTO: (v) => (v == null ? "" : String(v)),

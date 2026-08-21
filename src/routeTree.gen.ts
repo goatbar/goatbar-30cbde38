@@ -13,6 +13,7 @@ import { Route as VendasRouteImport } from './routes/vendas'
 import { Route as ModelosRouteImport } from './routes/modelos'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InventarioRouteImport } from './routes/inventario'
+import { Route as GoatAiRouteImport } from './routes/goat-ai'
 import { Route as EventosRouteImport } from './routes/eventos'
 import { Route as DrinksRouteImport } from './routes/drinks'
 import { Route as ControladoriaRouteImport } from './routes/controladoria'
@@ -43,6 +44,11 @@ const LoginRoute = LoginRouteImport.update({
 const InventarioRoute = InventarioRouteImport.update({
   id: '/inventario',
   path: '/inventario',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GoatAiRoute = GoatAiRouteImport.update({
+  id: '/goat-ai',
+  path: '/goat-ai',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EventosRoute = EventosRouteImport.update({
@@ -108,6 +114,7 @@ export interface FileRoutesByFullPath {
   '/controladoria': typeof ControladoriaRoute
   '/drinks': typeof DrinksRoute
   '/eventos': typeof EventosRouteWithChildren
+  '/goat-ai': typeof GoatAiRoute
   '/inventario': typeof InventarioRoute
   '/login': typeof LoginRoute
   '/modelos': typeof ModelosRoute
@@ -124,6 +131,7 @@ export interface FileRoutesByTo {
   '/contratos': typeof ContratosRoute
   '/controladoria': typeof ControladoriaRoute
   '/drinks': typeof DrinksRoute
+  '/goat-ai': typeof GoatAiRoute
   '/inventario': typeof InventarioRoute
   '/login': typeof LoginRoute
   '/modelos': typeof ModelosRoute
@@ -142,6 +150,7 @@ export interface FileRoutesById {
   '/controladoria': typeof ControladoriaRoute
   '/drinks': typeof DrinksRoute
   '/eventos': typeof EventosRouteWithChildren
+  '/goat-ai': typeof GoatAiRoute
   '/inventario': typeof InventarioRoute
   '/login': typeof LoginRoute
   '/modelos': typeof ModelosRoute
@@ -161,6 +170,7 @@ export interface FileRouteTypes {
     | '/controladoria'
     | '/drinks'
     | '/eventos'
+    | '/goat-ai'
     | '/inventario'
     | '/login'
     | '/modelos'
@@ -177,6 +187,7 @@ export interface FileRouteTypes {
     | '/contratos'
     | '/controladoria'
     | '/drinks'
+    | '/goat-ai'
     | '/inventario'
     | '/login'
     | '/modelos'
@@ -194,6 +205,7 @@ export interface FileRouteTypes {
     | '/controladoria'
     | '/drinks'
     | '/eventos'
+    | '/goat-ai'
     | '/inventario'
     | '/login'
     | '/modelos'
@@ -212,6 +224,7 @@ export interface RootRouteChildren {
   ControladoriaRoute: typeof ControladoriaRoute
   DrinksRoute: typeof DrinksRoute
   EventosRoute: typeof EventosRouteWithChildren
+  GoatAiRoute: typeof GoatAiRoute
   InventarioRoute: typeof InventarioRoute
   LoginRoute: typeof LoginRoute
   ModelosRoute: typeof ModelosRoute
@@ -249,6 +262,13 @@ declare module '@tanstack/react-router' {
       path: '/inventario'
       fullPath: '/inventario'
       preLoaderRoute: typeof InventarioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/goat-ai': {
+      id: '/goat-ai'
+      path: '/goat-ai'
+      fullPath: '/goat-ai'
+      preLoaderRoute: typeof GoatAiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/eventos': {
@@ -351,6 +371,7 @@ const rootRouteChildren: RootRouteChildren = {
   ControladoriaRoute: ControladoriaRoute,
   DrinksRoute: DrinksRoute,
   EventosRoute: EventosRouteWithChildren,
+  GoatAiRoute: GoatAiRoute,
   InventarioRoute: InventarioRoute,
   LoginRoute: LoginRoute,
   ModelosRoute: ModelosRoute,

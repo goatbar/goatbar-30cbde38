@@ -155,15 +155,15 @@ describe("resolver", () => {
   });
 });
 
-describe("matriz canônica dos 15 campos", () => {
+describe("matriz canônica dos campos", () => {
   it("mantém cada opção do catálogo conectada a um resolver explícito", async () => {
     const { hasProposalFieldResolver } = await import("./proposal-field-resolver");
     for (const field of PROPOSAL_FIELD_CATALOG)
       expect(hasProposalFieldResolver(field.key)).toBe(true);
-    expect(PROPOSAL_FIELD_CATALOG).toHaveLength(15);
+    expect(PROPOSAL_FIELD_CATALOG).toHaveLength(16);
   });
 
-  it("resolve e formata o payload completo sem valores técnicos acidentais", async () => {
+  it("resolve e formata o payload completo sem valores técnicos acidentais e com dados limpos", async () => {
     const { OFFICIAL_CANVA_SOURCE_MAP } = await import("./proposal-field-catalog");
     const complete = {
       event: { ...context.event, event_name: "Casamento Roberta e Paulo", duration_hours: 6 },
@@ -171,10 +171,10 @@ describe("matriz canônica dos 15 campos", () => {
       hydratedData: { selectedDrinkNames: ["Moscow Mule", "Fitzgerald"] },
     };
     const formatters: Record<string, string> = {
-      DATA_ORCAMENTO: "date_short",
-      DATA_EVENTO: "date_short",
+      DATA_ORCAMENTO: "date_dot",
+      DATA_EVENTO: "date_dot",
       VALOR_INVESTIMENTO: "currency",
-      DATA_FINAL_PAGAMENTO: "date_short",
+      DATA_FINAL_PAGAMENTO: "date_dot",
       QUANTIDADE_PESSOAS: "integer",
       QUANTIDADE_DRINKS: "integer",
     };
@@ -186,8 +186,8 @@ describe("matriz canônica dos 15 campos", () => {
     );
     expect(payload).toEqual({
       NOME_EVENTO: "Casamento Roberta e Paulo",
-      DATA_ORCAMENTO: "18/08/2026",
-      DATA_EVENTO: "20/10/2026",
+      DATA_ORCAMENTO: "18.08.2026",
+      DATA_EVENTO: "20.10.2026",
       INO: "P",
       INA: "R",
       QUANTIDADE_PESSOAS: "150",
@@ -196,9 +196,9 @@ describe("matriz canônica dos 15 campos", () => {
       QTD_BARTENDERS: "3",
       QTD_COPEIRAS: "1",
       QTD_BAR_KEEPERS: "2",
-      QUANTIDADE_DRINKS: "600",
+      QUANTIDADE_DRINKS: "2",
       VALOR_INVESTIMENTO: "R$ 6.850,00",
-      DATA_FINAL_PAGAMENTO: "13/10/2026",
+      DATA_FINAL_PAGAMENTO: "13.10.2026",
       QUANTIDADE_HORAS_EVENTO: "6",
     });
     for (const value of Object.values(payload))
@@ -206,7 +206,7 @@ describe("matriz canônica dos 15 campos", () => {
   });
 });
 
-describe("cálculo automático de QUANTIDADE_DRINKS (computed.total_drinks)", () => {
+describe("cálculo operacional de QUANTIDADE TOTAL DE DRINKS (computed.total_drinks)", () => {
   it("calcula guests * drinks_per_person com números", () => {
     const res = resolveProposalField("computed.total_drinks", {
       event: { guests: 150 },
@@ -260,29 +260,53 @@ describe("cálculo automático de QUANTIDADE_DRINKS (computed.total_drinks)", ()
       }),
     ).toBeNull();
   });
+});
 
-  it("resolve aliases legados para computed.total_drinks", () => {
-    const ctx = {
-      event: { guests: 100 },
-      budget: { drinks_per_person: 5 },
-    };
-    expect(resolveProposalField("budget.total_drinks", ctx)).toBe(500);
-    expect(resolveProposalField("package.drinks_count", ctx)).toBe(500);
-    expect(resolveProposalField("package.total_drinks", ctx)).toBe(500);
-    expect(resolveProposalField("budget.quantity_drinks", ctx)).toBe(500);
-    expect(resolveProposalField("budget.drinks_count", ctx)).toBe(500);
-  });
-
-  it("não confunde com a quantidade de tipos de drinks selecionados", () => {
+describe("cálculo de VARIEDADES DE DRINKS (computed.total_drink_varieties)", () => {
+  it("calcula a quantidade de drinks distintos no cardápio", () => {
     const ctx = {
       event: { guests: 150 },
       budget: {
         drinks_per_person: 4,
-        selected_drinks: ["d1", "d2", "d3", "d4", "d5", "d6", "d7"],
+        selected_drinks: [
+          "Caipivodka limão cravo e mel",
+          "Caip Maracujá com baunilha",
+          "Caipivodka Morango",
+          "Fitzgerald",
+          "Tom Collins",
+          "Moscow Mule",
+        ],
       },
     };
-    expect(resolveProposalField("computed.total_drinks", ctx)).toBe(600);
-    expect(resolveProposalField("computed.total_drinks", ctx)).not.toBe(7);
+    expect(resolveProposalField("computed.total_drink_varieties", ctx)).toBe(6);
+  });
+
+  it("deduplica drinks com nomes repetidos", () => {
+    const ctx = {
+      event: { guests: 100 },
+      budget: {
+        selected_drinks: ["Moscow Mule", "Fitzgerald", "Moscow Mule"],
+      },
+    };
+    expect(resolveProposalField("computed.total_drink_varieties", ctx)).toBe(2);
+  });
+
+  it("calcula a partir de objetos hidratados ou IDs", () => {
+    const ctx = {
+      event: { guests: 100 },
+      budget: {
+        selected_drinks: [{ nome: "Gin Tônica" }, { nome: "Negroni" }, { nome: "Gin Tônica" }],
+      },
+    };
+    expect(resolveProposalField("computed.total_drink_varieties", ctx)).toBe(2);
+  });
+
+  it("retorna null se o cardápio estiver vazio", () => {
+    const ctx = {
+      event: { guests: 100 },
+      budget: { selected_drinks: [] },
+    };
+    expect(resolveProposalField("computed.total_drink_varieties", ctx)).toBeNull();
   });
 });
 
@@ -313,34 +337,31 @@ describe("Apresentação visual da proposta Canva (formatCanvaProposalField)", (
     finalPaymentDate: "2026-11-07",
   };
 
-  it("formata QUANTIDADE_PESSOAS com texto contextualizado completo e singular/plural", () => {
-    expect(formatCanvaProposalField("QUANTIDADE_PESSOAS", 82)).toBe(
-      "Preparamos uma proposta especial para você:\nNúmero de convidados: 82 pessoas",
-    );
-    expect(formatCanvaProposalField("QUANTIDADE_PESSOAS", 1)).toBe(
-      "Preparamos uma proposta especial para você:\nNúmero de convidados: 1 pessoa",
-    );
+  it("formata QUANTIDADE_PESSOAS enviando apenas o número", () => {
+    expect(formatCanvaProposalField("QUANTIDADE_PESSOAS", 82)).toBe("82");
+    expect(formatCanvaProposalField("QUANTIDADE_PESSOAS", 1)).toBe("1");
+    expect(formatCanvaProposalField("QUANTIDADE_PESSOAS", null)).toBe("");
   });
 
-  it("formata QUANTIDADE_HORAS_EVENTO com texto contextualizado e singular/plural", () => {
-    expect(formatCanvaProposalField("QUANTIDADE_HORAS_EVENTO", 6)).toBe(
-      "Serviço de bar completo durante 6 horas de festa",
-    );
-    expect(formatCanvaProposalField("QUANTIDADE_HORAS_EVENTO", 1)).toBe(
-      "Serviço de bar completo durante 1 hora de festa",
-    );
+  it("formata QUANTIDADE_HORAS_EVENTO enviando apenas o número", () => {
+    expect(formatCanvaProposalField("QUANTIDADE_HORAS_EVENTO", 6)).toBe("6");
+    expect(formatCanvaProposalField("QUANTIDADE_HORAS_EVENTO", 1)).toBe("1");
+    expect(formatCanvaProposalField("QUANTIDADE_HORAS_EVENTO", null)).toBe("");
   });
 
-  it("formata equipe mantendo os rótulos de cada função", () => {
+  it("formata equipe como ÚNICA exceção que combina quantidade + nome da função", () => {
     expect(formatCanvaProposalField("QTD_BARTENDERS", 2)).toBe("2 Bartenders");
     expect(formatCanvaProposalField("QTD_BARTENDERS", 1)).toBe("1 Bartender");
+    expect(formatCanvaProposalField("QTD_BARTENDERS", 0)).toBe("");
     expect(formatCanvaProposalField("QTD_BAR_KEEPERS", 1)).toBe("1 Bar Keeper");
     expect(formatCanvaProposalField("QTD_BAR_KEEPERS", 2)).toBe("2 Bar Keepers");
-    expect(formatCanvaProposalField("QTD_COPEIRAS", 0)).toBe("0 Copeiras");
+    expect(formatCanvaProposalField("QTD_BAR_KEEPERS", 0)).toBe("");
+    expect(formatCanvaProposalField("QTD_COPEIRAS", 0)).toBe("");
     expect(formatCanvaProposalField("QTD_COPEIRAS", 1)).toBe("1 Copeira");
+    expect(formatCanvaProposalField("QTD_COPEIRAS", 3)).toBe("3 Copeiras");
   });
 
-  it("formata DRINKS e BEBIDAS com bullets", () => {
+  it("formata DRINKS e BEBIDAS com um único marcador • por item", () => {
     expect(formatCanvaProposalField("DRINKS", fixture.drinks)).toBe(
       "• Caipivodka limão cravo e mel\n• Caip Maracujá com baunilha\n• Caipivodka Morango\n• Fitzgerald\n• Tom Collins\n• Moscow Mule",
     );
@@ -349,29 +370,89 @@ describe("Apresentação visual da proposta Canva (formatCanvaProposalField)", (
     );
   });
 
-  it("formata datas no padrão DD.MM.AAAA com ponto", () => {
+  it("formata datas no padrão DD.MM.AAAA com ponto exclusivamente", () => {
     expect(formatCanvaProposalField("DATA_EVENTO", "2026-11-14")).toBe("14.11.2026");
     expect(formatCanvaProposalField("DATA_ORCAMENTO", "2026-08-19")).toBe("19.08.2026");
   });
 
-  it("formata DATA_FINAL_PAGAMENTO com o bloco completo de formas de pagamento", () => {
-    expect(formatCanvaProposalField("DATA_FINAL_PAGAMENTO", "2026-11-07")).toBe(
-      "Formas de pagamento:\n\n• 30% na assinatura do contrato -\n  Restante até dia 07.11.2026\n• 5% de desconto para pagamento à vista\n• Parcelamento no cartão ou boleto (a consultar)",
+  it("formata DATA_FINAL_PAGAMENTO enviando somente a data DD.MM.AAAA", () => {
+    expect(formatCanvaProposalField("DATA_FINAL_PAGAMENTO", "2026-11-07")).toBe("07.11.2026");
+  });
+
+  it("formata VALOR_INVESTIMENTO enviando somente o valor monetário formatado", () => {
+    expect(formatCanvaProposalField("VALOR_INVESTIMENTO", 2035.34)).toMatch(/R\$\s*2\.035,34/);
+  });
+
+  it("formata QUANTIDADE_DRINKS enviando somente o número de variedades", () => {
+    expect(formatCanvaProposalField("QUANTIDADE_DRINKS", 6)).toBe("6");
+    expect(formatCanvaProposalField("QUANTIDADE_DRINKS", 1)).toBe("1");
+    expect(formatCanvaProposalField("QUANTIDADE_DRINKS", null)).toBe("");
+  });
+});
+
+describe("Testes Obrigatórios de Auditoria da Proposta Comercial", () => {
+  it("TESTE A — Datas: 2026-11-07 -> 07.11.2026", () => {
+    expect(formatDateDot("2026-11-07")).toBe("07.11.2026");
+    expect(formatProposalFieldValue("2026-11-07", "date_dot")).toBe("07.11.2026");
+    expect(formatProposalFieldValue("2026-11-07", "date_short")).toBe("07.11.2026");
+    expect(formatProposalFieldValue("2026-11-07", "date_canva")).toBe("07.11.2026");
+  });
+
+  it("TESTE B — Marcadores: nunca gerar • • Moscow Mule", () => {
+    expect(formatBulletList(["• Moscow Mule"])).toBe("• Moscow Mule");
+    expect(formatBulletList(["• • Moscow Mule"])).toBe("• Moscow Mule");
+    expect(formatBulletList(["- Moscow Mule"])).toBe("• Moscow Mule");
+    expect(formatBulletList(["Moscow Mule"])).toBe("• Moscow Mule");
+    expect(formatBulletList("• Moscow Mule\n• • Fitzgerald\n- Negroni")).toBe(
+      "• Moscow Mule\n• Fitzgerald\n• Negroni",
     );
   });
 
-  it("formata VALOR_INVESTIMENTO com o bloco de Investimento", () => {
-    expect(formatCanvaProposalField("VALOR_INVESTIMENTO", 2035.34)).toMatch(
-      /Investimento:\n(R\$\s*2\.035,34)/,
-    );
+  it("TESTE C — Variedades de drinks: Cardápio com 6 drinks distintos -> 6", () => {
+    const ctx = {
+      event: { guests: 150 },
+      budget: {
+        drinks_per_person: 4,
+        selected_drinks: [
+          "Caipivodka limão cravo e mel",
+          "Caip Maracujá com baunilha",
+          "Caipivodka Morango",
+          "Fitzgerald",
+          "Tom Collins",
+          "Moscow Mule",
+        ],
+      },
+    };
+    const count = resolveProposalField("computed.total_drink_varieties", ctx);
+    expect(count).toBe(6);
+    expect(formatCanvaProposalField("QUANTIDADE_DRINKS", count)).toBe("6");
+    // Garante que não é o consumo total (600)
+    expect(count).not.toBe(600);
   });
 
-  it("formata QUANTIDADE_DRINKS com texto explicativo de doses previstas", () => {
-    expect(formatCanvaProposalField("QUANTIDADE_DRINKS", 246)).toBe(
-      "Previsão de 246 drinks durante o evento",
-    );
-    expect(formatCanvaProposalField("QUANTIDADE_DRINKS", 1)).toBe(
-      "Previsão de 1 drink durante o evento",
-    );
+  it("TESTE D — Equipe completa: 2 bartenders, 1 bar keeper, 2 copeiras", () => {
+    expect(formatCanvaProposalField("QTD_BARTENDERS", 2)).toBe("2 Bartenders");
+    expect(formatCanvaProposalField("QTD_BAR_KEEPERS", 1)).toBe("1 Bar Keeper");
+    expect(formatCanvaProposalField("QTD_COPEIRAS", 2)).toBe("2 Copeiras");
+  });
+
+  it("TESTE E — Equipe parcial: 2 bartenders, 1 bar keeper, 0 copeiras (sem '0 Copeiras')", () => {
+    expect(formatCanvaProposalField("QTD_BARTENDERS", 2)).toBe("2 Bartenders");
+    expect(formatCanvaProposalField("QTD_BAR_KEEPERS", 1)).toBe("1 Bar Keeper");
+    expect(formatCanvaProposalField("QTD_COPEIRAS", 0)).toBe("");
+    expect(formatCanvaProposalField("QTD_COPEIRAS", null)).toBe("");
+  });
+
+  it("TESTE F — Campo sem informação: Campo opcional = null -> campo vazio ''", () => {
+    expect(formatCanvaProposalField("NOME_EVENTO", null)).toBe("");
+    expect(formatCanvaProposalField("QUANTIDADE_PESSOAS", null)).toBe("");
+    expect(formatCanvaProposalField("QUANTIDADE_HORAS_EVENTO", null)).toBe("");
+    expect(formatCanvaProposalField("QUANTIDADE_DRINKS", null)).toBe("");
+    expect(formatCanvaProposalField("DATA_ORCAMENTO", null)).toBe("");
+    expect(formatCanvaProposalField("DATA_EVENTO", null)).toBe("");
+    expect(formatCanvaProposalField("DATA_FINAL_PAGAMENTO", null)).toBe("");
+    expect(formatCanvaProposalField("VALOR_INVESTIMENTO", null)).toBe("");
+    expect(formatCanvaProposalField("DRINKS", null)).toBe("");
+    expect(formatCanvaProposalField("BEBIDAS", null)).toBe("");
   });
 });

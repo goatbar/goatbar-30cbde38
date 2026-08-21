@@ -17,9 +17,11 @@ import {
   Menu,
   X,
   LayoutTemplate,
+  Sparkles,
 } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { goatAIService } from "@/services/goat-ai/goat-ai-service";
 import logo from "@/assets/goatbar-logo.png";
 
 const nav: {
@@ -34,6 +36,7 @@ const nav: {
   { to: "/drinks", label: "Drinks", icon: Wine },
   { to: "/inventario", label: "Inventário", icon: Package },
   { to: "/eventos", label: "Eventos", icon: CalendarRange },
+  { to: "/goat-ai", label: "Goat AI", icon: Sparkles, roles: ["admin", "financeiro", "comercial"] },
   { to: "/controladoria", label: "Controladoria", icon: BarChart3, roles: ["admin", "financeiro"] },
   { to: "/contratos", label: "Contratos", icon: FileText, roles: ["admin", "comercial"] },
   { to: "/modelos", label: "Modelos de Proposta", icon: LayoutTemplate, roles: ["admin"] },
@@ -44,11 +47,17 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const location = useLocation();
   const { loading, user, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [pendingAiCount, setPendingAiCount] = useState<number>(0);
   const role = (user?.user_metadata?.role as string | undefined)?.toLowerCase() ?? "admin";
   const visibleNav = useMemo(
     () => nav.filter((item) => !item.roles || item.roles.includes(role)),
     [role],
   );
+
+  useEffect(() => {
+    if (!user) return;
+    goatAIService.getPendingCount().then((cnt) => setPendingAiCount(cnt)).catch(() => {});
+  }, [user, location.pathname]);
 
   if (loading) {
     return (
@@ -125,7 +134,12 @@ export function AppShell({ children }: { children?: ReactNode }) {
                     }`}
                   >
                     <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
-                    <span className="font-medium text-base">{item.label}</span>
+                    <span className="font-medium text-base flex-1">{item.label}</span>
+                    {item.to === "/goat-ai" && pendingAiCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500 text-black">
+                        {pendingAiCount}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -183,7 +197,12 @@ export function AppShell({ children }: { children?: ReactNode }) {
                 }`}
               >
                 <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
-                <span className="font-medium">{item.label}</span>
+                <span className="font-medium flex-1">{item.label}</span>
+                {item.to === "/goat-ai" && pendingAiCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-black">
+                    {pendingAiCount}
+                  </span>
+                )}
               </Link>
             );
           })}

@@ -5,3 +5,6 @@ verify_jwt = false
 [functions.canva-oauth-callback]
 verify_jwt = false
 
+[functions.whatsapp-webhook]
+verify_jwt = false
+

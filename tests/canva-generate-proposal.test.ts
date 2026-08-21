@@ -510,7 +510,7 @@ describe("Normalização e hidratação de selected_drinks", () => {
     const autofill = buildAutofillData(
       [
         mapping("DRINKS", "budget.selected_drinks"),
-        mapping("QUANTIDADE_DRINKS", "computed.total_drinks"),
+        mapping("QUANTIDADE_DRINKS", "computed.total_drink_varieties"),
       ],
       ["DRINKS", "QUANTIDADE_DRINKS"],
       { ...event, id: realEventId },
@@ -518,7 +518,7 @@ describe("Normalização e hidratação de selected_drinks", () => {
     );
 
     expect(autofill.DRINKS.text).toBe("• Gin Tropical\n• Aperol Spritz");
-    expect(autofill.QUANTIDADE_DRINKS.text).toBe("Previsão de 600 drinks durante o evento");
+    expect(autofill.QUANTIDADE_DRINKS.text).toBe("2");
   });
 });
 
@@ -552,39 +552,39 @@ describe("Mensagens amigáveis de erro de proposta no frontend", () => {
   });
 });
 
-describe("Autofill de QUANTIDADE_DRINKS com cálculo automático", () => {
-  it("não bloqueia quando required=true e cálculo é válido (guests=150, drinks_per_person=4 -> 600)", () => {
+describe("Autofill de QUANTIDADE_DRINKS com cálculo numérico puro", () => {
+  it("não bloqueia quando required=true e cálculo de variedades é válido (6 drinks -> 6)", () => {
+    const data = buildAutofillData(
+      [mapping("QUANTIDADE_DRINKS", "computed.total_drink_varieties", { required: true })],
+      ["QUANTIDADE_DRINKS"],
+      { guests: 150 },
+      { selected_drinks: ["d1", "d2", "d3", "d4", "d5", "d6"] },
+    );
+    expect(data.QUANTIDADE_DRINKS.text).toBe("6");
+  });
+
+  it("permite envio do total operacional com computed.total_drinks", () => {
     const data = buildAutofillData(
       [mapping("QUANTIDADE_DRINKS", "computed.total_drinks", { required: true })],
       ["QUANTIDADE_DRINKS"],
       { guests: 150 },
       { drinks_per_person: 4 },
     );
-    expect(data.QUANTIDADE_DRINKS.text).toBe("Previsão de 600 drinks durante o evento");
+    expect(data.QUANTIDADE_DRINKS.text).toBe("600");
   });
 
-  it("não bloqueia quando guests=0 e drinks_per_person=4 -> 0", () => {
-    const data = buildAutofillData(
-      [mapping("QUANTIDADE_DRINKS", "computed.total_drinks", { required: true })],
-      ["QUANTIDADE_DRINKS"],
-      { guests: 0 },
-      { drinks_per_person: 4 },
-    );
-    expect(data.QUANTIDADE_DRINKS.text).toBe("Previsão de 0 drinks durante o evento");
-  });
-
-  it("bloqueia com required_field_empty quando guests=null e required=true", () => {
+  it("bloqueia com required_field_empty quando selected_drinks está vazio e required=true", () => {
     expect(() =>
       buildAutofillData(
-        [mapping("QUANTIDADE_DRINKS", "computed.total_drinks", { required: true })],
+        [mapping("QUANTIDADE_DRINKS", "computed.total_drink_varieties", { required: true })],
         ["QUANTIDADE_DRINKS"],
-        { guests: null },
-        { drinks_per_person: 4 },
+        { guests: 150 },
+        { selected_drinks: [] },
       ),
     ).toThrowError(expect.objectContaining({ code: "required_field_empty" }));
   });
 
-  it("bloqueia com required_field_empty quando drinks_per_person=null e required=true", () => {
+  it("bloqueia com required_field_empty quando drinks_per_person=null e required=true em computed.total_drinks", () => {
     expect(() =>
       buildAutofillData(
         [mapping("QUANTIDADE_DRINKS", "computed.total_drinks", { required: true })],
@@ -594,20 +594,10 @@ describe("Autofill de QUANTIDADE_DRINKS com cálculo automático", () => {
       ),
     ).toThrowError(expect.objectContaining({ code: "required_field_empty" }));
   });
-
-  it("funciona com alias legado budget.total_drinks", () => {
-    const data = buildAutofillData(
-      [mapping("QUANTIDADE_DRINKS", "budget.total_drinks", { required: true })],
-      ["QUANTIDADE_DRINKS"],
-      { guests: 200 },
-      { drinks_per_person: 5 },
-    );
-    expect(data.QUANTIDADE_DRINKS.text).toBe("Previsão de 1000 drinks durante o evento");
-  });
 });
 
-describe("Snapshot completo do payload Canva com apresentação visual", () => {
-  it("gera todos os campos com textos contextuais, datas com ponto e bullets", () => {
+describe("Snapshot completo do payload Canva com dados limpos e regra de equipe", () => {
+  it("gera todos os campos fornecendo apenas os dados limpos ao template Canva", () => {
     const sampleEvent = {
       guests: 82,
       duration_hours: 6,
@@ -645,7 +635,7 @@ describe("Snapshot completo do payload Canva com apresentação visual", () => {
       mapping("QTD_BARTENDERS", "budget.bartender_quantity"),
       mapping("QTD_COPEIRAS", "budget.copeira_quantity"),
       mapping("QTD_BAR_KEEPERS", "budget.keeper_quantity"),
-      mapping("QUANTIDADE_DRINKS", "computed.total_drinks"),
+      mapping("QUANTIDADE_DRINKS", "computed.total_drink_varieties"),
       mapping("VALOR_INVESTIMENTO", "budget.final_budget_value"),
       mapping("DATA_FINAL_PAGAMENTO", "computed.final_payment_date"),
       mapping("QUANTIDADE_HORAS_EVENTO", "event.duration_hours"),
@@ -658,24 +648,18 @@ describe("Snapshot completo do payload Canva com apresentação visual", () => {
     expect(data.DATA_EVENTO.text).toBe("14.11.2026");
     expect(data.INO.text).toBe("B");
     expect(data.INA.text).toBe("A");
-    expect(data.QUANTIDADE_PESSOAS.text).toBe(
-      "Preparamos uma proposta especial para você:\nNúmero de convidados: 82 pessoas",
-    );
+    expect(data.QUANTIDADE_PESSOAS.text).toBe("82");
     expect(data.DRINKS.text).toBe(
       "• Caipivodka limão cravo e mel\n• Caip Maracujá com baunilha\n• Caipivodka Morango\n• Fitzgerald\n• Tom Collins\n• Moscow Mule",
     );
     expect(data.BEBIDAS.text).toBe("• Gin O'gin ou Gordons\n• Vodka Smirnoff");
     expect(data.QTD_BARTENDERS.text).toBe("2 Bartenders");
-    expect(data.QTD_COPEIRAS.text).toBe("0 Copeiras");
+    expect(data.QTD_COPEIRAS.text).toBe(""); // Zerado não aparece
     expect(data.QTD_BAR_KEEPERS.text).toBe("1 Bar Keeper");
-    expect(data.QUANTIDADE_DRINKS.text).toBe("Previsão de 246 drinks durante o evento");
-    expect(data.VALOR_INVESTIMENTO.text).toMatch(/Investimento:\n(R\$\s*2\.035,34)/);
-    expect(data.DATA_FINAL_PAGAMENTO.text).toBe(
-      "Formas de pagamento:\n\n• 30% na assinatura do contrato -\n  Restante até dia 07.11.2026\n• 5% de desconto para pagamento à vista\n• Parcelamento no cartão ou boleto (a consultar)",
-    );
-    expect(data.QUANTIDADE_HORAS_EVENTO.text).toBe(
-      "Serviço de bar completo durante 6 horas de festa",
-    );
+    expect(data.QUANTIDADE_DRINKS.text).toBe("6"); // Quantidade de variedades distintas
+    expect(data.VALOR_INVESTIMENTO.text).toMatch(/R\$\s*2\.035,34/);
+    expect(data.DATA_FINAL_PAGAMENTO.text).toBe("07.11.2026");
+    expect(data.QUANTIDADE_HORAS_EVENTO.text).toBe("6");
   });
 });
 

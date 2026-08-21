@@ -14,6 +14,214 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_inbox_items: {
+        Row: {
+          id: string
+          source: string
+          source_message_id: string | null
+          source_conversation_id: string | null
+          source_sender_id: string | null
+          source_sender_name: string | null
+          message_type: string
+          raw_text: string | null
+          transcribed_text: string | null
+          classification: string
+          classification_confidence: number
+          extraction_confidence: number
+          event_match_confidence: number
+          processing_status: string
+          processing_mode: string
+          approval_status: string
+          structured_data: Json
+          provider_metadata: Json
+          matched_event_id: string | null
+          matched_location_id: string | null
+          matched_supplier_id: string | null
+          applied_entity_type: string | null
+          applied_entity_id: string | null
+          applied_at: string | null
+          error_message: string | null
+          received_at: string
+          processed_at: string | null
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          source: string
+          source_message_id?: string | null
+          source_conversation_id?: string | null
+          source_sender_id?: string | null
+          source_sender_name?: string | null
+          message_type?: string
+          raw_text?: string | null
+          transcribed_text?: string | null
+          classification?: string
+          classification_confidence?: number
+          extraction_confidence?: number
+          event_match_confidence?: number
+          processing_status?: string
+          processing_mode?: string
+          approval_status?: string
+          structured_data?: Json
+          provider_metadata?: Json
+          matched_event_id?: string | null
+          matched_location_id?: string | null
+          matched_supplier_id?: string | null
+          applied_entity_type?: string | null
+          applied_entity_id?: string | null
+          applied_at?: string | null
+          error_message?: string | null
+          received_at?: string
+          processed_at?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          source?: string
+          source_message_id?: string | null
+          source_conversation_id?: string | null
+          source_sender_id?: string | null
+          source_sender_name?: string | null
+          message_type?: string
+          raw_text?: string | null
+          transcribed_text?: string | null
+          classification?: string
+          classification_confidence?: number
+          extraction_confidence?: number
+          event_match_confidence?: number
+          processing_status?: string
+          processing_mode?: string
+          approval_status?: string
+          structured_data?: Json
+          provider_metadata?: Json
+          matched_event_id?: string | null
+          matched_location_id?: string | null
+          matched_supplier_id?: string | null
+          applied_entity_type?: string | null
+          applied_entity_id?: string | null
+          applied_at?: string | null
+          error_message?: string | null
+          received_at?: string
+          processed_at?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_inbox_items_matched_event_id_fkey"
+            columns: ["matched_event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_action_logs: {
+        Row: {
+          id: string
+          ai_inbox_item_id: string | null
+          action: string
+          event_id: string | null
+          performed_by: string | null
+          performer_name: string | null
+          automatic: boolean
+          previous_data: Json | null
+          new_data: Json | null
+          error_message: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          ai_inbox_item_id?: string | null
+          action: string
+          event_id?: string | null
+          performed_by?: string | null
+          performer_name?: string | null
+          automatic?: boolean
+          previous_data?: Json | null
+          new_data?: Json | null
+          error_message?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          ai_inbox_item_id?: string | null
+          action?: string
+          event_id?: string | null
+          performed_by?: string | null
+          performer_name?: string | null
+          automatic?: boolean
+          previous_data?: Json | null
+          new_data?: Json | null
+          error_message?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_action_logs_ai_inbox_item_id_fkey"
+            columns: ["ai_inbox_item_id"]
+            isOneToOne: false
+            referencedRelation: "ai_inbox_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_action_logs_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_inbox_attachments: {
+        Row: {
+          id: string
+          ai_inbox_item_id: string
+          storage_path: string
+          file_name: string
+          mime_type: string
+          file_size: number
+          attachment_type: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          ai_inbox_item_id: string
+          storage_path: string
+          file_name: string
+          mime_type: string
+          file_size?: number
+          attachment_type: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          ai_inbox_item_id?: string
+          storage_path?: string
+          file_name?: string
+          mime_type?: string
+          file_size?: number
+          attachment_type?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_inbox_attachments_ai_inbox_item_id_fkey"
+            columns: ["ai_inbox_item_id"]
+            isOneToOne: false
+            referencedRelation: "ai_inbox_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contract_history: {
         Row: {
           action: string

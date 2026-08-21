@@ -4,7 +4,7 @@ import { proposalTemplateConfigs, type EventTemplateType, type FieldConfig } fro
 import type { ProposalTemplateField } from "@/lib/proposal-template-mapper";
 
 import { isValidSourceFieldKey } from "@/lib/proposal-field-catalog";
-import { canonicalizeProposalSourceKey } from "@/lib/proposal-field-resolver";
+import { canonicalizeProposalSourceKey, formatDateDot, formatBulletList } from "@/lib/proposal-field-resolver";
 
 export interface ProposalTemplate {
   id: string;
@@ -467,23 +467,23 @@ function hexToRgb(hex: string) {
 // ─── Field value resolver ─────────────────────────────────────────
 function resolveFieldValue(fieldKey: string, data: ProposalData): string | string[] {
   switch (fieldKey) {
-    case "data_orcamento": return data.proposalDate;
+    case "data_orcamento": return formatDateDot(data.proposalDate);
     case "tipo_evento":    return data.eventTypeLabel;
     case "nome_evento":    return data.eventTypeLabel;
     case "nome_cliente":   return data.clientName;
     case "nome_casal":     return data.clientName;
-    case "data_evento":    return data.eventDate;
+    case "data_evento":    return formatDateDot(data.eventDate);
     case "lista_drinks":   return data.selectedDrinks;
     case "lista_bebidas":  return data.includedBeverages;
     case "welcome_drinks": return data.welcomeDrinks || [];
     case "valor_welcome_drinks": return data.welcomeDrinksTotal ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(data.welcomeDrinksTotal) : "";
     case "rodada_shots": return data.shots || [];
     case "valor_rodada_shots": return data.shotsTotal ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(data.shotsTotal) : "";
-    case "numero_convidados":    return `${data.guests} convidados`;
-    case "quantidade_bartenders": return `${data.bartenders} Bartender${data.bartenders !== 1 ? 's' : ''}`;
-    case "quantidade_bar_keeper": return `${data.keepers} Bar Keeper${data.keepers !== 1 ? 's' : ''}`;
-    case "quantidade_copeira":    return `${data.copeiras} Copeira${data.copeiras !== 1 ? 's' : ''}`;
-    case "quantidade_drinks":     return `${data.totalDrinkVarieties} variedades de drinks`;
+    case "numero_convidados":    return data.guests > 0 ? String(data.guests) : "";
+    case "quantidade_bartenders": return data.bartenders > 0 ? `${data.bartenders} Bartender${data.bartenders !== 1 ? 's' : ''}` : "";
+    case "quantidade_bar_keeper": return data.keepers > 0 ? `${data.keepers} Bar Keeper${data.keepers !== 1 ? 's' : ''}` : "";
+    case "quantidade_copeira":    return data.copeiras > 0 ? `${data.copeiras} Copeira${data.copeiras !== 1 ? 's' : ''}` : "";
+    case "quantidade_drinks":     return data.totalDrinkVarieties > 0 ? String(data.totalDrinkVarieties) : "";
     case "investimento_total":    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(data.finalInvestment);
     case "forma_pagamento":       return data.paymentTerms;
     case "inicial_1": {
@@ -583,9 +583,8 @@ export const pdfGenerationService = {
 
           } else if (mf.field_type === "lista_dinamica") {
             // ── List rendering ────────────────────────────────────
-            const lines = Array.isArray(rawValue)
-              ? rawValue.map((l) => `• ${l}`)
-              : rawValue.split("\n").filter(Boolean).map((l) => `• ${l}`);
+            const formatted = formatBulletList(rawValue);
+            const lines = formatted.split("\n").filter(Boolean);
             const lineH = mf.font_size * mf.line_height;
             let curY = absY + absH;
             for (const line of lines) {
@@ -649,26 +648,30 @@ export const pdfGenerationService = {
       const pageFields = config.filter((f) => f.page === pageIndex);
       for (const field of pageFields) {
         if (field.field === "proposalDateTop" || field.field === "proposalDateBottom") {
-          drawLines(outPage, field, [data.proposalDate]);
+          drawLines(outPage, field, [formatDateDot(data.proposalDate)]);
         } else if (field.field === "coverArcText") {
           const upper = sanitizeText(data.clientName || "").toUpperCase();
-          const bottom = sanitizeText((data.eventDate || "").replace(/\//g, "."));
+          const bottom = sanitizeText(formatDateDot(data.eventDate));
           outPage.drawText(upper, { x: field.x - 60, y: field.y + 30, size: field.fontSize, font: boldFont, color: field.color, rotate: degrees(12) });
           outPage.drawText(bottom, { x: field.x + 36, y: field.y - 34, size: field.fontSize - 4, font: boldFont, color: field.color, rotate: degrees(-8) });
         } else if (field.field === "selectedDrinks") {
-          drawLines(outPage, field, data.selectedDrinks.map((d) => `- ${d}`));
+          drawLines(outPage, field, formatBulletList(data.selectedDrinks).split("\n").filter(Boolean));
         } else if (field.field === "includedBeverages") {
-          drawLines(outPage, field, data.includedBeverages.map((b) => `- ${b}`));
+          drawLines(outPage, field, formatBulletList(data.includedBeverages).split("\n").filter(Boolean));
         } else if (field.field === "guests") {
-          drawLines(outPage, field, [`${data.guests} pessoas`]);
+          drawLines(outPage, field, data.guests > 0 ? [String(data.guests)] : []);
         } else if (field.field === "team") {
-          drawLines(outPage, field, [`${data.bartenders} Bartenders`, `${data.keepers} Bar Keeper`, `${data.copeiras} Coopeira`]);
+          const teamLines: string[] = [];
+          if (data.bartenders > 0) teamLines.push(`${data.bartenders} Bartender${data.bartenders > 1 ? "s" : ""}`);
+          if (data.keepers > 0) teamLines.push(`${data.keepers} Bar Keeper${data.keepers > 1 ? "s" : ""}`);
+          if (data.copeiras > 0) teamLines.push(`${data.copeiras} Copeira${data.copeiras > 1 ? "s" : ""}`);
+          drawLines(outPage, field, teamLines);
         } else if (field.field === "investment") {
           drawLines(outPage, field, [new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(data.finalInvestment)]);
         } else if (field.field === "totalDrinkVarieties") {
-          drawLines(outPage, field, [`Carta composta por ${data.totalDrinkVarieties} variedades de drinks`]);
+          drawLines(outPage, field, data.totalDrinkVarieties > 0 ? [String(data.totalDrinkVarieties)] : []);
         } else if (field.field === "paymentTerms") {
-          drawLines(outPage, field, data.paymentTerms.split("\n").filter(Boolean).map((p) => `- ${p}`));
+          drawLines(outPage, field, formatBulletList(data.paymentTerms).split("\n").filter(Boolean));
         }
       }
     }
@@ -922,37 +925,32 @@ export const pdfGenerationService = {
     });
 
     // Staff
-    page3.drawText(sanitizeText(String("Equipe Operacional:")), {
-      x: 50,
-      y: height - 180,
-      size: 13,
-      font: boldFont,
-      color: goldColor,
-    });
+    const teamItems: string[] = [];
+    if (data.bartenders > 0) teamItems.push(`- ${data.bartenders} Bartender${data.bartenders > 1 ? "s" : ""}`);
+    if (data.keepers > 0) teamItems.push(`- ${data.keepers} Bar Keeper${data.keepers > 1 ? "s" : ""}`);
+    if (data.copeiras > 0) teamItems.push(`- ${data.copeiras} Copeira${data.copeiras > 1 ? "s" : ""}`);
 
-    page3.drawText(sanitizeText(String(`- Bartenders: ${data.bartenders} profissionais`)), {
-      x: 60,
-      y: height - 205,
-      size: 11,
-      font: standardFont,
-      color: whiteColor,
-    });
+    if (teamItems.length > 0) {
+      page3.drawText(sanitizeText(String("Equipe Operacional:")), {
+        x: 50,
+        y: height - 180,
+        size: 13,
+        font: boldFont,
+        color: goldColor,
+      });
 
-    page3.drawText(sanitizeText(String(`- Bar Keepers: ${data.keepers} profissionais`)), {
-      x: 60,
-      y: height - 225,
-      size: 11,
-      font: standardFont,
-      color: whiteColor,
-    });
-
-    page3.drawText(sanitizeText(String(`- Copeiras: ${data.copeiras} profissionais`)), {
-      x: 60,
-      y: height - 245,
-      size: 11,
-      font: standardFont,
-      color: whiteColor,
-    });
+      let staffY = height - 205;
+      for (const item of teamItems) {
+        page3.drawText(sanitizeText(item), {
+          x: 60,
+          y: staffY,
+          size: 11,
+          font: standardFont,
+          color: whiteColor,
+        });
+        staffY -= 20;
+      }
+    }
 
     // Services Included
     const sColX = width / 2 + 10;
