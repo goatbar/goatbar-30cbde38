@@ -318,8 +318,8 @@ export class ConversationManager {
     await this.supabaseAdmin
       .from("ai_pending_actions")
       .update({
-        status: toolResult.success ? "executed" : "collecting",
-        execution_id: executionId,
+        status: toolResult.success ? "executed" : pendingAction.status,
+        execution_id: toolResult.success ? executionId : null,
         result: toolResult.data || null,
         error: toolResult.error || null,
         updated_at: new Date().toISOString(),
@@ -333,28 +333,30 @@ export class ConversationManager {
     const clean = text
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\w\s]/g, " ")
       .toLowerCase()
       .trim();
 
     const confirmationWords = [
       "sim", "confirmo", "confirma", "pode lancar", "pode gravar", "pode registrar",
-      "autorizado", "ok", "correto", "pode ser", "positivo", "lancar", "gravar", "isso", "concordo"
+      "autorizado", "ok", "correto", "pode ser", "positivo", "lancar", "gravar", "isso", "concordo", "pode"
     ];
 
-    return confirmationWords.some((w) => clean === w || clean.startsWith(w + " ") || clean.endsWith(" " + w));
+    return confirmationWords.some((w) => clean === w || clean.startsWith(w + " ") || clean.endsWith(" " + w) || clean.includes(" " + w + " "));
   }
 
   public isRejectionIntent(text: string): boolean {
     const clean = text
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\w\s]/g, " ")
       .toLowerCase()
       .trim();
 
     const rejectionWords = [
-      "nao", "não", "cancelar", "cancela", "esquece", "descarta", "descartar", "errado", "para"
+      "nao", "cancelar", "cancela", "esquece", "descarta", "descartar", "errado", "para", "nao lanca", "nao lancar"
     ];
 
-    return rejectionWords.some((w) => clean === w || clean.startsWith(w + " "));
+    return rejectionWords.some((w) => clean === w || clean.startsWith(w + " ") || clean.endsWith(" " + w) || clean.includes(" " + w + " "));
   }
 }

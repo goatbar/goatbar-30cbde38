@@ -175,47 +175,74 @@ export class WhatsAppChannelAdapter {
     let messageText = "";
     const attachments: AgentAttachment[] = [];
 
+    const ALLOWED_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/webp"]);
+    const ALLOWED_DOC_MIMES = new Set(["application/pdf", "image/jpeg", "image/png"]);
+    const ALLOWED_AUDIO_MIMES = new Set(["audio/ogg", "audio/mpeg", "audio/mp4", "audio/aac", "audio/wav"]);
+
     if (message.type === "text") {
       messageText = message.text?.body || "";
     } else if (message.type === "image") {
       messageText = message.image?.caption || "Foto enviada";
+      const mime = message.image?.mime_type || "image/jpeg";
+      if (!ALLOWED_IMAGE_MIMES.has(mime.toLowerCase())) {
+        console.warn(`[GOAT-AI][MEDIA][REJECTED] correlationId=${correlationId} reason="unsupported_mime" mimeType=${mime}`);
+        const reply = "Recebi sua imagem, mas o formato não é suportado. Por favor, envie uma foto em JPG, PNG ou WEBP.";
+        await this.sendTextMessage(senderPhone, reply, correlationId);
+        return { handled: true, reply, reason: "Unsupported image MIME type" };
+      }
+
       if (this.config.accessToken && message.image?.id) {
-        const mediaBase64 = await this.downloadMediaBase64(message.image.id);
-        if (mediaBase64) {
-          attachments.push({
-            mimeType: message.image.mime_type || "image/jpeg",
-            dataBase64: mediaBase64,
-          });
+        const media = await this.downloadMediaBase64(message.image.id, correlationId);
+        if (!media) {
+          const reply = "Não consegui baixar a imagem enviada. Pode tentar reenviar?";
+          await this.sendTextMessage(senderPhone, reply, correlationId);
+          return { handled: true, reply, reason: "Failed to download media" };
         }
+        attachments.push({
+          mimeType: media.mimeType || mime,
+          dataBase64: media.dataBase64,
+        });
       }
     } else if (message.type === "document") {
       messageText = message.document?.caption || message.document?.filename || "Documento enviado";
+      const mime = message.document?.mime_type || "application/pdf";
+      if (!ALLOWED_DOC_MIMES.has(mime.toLowerCase())) {
+        console.warn(`[GOAT-AI][MEDIA][REJECTED] correlationId=${correlationId} reason="unsupported_mime" mimeType=${mime}`);
+        const reply = "Recebi seu documento, mas atualmente aceitamos apenas PDFs ou imagens.";
+        await this.sendTextMessage(senderPhone, reply, correlationId);
+        return { handled: true, reply, reason: "Unsupported document MIME type" };
+      }
+
       if (this.config.accessToken && message.document?.id) {
-        const mediaBase64 = await this.downloadMediaBase64(message.document.id);
-        if (mediaBase64) {
-          attachments.push({
-            mimeType: message.document.mime_type || "application/pdf",
-            dataBase64: mediaBase64,
-            fileName: message.document.filename,
-          });
+        const media = await this.downloadMediaBase64(message.document.id, correlationId);
+        if (!media) {
+          const reply = "Não consegui baixar o documento enviado. Pode tentar reenviar?";
+          await this.sendTextMessage(senderPhone, reply, correlationId);
+          return { handled: true, reply, reason: "Failed to download media" };
         }
+        attachments.push({
+          mimeType: media.mimeType || mime,
+          dataBase64: media.dataBase64,
+          fileName: message.document.filename,
+        });
       }
     } else if (message.type === "audio" || message.type === "voice") {
       messageText = "Áudio enviado";
       const audioObj = message.audio || message.voice;
+      const mime = audioObj?.mime_type || "audio/ogg";
       if (this.config.accessToken && audioObj?.id) {
-        const mediaBase64 = await this.downloadMediaBase64(audioObj.id);
-        if (mediaBase64) {
+        const media = await this.downloadMediaBase64(audioObj.id, correlationId);
+        if (media) {
           attachments.push({
-            mimeType: audioObj.mime_type || "audio/ogg",
-            dataBase64: mediaBase64,
+            mimeType: media.mimeType || mime,
+            dataBase64: media.dataBase64,
           });
         }
       }
     }
 
     // 3. Process with Gemini Agent
-    console.log(`[GOAT-AI][WHATSAPP][AGENT_STARTED] correlationId=${correlationId} messageTextLength=${messageText.length}`);
+    console.log(`[GOAT-AI][WHATSAPP][AGENT_STARTED] correlationId=${correlationId} messageTextLength=${messageText.length} attachmentsCount=${attachments.length}`);
     const agent = new GoatAIGeminiAgent(this.supabaseAdmin);
     const turnResult = await agent.processTurn({
       correlationId,
@@ -239,28 +266,68 @@ export class WhatsAppChannelAdapter {
     return { handled: true, reply: turnResult.reply };
   }
 
-  public async downloadMediaBase64(mediaId: string): Promise<string | null> {
+  public async downloadMediaBase64(
+    mediaId: string,
+    correlationId?: string
+  ): Promise<{ dataBase64: string; mimeType: string; sizeBytes: number } | null> {
+    const MAX_MEDIA_BYTES = 20 * 1024 * 1024; // 20 MB
+
     try {
+      console.log(`[GOAT-AI][MEDIA][RESOLVE_STARTED] correlationId=${correlationId || "none"} mediaId=${mediaId}`);
       const mediaUrlRes = await fetch(getWhatsAppMediaUrl(mediaId), {
         headers: { Authorization: `Bearer ${this.config.accessToken}` },
       });
-      if (!mediaUrlRes.ok) return null;
-      const mediaData = await mediaUrlRes.json();
-      if (!mediaData.url) return null;
+      if (!mediaUrlRes.ok) {
+        console.error(`[GOAT-AI][MEDIA][RESOLVE_FAILED] correlationId=${correlationId || "none"} status=${mediaUrlRes.status}`);
+        return null;
+      }
 
+      const mediaData = await mediaUrlRes.json();
+      if (!mediaData.url) {
+        console.error(`[GOAT-AI][MEDIA][RESOLVE_FAILED] correlationId=${correlationId || "none"} error="no url in response"`);
+        return null;
+      }
+
+      const mimeType = mediaData.mime_type || "image/jpeg";
+      const fileSizeBytes = Number(mediaData.file_size) || 0;
+
+      if (fileSizeBytes > MAX_MEDIA_BYTES) {
+        console.warn(`[GOAT-AI][MEDIA][SIZE_EXCEEDED] correlationId=${correlationId || "none"} fileSizeBytes=${fileSizeBytes} maxBytes=${MAX_MEDIA_BYTES}`);
+        return null;
+      }
+
+      console.log(`[GOAT-AI][MEDIA][DOWNLOAD_STARTED] correlationId=${correlationId || "none"} mediaId=${mediaId} mimeType=${mimeType} declaredSize=${fileSizeBytes}`);
       const fileRes = await fetch(mediaData.url, {
         headers: { Authorization: `Bearer ${this.config.accessToken}` },
       });
-      if (!fileRes.ok) return null;
+
+      if (!fileRes.ok) {
+        console.error(`[GOAT-AI][MEDIA][DOWNLOAD_FAILED] correlationId=${correlationId || "none"} status=${fileRes.status}`);
+        return null;
+      }
+
       const arrayBuffer = await fileRes.arrayBuffer();
+      if (arrayBuffer.byteLength > MAX_MEDIA_BYTES) {
+        console.warn(`[GOAT-AI][MEDIA][SIZE_EXCEEDED] correlationId=${correlationId || "none"} actualBytes=${arrayBuffer.byteLength}`);
+        return null;
+      }
+
       const bytes = new Uint8Array(arrayBuffer);
       let binary = "";
       for (let i = 0; i < bytes.byteLength; i++) {
         binary += String.fromCharCode(bytes[i]);
       }
-      return btoa(binary);
-    } catch (err) {
-      console.error("Erro ao baixar mídia do WhatsApp:", err);
+      const dataBase64 = btoa(binary);
+
+      console.log(`[GOAT-AI][MEDIA][DOWNLOAD_SUCCESS] correlationId=${correlationId || "none"} mediaId=${mediaId} mimeType=${mimeType} sizeBytes=${bytes.byteLength}`);
+
+      return {
+        dataBase64,
+        mimeType,
+        sizeBytes: bytes.byteLength,
+      };
+    } catch (err: any) {
+      console.error(`[GOAT-AI][MEDIA][ERROR] correlationId=${correlationId || "none"} error="${err?.message || String(err)}"`);
       return null;
     }
   }

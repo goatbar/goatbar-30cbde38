@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GoatAIGeminiAgent } from "../supabase/functions/_shared/goat-ai/agent/gemini-agent";
 import { GoatAIToolRegistry } from "../supabase/functions/_shared/goat-ai/tools/registry";
+import { CircuitBreakerManager } from "../supabase/functions/_shared/goat-ai/router/circuit-breaker";
 
 describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
   let mockSupabase: any;
@@ -11,6 +12,7 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    CircuitBreakerManager.getInstance().reset();
     toolRegistry = new GoatAIToolRegistry();
 
     mockConversation = {

@@ -1,14 +1,52 @@
 import {
   AgentInput,
   AgentTurnResponse,
+  PrivacyClassification,
   ToolContext,
 } from "../types.ts";
 import { GOAT_AI_CONVERSATIONAL_SYSTEM_PROMPT } from "../prompts/system.ts";
 import { ConversationManager } from "../conversation/manager.ts";
 import { defaultToolRegistry, GoatAIToolRegistry } from "../tools/registry.ts";
 import { getEnv, getGeminiModel } from "../config.ts";
+import {
+  validateSalesSessionData,
+  checkDuplicateSalesSession,
+  formatSalesSessionWhatsAppPreview,
+} from "../validators/sales-session-validator.ts";
+import { AIRouter } from "../router/ai-router.ts";
+import {
+  NormalizedAIRequest,
+  NormalizedMessage,
+} from "../router/types.ts";
+import { CircuitBreakerManager } from "../router/circuit-breaker.ts";
 
 const MAX_TOOL_CALLS_PER_TURN = 8;
+
+export function determinePrivacyClass(input: AgentInput): PrivacyClassification {
+  const text = (input.message || "").toLowerCase();
+  if (
+    text.includes("faturamento") ||
+    text.includes("financeiro") ||
+    text.includes("r$") ||
+    text.includes("reais") ||
+    text.includes("lucro") ||
+    text.includes("custo") ||
+    text.includes("despesa") ||
+    text.includes("dre")
+  ) {
+    return "FINANCIAL";
+  }
+  if (
+    text.includes("cpf") ||
+    text.includes("telefone") ||
+    text.includes("cliente") ||
+    text.includes("noivos") ||
+    text.includes("contrato")
+  ) {
+    return "CUSTOMER_DATA";
+  }
+  return "PUBLIC_OR_SANITIZED";
+}
 
 export class GoatAIGeminiAgent {
   private apiKey: string;
@@ -16,18 +54,38 @@ export class GoatAIGeminiAgent {
   private conversationManager: ConversationManager;
   private toolRegistry: GoatAIToolRegistry;
   private supabaseAdmin: any;
+  private router: AIRouter;
 
   constructor(
     supabaseAdmin: any,
     apiKey?: string,
     toolRegistry: GoatAIToolRegistry = defaultToolRegistry,
-    model?: string
+    model?: string,
+    router?: AIRouter
   ) {
     this.supabaseAdmin = supabaseAdmin;
-    this.apiKey = apiKey || getEnv("GEMINI_API_KEY") || getEnv("GOOGLE_AI_API_KEY") || getEnv("GOOGLE_API_KEY");
+    this.apiKey = apiKey !== undefined ? apiKey : (getEnv("GEMINI_API_KEY") || getEnv("GOOGLE_AI_API_KEY") || getEnv("GOOGLE_API_KEY"));
     this.model = model || getGeminiModel();
     this.toolRegistry = toolRegistry;
     this.conversationManager = new ConversationManager(supabaseAdmin, toolRegistry);
+
+    if (router) {
+      this.router = router;
+    } else {
+      this.router = new AIRouter({
+        supabaseAdmin,
+        overrideSecrets: {
+          gemini: {
+            apiKey: this.apiKey,
+            model: this.model,
+          },
+        },
+      });
+    }
+  }
+
+  public getRouter(): AIRouter {
+    return this.router;
   }
 
   public async processTurn(input: AgentInput): Promise<AgentTurnResponse> {
@@ -70,6 +128,25 @@ export class GoatAIGeminiAgent {
     );
 
     console.log(`[GOAT-AI][CONVERSATION] correlationId=${correlationId} conversationId=${conversation.id} userMessageId=${userMessage.id} messageType=${messageType}`);
+
+    // Check for missing API Key if no providers are available
+    const availableProviders = this.router.getProviders().filter((p) => p.isAvailable().available);
+    if (availableProviders.length === 0 && !this.apiKey) {
+      console.error(`[GOAT-AI][PROVIDER][ERROR] correlationId=${correlationId} provider=gemini model=${this.model} error="GEMINI_API_KEY ausente ou não configurada no runtime" geminiApiKeyConfigured=false`);
+      const unavailReply = "Integração Gemini não configurada (chave GEMINI_API_KEY ausente).";
+      const assistantMsg = await this.conversationManager.saveMessage(
+        conversation.id,
+        "assistant",
+        unavailReply,
+        "text"
+      );
+      return {
+        conversationId: conversation.id,
+        messageId: assistantMsg.id,
+        reply: unavailReply,
+        toolCallsExecuted: [],
+      };
+    }
 
     // 2. Check Confirmation Intent against active pending actions
     const activePending = await this.conversationManager.getActivePendingAction(conversation.id);
@@ -130,244 +207,215 @@ export class GoatAIGeminiAgent {
       }
     }
 
-    // 3. Prepare Gemini Contents with Multi-turn History
+    // 3. Prepare Canonical Multi-turn Messages
     const history = await this.conversationManager.getRecentMessages(conversation.id, 10);
-    const contents: any[] = [];
+    const normalizedMessages: NormalizedMessage[] = [];
 
     for (const h of history) {
-      if (h.id === userMessage.id) continue; // add current message below
+      if (h.id === userMessage.id) continue;
       if (h.role === "user") {
-        contents.push({
+        normalizedMessages.push({
           role: "user",
-          parts: [{ text: h.content }],
+          content: h.content,
+          senderName: h.sender_name || undefined,
         });
       } else if (h.role === "assistant") {
-        contents.push({
-          role: "model",
-          parts: [{ text: h.content }],
+        normalizedMessages.push({
+          role: "assistant",
+          content: h.content,
         });
       }
     }
 
-    // Current turn parts
-    const currentParts: any[] = [];
-    if (input.attachments && input.attachments.length > 0) {
-      for (const att of input.attachments) {
-        if (att.dataBase64) {
-          currentParts.push({
-            inlineData: {
-              mimeType: att.mimeType,
-              data: att.dataBase64,
-            },
-          });
-        }
-      }
-    }
-
-    // If there was an active pending action collecting fields, supply guidance
-    let promptText = input.message;
+    // Contextual instruction if pending action was collecting missing fields
+    let userPromptText = input.message;
     if (activePending && activePending.status === "collecting") {
-      promptText += `\n[CONTEXTO OPERACIONAL: Há uma ação em andamento '${activePending.tool_name}' com dados já preenchidos: ${JSON.stringify(activePending.arguments)}. Campos pendentes necessários: [${activePending.missing_fields.join(", ")}]. Use os novos dados da mensagem para preencher os campos e acionar a ferramenta correspondente.]`;
+      userPromptText += `\n[CONTEXTO OPERACIONAL: Há uma ação em andamento '${activePending.tool_name}' com dados já preenchidos: ${JSON.stringify(activePending.arguments)}. Campos pendentes necessários: [${activePending.missing_fields.join(", ")}]. Use os novos dados da mensagem para preencher os campos e acionar a ferramenta correspondente.]`;
     }
 
-    currentParts.push({ text: promptText || "Processar entrada" });
-    contents.push({
+    normalizedMessages.push({
       role: "user",
-      parts: currentParts,
+      content: userPromptText || "Processar entrada",
+      senderName: input.userName || undefined,
+      attachments: input.attachments,
     });
 
-    // 4. Gemini Agent Tool Loop
+    // 4. Multi-Provider Router Tool Loop
     let turnCount = 0;
     const toolsExecuted: any[] = [];
+    const executedToolNamesSet = new Set<string>();
     let finalReply = "";
     let finalPendingAction: any = null;
+    let lastActiveProvider: string | null = null;
 
-    const effectiveApiKey = this.apiKey || getEnv("GEMINI_API_KEY") || getEnv("GOOGLE_AI_API_KEY") || getEnv("GOOGLE_API_KEY");
-
-    if (!effectiveApiKey) {
-      console.error(`[GOAT-AI][PROVIDER][ERROR] correlationId=${correlationId} provider=gemini model=${this.model} error="GEMINI_API_KEY ausente ou não configurada no runtime" geminiApiKeyConfigured=false`);
-      finalReply = "Integração Gemini não configurada (chave GEMINI_API_KEY ausente).";
-      const assistantMsg = await this.conversationManager.saveMessage(
-        conversation.id,
-        "assistant",
-        finalReply,
-        "text"
-      );
-      return {
-        conversationId: conversation.id,
-        messageId: assistantMsg.id,
-        reply: finalReply,
-        toolCallsExecuted: [],
-      };
-    }
-
-    const rawModel = this.model.startsWith("models/") ? this.model.slice(7) : this.model;
-    const resolvedModel = (rawModel.includes("1.5") || rawModel.includes("2.0") || rawModel.includes("2.5"))
-      ? "gemini-3.6-flash"
-      : (rawModel || "gemini-3.6-flash");
-
-    const candidateModels = [resolvedModel];
-
-    console.log(`[GOAT-AI][PROVIDER][START] correlationId=${correlationId} provider=gemini model=${resolvedModel} contextMessageCount=${contents.length} toolsAvailable=${this.toolRegistry.listTools().map((t) => t.name).join(",")}`);
+    const privacyClassification = determinePrivacyClass(input);
 
     while (turnCount < MAX_TOOL_CALLS_PER_TURN) {
       turnCount++;
 
-      // Canonical Gemini REST API Payload using camelCase properties
-      const payload = {
-        systemInstruction: {
-          parts: [{ text: GOAT_AI_CONVERSATIONAL_SYSTEM_PROMPT }],
-        },
-        contents,
-        tools: [
-          {
-            functionDeclarations: this.toolRegistry.getGeminiFunctionDeclarations(),
-          },
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 1500,
-        },
+      const routerRequest: NormalizedAIRequest = {
+        correlationId,
+        messages: normalizedMessages,
+        systemInstruction: GOAT_AI_CONVERSATIONAL_SYSTEM_PROMPT,
+        tools: this.toolRegistry.listTools().map((t) => ({
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters,
+        })),
+        temperature: 0.2,
+        maxTokens: 1500,
+        privacyClassification,
       };
 
-      let resJson: any = null;
-      let callError: any = null;
-      let usedModel = this.model;
+      const response = await this.router.generate(routerRequest);
 
-      for (const m of candidateModels) {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${effectiveApiKey}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 25000);
-
-        try {
-          const res = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-
-          if (res.ok) {
-            resJson = await res.json();
-            usedModel = m;
-            break;
-          } else {
-            const errText = await res.text();
-            callError = {
-              name: "GeminiHttpError",
-              message: `HTTP ${res.status} no modelo ${m}: ${errText.slice(0, 300)}`,
-              status: res.status,
-              body: errText.slice(0, 300),
-              model: m,
-            };
-            console.error(`[GOAT-AI][PROVIDER][ERROR] correlationId=${correlationId} provider=gemini model=${m} status=${res.status} error=${JSON.stringify(callError)}`);
-          }
-        } catch (err: any) {
-          clearTimeout(timeoutId);
-          const isTimeout = err?.name === "AbortError" || err?.message?.includes("aborted");
-          callError = {
-            name: isTimeout ? "TimeoutError" : (err?.name || "FetchError"),
-            message: isTimeout ? "Timeout de 25s excedido na API Gemini" : (err?.message || String(err)),
-            stack: err?.stack,
-            model: m,
-          };
-          console.error(`[GOAT-AI][PROVIDER][ERROR] correlationId=${correlationId} provider=gemini model=${m} error=${JSON.stringify(callError)}`);
-        }
-      }
-
-      if (!resJson) {
-        finalReply = `Não consegui processar a resposta com a IA no momento. Sua mensagem foi salva no histórico.`;
-        console.error(`[GOAT-AI][PROVIDER][ERROR] correlationId=${correlationId} final_fallback=true callError=${JSON.stringify(callError)}`);
-        break;
-      }
-
-      const durationMs = Date.now() - turnStartTime;
-      const finishReason = resJson.candidates?.[0]?.finishReason || "STOP";
-      const usage = resJson.usageMetadata;
-
-      console.log(`[GOAT-AI][PROVIDER][SUCCESS] correlationId=${correlationId} provider=gemini model=${usedModel} durationMs=${durationMs} finishReason=${finishReason} promptTokens=${usage?.promptTokenCount || 0} candidatesTokens=${usage?.candidatesTokenCount || 0}`);
-
-      const candidate = resJson.candidates?.[0]?.content;
-      if (!candidate || !candidate.parts) {
+      // Detect empty response without tools
+      if (!response.text && (!response.toolCalls || response.toolCalls.length === 0)) {
         finalReply = "Não consegui interpretar a resposta no momento. Pode reformular?";
         break;
       }
 
-      // Check if candidate made function calls
-      const functionCallPart = candidate.parts.find((p: any) => p.functionCall);
+      // Detect mid-turn provider switch
+      if (lastActiveProvider && lastActiveProvider !== response.providerId) {
+        console.log(
+          `[GOAT-AI][ROUTER][PROVIDER_SWITCH] correlationId=${correlationId} fromProvider=${lastActiveProvider} toProvider=${response.providerId} reason="mid_turn_switch" toolsAlreadyExecuted=${Array.from(executedToolNamesSet).join(",")} turnStep=${turnCount}`
+        );
+      }
+      lastActiveProvider = response.providerId;
 
-      if (functionCallPart && functionCallPart.functionCall) {
-        const { name: toolName, args } = functionCallPart.functionCall;
-        const toolDef = this.toolRegistry.getTool(toolName);
+      // Check if response contains tool calls
+      if (response.toolCalls && response.toolCalls.length > 0) {
+        let hasPendingOrBreak = false;
 
-        // Check if tool requires user confirmation before mutation
-        if (toolDef?.requiresConfirmation) {
-          const reqFields = toolDef.parameters.required || [];
-          const missing = reqFields.filter((f: string) => args[f] == null || args[f] === "");
+        for (const toolCall of response.toolCalls) {
+          const toolName = toolCall.name;
+          const args = toolCall.arguments || {};
+          const toolDef = this.toolRegistry.getTool(toolName);
 
-          if (missing.length === 0) {
-            const summary = `Vou registrar ${toolDef.description.toLowerCase()}: ${JSON.stringify(args)}. Confirma?`;
-            const pending = await this.conversationManager.savePendingAction(
-              conversation.id,
-              toolName,
-              args,
-              [],
-              summary,
-              "ready_for_confirmation"
-            );
-
-            finalPendingAction = pending;
-            finalReply = candidate.parts.find((p: any) => p.text)?.text || summary;
-            break;
-          } else {
-            const pending = await this.conversationManager.savePendingAction(
-              conversation.id,
-              toolName,
-              args,
-              missing,
-              `Coletando campos faltantes: ${missing.join(", ")}`,
-              "collecting"
-            );
-            finalPendingAction = pending;
-            finalReply = candidate.parts.find((p: any) => p.text)?.text || `Identifiquei os dados da operação, mas ainda preciso de: ${missing.join(", ")}. Pode informar?`;
-            break;
+          // Prevent duplicate execution of the same tool in the same turn
+          const toolExecKey = `${toolName}:${JSON.stringify(args)}`;
+          if (executedToolNamesSet.has(toolExecKey)) {
+            console.warn(`[GOAT-AI][ROUTER] Duplicate tool execution blocked: ${toolExecKey}`);
+            continue;
           }
+
+          // Check if tool requires user confirmation / validation before mutation
+          if (toolDef?.requiresConfirmation) {
+            if (toolName === "create_sales_session") {
+              const validation = validateSalesSessionData(args);
+
+              if (validation.isValid && validation.normalized) {
+                const duplicateCheck = await checkDuplicateSalesSession(
+                  this.supabaseAdmin,
+                  validation.normalized.modality,
+                  validation.normalized.start_date
+                );
+
+                const preview = formatSalesSessionWhatsAppPreview(
+                  validation.normalized,
+                  validation.warnings,
+                  duplicateCheck.isDuplicate
+                );
+
+                const pending = await this.conversationManager.savePendingAction(
+                  conversation.id,
+                  toolName,
+                  validation.normalized,
+                  [],
+                  preview,
+                  "ready_for_confirmation"
+                );
+
+                finalPendingAction = pending;
+                finalReply = preview;
+                hasPendingOrBreak = true;
+                break;
+              } else if (validation.missingFields.length > 0) {
+                const pending = await this.conversationManager.savePendingAction(
+                  conversation.id,
+                  toolName,
+                  args,
+                  validation.missingFields,
+                  `Coletando campos faltantes: ${validation.missingFields.join(", ")}`,
+                  "collecting"
+                );
+                finalPendingAction = pending;
+                const missingText = validation.missingFields.join(", ");
+                finalReply = response.text || `Identifiquei os dados da sessão, mas ainda preciso de: ${missingText}. Pode me informar?`;
+                hasPendingOrBreak = true;
+                break;
+              } else {
+                finalReply = validation.errors.join("\n") || "Dados da sessão inconsistentes. Por favor, revise as informações.";
+                hasPendingOrBreak = true;
+                break;
+              }
+            }
+
+            const reqFields = toolDef.parameters.required || [];
+            const missing = reqFields.filter((f: string) => args[f] == null || args[f] === "");
+
+            if (missing.length === 0) {
+              const summary = `Vou registrar ${toolDef.description.toLowerCase()}: ${JSON.stringify(args)}. Confirma?`;
+              const pending = await this.conversationManager.savePendingAction(
+                conversation.id,
+                toolName,
+                args,
+                [],
+                summary,
+                "ready_for_confirmation"
+              );
+
+              finalPendingAction = pending;
+              finalReply = response.text || summary;
+              hasPendingOrBreak = true;
+              break;
+            } else {
+              const pending = await this.conversationManager.savePendingAction(
+                conversation.id,
+                toolName,
+                args,
+                missing,
+                `Coletando campos faltantes: ${missing.join(", ")}`,
+                "collecting"
+              );
+              finalPendingAction = pending;
+              finalReply = response.text || `Identifiquei os dados da operação, mas ainda preciso de: ${missing.join(", ")}. Pode informar?`;
+              hasPendingOrBreak = true;
+              break;
+            }
+          }
+
+          // Execute read tool
+          const toolResult = await this.toolRegistry.executeTool(toolName, args, context);
+          executedToolNamesSet.add(toolExecKey);
+          toolsExecuted.push({
+            toolName,
+            arguments: args,
+            result: toolResult.data,
+            status: toolResult.success ? "success" : "error",
+          });
+
+          // Append assistant toolCall and user toolResult to canonical messages
+          normalizedMessages.push({
+            role: "assistant",
+            content: response.text,
+            toolCalls: [toolCall],
+          });
+
+          normalizedMessages.push({
+            role: "tool",
+            toolCallId: toolCall.id,
+            toolName,
+            toolResult: toolResult.success ? (toolResult.data ?? {}) : { error: toolResult.error || "Erro na ferramenta" },
+          });
         }
 
-        // Execute read-only tool
-        const toolResult = await this.toolRegistry.executeTool(toolName, args, context);
-        toolsExecuted.push({
-          toolName,
-          arguments: args,
-          result: toolResult.data,
-          status: toolResult.success ? "success" : "error",
-        });
-
-        // Append model call and tool response to history for next iteration
-        contents.push({
-          role: "model",
-          parts: [functionCallPart],
-        });
-
-        contents.push({
-          role: "user",
-          parts: [
-            {
-              functionResponse: {
-                name: toolName,
-                response: {
-                  name: toolName,
-                  content: toolResult.success ? (toolResult.data ?? {}) : { error: toolResult.error || "Erro na ferramenta" },
-                },
-              },
-            },
-          ],
-        });
+        if (hasPendingOrBreak) {
+          break;
+        }
       } else {
-        // Model provided final natural language response
-        const textPart = candidate.parts.find((p: any) => p.text);
-        finalReply = textPart?.text || "Entendido.";
+        // Model provided final text response
+        finalReply = response.text || "Entendido.";
         break;
       }
     }
@@ -389,7 +437,17 @@ export class GoatAIGeminiAgent {
       messageId: assistantMsg.id,
       reply: finalReply,
       toolCallsExecuted: toolsExecuted,
-      pendingAction: finalPendingAction,
+      pendingAction: finalPendingAction
+        ? {
+            id: finalPendingAction.id,
+            toolName: finalPendingAction.tool_name || (finalPendingAction as any).toolName,
+            status: finalPendingAction.status,
+            missingFields: finalPendingAction.missing_fields || (finalPendingAction as any).missingFields || [],
+            summary: finalPendingAction.summary,
+          }
+        : null,
     };
   }
 }
+
+export { GoatAIGeminiAgent as GoatAIAgent };

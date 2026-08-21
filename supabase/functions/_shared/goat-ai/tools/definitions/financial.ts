@@ -3,7 +3,7 @@ import { matchUnitName } from "../../matchers/unit-matcher.ts";
 
 export const createSalesSessionTool: GoatAIToolDefinition = {
   name: "create_sales_session",
-  description: "Registra uma nova sessão de vendas de uma unidade (ex: 7 Steak House, Goat Botequim) com itens vendidos, mão de obra e total.",
+  description: "Registra uma nova sessão de vendas de uma unidade (ex: 7 Steak House, Goat Botequim) com itens vendidos, mão de obra, formas de pagamento e total.",
   parameters: {
     type: "object",
     properties: {
@@ -26,6 +26,34 @@ export const createSalesSessionTool: GoatAIToolDefinition = {
       total_amount: {
         type: "number",
         description: "Valor total bruto apurado na sessão (ex: 1539.50).",
+      },
+      dinheiro: {
+        type: "number",
+        description: "Valor recebido em dinheiro.",
+      },
+      pix: {
+        type: "number",
+        description: "Valor recebido via Pix.",
+      },
+      debito: {
+        type: "number",
+        description: "Valor recebido em cartão de débito.",
+      },
+      credito: {
+        type: "number",
+        description: "Valor recebido em cartão de crédito.",
+      },
+      outros_meios: {
+        type: "number",
+        description: "Outros meios de pagamento / convênios.",
+      },
+      taxas: {
+        type: "number",
+        description: "Taxas descontadas na operação.",
+      },
+      descontos: {
+        type: "number",
+        description: "Descontos concedidos na operação.",
       },
       items: {
         type: "array",
@@ -59,6 +87,13 @@ export const createSalesSessionTool: GoatAIToolDefinition = {
     end_date?: string;
     responsible: string;
     total_amount: number;
+    dinheiro?: number;
+    pix?: number;
+    debito?: number;
+    credito?: number;
+    outros_meios?: number;
+    taxas?: number;
+    descontos?: number;
     items?: Array<{ name: string; quantity: number; unit_price?: number; total_price?: number; unit_cost?: number }>;
     labor_value?: number;
     notes?: string;
@@ -101,7 +136,7 @@ export const createSalesSessionTool: GoatAIToolDefinition = {
       };
     }
 
-    // 3. Insert items if present
+    // 3. Insert items if present, or generic item to maintain gross revenue consistency
     if (args.items && args.items.length > 0) {
       const itemsPayload = args.items.map((i) => ({
         session_id: session.id,
@@ -112,6 +147,14 @@ export const createSalesSessionTool: GoatAIToolDefinition = {
       }));
 
       await ctx.supabaseAdmin.from("financial_session_items").insert(itemsPayload);
+    } else if (Number(args.total_amount) > 0) {
+      await ctx.supabaseAdmin.from("financial_session_items").insert({
+        session_id: session.id,
+        drink_name: "Vendas da Sessão",
+        quantity: 1,
+        unit_price: Number(args.total_amount),
+        unit_cost: 0,
+      });
     }
 
     return {
@@ -123,9 +166,9 @@ export const createSalesSessionTool: GoatAIToolDefinition = {
         date: args.start_date,
         responsible: args.responsible,
         total: args.total_amount,
-        items_count: args.items?.length || 0,
+        items_count: args.items?.length || 1,
       },
-      message: `Sessão de vendas da ${unitInfo.unitName} registrada com sucesso.`,
+      message: `Sessão de vendas da ${unitInfo.unitName} registrada com sucesso (ID: ${session.id}).`,
     };
   },
 };
