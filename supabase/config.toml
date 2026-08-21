@@ -1,4 +1,5 @@
 project_id = "xdqgglrxidmegujhkygj"
+
 [functions.assinafy-webhook]
 verify_jwt = false
 
@@ -11,3 +12,11 @@ verify_jwt = false
 [functions.google-calendar-oauth]
 verify_jwt = false
 
+[functions.goat-ai-chat]
+verify_jwt = false
+
+[functions.goat-ai-process]
+verify_jwt = false
+
+[functions.goat-ai-status]
+verify_jwt = false
