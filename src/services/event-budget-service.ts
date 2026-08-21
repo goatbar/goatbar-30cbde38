@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { googleCalendarService } from "./google-calendar/google-calendar-service";
 
 export interface Event {
   id: string;
@@ -24,6 +25,11 @@ export interface Event {
   payment_percent_received?: number;
   current_budget_value?: number;
   current_profit_value?: number;
+  google_calendar_event_id?: string | null;
+  google_calendar_sync_status?: "not_synced" | "pending" | "synced" | "error" | "cancelled";
+  google_calendar_synced_at?: string | null;
+  google_calendar_sync_error?: string | null;
+  google_calendar_html_link?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -334,6 +340,23 @@ export const eventBudgetService = {
       .select()
       .single();
     if (error) throw error;
+
+    // Trigger Google Calendar sync asynchronously for relevant updates
+    const isRelevantChange =
+      payload.status !== undefined ||
+      payload.date !== undefined ||
+      payload.event_time !== undefined ||
+      payload.event_location !== undefined ||
+      payload.event_name !== undefined ||
+      payload.client_name !== undefined ||
+      payload.guests !== undefined;
+
+    if (isRelevantChange) {
+      googleCalendarService.syncEvent(id).catch((syncErr) => {
+        console.warn("[eventBudgetService] Google Calendar background sync error:", syncErr);
+      });
+    }
+
     return data as Event;
   },
 

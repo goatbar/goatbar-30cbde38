@@ -1,107 +1,154 @@
-export type GoatAISource = "whatsapp" | "manual" | "api";
+export type ConversationChannel = "web" | "whatsapp" | "api";
+export type MessageRole = "user" | "assistant" | "system" | "tool";
+export type MessageType = "text" | "image" | "document" | "audio" | "action_prompt" | "action_result";
+export type PendingActionStatus = "collecting" | "ready_for_confirmation" | "executed" | "cancelled" | "expired";
+export type ToolCallStatus = "pending" | "running" | "success" | "error" | "rejected";
 
-export type GoatAIMessageType = "text" | "image" | "audio" | "document" | "other";
-
-export type GoatAIClassification =
-  | "sales_session"
-  | "operation_report"
-  | "event_purchase"
-  | "invoice"
-  | "receipt"
-  | "stock_movement"
-  | "expense"
-  | "event_note"
-  | "general_note"
-  | "unknown";
-
-export type GoatAIProcessingStatus =
-  | "received"
-  | "processing"
-  | "processed"
-  | "needs_review"
-  | "failed";
-
-export type GoatAIProcessingMode = "gemini" | "heuristic" | "unavailable";
-
-export type GoatAIApprovalStatus = "pending" | "approved" | "rejected" | "not_required";
-
-export interface EventReference {
-  name?: string | null;
-  client_name?: string | null;
-  groom_name?: string | null;
-  bride_name?: string | null;
-  event_name?: string | null;
-  date?: string | null;
-  event_date?: string | null;
-  location?: string | null;
+export interface AIConversation {
+  id: string;
+  user_id?: string | null;
+  channel: ConversationChannel;
+  external_conversation_id?: string | null;
+  title: string;
+  status: "active" | "archived" | "closed";
+  metadata: Record<string, any>;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface EventMatchResult {
-  event_id: string | null;
-  confidence: number;
-  reason: string;
-  matched_event_name?: string;
+export interface AIMessage {
+  id: string;
+  conversation_id: string;
+  role: MessageRole;
+  content: string;
+  message_type: MessageType;
+  attachment_url?: string | null;
+  attachment_metadata?: Record<string, any>;
+  external_message_id?: string | null;
+  sender_name?: string | null;
+  tokens_used?: number;
+  created_at: string;
 }
 
-export interface ProviderMetadata {
-  provider: "gemini" | "heuristic" | "none";
-  model?: string;
-  processing_mode: GoatAIProcessingMode;
-  prompt_version: string;
-  processed_at: string;
+export interface AIPendingAction {
+  id: string;
+  conversation_id: string;
+  tool_name: string;
+  arguments: Record<string, any>;
+  missing_fields: string[];
+  summary?: string | null;
+  status: PendingActionStatus;
+  execution_id?: string | null;
+  result?: any;
+  error?: string | null;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIToolCall {
+  id: string;
+  conversation_id: string;
+  message_id?: string | null;
+  tool_name: string;
+  arguments: Record<string, any>;
+  result?: any;
+  status: ToolCallStatus;
+  error?: string | null;
   duration_ms?: number;
-  input_tokens?: number;
-  output_tokens?: number;
-  event_match_reason?: string;
-  warnings?: string[];
+  performed_by?: string | null;
+  started_at: string;
+  finished_at?: string | null;
 }
 
-export interface AIInput {
-  text: string;
-  senderName?: string;
-  messageType?: GoatAIMessageType;
-  mediaUrl?: string;
+export interface UserMessagingAccount {
+  id: string;
+  user_id: string;
+  provider: "whatsapp" | "telegram";
+  external_user_id?: string | null;
+  phone_number: string;
+  display_name?: string | null;
+  verified: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface AIClassificationResult {
-  classification: GoatAIClassification;
-  confidence: number;
-  reason?: string;
+export interface ToolContext {
+  supabaseAdmin: any;
+  userId?: string | null;
+  userName?: string | null;
+  userRole?: string | null;
+  conversationId: string;
+  channel: ConversationChannel;
 }
 
-export interface AIExtractionResult {
-  event_reference: EventReference;
-  data: Record<string, unknown>;
-  warnings: string[];
+export interface ToolExecutionResult {
+  success: boolean;
+  data?: any;
+  error?: string;
+  message?: string;
+  requires_confirmation?: boolean;
   missing_fields?: string[];
-  extraction_confidence: number;
+  summary?: string;
 }
 
-export interface AIProcessedOutput {
-  classification: GoatAIClassification;
-  classification_confidence: number;
-  extraction_confidence: number;
-  event_reference: EventReference;
-  data: Record<string, unknown>;
-  warnings: string[];
-  missing_fields?: string[];
-  provider_metadata: ProviderMetadata;
+export interface GoatAIToolDefinition {
+  name: string;
+  description: string;
+  parameters: {
+    type: "object";
+    properties: Record<string, any>;
+    required?: string[];
+  };
+  requiresConfirmation?: boolean;
+  requiredPermission?: string;
+  execute: (context: ToolContext, args: any) => Promise<ToolExecutionResult>;
 }
 
-export interface AIProvider {
-  classify(input: AIInput): Promise<AIClassificationResult>;
-  extract(input: AIInput, classification?: GoatAIClassification): Promise<AIExtractionResult>;
-  process(input: AIInput): Promise<AIProcessedOutput>;
+export interface AgentAttachment {
+  mimeType: string;
+  dataBase64?: string;
+  url?: string;
+  fileName?: string;
 }
 
-export interface DocumentExtractor {
-  extract(fileBytes: Uint8Array, mimeType: string): Promise<{ text: string; confidence: number; metadata: Record<string, unknown> }>;
+export interface AgentInput {
+  conversationId?: string;
+  message: string;
+  channel: ConversationChannel;
+  userId?: string | null;
+  userName?: string | null;
+  userRole?: string | null;
+  attachments?: AgentAttachment[];
+  externalMessageId?: string | null;
+  externalSenderId?: string | null;
+  pageContext?: {
+    currentEventId?: string;
+    currentPage?: string;
+  };
 }
 
-export interface AudioTranscriber {
-  transcribe(audioBytes: Uint8Array, mimeType: string): Promise<{ text: string; confidence: number }>;
-}
-
-export interface MessagingProvider {
-  sendText(to: string, message: string): Promise<{ success: boolean; messageId?: string; error?: string }>;
+export interface AgentTurnResponse {
+  conversationId: string;
+  messageId: string;
+  reply: string;
+  statusUpdates?: string[];
+  toolCallsExecuted: {
+    toolName: string;
+    arguments: any;
+    result: any;
+    status: ToolCallStatus;
+  }[];
+  pendingAction?: {
+    id: string;
+    toolName: string;
+    status: PendingActionStatus;
+    missingFields: string[];
+    summary?: string | null;
+  } | null;
+  tokensUsed?: {
+    input: number;
+    output: number;
+    total: number;
+  };
 }

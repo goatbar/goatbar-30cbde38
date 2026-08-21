@@ -37,7 +37,10 @@ import {
   Pencil,
   X,
   Sparkles,
+  ExternalLink,
+  RefreshCw,
 } from "lucide-react";
+import { googleCalendarService } from "@/services/google-calendar/google-calendar-service";
 import React, { useState, useEffect, useRef } from "react";
 import { useAppStore } from "@/lib/app-store";
 import { DrinkImage } from "@/components/DrinkImage";
@@ -71,7 +74,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Check, Search, Upload, FileText as FileTextIcon, RefreshCw } from "lucide-react";
+import { Check, Search, Upload, FileText as FileTextIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   proposalTemplatesService,
@@ -226,6 +229,7 @@ function EventoInterna() {
   const [proposalTemplate, setProposalTemplate] = useState<ProposalTemplate | null>(null);
   const [showDeleteProposalDialog, setShowDeleteProposalDialog] = useState(false);
   const [isDeletingProposal, setIsDeletingProposal] = useState(false);
+  const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
   const [canvaGeneration, setCanvaGeneration] = useState<{
     open: boolean;
     status: "loading" | "success" | "error";
@@ -1347,6 +1351,82 @@ function EventoInterna() {
                   <option value="FINALIZADO">Finalizado</option>
                   <option value="CANCELADO">Cancelado</option>
                 </select>
+
+                {evento && (
+                  <div className="flex items-center gap-2 mt-2 justify-start sm:justify-end text-xs">
+                    {evento.google_calendar_sync_status === "synced" ? (
+                      <div className="flex items-center gap-1.5 text-[#22c55e]">
+                        <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
+                        <span className="font-semibold text-[11px]">Calendar: Sincronizado</span>
+                        {evento.google_calendar_html_link && (
+                          <a
+                            href={evento.google_calendar_html_link}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary hover:underline inline-flex items-center gap-0.5 ml-1"
+                            title="Abrir no Google Calendar"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                      </div>
+                    ) : evento.google_calendar_sync_status === "error" ? (
+                      <div className="flex items-center gap-1.5 text-destructive">
+                        <span className="h-2 w-2 rounded-full bg-destructive" />
+                        <span className="font-semibold text-[11px]">Erro no Calendar</span>
+                        <button
+                          onClick={async () => {
+                            setIsSyncingCalendar(true);
+                            try {
+                              const res = await googleCalendarService.syncEvent(eventoId);
+                              if (res.success) {
+                                toast.success("Evento sincronizado com o Google Calendar!");
+                                loadAllData();
+                              } else {
+                                toast.error(res.error || "Erro ao sincronizar.");
+                              }
+                            } finally {
+                              setIsSyncingCalendar(false);
+                            }
+                          }}
+                          disabled={isSyncingCalendar}
+                          className="text-[11px] text-primary underline hover:text-primary/80 ml-1 cursor-pointer"
+                        >
+                          {isSyncingCalendar ? "..." : "Tentar novamente"}
+                        </button>
+                      </div>
+                    ) : evento.google_calendar_sync_status === "cancelled" ? (
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <span className="h-2 w-2 rounded-full bg-muted-foreground" />
+                        <span className="font-semibold text-[11px]">Calendar: Cancelado</span>
+                      </div>
+                    ) : draft.status.toLowerCase().includes("conf") ? (
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <button
+                          onClick={async () => {
+                            setIsSyncingCalendar(true);
+                            try {
+                              const res = await googleCalendarService.syncEvent(eventoId);
+                              if (res.success) {
+                                toast.success("Evento sincronizado com o Google Calendar!");
+                                loadAllData();
+                              } else {
+                                toast.error(res.error || "Erro ao sincronizar.");
+                              }
+                            } finally {
+                              setIsSyncingCalendar(false);
+                            }
+                          }}
+                          disabled={isSyncingCalendar}
+                          className="text-[11px] text-primary underline hover:text-primary/80 inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <RefreshCw className={`h-3 w-3 ${isSyncingCalendar ? "animate-spin" : ""}`} />
+                          {isSyncingCalendar ? "Sincronizando..." : "Sincronizar no Calendar"}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
               </div>
             </div>
           </div>
