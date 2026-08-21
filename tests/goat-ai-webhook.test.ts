@@ -221,6 +221,7 @@ describe("Goat AI WhatsAppChannelAdapter & Unauthorized User Handling", () => {
           const builder: any = {
             eq: () => builder,
             or: () => builder,
+            in: () => builder,
             maybeSingle: async () => ({ data: null, error: null }),
           };
           return builder;
@@ -262,4 +263,180 @@ describe("Goat AI WhatsAppChannelAdapter & Unauthorized User Handling", () => {
     expect(res.reason).toBe("Unauthorized phone number");
     expect(sendSpy).toHaveBeenCalledWith("5531900000000", expect.stringContaining("não está vinculado a uma conta autorizada"));
   });
+
+  it("handles authorized partner message with 9th-digit variation and passes to AI engine", async () => {
+    // Mock DB account for Mariana Campos
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "user_messaging_accounts") {
+        const createQueryBuilder = () => {
+          const builder: any = {
+            eq: () => builder,
+            or: () => builder,
+            in: () => ({
+              data: [
+                {
+                  id: "acc-mariana",
+                  user_id: "user-mariana-123",
+                  display_name: "Mariana Campos",
+                  verified: true,
+                  external_user_id: null,
+                  phone_number: "+5537999985192",
+                },
+              ],
+              error: null,
+            }),
+            maybeSingle: async () => ({ data: null, error: null }),
+          };
+          return builder;
+        };
+        return {
+          select: () => createQueryBuilder(),
+          update: () => ({ eq: async () => ({ data: null, error: null }) }),
+        };
+      }
+      if (table === "profiles") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { display_name: "Mariana Campos", email: "mariana@goatbar.com.br" },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "ai_conversations") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                eq: () => ({
+                  order: () => ({
+                    limit: () => ({
+                      maybeSingle: async () => ({
+                        data: { id: "conv-mariana-1", status: "active" },
+                        error: null,
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+          insert: () => ({
+            select: () => ({
+              single: async () => ({
+                data: { id: "conv-mariana-1", status: "active" },
+                error: null,
+              }),
+            }),
+          }),
+          update: () => ({ eq: async () => ({ data: null, error: null }) }),
+        };
+      }
+      if (table === "ai_messages") {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: async () => ({ data: [], error: null }),
+              }),
+              maybeSingle: async () => ({ data: null, error: null }),
+            }),
+          }),
+          insert: () => ({
+            select: () => ({
+              single: async () => ({
+                data: { id: "msg-1" },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "ai_pending_actions") {
+        return {
+          select: () => ({
+            eq: () => ({
+              in: () => ({
+                gt: () => ({
+                  order: () => ({
+                    limit: () => ({
+                      maybeSingle: async () => ({ data: null, error: null }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    const sendSpy = vi.spyOn(adapter, "sendTextMessage").mockResolvedValue(true);
+
+    // Meta sends 12-digit wa_id (without 9th digit): 553799985192
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messaging_product: "whatsapp",
+                contacts: [{ profile: { name: "Mariana Campos" }, wa_id: "553799985192" }],
+                messages: [
+                  {
+                    from: "553799985192",
+                    id: "wamid.AUTH1",
+                    text: { body: "Oi" },
+                    type: "text",
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const res = await adapter.processIncomingWebhook(payload);
+    expect(res.handled).toBe(true);
+    // Should NOT have rejected as unauthorized
+    expect(res.reason).not.toBe("Unauthorized phone number");
+    expect(sendSpy).toHaveBeenCalled();
+  });
+
+  it("safely logs Meta API errors without exposing access tokens in sendTextMessage", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({
+        error: {
+          message: "(#131030) Recipient phone number not in allowed list",
+          type: "OAuthException",
+          code: 131030,
+          error_subcode: 2388040,
+        },
+      }),
+      text: async () => "",
+    } as any);
+
+    const result = await adapter.sendTextMessage("+55 (31) 99876-1967", "Teste de mensagem");
+    expect(result).toBe(false);
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[whatsapp-adapter] Falha ao enviar mensagem Meta Graph API:"),
+      expect.stringContaining("131030")
+    );
+    // Check that access token is NOT in any logged call
+    for (const call of errorSpy.mock.calls) {
+      const logStr = call.join(" ");
+      expect(logStr).not.toContain("mock_token");
+    }
+  });
 });
+

@@ -35,31 +35,23 @@ describe("Goat AI - Conversation Manager & Multi-turn Engine", () => {
   it("resolves user from WhatsApp wa_id as primary identity", async () => {
     mockSupabase.from.mockImplementation((table: string) => {
       if (table === "user_messaging_accounts") {
-        return {
-          select: () => ({
-            eq: (field1: string, val1: string) => ({
-              eq: (field2: string, val2: string) => ({
-                eq: (field3: string, val3: boolean) => ({
-                  maybeSingle: async () => {
-                    if (field2 === "external_user_id" && val2 === "5531999998888") {
-                      return {
-                        data: {
-                          user_id: "user-123",
-                          display_name: "Jhansen Sócio",
-                          verified: true,
-                          external_user_id: "5531999998888",
-                          phone_number: "+5531999998888",
-                        },
-                        error: null,
-                      };
-                    }
-                    return { data: null, error: null };
-                  },
-                }),
-              }),
-            }),
+        const builder: any = {
+          eq: () => builder,
+          or: () => builder,
+          in: () => builder,
+          maybeSingle: async () => ({
+            data: {
+              id: "acc-123",
+              user_id: "user-123",
+              display_name: "Jhansen Sócio",
+              verified: true,
+              external_user_id: "5531999998888",
+              phone_number: "+5531999998888",
+            },
+            error: null,
           }),
         };
+        return { select: () => builder };
       }
       if (table === "profiles") {
         return {
@@ -84,24 +76,87 @@ describe("Goat AI - Conversation Manager & Multi-turn Engine", () => {
     expect(user?.authorized).toBe(true);
   });
 
-  it("returns null if WhatsApp account is not found or not verified", async () => {
+  it("resolves Brazilian partner with 9th-digit variation and backfills wa_id using account.id", async () => {
+    const updateSpy = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+
+    const mockDbAccounts = [
+      {
+        id: "acc-mariana",
+        user_id: "191c7da3-605b-4c5e-bc24-decbc71db56c",
+        display_name: "Mariana Campos",
+        verified: true,
+        external_user_id: null,
+        phone_number: "+5537999985192",
+      },
+      {
+        id: "acc-romulo",
+        user_id: "191c7da3-605b-4c5e-bc24-decbc71db56c",
+        display_name: "Romulo Chaves",
+        verified: true,
+        external_user_id: null,
+        phone_number: "+5531998761967",
+      },
+    ];
+
     mockSupabase.from.mockImplementation((table: string) => {
       if (table === "user_messaging_accounts") {
+        const builder: any = {
+          eq: () => builder,
+          or: () => builder,
+          in: (fIn: string, candidateList: string[]) => {
+            const found = mockDbAccounts.filter((acc) => candidateList.includes(acc.phone_number));
+            return { data: found, error: null };
+          },
+          maybeSingle: async () => ({ data: null, error: null }),
+        };
+        return {
+          select: () => builder,
+          update: (fields: any) => updateSpy(fields),
+        };
+      }
+      if (table === "profiles") {
         return {
           select: () => ({
             eq: () => ({
-              eq: () => ({
-                eq: () => ({
-                  maybeSingle: async () => ({ data: null, error: null }),
-                }),
-              }),
-              or: () => ({
-                eq: () => ({
-                  maybeSingle: async () => ({ data: null, error: null }),
-                }),
+              maybeSingle: async () => ({
+                data: { display_name: "Romulo Chaves", email: "romulo@goatbar.com.br" },
+                error: null,
               }),
             }),
           }),
+        };
+      }
+      return {};
+    });
+
+    // Meta sends 12-digit legacy wa_id without 9th digit: 553198761967
+    const user = await manager.resolveUserByWaIdOrPhone("553198761967", "553198761967");
+    expect(user).not.toBeNull();
+    expect(user?.name).toBe("Romulo Chaves");
+    expect(user?.authorized).toBe(true);
+    expect(user?.phoneNumber).toBe("+5531998761967");
+
+    // Verify backfill was called with account.id = "acc-romulo" and external_user_id = "553198761967"
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        external_user_id: "553198761967",
+      })
+    );
+  });
+
+  it("returns null if WhatsApp account is not found or not verified", async () => {
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "user_messaging_accounts") {
+        const builder: any = {
+          eq: () => builder,
+          or: () => builder,
+          in: () => ({ data: [], error: null }),
+          maybeSingle: async () => ({ data: null, error: null }),
+        };
+        return {
+          select: () => builder,
         };
       }
       return {};

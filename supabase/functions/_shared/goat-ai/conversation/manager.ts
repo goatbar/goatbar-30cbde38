@@ -7,6 +7,11 @@ import {
   ToolContext,
 } from "../types.ts";
 import { defaultToolRegistry, GoatAIToolRegistry } from "../tools/registry.ts";
+import {
+  getPhoneLookupCandidates,
+  arePhoneNumbersEqual,
+  sanitizeDigits,
+} from "../phone-normalizer.ts";
 
 export interface ResolvedUser {
   userId: string;
@@ -27,15 +32,18 @@ export class ConversationManager {
     this.toolRegistry = toolRegistry;
   }
 
-  public async resolveUserByWaIdOrPhone(waId: string, phoneNumber?: string): Promise<ResolvedUser | null> {
-    // 1. Primary lookup by external_user_id = wa_id
-    if (waId) {
+  public async resolveUserByWaIdOrPhone(waId?: string, phoneNumber?: string): Promise<ResolvedUser | null> {
+    const rawWaId = waId?.trim();
+    const cleanWaId = sanitizeDigits(rawWaId);
+
+    // 1. Primary lookup: external_user_id = wa_id exact & verified
+    if (rawWaId) {
       const { data: accountByWaId } = await this.supabaseAdmin
         .from("user_messaging_accounts")
-        .select("user_id, display_name, verified, external_user_id, phone_number")
+        .select("id, user_id, display_name, verified, external_user_id, phone_number")
         .eq("provider", "whatsapp")
-        .eq("external_user_id", waId)
         .eq("verified", true)
+        .or(`external_user_id.eq.${rawWaId},external_user_id.eq.${cleanWaId || rawWaId}`)
         .maybeSingle();
 
       if (accountByWaId) {
@@ -51,47 +59,67 @@ export class ConversationManager {
           email: profile?.email,
           role: "socio",
           authorized: true,
-          externalUserId: waId,
+          externalUserId: accountByWaId.external_user_id || rawWaId,
           phoneNumber: accountByWaId.phone_number,
         };
       }
     }
 
-    // 2. Secondary lookup by exact phone number
-    const targetPhone = phoneNumber || waId;
+    // 2. Secondary lookup: Canonical phone number & Brazilian equivalent variations (indexed query)
+    const targetPhone = phoneNumber || rawWaId;
     if (targetPhone) {
-      const cleanPhone = targetPhone.replace(/[^0-9+]/g, "");
-      const { data: accountByPhone } = await this.supabaseAdmin
-        .from("user_messaging_accounts")
-        .select("user_id, display_name, verified, external_user_id, phone_number")
-        .eq("provider", "whatsapp")
-        .or(`phone_number.eq.${cleanPhone},phone_number.eq.+${cleanPhone.replace("+", "")},phone_number.eq.${cleanPhone.replace("+", "")}`)
-        .eq("verified", true)
-        .maybeSingle();
+      const candidates = Array.from(
+        new Set([
+          ...getPhoneLookupCandidates(targetPhone),
+          ...(rawWaId ? getPhoneLookupCandidates(rawWaId) : []),
+        ])
+      );
 
-      if (accountByPhone) {
-        // If external_user_id was not yet populated, backfill wa_id for future faster lookups
-        if (waId && !accountByPhone.external_user_id) {
-          await this.supabaseAdmin
-            .from("user_messaging_accounts")
-            .update({ external_user_id: waId, updated_at: new Date().toISOString() })
-            .eq("id", accountByPhone.id);
+      let matchedAccount: any = null;
+
+      if (candidates.length > 0) {
+        const { data: accountsByCandidates } = await this.supabaseAdmin
+          .from("user_messaging_accounts")
+          .select("id, user_id, display_name, verified, external_user_id, phone_number")
+          .eq("provider", "whatsapp")
+          .eq("verified", true)
+          .in("phone_number", candidates);
+
+        if (accountsByCandidates && accountsByCandidates.length > 0) {
+          matchedAccount = accountsByCandidates[0];
+        }
+      }
+
+      if (matchedAccount) {
+        // Backfill external_user_id if missing or different, using account.id
+        if (rawWaId && matchedAccount.id && matchedAccount.external_user_id !== rawWaId) {
+          try {
+            await this.supabaseAdmin
+              .from("user_messaging_accounts")
+              .update({
+                external_user_id: rawWaId,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", matchedAccount.id);
+          } catch (updateErr) {
+            console.warn("[ConversationManager] Falha ao realizar backfill de external_user_id:", updateErr);
+          }
         }
 
         const { data: profile } = await this.supabaseAdmin
           .from("profiles")
           .select("display_name, email")
-          .eq("user_id", accountByPhone.user_id)
+          .eq("user_id", matchedAccount.user_id)
           .maybeSingle();
 
         return {
-          userId: accountByPhone.user_id,
-          name: accountByPhone.display_name || profile?.display_name || "Sócio",
+          userId: matchedAccount.user_id,
+          name: matchedAccount.display_name || profile?.display_name || "Sócio",
           email: profile?.email,
           role: "socio",
           authorized: true,
-          externalUserId: waId,
-          phoneNumber: accountByPhone.phone_number,
+          externalUserId: rawWaId || matchedAccount.external_user_id,
+          phoneNumber: matchedAccount.phone_number,
         };
       }
     }

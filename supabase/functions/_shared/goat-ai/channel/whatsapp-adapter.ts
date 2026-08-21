@@ -27,12 +27,17 @@ export class WhatsAppChannelAdapter {
   }
 
   public async sendTextMessage(to: string, text: string): Promise<boolean> {
+    const cleanTo = to.replace(/[^0-9]/g, "");
+
     if (!this.config.accessToken || !this.config.phoneNumberId) {
-      console.warn("WhatsApp credentials not configured; skipped outgoing message.");
+      console.warn("[whatsapp-adapter] Credenciais do WhatsApp não configuradas; envio ignorado.", JSON.stringify({
+        hasAccessToken: !!this.config.accessToken,
+        hasPhoneNumberId: !!this.config.phoneNumberId,
+        recipient: cleanTo,
+      }));
       return false;
     }
 
-    const cleanTo = to.replace(/[^0-9]/g, "");
     const url = getWhatsAppMessagesUrl(this.config.phoneNumberId);
 
     try {
@@ -52,14 +57,40 @@ export class WhatsAppChannelAdapter {
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
-        console.error(`Erro na resposta da Meta Graph API (HTTP ${res.status}):`, errorText.slice(0, 200));
+        let metaErrorCode: number | string | null = null;
+        let metaErrorType: string | null = null;
+        let metaErrorMessage: string | null = null;
+
+        try {
+          const errorJson = await res.json();
+          metaErrorCode = errorJson?.error?.code ?? null;
+          metaErrorType = errorJson?.error?.type ?? null;
+          metaErrorMessage = errorJson?.error?.message ?? null;
+        } catch {
+          try {
+            metaErrorMessage = (await res.text()).slice(0, 200);
+          } catch {
+            metaErrorMessage = "Unknown error body";
+          }
+        }
+
+        console.error("[whatsapp-adapter] Falha ao enviar mensagem Meta Graph API:", JSON.stringify({
+          httpStatus: res.status,
+          metaErrorCode,
+          metaErrorType,
+          metaErrorMessage,
+          recipient: cleanTo,
+        }));
+
         return false;
       }
 
       return true;
-    } catch (err) {
-      console.error("Erro ao enviar mensagem WhatsApp:", err);
+    } catch (err: any) {
+      console.error("[whatsapp-adapter] Exceção de rede ao enviar mensagem WhatsApp:", JSON.stringify({
+        error: err?.message || String(err),
+        recipient: cleanTo,
+      }));
       return false;
     }
   }
@@ -98,6 +129,7 @@ export class WhatsAppChannelAdapter {
     const message = entry.messages[0];
     const senderPhone = message.from;
     const messageId = message.id;
+    const messageType = message.type || "text";
     const contact = entry.contacts?.[0];
     const waId = contact?.wa_id || senderPhone;
     const contactName = contact?.profile?.name || "Sócio";
@@ -105,6 +137,19 @@ export class WhatsAppChannelAdapter {
     // 1. Resolve User with wa_id priority
     const convManager = new ConversationManager(this.supabaseAdmin);
     const resolvedUser = await convManager.resolveUserByWaIdOrPhone(waId, senderPhone);
+
+    // Structured safe logging for audit and debugging
+    console.log("[whatsapp-adapter] Webhook recebido:", JSON.stringify({
+      messageId,
+      senderPhone,
+      waId,
+      contactName,
+      messageType,
+      userFound: !!resolvedUser,
+      authorized: !!resolvedUser?.authorized,
+      resolvedUserId: resolvedUser?.userId || null,
+      resolvedName: resolvedUser?.name || null,
+    }));
 
     if (!resolvedUser || !resolvedUser.authorized) {
       const unauthReply = "Olá! Eu sou a GIA, assistente do Goat Bar. Este número de WhatsApp ainda não está vinculado a uma conta autorizada do Goat Bar. Solicite a liberação de acesso com um dos administradores.";
