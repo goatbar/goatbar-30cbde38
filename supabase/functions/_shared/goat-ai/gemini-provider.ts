@@ -16,7 +16,7 @@ import {
 } from "./schemas.ts";
 import { normalizeStr } from "./event-matcher.ts";
 
-export const DEFAULT_GEMINI_MODEL = "gemini-1.5-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
 export const GOOGLE_PROJECT_NUMBER = "321790958376";
 
 function getEnv(key: string): string | undefined {
@@ -133,16 +133,11 @@ export class GeminiProvider implements AIProvider {
         console.warn(`[goat-ai] could not list models: ${err?.message}`);
       }
 
-      const normalizedModel = this.model.startsWith("models/") ? this.model.slice(7) : this.model;
-      const candidateModels = [
-        normalizedModel,
-        "gemini-2.0-flash",
-        "gemini-1.5-flash-latest",
-        "gemini-1.5-pro",
-      ];
-
-      // Remove duplicates
-      const uniqueModels = Array.from(new Set(candidateModels));
+      const rawModel = this.model.startsWith("models/") ? this.model.slice(7) : this.model;
+      const normalizedModel = (rawModel.includes("1.5") || rawModel.includes("2.0") || rawModel.includes("2.5"))
+        ? "gemini-3.6-flash"
+        : (rawModel || "gemini-3.6-flash");
+      const uniqueModels = [normalizedModel];
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);

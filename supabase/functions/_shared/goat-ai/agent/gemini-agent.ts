@@ -201,14 +201,14 @@ export class GoatAIGeminiAgent {
       };
     }
 
-    const candidateModels = Array.from(new Set([
-      this.model.startsWith("models/") ? this.model.slice(7) : this.model,
-      "gemini-2.0-flash",
-      "gemini-1.5-flash",
-      "gemini-2.5-flash",
-    ]));
+    const rawModel = this.model.startsWith("models/") ? this.model.slice(7) : this.model;
+    const resolvedModel = (rawModel.includes("1.5") || rawModel.includes("2.0") || rawModel.includes("2.5"))
+      ? "gemini-3.6-flash"
+      : (rawModel || "gemini-3.6-flash");
 
-    console.log(`[GOAT-AI][PROVIDER][START] correlationId=${correlationId} provider=gemini model=${this.model} contextMessageCount=${contents.length} toolsAvailable=${this.toolRegistry.listTools().map((t) => t.name).join(",")}`);
+    const candidateModels = [resolvedModel];
+
+    console.log(`[GOAT-AI][PROVIDER][START] correlationId=${correlationId} provider=gemini model=${resolvedModel} contextMessageCount=${contents.length} toolsAvailable=${this.toolRegistry.listTools().map((t) => t.name).join(",")}`);
 
     while (turnCount < MAX_TOOL_CALLS_PER_TURN) {
       turnCount++;

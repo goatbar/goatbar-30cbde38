@@ -128,7 +128,7 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
       }),
     } as any);
 
-    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-gemini-key", toolRegistry, "gemini-2.0-flash");
+    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-gemini-key", toolRegistry, "gemini-3.6-flash");
     const result = await agent.processTurn({
       channel: "whatsapp",
       message: "Oi",

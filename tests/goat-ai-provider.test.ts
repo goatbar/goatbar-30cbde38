@@ -17,7 +17,7 @@ describe("Goat AI Gemini Provider & Robust Error Handling", () => {
   });
 
   it("exports correct defaults and Google Project number", () => {
-    expect(DEFAULT_GEMINI_MODEL).toBe("gemini-1.5-flash");
+    expect(DEFAULT_GEMINI_MODEL).toBe("gemini-3.6-flash");
     expect(GOOGLE_PROJECT_NUMBER).toBe("321790958376");
   });
 
@@ -79,7 +79,7 @@ describe("Goat AI Gemini Provider & Robust Error Handling", () => {
 
     const provider = new GeminiProvider({
       apiKey: "fake_gemini_key_for_test",
-      model: "gemini-1.5-flash",
+      model: "gemini-3.6-flash",
       allowHeuristicFallback: false,
     });
 

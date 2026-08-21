@@ -56,9 +56,9 @@ serve(async (req) => {
     gemini: {
       provider: "Google Gemini",
       googleProject: "321790958376",
-      configured: Boolean(geminiApiKey && geminiApiKey.length > 5),
-      model: Deno.env.get("GEMINI_MODEL") || "gemini-2.0-flash",
-      heuristicFallbackAllowed: allowHeuristic,
+      model: (Deno.env.get("GEMINI_MODEL")?.includes("1.5") || Deno.env.get("GEMINI_MODEL")?.includes("2.0") || Deno.env.get("GEMINI_MODEL")?.includes("2.5"))
+        ? "gemini-3.6-flash"
+        : (Deno.env.get("GEMINI_MODEL") || "gemini-3.6-flash"),
     },
     whatsapp: {
       configured: Boolean(whatsappToken && whatsappPhoneId),

@@ -224,7 +224,7 @@ export const goatAIService = {
         return {
           gemini: {
             configured: false,
-            model: "gemini-2.0-flash",
+            model: "gemini-3.6-flash",
             heuristicFallbackAllowed: true,
           },
           whatsapp: {
@@ -240,7 +240,7 @@ export const goatAIService = {
       return {
         gemini: {
           configured: false,
-          model: "gemini-2.0-flash",
+          model: "gemini-3.6-flash",
           heuristicFallbackAllowed: true,
         },
         whatsapp: {

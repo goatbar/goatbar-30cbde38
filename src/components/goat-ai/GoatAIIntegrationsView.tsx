@@ -248,7 +248,7 @@ export function GoatAIIntegrationsView() {
             <div className="flex items-center justify-between">
               <span>Modelo em uso:</span>
               <span className="font-mono font-semibold text-foreground">
-                {status?.gemini.model || "gemini-2.0-flash"}
+                {status?.gemini.model || "gemini-3.6-flash"}
               </span>
             </div>
 
