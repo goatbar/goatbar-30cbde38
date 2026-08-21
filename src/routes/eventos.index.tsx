@@ -474,9 +474,9 @@ function EventosIndex() {
                         }}
                       >
                         <option value="novo_orcamento">Novo orçamento</option>
-                        <option value="dados_solicitados">Dados solicitados</option>
                         <option value="orcamento_enviado">Orçamento enviado</option>
                         <option value="aguardando_retorno">Aguardando retorno</option>
+                        <option value="dados_solicitados">Dados solicitados</option>
                         <option value="em_assinatura">Em assinatura</option>
                         <option value="confirmado">Confirmado</option>
                         <option value="finalizado">Finalizado</option>

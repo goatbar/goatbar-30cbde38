@@ -106,7 +106,7 @@ export function GoatAIChatView({
 
     setInputValue("");
     setLoading(true);
-    setOperationalStatus(selectedFile ? "Lendo documento / imagem..." : "Pensando...");
+    setOperationalStatus(selectedFile ? "Lendo documento / imagem..." : "GIA está analisando...");
 
     // Optimistic user message
     const tempUserMsg: ChatMessage = {
@@ -123,7 +123,7 @@ export function GoatAIChatView({
     try {
       let attachments: any[] = [];
       if (selectedFile) {
-        setOperationalStatus("Enviando mídia e analisando com IA...");
+        setOperationalStatus("Enviando mídia e analisando com a GIA...");
         const media = await goatAIChatService.uploadMedia(selectedFile);
         attachments.push({
           mimeType: media.mimeType,
@@ -166,7 +166,7 @@ export function GoatAIChatView({
       setMessages((prev) => [...prev.filter((m) => m.id !== tempUserMsg.id), tempUserMsg, assistantMsg]);
     } catch (err: any) {
       console.error("Erro ao enviar mensagem:", err);
-      toast.error(err?.message || "Erro na comunicação com a Goat AI");
+      toast.error(err?.message || "Erro na comunicação com a GIA");
       setMessages((prev) => [
         ...prev,
         {
@@ -201,13 +201,13 @@ export function GoatAIChatView({
           </div>
           <div>
             <h3 className="font-display font-black text-sm tracking-tight text-foreground flex items-center gap-2">
-              Goat AI
+              GIA
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/15 text-primary border border-primary/20">
-                Assistente Conectado
+                Assistente Conectada
               </span>
             </h3>
             <p className="text-xs text-muted-foreground">
-              Inteligência operacional conectada a eventos, sessões e controladoria
+              Sua assistente operacional conectada a eventos, sessões e controladoria
             </p>
           </div>
         </div>
@@ -235,10 +235,10 @@ export function GoatAIChatView({
               <Sparkles className="h-7 w-7" />
             </div>
             <h4 className="font-display font-bold text-lg text-foreground mb-2">
-              Como posso ajudar você hoje?
+              Olá! Eu sou a GIA 👋
             </h4>
             <p className="text-xs text-muted-foreground mb-6 leading-relaxed">
-              Você pode perguntar sobre dados de eventos, médias de consumo, enviar fotos de fechamento de vendas ou notas fiscais para registrar na Controladoria.
+              Posso consultar informações do Goat Bar, analisar documentos, registrar operações e ajudar com eventos, vendas, compras, estoque e controladoria. Como posso ajudar?
             </p>
 
             <div className="w-full space-y-2">

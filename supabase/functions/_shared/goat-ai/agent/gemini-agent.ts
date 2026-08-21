@@ -6,12 +6,13 @@ import {
 import { GOAT_AI_CONVERSATIONAL_SYSTEM_PROMPT } from "../prompts/system.ts";
 import { ConversationManager } from "../conversation/manager.ts";
 import { defaultToolRegistry, GoatAIToolRegistry } from "../tools/registry.ts";
+import { getEnv, getGeminiModel } from "../config.ts";
 
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 const MAX_TOOL_CALLS_PER_TURN = 8;
 
 export class GoatAIGeminiAgent {
   private apiKey: string;
+  private model: string;
   private conversationManager: ConversationManager;
   private toolRegistry: GoatAIToolRegistry;
   private supabaseAdmin: any;
@@ -19,10 +20,12 @@ export class GoatAIGeminiAgent {
   constructor(
     supabaseAdmin: any,
     apiKey?: string,
-    toolRegistry: GoatAIToolRegistry = defaultToolRegistry
+    toolRegistry: GoatAIToolRegistry = defaultToolRegistry,
+    model?: string
   ) {
     this.supabaseAdmin = supabaseAdmin;
-    this.apiKey = apiKey || Deno.env.get("GEMINI_API_KEY") || "";
+    this.apiKey = apiKey || getEnv("GEMINI_API_KEY");
+    this.model = model || getGeminiModel();
     this.toolRegistry = toolRegistry;
     this.conversationManager = new ConversationManager(supabaseAdmin, toolRegistry);
   }
@@ -32,7 +35,7 @@ export class GoatAIGeminiAgent {
       input.channel,
       input.userId,
       input.externalMessageId ? input.conversationId : undefined,
-      input.message.slice(0, 40) || "Atendimento Goat AI"
+      input.message.slice(0, 40) || "Conversa com a GIA"
     );
 
     const context: ToolContext = {
@@ -45,11 +48,19 @@ export class GoatAIGeminiAgent {
     };
 
     // 1. Record user message
+    let messageType: "text" | "image" | "document" | "audio" = "text";
+    if (input.attachments && input.attachments.length > 0) {
+      const mime = input.attachments[0].mimeType.toLowerCase();
+      if (mime.startsWith("image/")) messageType = "image";
+      else if (mime.startsWith("audio/")) messageType = "audio";
+      else if (mime.includes("pdf") || mime.includes("document")) messageType = "document";
+    }
+
     const userMessage = await this.conversationManager.saveMessage(
       conversation.id,
       "user",
       input.message,
-      input.attachments && input.attachments.length > 0 ? "image" : "text",
+      messageType,
       input.attachments?.[0]?.url,
       input.externalMessageId,
       input.userName
@@ -151,10 +162,10 @@ export class GoatAIGeminiAgent {
     // If there was an active pending action collecting fields, supply guidance
     let promptText = input.message;
     if (activePending && activePending.status === "collecting") {
-      promptText += `\n[CONTEXTO: Há uma ação em andamento '${activePending.tool_name}' com dados parciais ${JSON.stringify(activePending.arguments)}. Campos pendentes: [${activePending.missing_fields.join(", ")}]. Use a resposta para completar os campos e chamar novamente a ferramenta.]`;
+      promptText += `\n[CONTEXTO OPERACIONAL: Há uma ação em andamento '${activePending.tool_name}' com dados já preenchidos: ${JSON.stringify(activePending.arguments)}. Campos pendentes necessários: [${activePending.missing_fields.join(", ")}]. Use os novos dados da mensagem para preencher os campos e acionar a ferramenta correspondente.]`;
     }
 
-    currentParts.push({ text: promptText });
+    currentParts.push({ text: promptText || "Processar entrada" });
     contents.push({
       role: "user",
       parts: currentParts,
@@ -182,6 +193,13 @@ export class GoatAIGeminiAgent {
       };
     }
 
+    const candidateModels = Array.from(new Set([
+      this.model.startsWith("models/") ? this.model.slice(7) : this.model,
+      "gemini-2.0-flash",
+      "gemini-1.5-flash",
+      "gemini-2.5-flash",
+    ]));
+
     while (turnCount < MAX_TOOL_CALLS_PER_TURN) {
       turnCount++;
 
@@ -201,21 +219,37 @@ export class GoatAIGeminiAgent {
         },
       };
 
-      const res = await fetch(`${GEMINI_API_URL}?key=${this.apiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      let resJson: any = null;
+      let callError: any = null;
 
-      if (!res.ok) {
-        const errText = await res.text();
-        finalReply = `Erro na comunicação com a IA: ${res.statusText}. Sua mensagem foi salva no histórico.`;
-        console.error("Gemini Agent API error:", errText);
+      for (const m of candidateModels) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${this.apiKey}`;
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          if (res.ok) {
+            resJson = await res.json();
+            break;
+          } else {
+            const errText = await res.text();
+            callError = new Error(`Gemini API (${m}) HTTP ${res.status}: ${errText.slice(0, 150)}`);
+          }
+        } catch (err: any) {
+          callError = err;
+        }
+      }
+
+      if (!resJson) {
+        finalReply = `Não consegui processar a resposta com a IA no momento. Sua mensagem foi salva no histórico.`;
+        console.error("Gemini Agent API error:", callError);
         break;
       }
 
-      const geminiData = await res.json();
-      const candidate = geminiData.candidates?.[0]?.content;
+      const candidate = resJson.candidates?.[0]?.content;
       if (!candidate || !candidate.parts) {
         finalReply = "Não consegui interpretar a resposta no momento. Pode reformular?";
         break;
@@ -246,7 +280,6 @@ export class GoatAIGeminiAgent {
             );
 
             finalPendingAction = pending;
-            // Let Gemini or system present summary asking for confirmation
             finalReply = candidate.parts.find((p: any) => p.text)?.text || summary;
             break;
           } else {
@@ -260,7 +293,7 @@ export class GoatAIGeminiAgent {
               "collecting"
             );
             finalPendingAction = pending;
-            finalReply = candidate.parts.find((p: any) => p.text)?.text || `Identifiquei os dados, mas ainda preciso de: ${missing.join(", ")}. Pode informar?`;
+            finalReply = candidate.parts.find((p: any) => p.text)?.text || `Identifiquei os dados da operação, mas ainda preciso de: ${missing.join(", ")}. Pode informar?`;
             break;
           }
         }

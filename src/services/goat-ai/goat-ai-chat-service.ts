@@ -82,7 +82,7 @@ export const goatAIChatService = {
     });
 
     if (error) {
-      throw new Error(error.message || "Erro na comunicação com a Goat AI");
+      throw new Error(error.message || "Erro na comunicação com a GIA");
     }
 
     return data as SendMessageResponse;
@@ -95,7 +95,7 @@ export const goatAIChatService = {
 
     if (error || !data?.success) {
       // Fallback direct supabase query
-      const { data: dbData } = await supabase
+      const { data: dbData } = await (supabase as any)
         .from("ai_conversations")
         .select("*")
         .order("updated_at", { ascending: false })
@@ -112,7 +112,7 @@ export const goatAIChatService = {
     });
 
     if (error || !data?.success) {
-      const { data: dbData } = await supabase
+      const { data: dbData } = await (supabase as any)
         .from("ai_messages")
         .select("*")
         .eq("conversation_id", conversationId)
@@ -130,7 +130,7 @@ export const goatAIChatService = {
     });
 
     if (error || !data?.success) {
-      const { data: dbData } = await supabase
+      const { data: dbData } = await (supabase as any)
         .from("ai_tool_calls")
         .select("*")
         .order("started_at", { ascending: false })

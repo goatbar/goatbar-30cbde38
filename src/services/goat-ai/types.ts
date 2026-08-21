@@ -112,8 +112,30 @@ export interface IntegrationStatus {
   whatsapp: {
     configured: boolean;
     hasVerifyToken: boolean;
+    phoneNumberId?: string;
+    businessAccountId?: string;
+    appId?: string;
+    displayPhoneNumber?: string;
+    verifiedName?: string;
     webhookUrl: string;
+    authorizedUsersCount?: number;
+    lastMessageAt?: string | null;
   };
   timestamp: string;
 }
 
+export interface UserMessagingAccountItem {
+  id: string;
+  user_id: string;
+  provider: "whatsapp" | "telegram";
+  external_user_id?: string | null;
+  phone_number: string;
+  display_name?: string | null;
+  verified: boolean;
+  created_at: string;
+  updated_at: string;
+  profile?: {
+    display_name?: string;
+    email?: string;
+  };
+}

@@ -53,14 +53,14 @@ describe("kanban-pipeline", () => {
   });
 
   describe("getVisibleKanbanColumns", () => {
-    it("returns active pipeline columns when filter is 'pipeline'", () => {
+    it("returns active pipeline columns in natural commercial funnel order when filter is 'pipeline'", () => {
       const cols = getVisibleKanbanColumns("pipeline");
       const ids = cols.map((c) => c.id);
       expect(ids).toEqual([
         "novo_orcamento",
-        "dados_solicitados",
         "orcamento_enviado",
         "aguardando_retorno",
+        "dados_solicitados",
         "em_assinatura",
         "confirmado",
       ]);
@@ -73,9 +73,9 @@ describe("kanban-pipeline", () => {
       const ids = cols.map((c) => c.id);
       expect(ids).toEqual([
         "novo_orcamento",
-        "dados_solicitados",
         "orcamento_enviado",
         "aguardando_retorno",
+        "dados_solicitados",
         "em_assinatura",
       ]);
     });

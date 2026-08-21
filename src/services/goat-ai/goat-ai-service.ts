@@ -3,6 +3,7 @@ import {
   AIInboxItem,
   AIActionLog,
   IntegrationStatus,
+  UserMessagingAccountItem,
 } from "./types";
 
 export const goatAIService = {
@@ -223,7 +224,7 @@ export const goatAIService = {
         return {
           gemini: {
             configured: false,
-            model: "gemini-1.5-flash",
+            model: "gemini-2.0-flash",
             heuristicFallbackAllowed: true,
           },
           whatsapp: {
@@ -239,7 +240,7 @@ export const goatAIService = {
       return {
         gemini: {
           configured: false,
-          model: "gemini-1.5-flash",
+          model: "gemini-2.0-flash",
           heuristicFallbackAllowed: true,
         },
         whatsapp: {
@@ -279,5 +280,68 @@ export const goatAIService = {
       return null;
     }
   },
-};
 
+  // Messaging Accounts (WhatsApp Phone -> User linking)
+  async listMessagingAccounts(): Promise<UserMessagingAccountItem[]> {
+    const { data, error } = await (supabase as any)
+      .from("user_messaging_accounts")
+      .select(`
+        *,
+        profile:user_id (
+          display_name,
+          email
+        )
+      `)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.warn("Erro ao buscar contas de mensageria:", error);
+      return [];
+    }
+    return (data || []) as UserMessagingAccountItem[];
+  },
+
+  async createMessagingAccount(payload: {
+    user_id: string;
+    phone_number: string;
+    display_name?: string;
+    external_user_id?: string;
+    provider?: "whatsapp" | "telegram";
+  }): Promise<UserMessagingAccountItem> {
+    const cleanPhone = payload.phone_number.replace(/[^0-9+]/g, "");
+    const { data, error } = await (supabase as any)
+      .from("user_messaging_accounts")
+      .upsert({
+        user_id: payload.user_id,
+        phone_number: cleanPhone,
+        display_name: payload.display_name || null,
+        external_user_id: payload.external_user_id || cleanPhone.replace("+", ""),
+        provider: payload.provider || "whatsapp",
+        verified: true,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "provider,phone_number" })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as UserMessagingAccountItem;
+  },
+
+  async deleteMessagingAccount(id: string): Promise<void> {
+    const { error } = await (supabase as any)
+      .from("user_messaging_accounts")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+  },
+
+  async toggleMessagingAccountVerified(id: string, verified: boolean): Promise<void> {
+    const { error } = await (supabase as any)
+      .from("user_messaging_accounts")
+      .update({ verified, updated_at: new Date().toISOString() })
+      .eq("id", id);
+
+    if (error) throw error;
+  },
+};

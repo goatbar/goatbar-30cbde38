@@ -14,6 +14,8 @@ export interface ResolvedUser {
   email?: string;
   role?: string;
   authorized: boolean;
+  externalUserId?: string;
+  phoneNumber?: string;
 }
 
 export class ConversationManager {
@@ -25,33 +27,80 @@ export class ConversationManager {
     this.toolRegistry = toolRegistry;
   }
 
-  public async resolveUserByPhoneNumber(phoneNumber: string): Promise<ResolvedUser | null> {
-    const cleanPhone = phoneNumber.replace(/[^0-9+]/g, "");
+  public async resolveUserByWaIdOrPhone(waId: string, phoneNumber?: string): Promise<ResolvedUser | null> {
+    // 1. Primary lookup by external_user_id = wa_id
+    if (waId) {
+      const { data: accountByWaId } = await this.supabaseAdmin
+        .from("user_messaging_accounts")
+        .select("user_id, display_name, verified, external_user_id, phone_number")
+        .eq("provider", "whatsapp")
+        .eq("external_user_id", waId)
+        .eq("verified", true)
+        .maybeSingle();
 
-    const { data: account, error } = await this.supabaseAdmin
-      .from("user_messaging_accounts")
-      .select("user_id, display_name, verified")
-      .or(`phone_number.eq.${cleanPhone},phone_number.eq.${cleanPhone.replace("+55", "")},phone_number.eq.+55${cleanPhone.replace("+", "")}`)
-      .eq("verified", true)
-      .maybeSingle();
+      if (accountByWaId) {
+        const { data: profile } = await this.supabaseAdmin
+          .from("profiles")
+          .select("display_name, email")
+          .eq("user_id", accountByWaId.user_id)
+          .maybeSingle();
 
-    if (error || !account) {
-      return null;
+        return {
+          userId: accountByWaId.user_id,
+          name: accountByWaId.display_name || profile?.display_name || "Sócio",
+          email: profile?.email,
+          role: "socio",
+          authorized: true,
+          externalUserId: waId,
+          phoneNumber: accountByWaId.phone_number,
+        };
+      }
     }
 
-    const { data: profile } = await this.supabaseAdmin
-      .from("profiles")
-      .select("display_name, email")
-      .eq("user_id", account.user_id)
-      .maybeSingle();
+    // 2. Secondary lookup by exact phone number
+    const targetPhone = phoneNumber || waId;
+    if (targetPhone) {
+      const cleanPhone = targetPhone.replace(/[^0-9+]/g, "");
+      const { data: accountByPhone } = await this.supabaseAdmin
+        .from("user_messaging_accounts")
+        .select("user_id, display_name, verified, external_user_id, phone_number")
+        .eq("provider", "whatsapp")
+        .or(`phone_number.eq.${cleanPhone},phone_number.eq.+${cleanPhone.replace("+", "")},phone_number.eq.${cleanPhone.replace("+", "")}`)
+        .eq("verified", true)
+        .maybeSingle();
 
-    return {
-      userId: account.user_id,
-      name: account.display_name || profile?.display_name || "Sócio",
-      email: profile?.email,
-      role: "socio",
-      authorized: true,
-    };
+      if (accountByPhone) {
+        // If external_user_id was not yet populated, backfill wa_id for future faster lookups
+        if (waId && !accountByPhone.external_user_id) {
+          await this.supabaseAdmin
+            .from("user_messaging_accounts")
+            .update({ external_user_id: waId, updated_at: new Date().toISOString() })
+            .eq("id", accountByPhone.id);
+        }
+
+        const { data: profile } = await this.supabaseAdmin
+          .from("profiles")
+          .select("display_name, email")
+          .eq("user_id", accountByPhone.user_id)
+          .maybeSingle();
+
+        return {
+          userId: accountByPhone.user_id,
+          name: accountByPhone.display_name || profile?.display_name || "Sócio",
+          email: profile?.email,
+          role: "socio",
+          authorized: true,
+          externalUserId: waId,
+          phoneNumber: accountByPhone.phone_number,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  public async resolveUserByPhoneNumber(phoneNumber: string): Promise<ResolvedUser | null> {
+    return this.resolveUserByWaIdOrPhone(phoneNumber, phoneNumber);
   }
 
   public async getOrCreateConversation(
@@ -221,6 +270,15 @@ export class ConversationManager {
     pendingAction: AIPendingAction,
     context: ToolContext
   ): Promise<{ success: boolean; result?: any; error?: string; message?: string }> {
+    // Idempotency: protect against duplicate confirmation execution
+    if (pendingAction.status === "executed") {
+      return {
+        success: true,
+        data: pendingAction.result,
+        message: "Esta ação já foi executada e confirmada anteriormente.",
+      };
+    }
+
     const executionId = `exec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
     const toolResult = await this.toolRegistry.executeTool(

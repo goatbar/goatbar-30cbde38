@@ -52,7 +52,7 @@ export function GoatAIManualTestModal({
         source_sender_name: senderName || "Sócio / Teste",
         source,
       });
-      toast.success("Mensagem processada pelo pipeline Goat AI!");
+      toast.success("Mensagem processada pelo pipeline da GIA!");
       onCreated();
       onClose();
     } catch (err: any) {
@@ -69,7 +69,7 @@ export function GoatAIManualTestModal({
         <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/30">
           <h2 className="text-base font-bold text-foreground flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-primary" />
-            Nova Entrada de Teste (Goat AI)
+            Nova Entrada de Teste (GIA)
           </h2>
           <button
             onClick={onClose}

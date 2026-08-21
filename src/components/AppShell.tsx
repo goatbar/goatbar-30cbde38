@@ -36,7 +36,7 @@ const nav: {
   { to: "/drinks", label: "Drinks", icon: Wine },
   { to: "/inventario", label: "Inventário", icon: Package },
   { to: "/eventos", label: "Eventos", icon: CalendarRange },
-  { to: "/goat-ai", label: "Goat AI", icon: Sparkles, roles: ["admin", "financeiro", "comercial"] },
+  { to: "/goat-ai", label: "GIA", icon: Sparkles, roles: ["admin", "financeiro", "comercial"] },
   { to: "/controladoria", label: "Controladoria", icon: BarChart3, roles: ["admin", "financeiro"] },
   { to: "/contratos", label: "Contratos", icon: FileText, roles: ["admin", "comercial"] },
   { to: "/modelos", label: "Modelos de Proposta", icon: LayoutTemplate, roles: ["admin"] },

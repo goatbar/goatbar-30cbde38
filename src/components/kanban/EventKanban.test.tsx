@@ -81,13 +81,17 @@ describe("EventKanban Component", () => {
       />,
     );
 
-    // Columns present in 'pipeline' filter
-    expect(screen.getByRole("heading", { name: "Novo Orçamento" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Dados Solicitados" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Orçamento Enviado" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Aguardando Retorno" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Em Assinatura" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Confirmado" })).toBeInTheDocument();
+    // Columns present in 'pipeline' filter in exact order
+    const headings = screen.getAllByRole("heading", { level: 3 });
+    const headingLabels = headings.map((h) => h.textContent?.trim());
+    expect(headingLabels).toEqual([
+      "Novo Orçamento",
+      "Orçamento Enviado",
+      "Aguardando Retorno",
+      "Dados Solicitados",
+      "Em Assinatura",
+      "Confirmado",
+    ]);
 
     // Event cards rendered in correct columns
     expect(screen.getByText("Casamento Ana & Pedro")).toBeInTheDocument();
@@ -100,7 +104,7 @@ describe("EventKanban Component", () => {
     expect(screen.getByText("50 pax")).toBeInTheDocument();
   });
 
-  it("allows changing status via the accessible dropdown without navigating", () => {
+  it("allows moving through all commercial funnel steps correctly", () => {
     render(
       <EventKanban
         events={mockEvents}
@@ -110,13 +114,18 @@ describe("EventKanban Component", () => {
     );
 
     const selectElements = screen.getAllByTitle("Alterar status do evento");
-    expect(selectElements.length).toBe(3);
 
-    // Change status of first event to 'orcamento_enviado'
-    fireEvent.change(selectElements[0], { target: { value: "orcamento_enviado" } });
+    // 1. Move to "dados_solicitados"
+    fireEvent.change(selectElements[0], { target: { value: "dados_solicitados" } });
+    expect(onStatusChangeMock).toHaveBeenLastCalledWith("evt-1", "dados_solicitados");
 
-    expect(onStatusChangeMock).toHaveBeenCalledTimes(1);
-    expect(onStatusChangeMock).toHaveBeenCalledWith("evt-1", "orcamento_enviado");
+    // 2. Move to "em_assinatura"
+    fireEvent.change(selectElements[0], { target: { value: "em_assinatura" } });
+    expect(onStatusChangeMock).toHaveBeenLastCalledWith("evt-1", "em_assinatura");
+
+    // 3. Move to "confirmado"
+    fireEvent.change(selectElements[0], { target: { value: "confirmado" } });
+    expect(onStatusChangeMock).toHaveBeenLastCalledWith("evt-1", "confirmado");
   });
 
   it("does not call onStatusChange if selected status is the same", () => {

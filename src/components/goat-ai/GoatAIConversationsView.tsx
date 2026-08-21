@@ -41,7 +41,7 @@ export function GoatAIConversationsView({ onSelectConversation }: GoatAIConversa
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-display font-bold text-base text-foreground">
-            Histórico de Conversas
+            Conversas com a GIA
           </h3>
           <p className="text-xs text-muted-foreground">
             Sessões de chat originadas pelo sistema web e pelo WhatsApp
@@ -90,7 +90,7 @@ export function GoatAIConversationsView({ onSelectConversation }: GoatAIConversa
                   </div>
                   <div>
                     <h4 className="font-bold text-xs text-foreground group-hover:text-primary transition-colors">
-                      {conv.title || "Atendimento Goat AI"}
+                      {conv.title || "Conversa com a GIA"}
                     </h4>
                     <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
                       <span className="capitalize">{conv.channel}</span>

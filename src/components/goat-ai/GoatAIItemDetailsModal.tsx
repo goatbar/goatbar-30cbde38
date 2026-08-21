@@ -219,7 +219,7 @@ export function GoatAIItemDetailsModal({
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-primary" />
-              Revisão Goat AI
+              Auditoria da GIA
             </h2>
             <GoatAIClassificationBadge classification={classification} />
             <GoatAIStatusBadge

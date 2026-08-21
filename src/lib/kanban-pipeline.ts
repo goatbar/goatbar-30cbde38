@@ -2,9 +2,9 @@ import { type Event as RealEvent } from "@/services/event-budget-service";
 
 export type KanbanColumnId =
   | "novo_orcamento"
-  | "dados_solicitados"
   | "orcamento_enviado"
   | "aguardando_retorno"
+  | "dados_solicitados"
   | "em_assinatura"
   | "confirmado"
   | "finalizado"
@@ -18,7 +18,15 @@ export interface KanbanColumnDef {
 }
 
 /**
- * Colunas canônicas do Kanban na ordem natural do funil comercial.
+ * Colunas canônicas do Kanban na ordem natural do funil comercial:
+ * 1. Novo orçamento
+ * 2. Orçamento enviado
+ * 3. Aguardando retorno
+ * 4. Dados solicitados (pós-negociação / pré-contrato)
+ * 5. Em assinatura
+ * 6. Confirmado
+ * 7. Finalizado
+ * 8. Cancelado
  */
 export const KANBAN_COLUMNS: KanbanColumnDef[] = [
   {
@@ -26,12 +34,6 @@ export const KANBAN_COLUMNS: KanbanColumnDef[] = [
     label: "Novo Orçamento",
     dotColor: "bg-blue-500",
     badgeClass: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  },
-  {
-    id: "dados_solicitados",
-    label: "Dados Solicitados",
-    dotColor: "bg-indigo-500",
-    badgeClass: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
   },
   {
     id: "orcamento_enviado",
@@ -44,6 +46,12 @@ export const KANBAN_COLUMNS: KanbanColumnDef[] = [
     label: "Aguardando Retorno",
     dotColor: "bg-purple-500",
     badgeClass: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+  },
+  {
+    id: "dados_solicitados",
+    label: "Dados Solicitados",
+    dotColor: "bg-indigo-500",
+    badgeClass: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
   },
   {
     id: "em_assinatura",
@@ -145,9 +153,9 @@ export function getVisibleKanbanColumns(statusFilter: string): KanbanColumnDef[]
       return KANBAN_COLUMNS.filter(
         (c) =>
           c.id === "novo_orcamento" ||
-          c.id === "dados_solicitados" ||
           c.id === "orcamento_enviado" ||
           c.id === "aguardando_retorno" ||
+          c.id === "dados_solicitados" ||
           c.id === "em_assinatura",
       );
 
@@ -180,9 +188,9 @@ export function groupEventsByKanbanStatus(
 ): Record<KanbanColumnId, RealEvent[]> {
   const groups: Record<KanbanColumnId, RealEvent[]> = {
     novo_orcamento: [],
-    dados_solicitados: [],
     orcamento_enviado: [],
     aguardando_retorno: [],
+    dados_solicitados: [],
     em_assinatura: [],
     confirmado: [],
     finalizado: [],

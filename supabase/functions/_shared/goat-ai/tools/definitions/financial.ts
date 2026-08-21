@@ -251,7 +251,7 @@ export const createControllerEntryTool: GoatAIToolDefinition = {
         description: args.description || `Compra de ${args.supplier_name}`,
         payment_method: args.payment_method || "PIX",
         status: args.status || "Pago",
-        responsible: ctx.userName || "Goat AI",
+        responsible: ctx.userName || "GIA",
       })
       .select()
       .single();
@@ -368,7 +368,7 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
         category: "Insumos",
         modality: "Evento",
         description: `Compra para evento (${args.items?.map((i) => `${i.quantity}x ${i.name}`).join(", ") || "Insumos"})`,
-        responsible: ctx.userName || "Goat AI",
+        responsible: ctx.userName || "GIA",
         status: "Pago",
       })
       .select()

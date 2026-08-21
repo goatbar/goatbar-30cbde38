@@ -34,8 +34,8 @@ function GoatAIPage() {
   return (
     <div className="space-y-6 pb-12">
       <PageHeader
-        title="Goat AI"
-        subtitle="Assistente operacional inteligente conectado a eventos, fechamentos e controladoria"
+        title="GIA"
+        subtitle="Assistente inteligente do Goat Bar"
       />
 
       {/* Tabs Bar */}
@@ -49,7 +49,7 @@ function GoatAIPage() {
           }`}
         >
           <Sparkles className="h-4 w-4" />
-          Chat Assistente
+          Chat GIA
         </button>
 
         <button
@@ -73,7 +73,7 @@ function GoatAIPage() {
           }`}
         >
           <ShieldCheck className="h-4 w-4" />
-          Auditoria & Logs
+          Auditoria da GIA
         </button>
 
         <button
@@ -85,7 +85,7 @@ function GoatAIPage() {
           }`}
         >
           <Cpu className="h-4 w-4" />
-          Integrações (WhatsApp & Gemini)
+          Configurações da GIA
         </button>
       </div>
 

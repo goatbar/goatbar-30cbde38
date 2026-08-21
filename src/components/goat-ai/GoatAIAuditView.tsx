@@ -38,10 +38,10 @@ export function GoatAIAuditView() {
         <div>
           <h3 className="font-display font-bold text-base text-foreground flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-primary" />
-            Auditoria de Operações & Ferramentas
+            Auditoria da GIA
           </h3>
           <p className="text-xs text-muted-foreground">
-            Registro de todas as chamadas de funções e ações operacionais disparadas pela IA
+            Registro de todas as chamadas de funções e ações operacionais disparadas pela GIA
           </p>
         </div>
         <button

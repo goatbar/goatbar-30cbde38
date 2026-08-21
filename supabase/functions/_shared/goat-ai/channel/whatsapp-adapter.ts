@@ -1,6 +1,11 @@
 import { GoatAIGeminiAgent } from "../agent/gemini-agent.ts";
 import { ConversationManager } from "../conversation/manager.ts";
 import { AgentAttachment } from "../types.ts";
+import {
+  getEnv,
+  getWhatsAppMessagesUrl,
+  getWhatsAppMediaUrl,
+} from "../config.ts";
 
 export interface WhatsAppConfig {
   phoneNumberId: string;
@@ -15,9 +20,9 @@ export class WhatsAppChannelAdapter {
   constructor(supabaseAdmin: any, config?: Partial<WhatsAppConfig>) {
     this.supabaseAdmin = supabaseAdmin;
     this.config = {
-      phoneNumberId: config?.phoneNumberId || Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") || "",
-      accessToken: config?.accessToken || Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "",
-      verifyToken: config?.verifyToken || Deno.env.get("WHATSAPP_WEBHOOK_VERIFY_TOKEN") || "",
+      phoneNumberId: config?.phoneNumberId || getEnv("WHATSAPP_PHONE_NUMBER_ID"),
+      accessToken: config?.accessToken || getEnv("WHATSAPP_ACCESS_TOKEN"),
+      verifyToken: config?.verifyToken || getEnv("WHATSAPP_VERIFY_TOKEN") || getEnv("WHATSAPP_WEBHOOK_VERIFY_TOKEN"),
     };
   }
 
@@ -28,7 +33,7 @@ export class WhatsAppChannelAdapter {
     }
 
     const cleanTo = to.replace(/[^0-9]/g, "");
-    const url = `https://graph.facebook.com/v20.0/${this.config.phoneNumberId}/messages`;
+    const url = getWhatsAppMessagesUrl(this.config.phoneNumberId);
 
     try {
       const res = await fetch(url, {
@@ -46,9 +51,40 @@ export class WhatsAppChannelAdapter {
         }),
       });
 
-      return res.ok;
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error(`Erro na resposta da Meta Graph API (HTTP ${res.status}):`, errorText.slice(0, 200));
+        return false;
+      }
+
+      return true;
     } catch (err) {
       console.error("Erro ao enviar mensagem WhatsApp:", err);
+      return false;
+    }
+  }
+
+  public async markMessageAsRead(messageId: string): Promise<boolean> {
+    if (!this.config.accessToken || !this.config.phoneNumberId || !messageId) {
+      return false;
+    }
+
+    const url = getWhatsAppMessagesUrl(this.config.phoneNumberId);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.config.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          status: "read",
+          message_id: messageId,
+        }),
+      });
+      return res.ok;
+    } catch {
       return false;
     }
   }
@@ -62,14 +98,16 @@ export class WhatsAppChannelAdapter {
     const message = entry.messages[0];
     const senderPhone = message.from;
     const messageId = message.id;
-    const contactName = entry.contacts?.[0]?.profile?.name || "Sócio";
+    const contact = entry.contacts?.[0];
+    const waId = contact?.wa_id || senderPhone;
+    const contactName = contact?.profile?.name || "Sócio";
 
-    // 1. Resolve User
+    // 1. Resolve User with wa_id priority
     const convManager = new ConversationManager(this.supabaseAdmin);
-    const resolvedUser = await convManager.resolveUserByPhoneNumber(senderPhone);
+    const resolvedUser = await convManager.resolveUserByWaIdOrPhone(waId, senderPhone);
 
     if (!resolvedUser || !resolvedUser.authorized) {
-      const unauthReply = "Olá! Este número de WhatsApp ainda não está vinculado a uma conta autorizada do Goat Bar. Solicite a liberação de acesso com um dos administradores.";
+      const unauthReply = "Olá! Eu sou a GIA, assistente do Goat Bar. Este número de WhatsApp ainda não está vinculado a uma conta autorizada do Goat Bar. Solicite a liberação de acesso com um dos administradores.";
       await this.sendTextMessage(senderPhone, unauthReply);
       return { handled: true, reply: unauthReply, reason: "Unauthorized phone number" };
     }
@@ -82,7 +120,6 @@ export class WhatsAppChannelAdapter {
       messageText = message.text?.body || "";
     } else if (message.type === "image") {
       messageText = message.image?.caption || "Foto enviada";
-      // Media download helper if access token exists
       if (this.config.accessToken && message.image?.id) {
         const mediaBase64 = await this.downloadMediaBase64(message.image.id);
         if (mediaBase64) {
@@ -101,6 +138,18 @@ export class WhatsAppChannelAdapter {
             mimeType: message.document.mime_type || "application/pdf",
             dataBase64: mediaBase64,
             fileName: message.document.filename,
+          });
+        }
+      }
+    } else if (message.type === "audio" || message.type === "voice") {
+      messageText = "Áudio enviado";
+      const audioObj = message.audio || message.voice;
+      if (this.config.accessToken && audioObj?.id) {
+        const mediaBase64 = await this.downloadMediaBase64(audioObj.id);
+        if (mediaBase64) {
+          attachments.push({
+            mimeType: audioObj.mime_type || "audio/ogg",
+            dataBase64: mediaBase64,
           });
         }
       }
@@ -127,9 +176,9 @@ export class WhatsAppChannelAdapter {
     return { handled: true, reply: turnResult.reply };
   }
 
-  private async downloadMediaBase64(mediaId: string): Promise<string | null> {
+  public async downloadMediaBase64(mediaId: string): Promise<string | null> {
     try {
-      const mediaUrlRes = await fetch(`https://graph.facebook.com/v20.0/${mediaId}`, {
+      const mediaUrlRes = await fetch(getWhatsAppMediaUrl(mediaId), {
         headers: { Authorization: `Bearer ${this.config.accessToken}` },
       });
       if (!mediaUrlRes.ok) return null;
