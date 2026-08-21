@@ -130,37 +130,119 @@ export const createSalesSessionTool: GoatAIToolDefinition = {
   },
 };
 
+function normalizeDateInput(d: string, defaultYear = 2026): string {
+  if (!d) return "";
+  const trimmed = d.trim();
+  // If already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  // If DD/MM/YYYY
+  const dmyMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, "0");
+    const month = dmyMatch[2].padStart(2, "0");
+    return `${dmyMatch[3]}-${month}-${day}`;
+  }
+  // If DD/MM (omit year -> use defaultYear)
+  const dmMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (dmMatch) {
+    const day = dmMatch[1].padStart(2, "0");
+    const month = dmMatch[2].padStart(2, "0");
+    return `${defaultYear}-${month}-${day}`;
+  }
+  return trimmed;
+}
+
 export const getSalesSessionsTool: GoatAIToolDefinition = {
   name: "get_sales_sessions",
-  description: "Consulta sessões de vendas registradas das unidades com seus respectivos itens e totais.",
+  description: "Consulta sessões de vendas registradas das unidades (Goat Botequim, 7 Steak House) por unidade, data específica ou período.",
   parameters: {
     type: "object",
     properties: {
       unit_name: {
         type: "string",
-        description: "Nome da unidade (ex: '7 Steak House', 'Goat Botequim').",
+        description: "Nome da unidade (ex: 'Goat Botequim', '7 Steak House').",
+      },
+      date: {
+        type: "string",
+        description: "Data específica da sessão no formato YYYY-MM-DD ou DD/MM (ex: '2026-07-31' ou '31/07').",
+      },
+      start_date: {
+        type: "string",
+        description: "Data inicial do período no formato YYYY-MM-DD ou DD/MM (ex: '2026-07-31').",
+      },
+      end_date: {
+        type: "string",
+        description: "Data final do período no formato YYYY-MM-DD ou DD/MM (ex: '2026-08-07').",
+      },
+      dates: {
+        type: "array",
+        description: "Lista de datas específicas a consultar (ex: ['31/07', '07/08']).",
+        items: {
+          type: "string",
+        },
+      },
+      month: {
+        type: "number",
+        description: "Mês a consultar (1 a 12).",
+      },
+      year: {
+        type: "number",
+        description: "Ano a consultar (ex: 2026).",
       },
       limit: {
         type: "number",
-        description: "Limite de sessões a retornar (padrão 10).",
+        description: "Limite de sessões a retornar (padrão 15).",
       },
     },
     required: [],
   },
   requiresConfirmation: false,
-  execute: async (ctx: ToolContext, args: { unit_name?: string; limit?: number }): Promise<ToolExecutionResult> => {
+  execute: async (
+    ctx: ToolContext,
+    args: {
+      unit_name?: string;
+      date?: string;
+      start_date?: string;
+      end_date?: string;
+      dates?: string[];
+      month?: number;
+      year?: number;
+      limit?: number;
+    }
+  ): Promise<ToolExecutionResult> => {
+    const currentYear = args.year || new Date().getFullYear();
+
     let query = ctx.supabaseAdmin
       .from("financial_sessions")
       .select(`
-        id, date, modality, labor_value, labor_names,
-        financial_session_items (id, drink_name, quantity, unit_price)
+        id, date, modality, labor_value, labor_names, reposicao_restaurante,
+        financial_session_items (id, drink_name, quantity, unit_price, unit_cost)
       `)
       .order("date", { ascending: false })
-      .limit(args.limit || 10);
+      .limit(args.limit || 20);
 
     if (args.unit_name) {
       const unit = matchUnitName(args.unit_name);
       query = query.ilike("modality", `%${unit.modality}%`);
+    }
+
+    if (args.date) {
+      const normalizedDate = normalizeDateInput(args.date, currentYear);
+      query = query.eq("date", normalizedDate);
+    } else if (args.dates && args.dates.length > 0) {
+      const normalizedDates = args.dates.map((d) => normalizeDateInput(d, currentYear));
+      query = query.in("date", normalizedDates);
+    } else {
+      if (args.start_date) {
+        query = query.gte("date", normalizeDateInput(args.start_date, currentYear));
+      }
+      if (args.end_date) {
+        query = query.lte("date", normalizeDateInput(args.end_date, currentYear));
+      }
+      if (args.month && !args.start_date && !args.end_date) {
+        const mStr = String(args.month).padStart(2, "0");
+        query = query.gte("date", `${currentYear}-${mStr}-01`).lte("date", `${currentYear}-${mStr}-31`);
+      }
     }
 
     const { data: sessions, error } = await query;
@@ -168,11 +250,52 @@ export const getSalesSessionsTool: GoatAIToolDefinition = {
       return { success: false, error: `Erro ao consultar sessões de vendas: ${error.message}` };
     }
 
+    const sessionList = (sessions || []).map((s: any) => {
+      const items = s.financial_session_items || [];
+      const grossRevenue = items.reduce(
+        (sum: number, it: any) => sum + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0),
+        0
+      );
+      return {
+        id: s.id,
+        date: s.date,
+        unit: s.modality,
+        responsible: s.labor_names,
+        labor_value: s.labor_value,
+        gross_revenue: grossRevenue,
+        items_count: items.length,
+        items: items.map((it: any) => ({
+          name: it.drink_name,
+          quantity: it.quantity,
+          unit_price: it.unit_price,
+          total: (Number(it.quantity) || 0) * (Number(it.unit_price) || 0),
+        })),
+      };
+    });
+
+    if (sessionList.length === 0) {
+      return {
+        success: true,
+        data: {
+          count: 0,
+          sessions: [],
+          filter_applied: {
+            unit: args.unit_name,
+            date: args.date,
+            start_date: args.start_date,
+            end_date: args.end_date,
+            dates: args.dates,
+          },
+        },
+        message: "Nenhuma sessão de vendas encontrada para os critérios e período informados.",
+      };
+    }
+
     return {
       success: true,
       data: {
-        count: (sessions || []).length,
-        sessions: sessions || [],
+        count: sessionList.length,
+        sessions: sessionList,
       },
     };
   },

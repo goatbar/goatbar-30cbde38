@@ -36,7 +36,7 @@ const nav: {
   { to: "/drinks", label: "Drinks", icon: Wine },
   { to: "/inventario", label: "Inventário", icon: Package },
   { to: "/eventos", label: "Eventos", icon: CalendarRange },
-  { to: "/goat-ai", label: "GIA", icon: Sparkles, roles: ["admin", "financeiro", "comercial"] },
+  { to: "/gia", label: "GIA", icon: Sparkles, roles: ["admin", "financeiro", "comercial"] },
   { to: "/controladoria", label: "Controladoria", icon: BarChart3, roles: ["admin", "financeiro"] },
   { to: "/contratos", label: "Contratos", icon: FileText, roles: ["admin", "comercial"] },
   { to: "/modelos", label: "Modelos de Proposta", icon: LayoutTemplate, roles: ["admin"] },
@@ -74,9 +74,9 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const initials = (user?.email ?? "GB").slice(0, 2).toUpperCase();
   const displayName = user?.email?.split("@")[0] ?? "Gestor";
   return (
-    <div className="flex min-h-screen w-full min-w-0 max-w-[100vw] flex-col overflow-x-hidden bg-background text-foreground md:flex-row">
+    <div className="flex h-screen w-full min-w-0 max-w-[100vw] flex-col overflow-hidden bg-background text-foreground md:flex-row">
       {/* MOBILE TOPBAR */}
-      <div className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-surface p-4 md:hidden">
+      <div className="shrink-0 flex items-center justify-between border-b border-border bg-surface p-4 md:hidden">
         <Link to="/" className="flex items-center gap-3">
           <img src={logo} alt="GOAT BAR" className="h-8 w-auto" />
           <div className="font-display text-[11px] font-semibold tracking-[0.18em] leading-none">
@@ -99,7 +99,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
             onClick={() => setMobileMenuOpen(false)}
           />
           <div className="relative w-72 max-w-[80vw] h-full bg-sidebar border-r border-sidebar-border shadow-2xl flex flex-col animate-in slide-in-from-left">
-            <div className="flex items-center justify-between px-6 pt-7 pb-8">
+            <div className="flex items-center justify-between px-6 pt-7 pb-8 shrink-0">
               <Link
                 to="/"
                 className="flex items-center gap-3"
@@ -115,7 +115,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
               </button>
             </div>
 
-            <div className="px-3 mb-2 label-eyebrow">Operação</div>
+            <div className="px-3 mb-2 label-eyebrow shrink-0">Operação</div>
             <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
               {visibleNav.map((item) => {
                 const Icon = item.icon;
@@ -135,7 +135,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
                   >
                     <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
                     <span className="font-medium text-base flex-1">{item.label}</span>
-                    {item.to === "/goat-ai" && pendingAiCount > 0 && (
+                    {item.to === "/gia" && pendingAiCount > 0 && (
                       <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500 text-black">
                         {pendingAiCount}
                       </span>
@@ -145,7 +145,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
               })}
             </nav>
 
-            <div className="m-3 p-3 rounded-xl bg-sidebar-accent border border-sidebar-border">
+            <div className="m-3 p-3 rounded-xl bg-sidebar-accent border border-sidebar-border shrink-0">
               <div className="flex items-center gap-3">
                 <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-primary-foreground font-display font-semibold text-xs">
                   {initials}
@@ -166,8 +166,8 @@ export function AppShell({ children }: { children?: ReactNode }) {
       )}
 
       {/* DESKTOP SIDEBAR */}
-      <aside className="hidden md:flex flex-col w-64 shrink-0 bg-sidebar border-r border-sidebar-border sticky top-0 h-screen overflow-y-auto">
-        <div className="px-6 pt-7 pb-8">
+      <aside className="hidden md:flex flex-col w-64 shrink-0 bg-sidebar border-r border-sidebar-border h-screen overflow-y-auto">
+        <div className="px-6 pt-7 pb-8 shrink-0">
           <Link to="/" className="flex items-center gap-3">
             <img src={logo} alt="GOAT BAR" className="h-12 w-auto" />
             <div>
@@ -179,8 +179,8 @@ export function AppShell({ children }: { children?: ReactNode }) {
           </Link>
         </div>
 
-        <div className="px-3 mb-2 label-eyebrow">Operação</div>
-        <nav className="flex-1 px-3 space-y-1">
+        <div className="px-3 mb-2 label-eyebrow shrink-0">Operação</div>
+        <nav className="flex-1 px-3 space-y-1 overflow-y-auto min-h-0">
           {visibleNav.map((item) => {
             const Icon = item.icon;
             const active = item.exact
@@ -198,7 +198,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
               >
                 <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
                 <span className="font-medium flex-1">{item.label}</span>
-                {item.to === "/goat-ai" && pendingAiCount > 0 && (
+                {item.to === "/gia" && pendingAiCount > 0 && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-black">
                     {pendingAiCount}
                   </span>
@@ -209,7 +209,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
         </nav>
 
         {/* User card */}
-        <div className="m-3 p-3 rounded-xl bg-sidebar-accent border border-sidebar-border">
+        <div className="m-3 p-3 rounded-xl bg-sidebar-accent border border-sidebar-border shrink-0">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-primary-foreground font-display font-semibold text-xs">
               {initials}
@@ -230,7 +230,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
       </aside>
 
       {/* MAIN */}
-      <main className="flex w-full min-w-0 max-w-[100vw] flex-1 flex-col overflow-x-hidden pb-[calc(5.25rem+env(safe-area-inset-bottom))] md:pb-0">
+      <main className="flex w-full min-w-0 max-w-[100vw] flex-1 flex-col overflow-y-auto overflow-x-hidden pb-[calc(5.25rem+env(safe-area-inset-bottom))] md:pb-0">
         {children ?? <Outlet />}
       </main>
 

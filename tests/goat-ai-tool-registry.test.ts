@@ -67,4 +67,63 @@ describe("Goat AI - Tool Registry & Safety Validation", () => {
     expect(result.missing_fields).toContain("amount");
     expect(result.missing_fields).toContain("date");
   });
+
+  it("executes get_sales_sessions filtering by dates array or date range and returns clean message on zero results", async () => {
+    const mockSessionsData = [
+      {
+        id: "sess-1",
+        date: "2026-07-31",
+        modality: "Goat Botequim",
+        labor_names: "Jhansen",
+        labor_value: 200,
+        financial_session_items: [
+          { id: "item-1", drink_name: "Caipirinha", quantity: 10, unit_price: 25 },
+        ],
+      },
+    ];
+
+    const mockAdmin = {
+      from: vi.fn((table: string) => {
+        if (table === "ai_tool_calls") {
+          return {
+            insert: async () => ({ data: null, error: null }),
+          };
+        }
+        if (table === "financial_sessions") {
+          return {
+            select: () => ({
+              order: () => ({
+                limit: () => ({
+                  ilike: () => ({
+                    in: async () => ({ data: mockSessionsData, error: null }),
+                    gte: () => ({
+                      lte: async () => ({ data: [], error: null }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        return {};
+      }),
+    };
+
+    const mockContext: ToolContext = {
+      supabaseAdmin: mockAdmin,
+      conversationId: "conv-test",
+      channel: "web",
+    };
+
+    // Test with specific dates
+    const result = await defaultToolRegistry.executeTool(
+      "get_sales_sessions",
+      { unit_name: "Goat Botequim", dates: ["31/07", "07/08"] },
+      mockContext
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.data.count).toBe(1);
+    expect(result.data.sessions[0].gross_revenue).toBe(250);
+  });
 });

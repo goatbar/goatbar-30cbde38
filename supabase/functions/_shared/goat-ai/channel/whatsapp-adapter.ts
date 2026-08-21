@@ -1,6 +1,7 @@
 import { GoatAIGeminiAgent } from "../agent/gemini-agent.ts";
 import { ConversationManager } from "../conversation/manager.ts";
 import { AgentAttachment } from "../types.ts";
+import { formatWhatsAppMessage } from "../formatter.ts";
 import {
   getEnv,
   getWhatsAppMessagesUrl,
@@ -33,6 +34,7 @@ export class WhatsAppChannelAdapter {
 
   public async sendTextMessage(to: string, text: string, correlationId?: string): Promise<boolean> {
     const cleanTo = to.replace(/[^0-9]/g, "");
+    const formattedText = formatWhatsAppMessage(text);
 
     if (!this.config.accessToken || !this.config.phoneNumberId) {
       console.warn(`[GOAT-AI][WHATSAPP][SEND] correlationId=${correlationId || "none"} status=skipped error="WhatsApp credentials not configured" recipient=${maskPhone(cleanTo)}`);
@@ -40,6 +42,7 @@ export class WhatsAppChannelAdapter {
     }
 
     const url = getWhatsAppMessagesUrl(this.config.phoneNumberId);
+    console.log(`[GOAT-AI][WHATSAPP][SEND_STARTED] correlationId=${correlationId || "none"} recipient=${maskPhone(cleanTo)} textLength=${formattedText.length}`);
 
     try {
       const res = await fetch(url, {
@@ -53,7 +56,7 @@ export class WhatsAppChannelAdapter {
           recipient_type: "individual",
           to: cleanTo,
           type: "text",
-          text: { body: text },
+          text: { body: formattedText },
         }),
       });
 
@@ -141,6 +144,20 @@ export class WhatsAppChannelAdapter {
 
     console.log(`[GOAT-AI][WHATSAPP][RECEIVED] correlationId=${correlationId} messageId=${messageId} phone=${maskedPhone} messageType=${messageType}`);
 
+    // Deduplication check: if this specific messageId was already processed, ignore Meta retry
+    if (messageId) {
+      const { data: existingMsg } = await this.supabaseAdmin
+        .from("ai_messages")
+        .select("id")
+        .eq("external_message_id", messageId)
+        .maybeSingle();
+
+      if (existingMsg) {
+        console.log(`[GOAT-AI][WHATSAPP][DEDUPLICATE] correlationId=${correlationId} messageId=${messageId} already processed. Skipping duplicate webhook.`);
+        return { handled: true, reason: "Duplicate message already processed" };
+      }
+    }
+
     // 1. Resolve User with wa_id priority
     const convManager = new ConversationManager(this.supabaseAdmin);
     const resolvedUser = await convManager.resolveUserByWaIdOrPhone(waId, senderPhone);
@@ -198,6 +215,7 @@ export class WhatsAppChannelAdapter {
     }
 
     // 3. Process with Gemini Agent
+    console.log(`[GOAT-AI][WHATSAPP][AGENT_STARTED] correlationId=${correlationId} messageTextLength=${messageText.length}`);
     const agent = new GoatAIGeminiAgent(this.supabaseAdmin);
     const turnResult = await agent.processTurn({
       correlationId,
@@ -211,7 +229,9 @@ export class WhatsAppChannelAdapter {
       attachments,
     });
 
-    // 4. Send reply back to WhatsApp
+    console.log(`[GOAT-AI][WHATSAPP][AGENT_FINAL] correlationId=${correlationId} toolsExecuted=${turnResult.toolCallsExecuted?.length || 0} replyLength=${turnResult.reply?.length || 0}`);
+
+    // 4. Send EXACTLY ONE final reply back to WhatsApp
     if (turnResult.reply) {
       await this.sendTextMessage(senderPhone, turnResult.reply, correlationId);
     }

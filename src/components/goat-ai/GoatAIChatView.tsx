@@ -15,6 +15,8 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import giaAvatar from "@/assets/gia-avatar.png";
+import { ChatMessageContent } from "./ChatMessageContent";
 import {
   goatAIChatService,
   ChatMessage,
@@ -28,134 +30,133 @@ interface GoatAIChatViewProps {
 
 const QUICK_PROMPTS = [
   "Nos eventos de aproximadamente 100 pessoas, qual foi a média de gelo gasto?",
-  "Qual o resumo financeiro de receitas e despesas?",
-  "Buscar eventos confirmados para os próximos meses",
-  "Registrar fechamento de vendas da 7 Steak House",
+  "Quantos eventos temos confirmados para os próximos meses?",
+  "Buscar detalhes e cardápio de drinks do próximo evento",
+  "Resumo do faturamento e resultado da unidade Goat Botequim",
 ];
 
-export function GoatAIChatView({
-  conversationId: initialConvId,
+export const GoatAIChatView: React.FC<GoatAIChatViewProps> = ({
+  conversationId: initialConversationId,
   onConversationCreated,
-}: GoatAIChatViewProps) {
-  const [conversationId, setConversationId] = useState<string | undefined>(initialConvId);
+}) => {
+  const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputValue, setInputValue] = useState("");
+  const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(false);
   const [operationalStatus, setOperationalStatus] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<{ base64?: string; name: string; type: string } | null>(null);
   const [pendingAction, setPendingAction] = useState<any>(null);
+  const [attachments, setAttachments] = useState<
+    Array<{
+      mimeType: string;
+      dataBase64?: string;
+      fileName?: string;
+      previewUrl?: string;
+    }>
+  >([]);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setConversationId(initialConvId);
-    if (initialConvId) {
-      loadMessages(initialConvId);
-    } else {
-      setMessages([]);
+    setConversationId(initialConversationId);
+  }, [initialConversationId]);
+
+  useEffect(() => {
+    if (conversationId) {
+      loadConversationMessages(conversationId);
     }
-  }, [initialConvId]);
+  }, [conversationId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, operationalStatus]);
 
-  const loadMessages = async (convId: string) => {
+  const loadConversationMessages = async (id: string) => {
     try {
-      const data = await goatAIChatService.listMessages(convId);
-      setMessages(data);
+      const msgs = await goatAIChatService.listMessages(id);
+      setMessages(msgs);
     } catch (err) {
       console.error("Erro ao carregar mensagens:", err);
     }
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    setSelectedFile(file);
-    if (file.type.startsWith("image/")) {
+    Array.from(files).forEach((file) => {
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error(`Arquivo ${file.name} excede o limite de 10MB`);
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = () => {
-        setFilePreview({
-          base64: reader.result as string,
-          name: file.name,
-          type: file.type,
-        });
+        const base64 = (reader.result as string).split(",")[1];
+        const preview = file.type.startsWith("image/") ? (reader.result as string) : undefined;
+
+        setAttachments((prev) => [
+          ...prev,
+          {
+            mimeType: file.type || "application/octet-stream",
+            dataBase64: base64,
+            fileName: file.name,
+            previewUrl: preview,
+          },
+        ]);
       };
       reader.readAsDataURL(file);
-    } else {
-      setFilePreview({
-        name: file.name,
-        type: file.type,
-      });
-    }
-  };
+    });
 
-  const removeSelectedFile = () => {
-    setSelectedFile(null);
-    setFilePreview(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleSendMessage = async (customText?: string) => {
-    const text = (customText || inputValue).trim();
-    if (!text && !selectedFile) return;
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
 
-    setInputValue("");
-    setLoading(true);
-    setOperationalStatus(selectedFile ? "Lendo documento / imagem..." : "GIA está analisando...");
+  const handleSendMessage = async (customText?: string) => {
+    const textToSend = customText || inputText;
+    if (!textToSend.trim() && attachments.length === 0) return;
+    if (loading) return;
+
+    const currentAttachments = [...attachments];
+    setInputText("");
+    setAttachments([]);
 
     // Optimistic user message
     const tempUserMsg: ChatMessage = {
       id: `temp_${Date.now()}`,
       conversation_id: conversationId || "new",
       role: "user",
-      content: text || (selectedFile ? `[Arquivo: ${selectedFile.name}]` : ""),
-      message_type: selectedFile ? "image" : "text",
+      content: textToSend,
+      message_type: currentAttachments.length > 0 ? "document" : "text",
       created_at: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, tempUserMsg]);
+    setLoading(true);
+    setOperationalStatus("Consultando dados operacionais com a GIA...");
 
     try {
-      let attachments: any[] = [];
-      if (selectedFile) {
-        setOperationalStatus("Enviando mídia e analisando com a GIA...");
-        const media = await goatAIChatService.uploadMedia(selectedFile);
-        attachments.push({
-          mimeType: media.mimeType,
-          dataBase64: media.base64,
-          url: media.url,
-          fileName: selectedFile.name,
-        });
-        removeSelectedFile();
-      }
-
-      setOperationalStatus("Consultando sistema e processando...");
-
-      const response = await goatAIChatService.sendMessage({
+      const response: SendMessageResponse = await goatAIChatService.sendMessage({
         conversationId,
-        message: text,
-        attachments,
+        message: textToSend,
+        attachments: currentAttachments.map((a) => ({
+          mimeType: a.mimeType,
+          dataBase64: a.dataBase64,
+          fileName: a.fileName,
+        })),
       });
 
-      if (response.conversationId && response.conversationId !== conversationId) {
+      if (!conversationId && response.conversationId) {
         setConversationId(response.conversationId);
         onConversationCreated?.(response.conversationId);
       }
 
-      if (response.pendingAction) {
-        setPendingAction(response.pendingAction);
-      } else {
-        setPendingAction(null);
-      }
-
-      // Add assistant response
+      // Append assistant reply
       const assistantMsg: ChatMessage = {
-        id: response.messageId || `msg_${Date.now()}`,
+        id: response.messageId,
         conversation_id: response.conversationId,
         role: "assistant",
         content: response.reply,
@@ -164,9 +165,14 @@ export function GoatAIChatView({
       };
 
       setMessages((prev) => [...prev.filter((m) => m.id !== tempUserMsg.id), tempUserMsg, assistantMsg]);
+
+      if (response.pendingAction) {
+        setPendingAction(response.pendingAction);
+      } else {
+        setPendingAction(null);
+      }
     } catch (err: any) {
-      console.error("Erro ao enviar mensagem:", err);
-      toast.error(err?.message || "Erro na comunicação com a GIA");
+      toast.error(err?.message || "Erro ao comunicar com a GIA");
       setMessages((prev) => [
         ...prev,
         {
@@ -196,8 +202,17 @@ export function GoatAIChatView({
       {/* Chat Header */}
       <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between bg-surface/50 backdrop-blur-sm">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm">
-            <Sparkles className="h-5 w-5" />
+          <div className="h-10 w-10 rounded-full border border-primary/30 overflow-hidden bg-primary/10 flex items-center justify-center text-primary shadow-sm shrink-0">
+            <img
+              src={giaAvatar}
+              alt="GIA Avatar"
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                // Fallback to icon if image fails
+                (e.target as HTMLElement).style.display = "none";
+              }}
+            />
+            <Sparkles className="h-5 w-5 hidden" />
           </div>
           <div>
             <h3 className="font-display font-black text-sm tracking-tight text-foreground flex items-center gap-2">
@@ -231,8 +246,12 @@ export function GoatAIChatView({
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto py-12">
-            <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4 shadow-sm">
-              <Sparkles className="h-7 w-7" />
+            <div className="h-16 w-16 rounded-full border-2 border-primary/40 overflow-hidden bg-primary/10 flex items-center justify-center text-primary mb-4 shadow-md">
+              <img
+                src={giaAvatar}
+                alt="GIA"
+                className="h-full w-full object-cover"
+              />
             </div>
             <h4 className="font-display font-bold text-lg text-foreground mb-2">
               Olá! Eu sou a GIA 👋
@@ -266,23 +285,31 @@ export function GoatAIChatView({
                   className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}
                 >
                   {!isUser && (
-                    <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 mt-0.5">
-                      <Bot className="h-4 w-4" />
+                    <div className="h-8 w-8 rounded-full border border-primary/30 overflow-hidden bg-primary/10 flex items-center justify-center text-primary shrink-0 mt-0.5 shadow-xs">
+                      <img
+                        src={giaAvatar}
+                        alt="GIA"
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = "none";
+                        }}
+                      />
+                      <Bot className="h-4 w-4 hidden" />
                     </div>
                   )}
 
                   <div
-                    className={`max-w-[80%] rounded-2xl p-4 text-xs leading-relaxed whitespace-pre-wrap ${
+                    className={`max-w-[85%] rounded-2xl p-4 text-xs leading-relaxed ${
                       isUser
                         ? "bg-primary text-primary-foreground font-medium rounded-tr-xs shadow-xs"
                         : "bg-surface-active/60 border border-border/60 text-foreground rounded-tl-xs shadow-xs"
                     }`}
                   >
-                    {msg.content}
+                    <ChatMessageContent content={msg.content} isUser={isUser} />
                   </div>
 
                   {isUser && (
-                    <div className="h-8 w-8 rounded-lg bg-surface-active border border-border/60 flex items-center justify-center text-muted-foreground shrink-0 mt-0.5">
+                    <div className="h-8 w-8 rounded-full bg-surface-active border border-border/60 flex items-center justify-center text-muted-foreground shrink-0 mt-0.5 shadow-xs">
                       <User className="h-4 w-4" />
                     </div>
                   )}
@@ -293,11 +320,16 @@ export function GoatAIChatView({
             {/* Operational Status (Thinking/Querying) */}
             {loading && operationalStatus && (
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 animate-pulse">
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                <div className="h-8 w-8 rounded-full border border-primary/30 overflow-hidden bg-primary/10 flex items-center justify-center text-primary shrink-0 animate-pulse shadow-xs">
+                  <img
+                    src={giaAvatar}
+                    alt="GIA"
+                    className="h-full w-full object-cover opacity-80"
+                  />
                 </div>
-                <div className="bg-surface-active/40 border border-border/40 px-3.5 py-2 rounded-xl italic">
-                  {operationalStatus}
+                <div className="bg-surface-active/40 border border-border/40 px-3.5 py-2 rounded-xl italic flex items-center gap-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                  <span>{operationalStatus}</span>
                 </div>
               </div>
             )}
@@ -333,73 +365,76 @@ export function GoatAIChatView({
         )}
       </div>
 
-      {/* Attachment Preview */}
-      {filePreview && (
-        <div className="px-6 py-2 bg-surface-active/30 border-t border-border/40 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs">
-            {filePreview.base64 ? (
-              <img
-                src={filePreview.base64}
-                alt="Preview"
-                className="h-10 w-10 object-cover rounded-lg border border-border"
-              />
-            ) : (
-              <FileText className="h-6 w-6 text-primary" />
-            )}
-            <div>
-              <p className="font-semibold text-foreground truncate max-w-[200px]">{filePreview.name}</p>
-              <p className="text-[10px] text-muted-foreground uppercase">{filePreview.type}</p>
+      {/* Attachments Preview */}
+      {attachments.length > 0 && (
+        <div className="px-6 py-2 border-t border-border/40 bg-surface/30 flex gap-2 overflow-x-auto">
+          {attachments.map((att, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-2 bg-surface-active border border-border/60 px-3 py-1.5 rounded-lg text-xs"
+            >
+              {att.previewUrl ? (
+                <img src={att.previewUrl} alt="Preview" className="h-5 w-5 object-cover rounded" />
+              ) : (
+                <FileText className="h-4 w-4 text-primary" />
+              )}
+              <span className="max-w-[120px] truncate text-[11px] font-medium text-foreground">
+                {att.fileName || "Documento"}
+              </span>
+              <button
+                onClick={() => removeAttachment(i)}
+                className="text-muted-foreground hover:text-destructive transition-colors ml-1"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
-          </div>
-          <button
-            onClick={removeSelectedFile}
-            className="p-1 rounded-full hover:bg-surface text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          ))}
         </div>
       )}
 
-      {/* Chat Input Bar */}
-      <div className="p-4 border-t border-border/60 bg-surface/80">
-        <div className="flex items-end gap-2 bg-surface border border-border/80 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 rounded-xl p-2 transition-all">
+      {/* Input Form */}
+      <div className="p-4 border-t border-border/60 bg-surface/80 backdrop-blur-sm">
+        <div className="relative flex items-end gap-2 bg-surface-active/50 border border-border/60 rounded-xl p-2 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
           <input
             type="file"
             ref={fileInputRef}
-            onChange={handleFileSelect}
-            accept="image/*,application/pdf"
+            onChange={handleFileUpload}
+            multiple
+            accept="image/*,.pdf,.doc,.docx"
             className="hidden"
           />
 
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-surface-hover transition-colors cursor-pointer"
-            title="Anexar foto ou documento"
+            className="p-2 text-muted-foreground hover:text-foreground hover:bg-surface rounded-lg transition-colors shrink-0"
+            title="Anexar comprovante ou documento"
           >
-            <Paperclip className="h-5 w-5" />
+            <Paperclip className="h-4 w-4" />
           </button>
 
           <textarea
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Digite uma mensagem ou comando (ex: 'Quanto gastamos com gelo?')..."
+            placeholder="Digite uma mensagem ou comando para a GIA..."
             rows={1}
-            disabled={loading}
-            className="flex-1 max-h-32 min-h-[38px] py-2 px-1 text-xs bg-transparent border-0 outline-none resize-none text-foreground placeholder:text-muted-foreground"
+            className="flex-1 bg-transparent border-0 resize-none text-xs text-foreground placeholder:text-muted-foreground focus:outline-hidden py-2 min-h-[36px] max-h-[120px]"
           />
 
           <button
             type="button"
+            disabled={(!inputText.trim() && attachments.length === 0) || loading}
             onClick={() => handleSendMessage()}
-            disabled={loading || (!inputValue.trim() && !selectedFile)}
-            className="p-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-40 hover:bg-primary/90 transition-all cursor-pointer shadow-xs"
+            className="p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer shadow-xs"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </button>
         </div>
+        <p className="text-[10px] text-muted-foreground/70 text-center mt-2">
+          GIA Goat Bar • Model gemini-3.6-flash • Conectada ao banco operacional
+        </p>
       </div>
     </div>
   );
-}
+};

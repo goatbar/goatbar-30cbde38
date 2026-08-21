@@ -230,6 +230,15 @@ describe("Goat AI WhatsAppChannelAdapter & Unauthorized User Handling", () => {
           select: () => createQueryBuilder(),
         };
       }
+      if (table === "ai_messages") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: null, error: null }),
+            }),
+          }),
+        };
+      }
       return {};
     });
 
@@ -436,6 +445,169 @@ describe("Goat AI WhatsAppChannelAdapter & Unauthorized User Handling", () => {
       const logStr = call.join(" ");
       expect(logStr).not.toContain("mock_token");
     }
+  });
+
+  it("sends EXACTLY ONE final message on WhatsApp during Tool Calling and NEVER sends false fallback before successful response", async () => {
+    process.env.GEMINI_API_KEY = "mock_gemini_key_for_test";
+    // Mariana Campos authorized
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "user_messaging_accounts") {
+        const createQueryBuilder = () => {
+          const builder: any = {
+            eq: () => builder,
+            or: () => builder,
+            in: () => ({
+              data: [
+                {
+                  id: "acc-mariana",
+                  user_id: "user-mariana-123",
+                  display_name: "Mariana Campos",
+                  verified: true,
+                  external_user_id: null,
+                  phone_number: "+5537999985192",
+                },
+              ],
+              error: null,
+            }),
+            maybeSingle: async () => ({ data: null, error: null }),
+          };
+          return builder;
+        };
+        return { select: () => createQueryBuilder(), update: () => ({ eq: async () => ({ data: null, error: null }) }) };
+      }
+      if (table === "profiles") {
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { display_name: "Mariana Campos" }, error: null }) }) }) };
+      }
+      if (table === "ai_conversations") {
+        return {
+          select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: { id: "conv-1", status: "active" }, error: null }) }) }) }) }) }) }),
+          insert: () => ({ select: () => ({ single: async () => ({ data: { id: "conv-1", status: "active" }, error: null }) }) }),
+          update: () => ({ eq: async () => ({ data: null, error: null }) }),
+        };
+      }
+      if (table === "ai_messages") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: null, error: null }),
+              order: () => ({ limit: async () => ({ data: [], error: null }) }),
+            }),
+          }),
+          insert: () => ({ select: () => ({ single: async () => ({ data: { id: "msg-1" }, error: null }) }) }),
+        };
+      }
+      if (table === "ai_pending_actions") {
+        return { select: () => ({ eq: () => ({ in: () => ({ gt: () => ({ order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) }) }) }) };
+      }
+      if (table === "ai_tool_calls") {
+        return { insert: async () => ({ data: null, error: null }) };
+      }
+      if (table === "events") {
+        return {
+          select: () => ({
+            order: () => ({
+              limit: async () => ({
+                data: [
+                  {
+                    id: "ev-luisa",
+                    client_name: "Luísa de Paula",
+                    event_name: "Casamento da Luísa",
+                    date: "2026-09-05",
+                    drinks: ["Caipi Limão Cravo e Mel", "Caipivodka Abacaxi"],
+                    status: "confirmado",
+                  },
+                ],
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    const sentMessages: string[] = [];
+    const sendSpy = vi.spyOn(adapter, "sendTextMessage").mockImplementation(async (_to, text) => {
+      sentMessages.push(text);
+      return true;
+    });
+
+    // Mock Gemini 2-turn fetch
+    let fetchCount = 0;
+    globalThis.fetch = vi.fn().mockImplementation(async () => {
+      fetchCount++;
+      if (fetchCount === 1) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            candidates: [
+              {
+                content: {
+                  role: "model",
+                  parts: [{ functionCall: { name: "search_events", args: { query: "Luisa" } } }],
+                },
+                finishReason: "STOP",
+              },
+            ],
+            usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 20 },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          candidates: [
+            {
+              content: {
+                role: "model",
+                parts: [{ text: "🍹 *Cardápio de Drinks Selecionados*\n\n• Caipi Limão Cravo e Mel\n• Caipivodka Abacaxi" }],
+              },
+              finishReason: "STOP",
+            },
+          ],
+          usageMetadata: { promptTokenCount: 150, candidatesTokenCount: 30 },
+        }),
+      };
+    });
+
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messaging_product: "whatsapp",
+                contacts: [{ profile: { name: "Mariana Campos" }, wa_id: "5537999985192" }],
+                messages: [
+                  {
+                    from: "5537999985192",
+                    id: "wamid.CARDAPIO_1",
+                    text: { body: "me mostre o cardápio do evento da Luísa" },
+                    type: "text",
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const res = await adapter.processIncomingWebhook(payload);
+    expect(res.handled).toBe(true);
+
+    // 1. MUST be called EXACTLY once
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    expect(sentMessages).toHaveLength(1);
+
+    // 2. Sent message MUST be the cardápio response
+    expect(sentMessages[0]).toContain("Cardápio de Drinks Selecionados");
+    expect(sentMessages[0]).toContain("Caipi Limão Cravo e Mel");
+
+    // 3. MUST NEVER have sent the false fallback message
+    expect(sentMessages[0]).not.toContain("Não consegui processar a resposta");
   });
 });
 
