@@ -113,6 +113,7 @@ export interface AgentAttachment {
 }
 
 export interface AgentInput {
+  correlationId?: string;
   conversationId?: string;
   message: string;
   channel: ConversationChannel;

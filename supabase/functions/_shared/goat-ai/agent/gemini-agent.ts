@@ -24,13 +24,16 @@ export class GoatAIGeminiAgent {
     model?: string
   ) {
     this.supabaseAdmin = supabaseAdmin;
-    this.apiKey = apiKey || getEnv("GEMINI_API_KEY");
+    this.apiKey = apiKey || getEnv("GEMINI_API_KEY") || getEnv("GOOGLE_AI_API_KEY") || getEnv("GOOGLE_API_KEY");
     this.model = model || getGeminiModel();
     this.toolRegistry = toolRegistry;
     this.conversationManager = new ConversationManager(supabaseAdmin, toolRegistry);
   }
 
   public async processTurn(input: AgentInput): Promise<AgentTurnResponse> {
+    const correlationId = input.correlationId || `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const turnStartTime = Date.now();
+
     const conversation = await this.conversationManager.getOrCreateConversation(
       input.channel,
       input.userId,
@@ -65,6 +68,8 @@ export class GoatAIGeminiAgent {
       input.externalMessageId,
       input.userName
     );
+
+    console.log(`[GOAT-AI][CONVERSATION] correlationId=${correlationId} conversationId=${conversation.id} userMessageId=${userMessage.id} messageType=${messageType}`);
 
     // 2. Check Confirmation Intent against active pending actions
     const activePending = await this.conversationManager.getActivePendingAction(conversation.id);
@@ -150,8 +155,8 @@ export class GoatAIGeminiAgent {
       for (const att of input.attachments) {
         if (att.dataBase64) {
           currentParts.push({
-            inline_data: {
-              mime_type: att.mimeType,
+            inlineData: {
+              mimeType: att.mimeType,
               data: att.dataBase64,
             },
           });
@@ -177,7 +182,10 @@ export class GoatAIGeminiAgent {
     let finalReply = "";
     let finalPendingAction: any = null;
 
-    if (!this.apiKey) {
+    const effectiveApiKey = this.apiKey || getEnv("GEMINI_API_KEY") || getEnv("GOOGLE_AI_API_KEY") || getEnv("GOOGLE_API_KEY");
+
+    if (!effectiveApiKey) {
+      console.error(`[GOAT-AI][PROVIDER][ERROR] correlationId=${correlationId} provider=gemini model=${this.model} error="GEMINI_API_KEY ausente ou não configurada no runtime" geminiApiKeyConfigured=false`);
       finalReply = "Integração Gemini não configurada (chave GEMINI_API_KEY ausente).";
       const assistantMsg = await this.conversationManager.saveMessage(
         conversation.id,
@@ -200,54 +208,85 @@ export class GoatAIGeminiAgent {
       "gemini-2.5-flash",
     ]));
 
+    console.log(`[GOAT-AI][PROVIDER][START] correlationId=${correlationId} provider=gemini model=${this.model} contextMessageCount=${contents.length} toolsAvailable=${this.toolRegistry.listTools().map((t) => t.name).join(",")}`);
+
     while (turnCount < MAX_TOOL_CALLS_PER_TURN) {
       turnCount++;
 
+      // Canonical Gemini REST API Payload using camelCase properties
       const payload = {
-        system_instruction: {
+        systemInstruction: {
           parts: [{ text: GOAT_AI_CONVERSATIONAL_SYSTEM_PROMPT }],
         },
         contents,
         tools: [
           {
-            function_declarations: this.toolRegistry.getGeminiFunctionDeclarations(),
+            functionDeclarations: this.toolRegistry.getGeminiFunctionDeclarations(),
           },
         ],
-        generation_config: {
+        generationConfig: {
           temperature: 0.2,
-          max_output_tokens: 1500,
+          maxOutputTokens: 1500,
         },
       };
 
       let resJson: any = null;
       let callError: any = null;
+      let usedModel = this.model;
 
       for (const m of candidateModels) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${effectiveApiKey}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 25000);
+
         try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${this.apiKey}`;
           const res = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
+            signal: controller.signal,
           });
+          clearTimeout(timeoutId);
 
           if (res.ok) {
             resJson = await res.json();
+            usedModel = m;
             break;
           } else {
             const errText = await res.text();
-            callError = new Error(`Gemini API (${m}) HTTP ${res.status}: ${errText.slice(0, 150)}`);
+            callError = {
+              name: "GeminiHttpError",
+              message: `HTTP ${res.status} no modelo ${m}: ${errText.slice(0, 300)}`,
+              status: res.status,
+              body: errText.slice(0, 300),
+              model: m,
+            };
+            console.error(`[GOAT-AI][PROVIDER][ERROR] correlationId=${correlationId} provider=gemini model=${m} status=${res.status} error=${JSON.stringify(callError)}`);
           }
         } catch (err: any) {
-          callError = err;
+          clearTimeout(timeoutId);
+          const isTimeout = err?.name === "AbortError" || err?.message?.includes("aborted");
+          callError = {
+            name: isTimeout ? "TimeoutError" : (err?.name || "FetchError"),
+            message: isTimeout ? "Timeout de 25s excedido na API Gemini" : (err?.message || String(err)),
+            stack: err?.stack,
+            model: m,
+          };
+          console.error(`[GOAT-AI][PROVIDER][ERROR] correlationId=${correlationId} provider=gemini model=${m} error=${JSON.stringify(callError)}`);
         }
       }
 
       if (!resJson) {
         finalReply = `Não consegui processar a resposta com a IA no momento. Sua mensagem foi salva no histórico.`;
-        console.error("Gemini Agent API error:", callError);
+        console.error(`[GOAT-AI][PROVIDER][ERROR] correlationId=${correlationId} final_fallback=true callError=${JSON.stringify(callError)}`);
         break;
       }
+
+      const durationMs = Date.now() - turnStartTime;
+      const finishReason = resJson.candidates?.[0]?.finishReason || "STOP";
+      const usage = resJson.usageMetadata;
+
+      console.log(`[GOAT-AI][PROVIDER][SUCCESS] correlationId=${correlationId} provider=gemini model=${usedModel} durationMs=${durationMs} finishReason=${finishReason} promptTokens=${usage?.promptTokenCount || 0} candidatesTokens=${usage?.candidatesTokenCount || 0}`);
 
       const candidate = resJson.candidates?.[0]?.content;
       if (!candidate || !candidate.parts) {
@@ -264,9 +303,8 @@ export class GoatAIGeminiAgent {
 
         // Check if tool requires user confirmation before mutation
         if (toolDef?.requiresConfirmation) {
-          // If arguments have all required fields, stage as ready_for_confirmation
           const reqFields = toolDef.parameters.required || [];
-          const missing = reqFields.filter((f) => args[f] == null || args[f] === "");
+          const missing = reqFields.filter((f: string) => args[f] == null || args[f] === "");
 
           if (missing.length === 0) {
             const summary = `Vou registrar ${toolDef.description.toLowerCase()}: ${JSON.stringify(args)}. Confirma?`;
@@ -283,7 +321,6 @@ export class GoatAIGeminiAgent {
             finalReply = candidate.parts.find((p: any) => p.text)?.text || summary;
             break;
           } else {
-            // Stage as collecting
             const pending = await this.conversationManager.savePendingAction(
               conversation.id,
               toolName,

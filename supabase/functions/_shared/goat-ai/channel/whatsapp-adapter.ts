@@ -13,6 +13,11 @@ export interface WhatsAppConfig {
   verifyToken: string;
 }
 
+function maskPhone(phone: string): string {
+  if (!phone || phone.length <= 6) return phone || "";
+  return phone.slice(0, 4) + "*".repeat(Math.max(2, phone.length - 8)) + phone.slice(-4);
+}
+
 export class WhatsAppChannelAdapter {
   private config: WhatsAppConfig;
   private supabaseAdmin: any;
@@ -26,15 +31,11 @@ export class WhatsAppChannelAdapter {
     };
   }
 
-  public async sendTextMessage(to: string, text: string): Promise<boolean> {
+  public async sendTextMessage(to: string, text: string, correlationId?: string): Promise<boolean> {
     const cleanTo = to.replace(/[^0-9]/g, "");
 
     if (!this.config.accessToken || !this.config.phoneNumberId) {
-      console.warn("[whatsapp-adapter] Credenciais do WhatsApp não configuradas; envio ignorado.", JSON.stringify({
-        hasAccessToken: !!this.config.accessToken,
-        hasPhoneNumberId: !!this.config.phoneNumberId,
-        recipient: cleanTo,
-      }));
+      console.warn(`[GOAT-AI][WHATSAPP][SEND] correlationId=${correlationId || "none"} status=skipped error="WhatsApp credentials not configured" recipient=${maskPhone(cleanTo)}`);
       return false;
     }
 
@@ -74,23 +75,24 @@ export class WhatsAppChannelAdapter {
           }
         }
 
-        console.error("[whatsapp-adapter] Falha ao enviar mensagem Meta Graph API:", JSON.stringify({
-          httpStatus: res.status,
-          metaErrorCode,
-          metaErrorType,
-          metaErrorMessage,
-          recipient: cleanTo,
-        }));
+        console.error(`[GOAT-AI][WHATSAPP][SEND] correlationId=${correlationId || "none"} success=false httpStatus=${res.status} metaErrorCode=${metaErrorCode} metaErrorType=${metaErrorType} metaErrorMessage=${metaErrorMessage} recipient=${maskPhone(cleanTo)}`);
 
         return false;
       }
 
+      let metaMessageId: string | null = null;
+      try {
+        const resJson = await res.json();
+        metaMessageId = resJson?.messages?.[0]?.id || null;
+      } catch {
+        // ignore json parse error on successful send
+      }
+
+      console.log(`[GOAT-AI][WHATSAPP][SEND] correlationId=${correlationId || "none"} success=true metaMessageId=${metaMessageId || "none"} recipient=${maskPhone(cleanTo)}`);
+
       return true;
     } catch (err: any) {
-      console.error("[whatsapp-adapter] Exceção de rede ao enviar mensagem WhatsApp:", JSON.stringify({
-        error: err?.message || String(err),
-        recipient: cleanTo,
-      }));
+      console.error(`[GOAT-AI][WHATSAPP][SEND] correlationId=${correlationId || "none"} success=false error="${err?.message || String(err)}" recipient=${maskPhone(cleanTo)}`);
       return false;
     }
   }
@@ -134,28 +136,23 @@ export class WhatsAppChannelAdapter {
     const waId = contact?.wa_id || senderPhone;
     const contactName = contact?.profile?.name || "Sócio";
 
+    const correlationId = `wa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const maskedPhone = maskPhone(senderPhone);
+
+    console.log(`[GOAT-AI][WHATSAPP][RECEIVED] correlationId=${correlationId} messageId=${messageId} phone=${maskedPhone} messageType=${messageType}`);
+
     // 1. Resolve User with wa_id priority
     const convManager = new ConversationManager(this.supabaseAdmin);
     const resolvedUser = await convManager.resolveUserByWaIdOrPhone(waId, senderPhone);
 
-    // Structured safe logging for audit and debugging
-    console.log("[whatsapp-adapter] Webhook recebido:", JSON.stringify({
-      messageId,
-      senderPhone,
-      waId,
-      contactName,
-      messageType,
-      userFound: !!resolvedUser,
-      authorized: !!resolvedUser?.authorized,
-      resolvedUserId: resolvedUser?.userId || null,
-      resolvedName: resolvedUser?.name || null,
-    }));
-
     if (!resolvedUser || !resolvedUser.authorized) {
+      console.warn(`[GOAT-AI][AUTH][UNAUTHORIZED] correlationId=${correlationId} phone=${maskedPhone} userFound=${!!resolvedUser} authorized=false`);
       const unauthReply = "Olá! Eu sou a GIA, assistente do Goat Bar. Este número de WhatsApp ainda não está vinculado a uma conta autorizada do Goat Bar. Solicite a liberação de acesso com um dos administradores.";
-      await this.sendTextMessage(senderPhone, unauthReply);
+      await this.sendTextMessage(senderPhone, unauthReply, correlationId);
       return { handled: true, reply: unauthReply, reason: "Unauthorized phone number" };
     }
+
+    console.log(`[GOAT-AI][AUTH][RESOLVED] correlationId=${correlationId} userId=${resolvedUser.userId} userName=${resolvedUser.name} authorized=true externalUserId=${resolvedUser.externalUserId || "none"}`);
 
     // 2. Extract content and media
     let messageText = "";
@@ -203,6 +200,7 @@ export class WhatsAppChannelAdapter {
     // 3. Process with Gemini Agent
     const agent = new GoatAIGeminiAgent(this.supabaseAdmin);
     const turnResult = await agent.processTurn({
+      correlationId,
       channel: "whatsapp",
       message: messageText,
       userId: resolvedUser.userId,
@@ -215,7 +213,7 @@ export class WhatsAppChannelAdapter {
 
     // 4. Send reply back to WhatsApp
     if (turnResult.reply) {
-      await this.sendTextMessage(senderPhone, turnResult.reply);
+      await this.sendTextMessage(senderPhone, turnResult.reply, correlationId);
     }
 
     return { handled: true, reply: turnResult.reply };

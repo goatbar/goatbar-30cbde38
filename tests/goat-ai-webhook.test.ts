@@ -261,7 +261,7 @@ describe("Goat AI WhatsAppChannelAdapter & Unauthorized User Handling", () => {
     const res = await adapter.processIncomingWebhook(payload);
     expect(res.handled).toBe(true);
     expect(res.reason).toBe("Unauthorized phone number");
-    expect(sendSpy).toHaveBeenCalledWith("5531900000000", expect.stringContaining("não está vinculado a uma conta autorizada"));
+    expect(sendSpy).toHaveBeenCalledWith("5531900000000", expect.stringContaining("não está vinculado a uma conta autorizada"), expect.any(String));
   });
 
   it("handles authorized partner message with 9th-digit variation and passes to AI engine", async () => {
@@ -429,8 +429,7 @@ describe("Goat AI WhatsAppChannelAdapter & Unauthorized User Handling", () => {
     expect(result).toBe(false);
 
     expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[whatsapp-adapter] Falha ao enviar mensagem Meta Graph API:"),
-      expect.stringContaining("131030")
+      expect.stringMatching(/\[GOAT-AI\]\[WHATSAPP\]\[SEND\].*metaErrorCode=131030/)
     );
     // Check that access token is NOT in any logged call
     for (const call of errorSpy.mock.calls) {
