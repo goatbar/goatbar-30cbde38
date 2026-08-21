@@ -351,14 +351,14 @@ export class GoatAIGeminiAgent {
         });
 
         contents.push({
-          role: "function",
+          role: "user",
           parts: [
             {
               functionResponse: {
                 name: toolName,
                 response: {
                   name: toolName,
-                  content: toolResult.success ? toolResult.data : { error: toolResult.error },
+                  content: toolResult.success ? (toolResult.data ?? {}) : { error: toolResult.error || "Erro na ferramenta" },
                 },
               },
             },

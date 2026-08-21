@@ -101,6 +101,42 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
           };
         }
 
+        if (table === "ai_tool_calls") {
+          return {
+            insert: async () => ({ data: null, error: null }),
+          };
+        }
+
+        if (table === "events") {
+          return {
+            select: () => ({
+              order: () => ({
+                limit: async () => ({
+                  data: [
+                    {
+                      id: "ev-1",
+                      client_name: "Fernanda",
+                      event_name: "Casamento da Fernanda",
+                      date: "2026-10-15",
+                      guests: 150,
+                      status: "confirmado",
+                    },
+                    {
+                      id: "ev-2",
+                      client_name: "Mariana",
+                      event_name: "Casamento da Mariana",
+                      date: "2026-11-20",
+                      guests: 200,
+                      status: "confirmado",
+                    },
+                  ],
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+
         return {};
       }),
     };
@@ -283,5 +319,101 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining("geminiApiKeyConfigured=false")
     );
+  });
+
+  it("13. Round-trip de Tool Calling: envia functionCall como model e functionResponse como user, NUNCA usando role 'function' ou 'tool'", async () => {
+    // Turn 1: Gemini returns functionCall
+    const geminiTurn1Response = {
+      candidates: [
+        {
+          content: {
+            role: "model",
+            parts: [
+              {
+                functionCall: {
+                  name: "search_events",
+                  args: { query: "confirmados" },
+                },
+              },
+            ],
+          },
+          finishReason: "STOP",
+        },
+      ],
+      usageMetadata: { promptTokenCount: 50, candidatesTokenCount: 20 },
+    };
+
+    // Turn 2: Gemini returns final answer after receiving functionResponse
+    const geminiTurn2Response = {
+      candidates: [
+        {
+          content: {
+            role: "model",
+            parts: [
+              {
+                text: "Encontrei 2 eventos confirmados para os próximos meses: Casamento da Fernanda e Casamento da Mariana.",
+              },
+            ],
+          },
+          finishReason: "STOP",
+        },
+      ],
+      usageMetadata: { promptTokenCount: 150, candidatesTokenCount: 35 },
+    };
+
+    const fetchCalls: any[] = [];
+    globalThis.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
+      fetchCalls.push({ url, options, body: JSON.parse(options.body) });
+      if (fetchCalls.length === 1) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => geminiTurn1Response,
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => geminiTurn2Response,
+      };
+    });
+
+    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-gemini-key", toolRegistry, "gemini-3.6-flash");
+    const result = await agent.processTurn({
+      channel: "web",
+      message: "Buscar eventos confirmados para os próximos meses",
+      userId: "user-123",
+      userName: "Romulo Chaves",
+    });
+
+    // 1. Agent should execute the tool and complete with final reply
+    expect(result.reply).toContain("Encontrei 2 eventos confirmados");
+    expect(result.toolCallsExecuted).toHaveLength(1);
+    expect(result.toolCallsExecuted[0].toolName).toBe("search_events");
+
+    // 2. Fetch should have been called twice (turn 1 and turn 2)
+    expect(fetchCalls).toHaveLength(2);
+
+    const secondPayload = fetchCalls[1].body;
+    const rawPayloadJson = JSON.stringify(secondPayload);
+
+    // 3. MUST NOT contain role "function" or role "tool" anywhere in the payload
+    expect(rawPayloadJson).not.toContain('"role":"function"');
+    expect(rawPayloadJson).not.toContain('"role":"tool"');
+
+    // 4. Second payload contents sequence must be:
+    //    [0] user prompt -> [1] model functionCall -> [2] user functionResponse
+    const contents = secondPayload.contents;
+    expect(contents).toHaveLength(3);
+
+    expect(contents[0].role).toBe("user");
+    expect(contents[0].parts[0].text).toContain("Buscar eventos confirmados");
+
+    expect(contents[1].role).toBe("model");
+    expect(contents[1].parts[0].functionCall.name).toBe("search_events");
+
+    expect(contents[2].role).toBe("user");
+    expect(contents[2].parts[0].functionResponse.name).toBe("search_events");
+    expect(contents[2].parts[0].functionResponse.response).toBeDefined();
   });
 });
