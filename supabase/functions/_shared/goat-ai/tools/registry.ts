@@ -9,6 +9,7 @@ import {
 import {
   createSalesSessionTool,
   getSalesSessionsTool,
+  createControladoriaExpenseTool,
   createControllerEntryTool,
   searchControllerEntriesTool,
   createEventPurchaseTool,
@@ -48,6 +49,7 @@ export class GoatAIToolRegistry {
     this.register(aggregateEventConsumptionTool);
     this.register(createSalesSessionTool);
     this.register(getSalesSessionsTool);
+    this.register(createControladoriaExpenseTool);
     this.register(createControllerEntryTool);
     this.register(searchControllerEntriesTool);
     this.register(createEventPurchaseTool);
@@ -122,18 +124,25 @@ export class GoatAIToolRegistry {
 
       // Audit log in ai_tool_calls
       if (context.supabaseAdmin?.from && context.conversationId) {
-        await context.supabaseAdmin.from("ai_tool_calls").insert({
-          conversation_id: context.conversationId,
-          tool_name: toolName,
-          arguments: args || {},
-          result: result.data || null,
-          status: result.success ? "success" : "error",
-          error: result.error || null,
-          duration_ms: duration,
-          performed_by: context.userId || null,
-          started_at: new Date(startTime).toISOString(),
-          finished_at: new Date().toISOString(),
-        });
+        try {
+          const auditBuilder = context.supabaseAdmin.from("ai_tool_calls");
+          if (typeof auditBuilder?.insert === "function") {
+            await auditBuilder.insert({
+              conversation_id: context.conversationId,
+              tool_name: toolName,
+              arguments: args || {},
+              result: result.data || null,
+              status: result.success ? "success" : "error",
+              error: result.error || null,
+              duration_ms: duration,
+              performed_by: context.userId || null,
+              started_at: new Date(startTime).toISOString(),
+              finished_at: new Date().toISOString(),
+            });
+          }
+        } catch {
+          // tool execution result preserved even if audit logging fails
+        }
       }
 
       return result;

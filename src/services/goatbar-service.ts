@@ -1,4 +1,4 @@
-﻿import { drinks as seedDrinks } from "@/lib/mock-data";
+import { drinks as seedDrinks } from "@/lib/mock-data";
 
 type Drink = {
   id: string;
@@ -43,7 +43,7 @@ const initialDrinks: Drink[] = seedDrinks.map((d) => ({
   custoUnitario: d.custoUnitario,
   // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
   precoVenda: d.precoVenda,
-  imagem: d.imagem?.startsWith("/") ? d.imagem : `/${d.imagem ?? "drinks/old-fashioned.jpg"}`,
+  imagem: d.imagem?.startsWith("/") ? d.imagem : `/${d.imagem ?? "drinks/old-fashioned.png"}`,
   modalityConfig: d.modalityConfig,
 }));
 
@@ -106,7 +106,7 @@ function readDb() {
     const nome = d.nome ?? d.name;
     const custoUnitario = Number(d.custoUnitario ?? d.cost ?? 0);
     const precoVenda = Number(d.precoVenda ?? d.price ?? 0);
-    const imagemBruta = d.imagem ?? d.image ?? "/drinks/old-fashioned.jpg";
+    const imagemBruta = d.imagem ?? d.image ?? "/drinks/old-fashioned.png";
     const imagem = imagemBruta?.startsWith("/") ? imagemBruta : `/${imagemBruta}`;
     const modalityConfig = d.modalityConfig ?? {
       evento: { active: true, cost: custoUnitario },
@@ -132,7 +132,7 @@ export const goatbarService = {
       nome: payload.name,
       custoUnitario: payload.cost,
       precoVenda: payload.price,
-      imagem: payload.image ?? "/drinks/old-fashioned.jpg",
+      imagem: payload.image ?? "/drinks/old-fashioned.png",
       modalityConfig: {
         evento: { active: true, cost: payload.cost },
         steakhouse: { active: true, cost: payload.cost, price: payload.price },

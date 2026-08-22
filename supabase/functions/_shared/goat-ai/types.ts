@@ -1,7 +1,7 @@
 export type ConversationChannel = "web" | "whatsapp" | "api";
 export type MessageRole = "user" | "assistant" | "system" | "tool";
 export type MessageType = "text" | "image" | "document" | "audio" | "action_prompt" | "action_result";
-export type PendingActionStatus = "collecting" | "ready_for_confirmation" | "executed" | "cancelled" | "expired";
+export type PendingActionStatus = "collecting" | "ready_for_confirmation" | "awaiting_confirmation" | "executing" | "executed" | "completed" | "cancelled" | "expired";
 export type ToolCallStatus = "pending" | "running" | "success" | "error" | "rejected";
 
 export interface AIConversation {

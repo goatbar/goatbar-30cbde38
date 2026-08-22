@@ -293,8 +293,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 13.25, price: 25 },
       goatbotequim: { active: true, cost: 2.37, price: 20 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1541546106583-b4f853b4306a?w=400&auto=format&fit=crop",
+    imagem: "/drinks/caipi-limao.png",
   },
   {
     id: "caipivodka-limao",
@@ -311,8 +310,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: false, cost: 0 },
       goatbotequim: { active: true, cost: 3.87, price: 22 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1541546106583-b4f853b4306a?w=400&auto=format&fit=crop",
+    imagem: "/drinks/caipi-limao.png",
   },
   {
     id: "caipi-limao-cravo-mel",
@@ -331,8 +329,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 13.25, price: 30 },
       goatbotequim: { active: true, cost: 4.37, price: 22 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1541546106583-b4f853b4306a?w=400&auto=format&fit=crop",
+    imagem: "/drinks/caipi-limao-cravo-mel.png",
   },
   {
     id: "caipivodka-morango",
@@ -349,7 +346,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 15.4, price: 30 },
       goatbotequim: { active: true, cost: 5.37, price: 22 },
     },
-    imagem: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&auto=format&fit=crop",
+    imagem: "/drinks/caipi-morango.png",
   },
   {
     id: "caipivodka-abacaxi",
@@ -367,8 +364,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 15.4, price: 30 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1587223962905-276f75608b4f?w=400&auto=format&fit=crop",
+    imagem: "/drinks/caipi-abacaxi.png",
   },
   {
     id: "caipivodka-maracuja",
@@ -386,8 +382,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 15.4, price: 30 },
       goatbotequim: { active: true, cost: 4.47, price: 22 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1595981267035-7b04ca84a82d?w=400&auto=format&fit=crop",
+    imagem: "/drinks/caipi-maracuja-baunilha.png",
   },
   {
     id: "moscow-mule",
@@ -405,8 +400,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 17.55, price: 35 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1513415277900-a62401e19be4?w=400&auto=format&fit=crop",
+    imagem: "/drinks/moscow-mule.png",
   },
   {
     id: "london-mule",
@@ -424,8 +418,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 18.55, price: 35 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1513415277900-a62401e19be4?w=400&auto=format&fit=crop",
+    imagem: "/drinks/moscow-mule.png",
   },
   {
     id: "mojito",
@@ -444,8 +437,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 16.76, price: 32 },
       goatbotequim: { active: true, cost: 4.67, price: 25 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=400&auto=format&fit=crop",
+    imagem: "/drinks/mojito.png",
   },
   {
     id: "aquario",
@@ -466,8 +458,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 17.26, price: 32 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1597290282695-edc43d0e7129?w=400&auto=format&fit=crop",
+    imagem: "/drinks/aquario.jpg",
   },
   {
     id: "sex-on-the-beach",
@@ -487,8 +478,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 17.76, price: 32 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1536935338788-846bb9981813?w=400&auto=format&fit=crop",
+    imagem: "/drinks/sex-on-the-beach.png",
   },
   {
     id: "bossa-nova",
@@ -506,7 +496,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: false, cost: 0 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&auto=format&fit=crop",
+    imagem: "/drinks/bossa-nova.png",
   },
   {
     id: "gin-tonica",
@@ -525,7 +515,43 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 18.55, price: 35 },
       goatbotequim: { active: true, cost: 8.17, price: 28 },
     },
-    imagem: "https://images.unsplash.com/photo-1551538827-9c037cb4f32a?w=400&auto=format&fit=crop",
+    imagem: "/drinks/gin-tonica.png",
+  },
+  {
+    id: "gin-tropical",
+    nome: "Gin Tropical",
+    categoria: "Gin",
+    descricao: "Gin, energético tropical, laranja e especiarias.",
+    custoUnitario: 6.5,
+    insumos: [
+      { nome: "Gin", custo: 4.66 },
+      { nome: "Energético Tropical", custo: 1.5 },
+      { nome: "Laranja", custo: 0.34 },
+    ],
+    modalityConfig: {
+      evento: { active: true, cost: 6.5 },
+      steakhouse: { active: true, cost: 18.55, price: 35 },
+      goatbotequim: { active: true, cost: 8.5, price: 28 },
+    },
+    imagem: "/drinks/gin-tropical.png",
+  },
+  {
+    id: "gin-morango",
+    nome: "Gin Morango",
+    categoria: "Gin",
+    descricao: "Gin, morangos frescos, tônica e especiarias.",
+    custoUnitario: 6.8,
+    insumos: [
+      { nome: "Gin", custo: 4.66 },
+      { nome: "Morango", custo: 1.6 },
+      { nome: "Tônica", custo: 0.54 },
+    ],
+    modalityConfig: {
+      evento: { active: true, cost: 6.8 },
+      steakhouse: { active: true, cost: 18.55, price: 35 },
+      goatbotequim: { active: true, cost: 8.5, price: 28 },
+    },
+    imagem: "/drinks/gin-morango.png",
   },
   {
     id: "tom-collins",
@@ -544,8 +570,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 19.05, price: 35 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1536935338788-846bb9981813?w=400&auto=format&fit=crop",
+    imagem: "/drinks/tom-collins.png",
   },
   {
     id: "fitzgerald",
@@ -564,7 +589,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 19.55, price: 35 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem: "https://images.unsplash.com/photo-1544145945-f904253d0c7b?w=400&auto=format&fit=crop",
+    imagem: "/drinks/fitzgerald.png",
   },
   {
     id: "bramble",
@@ -583,7 +608,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: false, cost: 0 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem: "https://images.unsplash.com/photo-1551538827-9c037cb4f32a?w=400&auto=format&fit=crop",
+    imagem: "/drinks/bramble.jpeg",
   },
   {
     id: "aperol-spritz",
@@ -602,7 +627,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 20.5, price: 35 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem: "https://images.unsplash.com/photo-1560512823-829485b8bf24?w=400&auto=format&fit=crop",
+    imagem: "/drinks/aperol-spritz.png",
   },
   {
     id: "cest-la-vie",
@@ -622,8 +647,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 22.7, price: 40 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=400&auto=format&fit=crop",
+    imagem: "/drinks/cest-la-vie.png",
   },
   {
     id: "mint-jullep",
@@ -641,8 +665,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 21.2, price: 40 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=400&auto=format&fit=crop",
+    imagem: "/drinks/mint-julep.png",
   },
   {
     id: "whisky-sour",
@@ -661,8 +684,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 21.7, price: 40 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=400&auto=format&fit=crop",
+    imagem: "/drinks/whisky-sour.png",
   },
   {
     id: "negroni",
@@ -680,7 +702,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 25.35, price: 45 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&auto=format&fit=crop",
+    imagem: "/drinks/negroni.png",
   },
   {
     id: "campari-tonica",
@@ -736,8 +758,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 20.7, price: 40 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1595981267035-7b04ca84a82d?w=400&auto=format&fit=crop",
+    imagem: "/drinks/stamping-passion.jpg",
   },
   {
     id: "olho-grego",
@@ -756,8 +777,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: false, cost: 0 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1597290282695-edc43d0e7129?w=400&auto=format&fit=crop",
+    imagem: "/drinks/olho-grego.jpeg",
   },
   {
     id: "cosmopolitan",
@@ -776,8 +796,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: false, cost: 0 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1536935338788-846bb9981813?w=400&auto=format&fit=crop",
+    imagem: "/drinks/cosmopolitan.jpeg",
   },
   {
     id: "apple-martini",
@@ -794,8 +813,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 20.7, price: 40 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1587223962905-276f75608b4f?w=400&auto=format&fit=crop",
+    imagem: "/drinks/apple-martini.png",
   },
   {
     id: "expresso-martini",
@@ -814,7 +832,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 20.7, price: 40 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem: "https://images.unsplash.com/photo-1544145945-f904253d0c7b?w=400&auto=format&fit=crop",
+    imagem: "/drinks/expresso-martini.png",
   },
   {
     id: "paloma",
@@ -833,8 +851,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: false, cost: 0 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=400&auto=format&fit=crop",
+    imagem: "/drinks/paloma.jpeg",
   },
   {
     id: "soda-italiana",
@@ -851,7 +868,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 3.34, price: 25 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&auto=format&fit=crop",
+    imagem: "/drinks/soda-italiana.png",
   },
   {
     id: "old-fashioned",
@@ -869,8 +886,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: true, cost: 24.35, price: 45 },
       goatbotequim: { active: false, cost: 0 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=400&auto=format&fit=crop",
+    imagem: "/drinks/old-fashioned.png",
   },
 
   // --- DOSES BOTEQUIM ---
@@ -916,7 +932,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: false, cost: 0 },
       goatbotequim: { active: true, cost: 6.0, price: 17.0 },
     },
-    imagem: "https://images.unsplash.com/photo-1551538827-9c037cb4f32a?w=400&auto=format&fit=crop",
+    imagem: "/drinks/gin-tonica.png",
   },
   {
     id: "dose-whisky",
@@ -930,8 +946,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: false, cost: 0 },
       goatbotequim: { active: true, cost: 10.0, price: 25.0 },
     },
-    imagem:
-      "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=400&auto=format&fit=crop",
+    imagem: "/drinks/old-fashioned.png",
   },
   {
     id: "dose-campari",
@@ -945,7 +960,7 @@ export const drinks: Drink[] = [
       steakhouse: { active: false, cost: 0 },
       goatbotequim: { active: true, cost: 7.0, price: 25.0 },
     },
-    imagem: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&auto=format&fit=crop",
+    imagem: "/drinks/negroni.png",
   },
 ];
 

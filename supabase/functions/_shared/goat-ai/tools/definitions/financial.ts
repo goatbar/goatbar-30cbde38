@@ -5,6 +5,11 @@ import {
   resolveDrinkMatch,
   resolveDrinkCommercialData,
 } from "../../matchers/drink-matcher.ts";
+import {
+  validateControladoriaExpenseDraft,
+  ControladoriaExpenseDraft,
+  formatControladoriaExpenseWhatsAppPreview,
+} from "../../validators/controladoria-expense-validator.ts";
 
 export function normalizeDateInput(d?: string | null, defaultYear = 2026): string {
   if (!d || typeof d !== "string") return "";
@@ -515,30 +520,34 @@ export const getSalesSessionsTool: GoatAIToolDefinition = {
   },
 };
 
-export const createControllerEntryTool: GoatAIToolDefinition = {
-  name: "create_controller_entry",
+export const createControladoriaExpenseTool: GoatAIToolDefinition = {
+  name: "create_controladoria_expense",
   domain: "CONTROLLER",
   sourceTable: "financial_expenses",
-  description: "Registra uma despesa, nota fiscal ou comprovante no módulo de Controladoria do Goat Bar.",
+  description: "Registra uma despesa, nota fiscal, cupom ou comprovante no módulo de Controladoria do Goat Bar com prévia e confirmação.",
   parameters: {
     type: "object",
     properties: {
+      operation_id: { type: "string", description: "ID único da operação para garantia de idempotência financeira." },
       supplier_name: { type: "string", description: "Nome do fornecedor ou estabelecimento." },
       supplier_cnpj: { type: "string", description: "CNPJ do fornecedor se identificado." },
-      amount: { type: "number", description: "Valor total da nota/despesa." },
+      amount: { type: "number", description: "Valor total da nota/despesa (ex: 186.40)." },
       date: { type: "string", description: "Data da compra/emissão no formato YYYY-MM-DD." },
+      due_date: { type: "string", description: "Data de vencimento no formato YYYY-MM-DD (opcional)." },
       category: {
         type: "string",
         description: "Categoria da despesa: 'Insumos', 'Fornecedor', 'Equipe', 'Operacional' ou 'Outros'.",
       },
       modality: {
         type: "string",
-        description: "Destino da despesa: 'Evento', 'Steakhouse', 'Goatbotequim' ou 'Geral'.",
+        description: "Unidade/Destino da despesa: '7 Steakhouse', 'Goat Botequim', 'Evento' ou 'Geral'.",
       },
       event_id: { type: "string", description: "ID do evento caso seja referente a um evento específico." },
       description: { type: "string", description: "Descrição dos itens ou finalidade da compra." },
       payment_method: { type: "string", description: "Forma de pagamento (PIX, Dinheiro, Cartão, Transferência, Outros)." },
       status: { type: "string", description: "Status de pagamento ('Pago' ou 'Pendente')." },
+      classification: { type: "string", description: "Classificação de custo ('Direto' ou 'Indireto')." },
+      responsible: { type: "string", description: "Responsável pelo lançamento (preenchido com usuário autenticado)." },
       items: {
         type: "array",
         description: "Itens listados na nota fiscal com quantidades e valores.",
@@ -547,70 +556,192 @@ export const createControllerEntryTool: GoatAIToolDefinition = {
           properties: {
             product_name: { type: "string" },
             quantity: { type: "number" },
+            unit: { type: "string" },
             unit_price: { type: "number" },
             total_price: { type: "number" },
+            suggested_category: { type: "string" },
           },
+          required: ["product_name", "quantity"],
         },
       },
+      invoice_url: { type: "string" },
+      receipt_url: { type: "string" },
+      ocr_raw_text: { type: "string" },
+      confidence: { type: "number" },
+      auto_filled_fields: { type: "array", items: { type: "string" } },
+      manually_edited_fields: { type: "array", items: { type: "string" } },
     },
-    required: ["supplier_name", "amount", "date"],
+    required: ["amount", "modality"],
   },
   requiresConfirmation: true,
-  execute: async (ctx: ToolContext, args: {
-    supplier_name: string;
-    supplier_cnpj?: string;
-    amount: number;
-    date: string;
-    category?: string;
-    modality?: string;
-    event_id?: string;
-    description?: string;
-    payment_method?: string;
-    status?: string;
-    items?: Array<{ product_name: string; quantity: number; unit_price?: number; total_price?: number; unit?: string }>;
-  }): Promise<ToolExecutionResult> => {
-    const missing: string[] = [];
-    if (!args.supplier_name) missing.push("supplier_name");
-    if (args.amount == null || isNaN(args.amount)) missing.push("amount");
-    if (!args.date) missing.push("date");
+  execute: async (ctx: ToolContext, args: any): Promise<ToolExecutionResult> => {
+    // 1. Validate & Normalize deterministically
+    const validation = validateControladoriaExpenseDraft(args, {
+      fallbackResponsible: ctx.userName || "Sócio Goat Bar",
+    });
 
-    if (missing.length > 0) {
-      return { success: false, missing_fields: missing, error: `Campos obrigatórios pendentes: ${missing.join(", ")}` };
+    if (!validation.isValid || !validation.normalized) {
+      return {
+        success: false,
+        missing_fields: validation.missingFields,
+        error: validation.errors.join("; ") || `Campos obrigatórios pendentes: ${validation.missingFields.join(", ")}`,
+      };
     }
 
-    const { data: expense, error } = await ctx.supabaseAdmin
+    const norm = validation.normalized;
+
+    // 2. Idempotency Check by operation_id in ocr_metadata
+    if (norm.operation_id) {
+      try {
+        const { data: existingExpenses } = await ctx.supabaseAdmin
+          .from("financial_expenses")
+          .select("id, amount, supplier_name, date, modality, category, description, created_at, ocr_metadata")
+          .contains("ocr_metadata", { operation_id: norm.operation_id })
+          .limit(1);
+
+        if (existingExpenses && existingExpenses.length > 0) {
+          const existing = existingExpenses[0];
+          console.log(`[GOAT-AI][DATABASE][IDEMPOTENT_HIT] operation_id=${norm.operation_id} existingExpenseId=${existing.id}`);
+          return {
+            success: true,
+            data: {
+              expense_id: existing.id,
+              supplier: existing.supplier_name,
+              amount: Number(existing.amount),
+              date: existing.date,
+              modality: existing.modality,
+              category: existing.category,
+              is_idempotent: true,
+            },
+            message: `Despesa de R$ ${Number(existing.amount).toFixed(2).replace(".", ",")} já havia sido lançada na Controladoria (ID: ${existing.id}).`,
+          };
+        }
+      } catch (idempErr) {
+        console.warn(`[GOAT-AI][DATABASE][IDEMPOTENCY_QUERY_WARN] ${idempErr}`);
+      }
+    }
+
+    // 3. Database Write to financial_expenses
+    const expensePayload: Record<string, any> = {
+      supplier_name: norm.supplier_name,
+      supplier_cnpj: norm.supplier_cnpj || null,
+      amount: norm.amount,
+      date: norm.date,
+      due_date: norm.due_date || null,
+      modality: norm.modality, // 'Steakhouse', 'Goatbotequim', 'Evento', 'Geral'
+      category: norm.category, // 'Fornecedor', 'Equipe', 'Insumos', 'Operacional', 'Outros'
+      description: norm.description,
+      payment_method: norm.payment_method, // 'PIX', 'Dinheiro', 'Cartao', 'Transferencia', 'Outros'
+      status: norm.status,
+      classification: norm.classification,
+      responsible: norm.responsible,
+      event_id: norm.event_id || null,
+      invoice_url: norm.invoice_url || null,
+      receipt_url: norm.receipt_url || null,
+      expense_type: "despesa",
+      review_status: norm.review_status,
+      ocr_raw_text: norm.ocr_raw_text || null,
+      ocr_metadata: {
+        operation_id: norm.operation_id,
+        confidence: norm.confidence,
+        source: "whatsapp-gia",
+        source_message_id: norm.source_message_id || null,
+        source_media_id: norm.source_media_id || null,
+        auto_filled_fields: norm.auto_filled_fields,
+      },
+      auto_filled_fields: norm.auto_filled_fields,
+      manually_edited_fields: norm.manually_edited_fields,
+    };
+
+    const { data: expense, error: expError } = await ctx.supabaseAdmin
       .from("financial_expenses")
-      .insert({
-        supplier_name: args.supplier_name,
-        supplier_cnpj: args.supplier_cnpj || null,
-        amount: args.amount,
-        date: args.date,
-        category: args.category || "Insumos",
-        modality: args.modality || (args.event_id ? "Evento" : "Geral"),
-        description: args.description || `Compra de ${args.supplier_name}`,
-        payment_method: args.payment_method || "PIX",
-        status: args.status || "Pago",
-        responsible: ctx.userName || "GIA",
-      })
+      .insert(expensePayload)
       .select()
       .single();
 
-    if (error || !expense) {
-      return { success: false, error: `Erro ao registrar na Controladoria: ${error?.message}` };
+    if (expError || !expense) {
+      console.error(`[GOAT-AI][DATABASE][WRITE_FAILED] table=financial_expenses error="${expError?.message}"`);
+      return {
+        success: false,
+        error: `Erro ao registrar despesa na Controladoria: ${expError?.message || "Falha desconhecida"}`,
+      };
     }
 
+    console.log(`[GOAT-AI][DATABASE][WRITE_SUCCESS] table=financial_expenses expenseId=${expense.id} operationId=${norm.operation_id}`);
+
+    // 4. Insert items if present (financial_expense_items)
+    let itemsCount = 0;
+    if (norm.items && norm.items.length > 0) {
+      const itemsToInsert = norm.items.map((it) => ({
+        expense_id: expense.id,
+        product_name: it.product_name,
+        quantity: it.quantity,
+        unit: it.unit || "un",
+        unit_price: it.unit_price || null,
+        total_price: it.total_price || null,
+        suggested_category: it.suggested_category || norm.category,
+        reviewed: norm.review_status === "Lido automaticamente",
+      }));
+
+      try {
+        const itemsBuilder = ctx.supabaseAdmin.from("financial_expense_items");
+        if (typeof itemsBuilder?.insert === "function") {
+          const { error: itemsErr } = await itemsBuilder.insert(itemsToInsert);
+          if (itemsErr) {
+            console.warn(`[GOAT-AI][DATABASE][ITEMS_WRITE_WARNING] expenseId=${expense.id} error="${itemsErr.message}"`);
+          } else {
+            itemsCount = itemsToInsert.length;
+          }
+        }
+      } catch (itemsErr: any) {
+        console.warn(`[GOAT-AI][DATABASE][ITEMS_WRITE_WARNING] expenseId=${expense.id} error="${itemsErr?.message}"`);
+      }
+    }
+
+    // 5. Insert Receipt Log (financial_expense_receipt_logs)
+    try {
+      const logBuilder = ctx.supabaseAdmin.from("financial_expense_receipt_logs");
+      if (typeof logBuilder?.insert === "function") {
+        await logBuilder.insert({
+          expense_id: expense.id,
+          uploaded_by: ctx.userId || null,
+          is_ocr_generated: norm.auto_filled_fields.length > 0,
+          auto_filled_fields: norm.auto_filled_fields,
+          manually_edited_fields: norm.manually_edited_fields,
+          reading_error: norm.review_status === "Erro na leitura" ? "Leitura parcial ou de baixa confiança" : null,
+          metadata: {
+            operation_id: norm.operation_id,
+            confidence: norm.confidence,
+            source_message_id: norm.source_message_id || null,
+          },
+        });
+      }
+    } catch (logErr) {
+      console.warn(`[GOAT-AI][DATABASE][LOG_WRITE_WARNING] expenseId=${expense.id} error="${logErr}"`);
+    }
+
+    const fmtAmount = `R$ ${norm.amount.toFixed(2).replace(".", ",")}`;
     return {
       success: true,
       data: {
         expense_id: expense.id,
-        supplier: args.supplier_name,
-        amount: args.amount,
-        date: args.date,
-        category: args.category || "Insumos",
+        operation_id: norm.operation_id,
+        supplier: norm.supplier_name,
+        amount: norm.amount,
+        date: norm.date,
+        modality: norm.modality,
+        category: norm.category,
+        items_count: itemsCount,
+        review_status: norm.review_status,
       },
-      message: `Despesa de R$ ${args.amount.toFixed(2)} lançada na Controladoria com sucesso.`,
+      message: `Pronto. O gasto de ${fmtAmount} (${norm.supplier_name}) foi lançado com sucesso na Controladoria.`,
     };
   },
+};
+
+export const createControllerEntryTool: GoatAIToolDefinition = {
+  ...createControladoriaExpenseTool,
+  name: "create_controller_entry",
 };
 
 export const searchControllerEntriesTool: GoatAIToolDefinition = {

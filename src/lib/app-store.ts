@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { saveImage, loadImage, deleteImage } from "@/lib/image-store";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -182,7 +182,23 @@ function readStore(): AppStore {
     eventos: mergeById(base.eventos ?? [], ...legacySources.map((s) => s.eventos ?? [])),
     contratos: mergeById(base.contratos ?? [], ...legacySources.map((s) => s.contratos ?? [])),
     parametros: base.parametros ?? seedParametros,
-    drinks: mergeById(base.drinks ?? [], ...legacySources.map((s) => s.drinks ?? [])),
+    drinks: mergeById(
+      (base.drinks ?? []).map((d) => {
+        const seedMatch = seedDrinks.find((s) => s.id === d.id);
+        if (
+          seedMatch &&
+          (!d.imagem ||
+            d.imagem.includes("unsplash.com") ||
+            d.imagem.startsWith("/drinks/d") ||
+            d.imagem === "/drinks/old-fashioned.jpg")
+        ) {
+          return { ...d, imagem: seedMatch.imagem };
+        }
+        return d;
+      }),
+      seedDrinks,
+      ...legacySources.map((s) => s.drinks ?? []),
+    ),
     contractTemplates: mergeById(
       base.contractTemplates ?? [],
       ...legacySources.map((s) => s.contractTemplates ?? []),

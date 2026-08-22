@@ -14,6 +14,13 @@ import {
   checkDuplicateSalesSession,
   formatSalesSessionWhatsAppPreview,
 } from "../validators/sales-session-validator.ts";
+import {
+  validateControladoriaExpenseDraft,
+  formatControladoriaExpenseWhatsAppPreview,
+  ControladoriaExpenseDraft,
+  normalizeControladoriaModality,
+  normalizeCurrencyBRL,
+} from "../validators/controladoria-expense-validator.ts";
 import { resolveBusinessUnit } from "../matchers/unit-matcher.ts";
 import {
   loadDrinkCatalogAndAliases,
@@ -54,6 +61,13 @@ export function determinePrivacyClass(input: AgentInput): PrivacyClassification 
     return "FINANCIAL";
   }
   return "COMMERCIAL";
+}
+
+function maskPhone(phone?: string | null): string {
+  if (!phone) return "";
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length <= 6) return phone;
+  return digits.slice(0, 4) + "*".repeat(Math.max(2, digits.length - 8)) + digits.slice(-4);
 }
 
 export class GoatAIGeminiAgent {
@@ -100,10 +114,15 @@ export class GoatAIGeminiAgent {
     const correlationId = input.correlationId || `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const turnStartTime = Date.now();
 
+    const externalConvIdentifier =
+      input.conversationId ||
+      input.externalSenderId ||
+      (input.channel === "whatsapp" && input.userId ? `wa_user_${input.userId}` : undefined);
+
     const conversation = await this.conversationManager.getOrCreateConversation(
       input.channel,
       input.userId,
-      input.externalMessageId ? input.conversationId : undefined,
+      externalConvIdentifier,
       input.message.slice(0, 40) || "Conversa com a GIA"
     );
 
@@ -114,6 +133,7 @@ export class GoatAIGeminiAgent {
       userRole: input.userRole || "socio",
       conversationId: conversation.id,
       channel: input.channel,
+      correlationId,
     };
 
     // 1. Record user message
@@ -156,18 +176,30 @@ export class GoatAIGeminiAgent {
       };
     }
 
-    // 2. Check Confirmation Intent against active pending actions
+    // 2. Deterministic State Machine / Confirmation Resolver against active pending actions
     const activePending = await this.conversationManager.getActivePendingAction(conversation.id);
+    const maskedSender = maskPhone(input.externalSenderId || conversation.external_conversation_id);
 
     if (activePending && activePending.status === "ready_for_confirmation") {
       if (this.conversationManager.isConfirmationIntent(input.message)) {
+        console.log(
+          `[GOAT-AI][CONFIRMATION_RESOLVER] correlationId=${correlationId} conversationId=${conversation.id} phone=${maskedSender} pendingAction=${activePending.tool_name} pendingStatus=${activePending.status} decision=CONFIRM`
+        );
+
+        // Execute deterministic tool using EXCLUSIVELY the approved structured arguments
         const execResult = await this.conversationManager.executePendingAction(activePending, context);
         let confirmationReply = "";
 
         if (execResult.success) {
+          console.log(
+            `[GOAT-AI][CONFIRMATION_EXECUTION] correlationId=${correlationId} conversationId=${conversation.id} phone=${maskedSender} toolName=${activePending.tool_name} success=true`
+          );
           confirmationReply = execResult.message || `Operação '${activePending.tool_name}' confirmada e executada com sucesso no sistema.`;
         } else {
-          confirmationReply = `Não foi possível concluir a operação: ${execResult.error || "Erro desconhecido"}.`;
+          console.error(
+            `[GOAT-AI][CONFIRMATION_EXECUTION] correlationId=${correlationId} conversationId=${conversation.id} phone=${maskedSender} toolName=${activePending.tool_name} success=false error="${execResult.error || "unknown"}"`
+          );
+          confirmationReply = `Não foi possível concluir a operação: ${execResult.error || "Erro desconhecido"}. Os dados continuam salvos para nova tentativa.`;
         }
 
         const assistantMsg = await this.conversationManager.saveMessage(
@@ -189,9 +221,21 @@ export class GoatAIGeminiAgent {
               status: execResult.success ? "success" : "error",
             },
           ],
-          pendingAction: null,
+          pendingAction: execResult.success
+            ? null
+            : {
+                id: activePending.id,
+                toolName: activePending.tool_name,
+                status: "ready_for_confirmation",
+                missingFields: [],
+                summary: activePending.summary,
+              },
         };
       } else if (this.conversationManager.isRejectionIntent(input.message)) {
+        console.log(
+          `[GOAT-AI][CONFIRMATION_RESOLVER] correlationId=${correlationId} conversationId=${conversation.id} phone=${maskedSender} pendingAction=${activePending.tool_name} pendingStatus=${activePending.status} decision=REJECT`
+        );
+
         await this.supabaseAdmin
           .from("ai_pending_actions")
           .update({ status: "cancelled", updated_at: new Date().toISOString() })
@@ -212,6 +256,124 @@ export class GoatAIGeminiAgent {
           toolCallsExecuted: [],
           pendingAction: null,
         };
+      } else {
+        console.log(
+          `[GOAT-AI][CONFIRMATION_RESOLVER] correlationId=${correlationId} conversationId=${conversation.id} phone=${maskedSender} pendingAction=${activePending.tool_name} pendingStatus=${activePending.status} decision=INTERMEDIATE_OR_MODIFICATION`
+        );
+      }
+    }
+
+    // 2.1 Check for Controladoria Direct Modifications (unit selection or amount correction on active pending action)
+    if (activePending && (activePending.tool_name === "create_controladoria_expense" || activePending.tool_name === "create_controller_entry")) {
+      const draftArgs = { ...(activePending.arguments || {}) };
+      let draftModified = false;
+
+      const normalizedInput = input.message
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
+
+      // Check if user is supplying modality
+      const modRes = normalizeControladoriaModality(input.message);
+      if (modRes.matched) {
+        draftArgs.modality = modRes.displayName;
+        draftModified = true;
+      }
+
+      // Check if user is supplying/correcting amount
+      const amountMatch = normalizedInput.match(/(?:o\s+)?valor(?:\s+correto)?(?:\s+e|\s+foi|\s*=\s*)?\s*(?:r\$)?\s*(\d+[\.,]\d{2})/i);
+      if (amountMatch) {
+        draftArgs.amount = normalizeCurrencyBRL(amountMatch[1]);
+        draftModified = true;
+      } else if (activePending.missing_fields?.includes("amount")) {
+        const rawNum = normalizeCurrencyBRL(input.message);
+        if (rawNum > 0) {
+          draftArgs.amount = rawNum;
+          draftModified = true;
+        }
+      }
+
+      if (draftModified) {
+        const validation = validateControladoriaExpenseDraft(draftArgs, {
+          fallbackResponsible: input.userName || "Sócio Goat Bar",
+        });
+
+        if (validation.isValid && validation.normalized) {
+          const preview = formatControladoriaExpenseWhatsAppPreview(
+            validation.normalized,
+            validation.warnings
+          );
+
+          const finalPending = await this.conversationManager.savePendingAction(
+            conversation.id,
+            activePending.tool_name,
+            validation.normalized,
+            [],
+            preview,
+            "ready_for_confirmation"
+          );
+
+          const assistantMsg = await this.conversationManager.saveMessage(
+            conversation.id,
+            "assistant",
+            preview,
+            "text"
+          );
+
+          return {
+            conversationId: conversation.id,
+            messageId: assistantMsg.id,
+            reply: preview,
+            toolCallsExecuted: [],
+            pendingAction: {
+              id: finalPending.id,
+              toolName: finalPending.tool_name,
+              status: finalPending.status,
+              missingFields: [],
+              summary: finalPending.summary,
+            },
+          };
+        } else if (validation.missingFields.length > 0) {
+          const finalPending = await this.conversationManager.savePendingAction(
+            conversation.id,
+            activePending.tool_name,
+            draftArgs,
+            validation.missingFields,
+            `Coletando campos faltantes: ${validation.missingFields.join(", ")}`,
+            "collecting"
+          );
+
+          let reply = "";
+          if (validation.missingFields.includes("modality")) {
+            reply = `Em qual unidade devo lançar esse gasto? ('7 Steakhouse', 'Goat Botequim', 'Evento' ou 'Geral')`;
+          } else if (validation.missingFields.includes("amount")) {
+            reply = `Qual o valor total da nota/gasto?`;
+          } else {
+            reply = `Ainda preciso de: ${validation.missingFields.join(" e ")}. Pode informar?`;
+          }
+
+          const assistantMsg = await this.conversationManager.saveMessage(
+            conversation.id,
+            "assistant",
+            reply,
+            "text"
+          );
+
+          return {
+            conversationId: conversation.id,
+            messageId: assistantMsg.id,
+            reply,
+            toolCallsExecuted: [],
+            pendingAction: {
+              id: finalPending.id,
+              toolName: finalPending.tool_name,
+              status: finalPending.status,
+              missingFields: finalPending.missing_fields,
+              summary: finalPending.summary,
+            },
+          };
+        }
       }
     }
 
@@ -455,6 +617,8 @@ export class GoatAIGeminiAgent {
     let userPromptText = input.message;
     if (activePending && activePending.status === "collecting") {
       userPromptText += `\n[CONTEXTO OPERACIONAL: Há uma ação em andamento '${activePending.tool_name}' com dados já preenchidos: ${JSON.stringify(activePending.arguments)}. Campos pendentes necessários: [${activePending.missing_fields.join(", ")}]. Use os novos dados da mensagem para preencher os campos e acionar a ferramenta correspondente.]`;
+    } else if (activePending && activePending.status === "ready_for_confirmation") {
+      userPromptText += `\n[CONTEXTO OPERACIONAL: Há uma ação '${activePending.tool_name}' aguardando confirmação do usuário com os dados: ${JSON.stringify(activePending.arguments)}. Se o usuário estiver fazendo uma pergunta ou pedindo um detalhe, responda mantendo a confirmação pendente. Se o usuário estiver corrigindo, alterando ou adicionando dados (ex: quantidade de drinks, datas, valores), chame a ferramenta '${activePending.tool_name}' com os dados completos atualizados/mesclados para gerar um novo preview atualizado.]`;
     } else if (inheritedUnit && !input.message.toLowerCase().includes("steak") && !input.message.toLowerCase().includes("botequim")) {
       userPromptText += `\n[CONTEXTO OPERACIONAL: A unidade já identificada na conversa é '${inheritedUnit}'. Utilize esta unidade ao registrar a sessão de vendas.]`;
     }
@@ -528,7 +692,9 @@ export class GoatAIGeminiAgent {
           // Check if tool requires user confirmation / validation before mutation
           if (toolDef?.requiresConfirmation) {
             if (toolName === "create_sales_session") {
-              const priorArgs = (activePending && activePending.status === "collecting") ? (activePending.arguments || {}) : {};
+              const priorArgs = (activePending && (activePending.status === "collecting" || activePending.status === "ready_for_confirmation"))
+                ? (activePending.arguments || {})
+                : {};
               const mergedArgs = { ...priorArgs, ...args };
 
               if (!mergedArgs.unit_name && inheritedUnit) {
@@ -599,6 +765,81 @@ export class GoatAIGeminiAgent {
                 break;
               } else {
                 finalReply = validation.errors.join("\n") || "Dados da sessão inconsistentes. Por favor, revise as informações.";
+                hasPendingOrBreak = true;
+                break;
+              }
+            }
+
+            if (toolName === "create_controladoria_expense" || toolName === "create_controller_entry") {
+              const priorArgs = (activePending && (activePending.status === "collecting" || activePending.status === "ready_for_confirmation" || activePending.status === "awaiting_confirmation"))
+                ? (activePending.arguments || {})
+                : {};
+              const mergedArgs: ControladoriaExpenseDraft = { ...priorArgs, ...args };
+
+              if (!mergedArgs.modality && inheritedUnit) {
+                mergedArgs.modality = inheritedUnit;
+              }
+
+              if (input.externalMessageId && !mergedArgs.source_message_id) {
+                mergedArgs.source_message_id = input.externalMessageId;
+              }
+
+              const validation = validateControladoriaExpenseDraft(mergedArgs, {
+                fallbackResponsible: input.userName || "Sócio Goat Bar",
+              });
+
+              console.log(
+                `[GOAT-AI][CONTROLADORIA_DRAFT][EXTRACTED] correlationId=${correlationId} supplier="${validation.normalized?.supplier_name || mergedArgs.supplier_name || "none"}" amount=${validation.normalized?.amount || mergedArgs.amount || 0} date="${validation.normalized?.date || mergedArgs.date || "none"}" modality="${validation.normalized?.modality || mergedArgs.modality || "none"}" isValid=${validation.isValid} missing=[${validation.missingFields.join(",")}]`
+              );
+
+              if (validation.isValid && validation.normalized) {
+                const preview = formatControladoriaExpenseWhatsAppPreview(
+                  validation.normalized,
+                  validation.warnings
+                );
+
+                const pending = await this.conversationManager.savePendingAction(
+                  conversation.id,
+                  toolName,
+                  validation.normalized,
+                  [],
+                  preview,
+                  "ready_for_confirmation"
+                );
+
+                finalPendingAction = pending;
+                finalReply = preview;
+                hasPendingOrBreak = true;
+                break;
+              } else if (validation.missingFields.length > 0) {
+                const pending = await this.conversationManager.savePendingAction(
+                  conversation.id,
+                  toolName,
+                  mergedArgs,
+                  validation.missingFields,
+                  `Coletando campos faltantes: ${validation.missingFields.join(", ")}`,
+                  "collecting"
+                );
+                finalPendingAction = pending;
+
+                const supplierName = mergedArgs.supplier_name ? `🏪 *Fornecedor:* ${mergedArgs.supplier_name}\n` : "";
+                const dateStr = mergedArgs.date ? `📅 *Data:* ${mergedArgs.date}\n` : "";
+                const amountStr = mergedArgs.amount ? `💰 *Valor:* R$ ${normalizeCurrencyBRL(mergedArgs.amount).toFixed(2).replace(".", ",")}\n` : "";
+
+                let missingQuestion = "";
+                if (validation.missingFields.includes("modality") && !validation.missingFields.includes("amount")) {
+                  missingQuestion = `Li a nota:\n${supplierName}${dateStr}${amountStr}\nEm qual unidade devo lançar esse gasto? ('7 Steakhouse', 'Goat Botequim', 'Evento' ou 'Geral')`;
+                } else if (validation.missingFields.includes("amount")) {
+                  missingQuestion = `Consegui receber a foto${mergedArgs.supplier_name ? ` de ${mergedArgs.supplier_name}` : ""}, mas não consegui identificar o valor da nota com segurança. Pode enviar uma foto mais próxima ou me informar o valor?`;
+                } else {
+                  missingQuestion = `Identifiquei os dados da nota, mas ainda preciso de: ${validation.missingFields.join(" e ")}. Pode informar?`;
+                }
+
+                finalReply = missingQuestion;
+                hasPendingOrBreak = true;
+                break;
+              } else {
+                finalReply = validation.errors.join("\n") || "Não consegui extrair os dados da nota com clareza. Pode me informar o valor e a unidade?";
                 hasPendingOrBreak = true;
                 break;
               }
@@ -701,6 +942,14 @@ export class GoatAIGeminiAgent {
             status: finalPendingAction.status,
             missingFields: finalPendingAction.missing_fields || (finalPendingAction as any).missingFields || [],
             summary: finalPendingAction.summary,
+          }
+        : activePending && (activePending.status === "ready_for_confirmation" || activePending.status === "collecting")
+        ? {
+            id: activePending.id,
+            toolName: activePending.tool_name,
+            status: activePending.status,
+            missingFields: activePending.missing_fields || [],
+            summary: activePending.summary,
           }
         : null,
     };

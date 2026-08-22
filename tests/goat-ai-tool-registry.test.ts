@@ -65,7 +65,7 @@ describe("Goat AI - Tool Registry & Safety Validation", () => {
 
     expect(result.success).toBe(false);
     expect(result.missing_fields).toContain("amount");
-    expect(result.missing_fields).toContain("date");
+    expect(result.missing_fields).toContain("modality");
   });
 
   it("executes get_sales_sessions filtering by dates array or date range and returns clean message on zero results", async () => {

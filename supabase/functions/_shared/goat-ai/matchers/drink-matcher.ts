@@ -817,8 +817,24 @@ export function parseDrinkMatchInstructions(text: string): Array<{ alias: string
       continue;
     }
 
+    // Reject business unit names on left side (e.g. "7 steak house", "goat botequim")
+    const unitCheck = resolveBusinessUnit(left);
+    if (unitCheck.matched && unitCheck.id !== "geral") {
+      continue;
+    }
+
+    // Reject dates on left side (e.g. "05/08", "05/08/2026", "05-08")
+    if (/\d{1,2}[\/\-]\d{1,2}/.test(left)) {
+      continue;
+    }
+
     // Reject numeric equations (e.g. "receita = 811" or "lucro = 181" or "10 = 20")
     if (/^[\d\.,\sR$]+$/.test(right) || /^[\d\.,\s]+$/.test(left)) {
+      continue;
+    }
+
+    // Reject lists of items with quantities on right side (e.g. "5 caipirinhas e 10 fitz gerald")
+    if (/\d+\s+[a-zA-Z]/i.test(right) || (right.includes(",") && /\d/.test(right)) || (right.toLowerCase().includes(" e ") && /\d/.test(right))) {
       continue;
     }
 

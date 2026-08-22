@@ -17,19 +17,53 @@ describe("Goat AI - Conversation Manager & Multi-turn Engine", () => {
   });
 
   it("accurately detects confirmation and rejection intents", () => {
+    // Confirmations
     expect(manager.isConfirmationIntent("sim")).toBe(true);
     expect(manager.isConfirmationIntent("SIM")).toBe(true);
+    expect(manager.isConfirmationIntent("s")).toBe(true);
+    expect(manager.isConfirmationIntent("S")).toBe(true);
+    expect(manager.isConfirmationIntent("pode")).toBe(true);
+    expect(manager.isConfirmationIntent("pode sim")).toBe(true);
     expect(manager.isConfirmationIntent("Sim, pode lançar")).toBe(true);
+    expect(manager.isConfirmationIntent("pode lançar")).toBe(true);
+    expect(manager.isConfirmationIntent("lançar")).toBe(true);
+    expect(manager.isConfirmationIntent("lancar")).toBe(true);
     expect(manager.isConfirmationIntent("confirmo")).toBe(true);
+    expect(manager.isConfirmationIntent("confirma")).toBe(true);
+    expect(manager.isConfirmationIntent("ok")).toBe(true);
+    expect(manager.isConfirmationIntent("isso")).toBe(true);
+    expect(manager.isConfirmationIntent("isso mesmo")).toBe(true);
+    expect(manager.isConfirmationIntent("prosseguir")).toBe(true);
+    expect(manager.isConfirmationIntent("manda")).toBe(true);
+    expect(manager.isConfirmationIntent("manda bala")).toBe(true);
+    expect(manager.isConfirmationIntent("bora")).toBe(true);
     expect(manager.isConfirmationIntent("autorizado")).toBe(true);
+    expect(manager.isConfirmationIntent("fechado")).toBe(true);
 
+    // Intermediate questions and non-confirmations (MUST NOT trigger confirmation)
     expect(manager.isConfirmationIntent("Olá, tudo bem?")).toBe(false);
     expect(manager.isConfirmationIntent("Quanto custou?")).toBe(false);
+    expect(manager.isConfirmationIntent("qual foi o valor total?")).toBe(false);
+    expect(manager.isConfirmationIntent("quantos drinks deram?")).toBe(false);
+    expect(manager.isConfirmationIntent("quem é o garçom?")).toBe(false);
+    expect(manager.isConfirmationIntent("suco de laranja")).toBe(false);
+    expect(manager.isConfirmationIntent("nao pode")).toBe(false);
 
+    // Rejections
     expect(manager.isRejectionIntent("não")).toBe(true);
+    expect(manager.isRejectionIntent("nao")).toBe(true);
+    expect(manager.isRejectionIntent("n")).toBe(true);
+    expect(manager.isRejectionIntent("N")).toBe(true);
+    expect(manager.isRejectionIntent("cancela")).toBe(true);
     expect(manager.isRejectionIntent("cancelar")).toBe(true);
+    expect(manager.isRejectionIntent("não lança")).toBe(true);
+    expect(manager.isRejectionIntent("nao lanca")).toBe(true);
+    expect(manager.isRejectionIntent("deixa")).toBe(true);
+    expect(manager.isRejectionIntent("deixa pra lá")).toBe(true);
     expect(manager.isRejectionIntent("descarta")).toBe(true);
+    expect(manager.isRejectionIntent("esquece")).toBe(true);
     expect(manager.isRejectionIntent("sim")).toBe(false);
+    expect(manager.isRejectionIntent("qual foi o valor total?")).toBe(false);
   });
 
   it("resolves user from WhatsApp wa_id as primary identity", async () => {
