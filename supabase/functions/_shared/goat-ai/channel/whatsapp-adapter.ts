@@ -184,6 +184,9 @@ export class WhatsAppChannelAdapter {
     } else if (message.type === "image") {
       messageText = message.image?.caption || "Foto enviada";
       const mime = message.image?.mime_type || "image/jpeg";
+      const mediaId = message.image?.id || "unknown_media";
+      console.log(`[GOAT-AI][MEDIA][RECEIVED] correlationId=${correlationId} mediaId=${mediaId} mimeType=${mime}`);
+
       if (!ALLOWED_IMAGE_MIMES.has(mime.toLowerCase())) {
         console.warn(`[GOAT-AI][MEDIA][REJECTED] correlationId=${correlationId} reason="unsupported_mime" mimeType=${mime}`);
         const reply = "Recebi sua imagem, mas o formato não é suportado. Por favor, envie uma foto em JPG, PNG ou WEBP.";
@@ -206,6 +209,9 @@ export class WhatsAppChannelAdapter {
     } else if (message.type === "document") {
       messageText = message.document?.caption || message.document?.filename || "Documento enviado";
       const mime = message.document?.mime_type || "application/pdf";
+      const mediaId = message.document?.id || "unknown_media";
+      console.log(`[GOAT-AI][MEDIA][RECEIVED] correlationId=${correlationId} mediaId=${mediaId} mimeType=${mime}`);
+
       if (!ALLOWED_DOC_MIMES.has(mime.toLowerCase())) {
         console.warn(`[GOAT-AI][MEDIA][REJECTED] correlationId=${correlationId} reason="unsupported_mime" mimeType=${mime}`);
         const reply = "Recebi seu documento, mas atualmente aceitamos apenas PDFs ou imagens.";
@@ -230,6 +236,9 @@ export class WhatsAppChannelAdapter {
       messageText = "Áudio enviado";
       const audioObj = message.audio || message.voice;
       const mime = audioObj?.mime_type || "audio/ogg";
+      const mediaId = audioObj?.id || "unknown_media";
+      console.log(`[GOAT-AI][MEDIA][RECEIVED] correlationId=${correlationId} mediaId=${mediaId} mimeType=${mime}`);
+
       if (this.config.accessToken && audioObj?.id) {
         const media = await this.downloadMediaBase64(audioObj.id, correlationId);
         if (media) {
@@ -319,6 +328,7 @@ export class WhatsAppChannelAdapter {
       }
       const dataBase64 = btoa(binary);
 
+      console.log(`[GOAT-AI][MEDIA][DOWNLOAD] correlationId=${correlationId || "none"} success=true mediaId=${mediaId} mimeType=${mimeType} sizeBytes=${bytes.byteLength}`);
       console.log(`[GOAT-AI][MEDIA][DOWNLOAD_SUCCESS] correlationId=${correlationId || "none"} mediaId=${mediaId} mimeType=${mimeType} sizeBytes=${bytes.byteLength}`);
 
       return {
@@ -327,6 +337,7 @@ export class WhatsAppChannelAdapter {
         sizeBytes: bytes.byteLength,
       };
     } catch (err: any) {
+      console.error(`[GOAT-AI][MEDIA][DOWNLOAD] correlationId=${correlationId || "none"} success=false error="${err?.message || String(err)}"`);
       console.error(`[GOAT-AI][MEDIA][ERROR] correlationId=${correlationId || "none"} error="${err?.message || String(err)}"`);
       return null;
     }

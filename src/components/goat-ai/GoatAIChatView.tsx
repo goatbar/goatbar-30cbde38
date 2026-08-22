@@ -200,19 +200,14 @@ export const GoatAIChatView: React.FC<GoatAIChatViewProps> = ({
   return (
     <div className="flex flex-col h-[700px] bg-surface rounded-2xl border border-border/60 shadow-sm overflow-hidden">
       {/* Chat Header */}
-      <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between bg-surface/50 backdrop-blur-sm">
+      <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between bg-surface/50 backdrop-blur-sm shrink-0">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full border border-primary/30 overflow-hidden bg-primary/10 flex items-center justify-center text-primary shadow-sm shrink-0">
+          <div className="h-11 w-11 shrink-0 rounded-full border border-primary/40 overflow-hidden bg-surface-active flex items-center justify-center shadow-sm ring-2 ring-primary/10">
             <img
               src={giaAvatar}
               alt="GIA Avatar"
-              className="h-full w-full object-cover"
-              onError={(e) => {
-                // Fallback to icon if image fails
-                (e.target as HTMLElement).style.display = "none";
-              }}
+              className="h-full w-full object-cover object-center aspect-square"
             />
-            <Sparkles className="h-5 w-5 hidden" />
           </div>
           <div>
             <h3 className="font-display font-black text-sm tracking-tight text-foreground flex items-center gap-2">
@@ -243,14 +238,14 @@ export const GoatAIChatView: React.FC<GoatAIChatViewProps> = ({
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 min-h-0">
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto py-12">
-            <div className="h-16 w-16 rounded-full border-2 border-primary/40 overflow-hidden bg-primary/10 flex items-center justify-center text-primary mb-4 shadow-md">
+          <div className="flex flex-col items-center justify-center text-center max-w-md mx-auto py-6">
+            <div className="w-24 h-24 shrink-0 rounded-full border-2 border-primary/40 overflow-hidden bg-surface-active mb-4 shadow-xl ring-4 ring-primary/15 flex items-center justify-center">
               <img
                 src={giaAvatar}
-                alt="GIA"
-                className="h-full w-full object-cover"
+                alt="GIA - Sua Assistente Inteligente"
+                className="w-full h-full object-cover object-center aspect-square"
               />
             </div>
             <h4 className="font-display font-bold text-lg text-foreground mb-2">
@@ -285,16 +280,12 @@ export const GoatAIChatView: React.FC<GoatAIChatViewProps> = ({
                   className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}
                 >
                   {!isUser && (
-                    <div className="h-8 w-8 rounded-full border border-primary/30 overflow-hidden bg-primary/10 flex items-center justify-center text-primary shrink-0 mt-0.5 shadow-xs">
+                    <div className="h-8 w-8 shrink-0 rounded-full border border-primary/30 overflow-hidden bg-surface-active flex items-center justify-center text-primary mt-0.5 shadow-xs">
                       <img
                         src={giaAvatar}
                         alt="GIA"
-                        className="h-full w-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = "none";
-                        }}
+                        className="h-full w-full object-cover object-center aspect-square"
                       />
-                      <Bot className="h-4 w-4 hidden" />
                     </div>
                   )}
 
@@ -320,11 +311,11 @@ export const GoatAIChatView: React.FC<GoatAIChatViewProps> = ({
             {/* Operational Status (Thinking/Querying) */}
             {loading && operationalStatus && (
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <div className="h-8 w-8 rounded-full border border-primary/30 overflow-hidden bg-primary/10 flex items-center justify-center text-primary shrink-0 animate-pulse shadow-xs">
+                <div className="h-8 w-8 shrink-0 rounded-full border border-primary/30 overflow-hidden bg-surface-active flex items-center justify-center text-primary animate-pulse shadow-xs">
                   <img
                     src={giaAvatar}
                     alt="GIA"
-                    className="h-full w-full object-cover opacity-80"
+                    className="h-full w-full object-cover object-center opacity-80 aspect-square"
                   />
                 </div>
                 <div className="bg-surface-active/40 border border-border/40 px-3.5 py-2 rounded-xl italic flex items-center gap-2">

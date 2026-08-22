@@ -1,28 +1,46 @@
-import { matchUnitName } from "../matchers/unit-matcher.ts";
+import { resolveBusinessUnit, CanonicalDatabaseModality } from "../matchers/unit-matcher.ts";
 
-export interface RawSalesSessionData {
+export interface SalesSessionDraftItem {
+  name: string;
+  quantity: number;
+  unit_price?: number;
+  unit_cost?: number;
+  ingredient_cost?: number;
+  drink_id?: string;
+  matchedCatalogName?: string;
+  isUnknown?: boolean;
+}
+
+export interface SalesSessionDraft {
   unit_name?: string;
+  canonical_unit?: CanonicalDatabaseModality;
   date?: string;
   start_date?: string;
   end_date?: string;
+  items?: SalesSessionDraftItem[];
+  labor_value?: number | string;
+  labor_quantity?: number | string;
+  labor_names?: string;
+  labor_details?: Array<{ data: string; valor: number; qtdPessoas: number; nomes?: string }>;
+  reposicao_restaurante?: number | string;
+  custos_restaurante_detalhes?: Array<{ descricao: string; valor: number }>;
+  notes?: string;
+  unknown_drinks?: string[];
+  source_turn_ids?: string[];
+  // Tolerated legacy fields (never mandatory):
   responsible?: string;
   total_amount?: number | string;
-  dinheiro?: number | string;
-  pix?: number | string;
-  debito?: number | string;
-  credito?: number | string;
-  outros_meios?: number | string;
-  taxas?: number | string;
-  descontos?: number | string;
-  items?: Array<{
-    name: string;
-    quantity: number;
-    unit_price?: number;
-    total_price?: number;
-    unit_cost?: number;
-  }>;
-  labor_value?: number | string;
-  notes?: string;
+}
+
+export interface NormalizedSalesSessionItem {
+  name: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  unit_cost: number;
+  ingredient_cost?: number;
+  drink_id?: string;
+  isUnknown?: boolean;
 }
 
 export interface NormalizedSalesSession {
@@ -30,24 +48,19 @@ export interface NormalizedSalesSession {
   modality: "Goat Botequim" | "7Steakhouse";
   start_date: string;
   end_date?: string;
-  responsible: string;
+  items: NormalizedSalesSessionItem[];
+  total_drinks: number;
   total_amount: number;
-  dinheiro: number;
-  pix: number;
-  debito: number;
-  credito: number;
-  outros_meios: number;
-  taxas: number;
-  descontos: number;
-  items: Array<{
-    name: string;
-    quantity: number;
-    unit_price: number;
-    total_price: number;
-    unit_cost: number;
-  }>;
+  total_cost: number;
+  estimated_profit?: number;
   labor_value: number;
+  labor_quantity: number;
+  labor_names?: string;
+  labor_details?: Array<{ data: string; valor: number; qtdPessoas: number; nomes?: string }>;
+  reposicao_restaurante: number;
+  custos_restaurante_detalhes?: Array<{ descricao: string; valor: number }>;
   notes?: string;
+  unknown_drinks?: string[];
 }
 
 export interface ValidationResult {
@@ -59,7 +72,7 @@ export interface ValidationResult {
 }
 
 /**
- * Parses numeric strings like "R$ 1.234,56", "1.234,56", "1234.56" to a float number.
+ * Normalizes currency values (R$ 1.234,56, "1234,56", 1234.56).
  */
 export function normalizeCurrency(val: unknown): number {
   if (typeof val === "number") {
@@ -72,7 +85,6 @@ export function normalizeCurrency(val: unknown): number {
     .replace(/\s+/g, "")
     .trim();
 
-  // If format is like 1.234,56 (BR format)
   if (cleaned.includes(",") && cleaned.includes(".")) {
     const withoutDots = cleaned.replace(/\./g, "");
     const withDotDecimal = withoutDots.replace(",", ".");
@@ -80,7 +92,6 @@ export function normalizeCurrency(val: unknown): number {
     return isNaN(num) ? 0 : Math.round(num * 100) / 100;
   }
 
-  // If format is like 1234,56
   if (cleaned.includes(",")) {
     const withDot = cleaned.replace(",", ".");
     const num = parseFloat(withDot);
@@ -92,7 +103,7 @@ export function normalizeCurrency(val: unknown): number {
 }
 
 /**
- * Normalizes dates to YYYY-MM-DD format.
+ * Normalizes dates to YYYY-MM-DD format deterministically.
  */
 export function normalizeDate(dateStr?: string, defaultYear = 2026): string {
   if (!dateStr || typeof dateStr !== "string") return "";
@@ -102,7 +113,7 @@ export function normalizeDate(dateStr?: string, defaultYear = 2026): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
 
   // DD/MM/YYYY
-  const dmyMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  const dmyMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
   if (dmyMatch) {
     const day = dmyMatch[1].padStart(2, "0");
     const month = dmyMatch[2].padStart(2, "0");
@@ -110,7 +121,7 @@ export function normalizeDate(dateStr?: string, defaultYear = 2026): string {
   }
 
   // DD/MM
-  const dmMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})$/);
+  const dmMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
   if (dmMatch) {
     const day = dmMatch[1].padStart(2, "0");
     const month = dmMatch[2].padStart(2, "0");
@@ -121,108 +132,317 @@ export function normalizeDate(dateStr?: string, defaultYear = 2026): string {
 }
 
 /**
- * Validates extracted fields deterministically in TypeScript code.
+ * Normalizes a drink name for fuzzy matching with the catalog.
  */
-export function validateSalesSessionData(raw: RawSalesSessionData): ValidationResult {
+export function normalizeDrinkName(str: string): string {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
+/**
+ * Matches a drink against catalog items, extracting modality-specific prices & costs.
+ */
+export function resolveDrinkFromCatalog(
+  name: string,
+  catalog: any[],
+  modality: "Goat Botequim" | "7Steakhouse"
+): {
+  drinkId?: string;
+  catalogName: string;
+  unitPrice: number;
+  unitCost: number;
+  ingredientCost: number;
+  matched: boolean;
+} {
+  const normInput = normalizeDrinkName(name);
+  if (!normInput || !catalog || catalog.length === 0) {
+    return {
+      catalogName: name.trim(),
+      unitPrice: 0,
+      unitCost: 0,
+      ingredientCost: 0,
+      matched: false,
+    };
+  }
+
+  const isSteak = modality === "7Steakhouse";
+
+  for (const d of catalog) {
+    const drinkName = d.nome || d.name || "";
+    const normDrink = normalizeDrinkName(drinkName);
+
+    if (normDrink === normInput || normDrink.includes(normInput) || normInput.includes(normDrink)) {
+      const modConfig = d.modality_config || d.modalityConfig || {};
+      const config = isSteak ? (modConfig.steakhouse || {}) : (modConfig.goatbotequim || {});
+
+      const unitPrice = Number(config.price ?? d.preco_venda ?? d.precoVenda ?? 0);
+      const unitCost = Number(config.cost ?? d.custo_unitario ?? d.custoUnitario ?? 0);
+      const ingredientCost = isSteak
+        ? Number(modConfig.evento?.cost ?? d.custo_unitario ?? d.custoUnitario ?? unitCost)
+        : unitCost;
+
+      return {
+        drinkId: d.id,
+        catalogName: drinkName,
+        unitPrice,
+        unitCost,
+        ingredientCost,
+        matched: true,
+      };
+    }
+  }
+
+  return {
+    catalogName: name.trim(),
+    unitPrice: 0,
+    unitCost: 0,
+    ingredientCost: 0,
+    matched: false,
+  };
+}
+
+/**
+ * Deterministically parses sales session text (e.g. WhatsApp list of drinks with dates & unit).
+ */
+export function parseSalesSessionText(text: string): Partial<SalesSessionDraft> {
+  if (!text || typeof text !== "string") return {};
+
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const draft: Partial<SalesSessionDraft> = {
+    items: [],
+  };
+
+  // 1. Identify Business Unit
+  const unitRes = resolveBusinessUnit(text);
+  if (unitRes.matched) {
+    draft.unit_name = unitRes.canonicalName;
+    draft.canonical_unit = unitRes.dbModality;
+  }
+
+  // 2. Identify Date Range or Single Date
+  const rangeMatch = text.match(/(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?)\s*(?:a|ate|à|ate o dia|-)\s*(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?)/i);
+  if (rangeMatch) {
+    draft.start_date = normalizeDate(rangeMatch[1]);
+    draft.end_date = normalizeDate(rangeMatch[2]);
+  } else {
+    const singleMatch = text.match(/\b(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?)\b/);
+    if (singleMatch) {
+      draft.start_date = normalizeDate(singleMatch[1]);
+    }
+  }
+
+  // 3. Extract Drink Items
+  const items: SalesSessionDraftItem[] = [];
+  const nonItemKeywords = ["steak house", "steakhouse", "botequim", "goat", "data", "periodo", "total", "fechamento", "relatorio", "vendas"];
+
+  for (const line of lines) {
+    const lowerLine = line.toLowerCase();
+    if (nonItemKeywords.some((kw) => lowerLine === kw || lowerLine.startsWith(kw + ":"))) {
+      continue;
+    }
+
+    if (resolveBusinessUnit(line).matched) {
+      continue;
+    }
+
+    if (/^\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?(?:\s*(?:a|ate|à|-)\s*\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?)?$/i.test(line)) {
+      continue;
+    }
+
+    // Format 1: "CAIPIRINHA 2" or "FITZ GERALD 16" or "CAIPIRINHA: 2" or "CAIPIRINHA - 2"
+    const endQtyMatch = line.match(/^([a-zA-ZÀ-ÿ\s\(\)\'\-]+?)[\s:\-]+(\d+)(?:\s*(?:un|unidades?|doses?))?$/);
+    if (endQtyMatch) {
+      const name = endQtyMatch[1].trim();
+      const qty = parseInt(endQtyMatch[2], 10);
+      if (name.length > 1 && qty > 0 && !resolveBusinessUnit(name).matched) {
+        items.push({ name, quantity: qty });
+        continue;
+      }
+    }
+
+    // Format 2: "16x FITZ GERALD" or "2 CAIPIRINHA" or "16 - FITZ GERALD"
+    const startQtyMatch = line.match(/^(\d+)(?:x|\s*x|\s*\-|\s+)([a-zA-ZÀ-ÿ\s\(\)\'\-]+)$/i);
+    if (startQtyMatch) {
+      const qty = parseInt(startQtyMatch[1], 10);
+      const name = startQtyMatch[2].trim();
+      if (name.length > 1 && qty > 0 && !resolveBusinessUnit(name).matched) {
+        items.push({ name, quantity: qty });
+        continue;
+      }
+    }
+  }
+
+  if (items.length > 0) {
+    draft.items = items;
+  }
+
+  return draft;
+}
+
+/**
+ * Deterministically normalizes and validates a sales session draft using the REAL database schema.
+ */
+export function validateSalesSessionDraft(
+  draft: SalesSessionDraft,
+  drinksCatalog?: any[]
+): ValidationResult {
   const missingFields: string[] = [];
   const errors: string[] = [];
   const warnings: string[] = [];
+  const unknownDrinks: string[] = [];
 
-  // 1. Validate Unit
-  if (!raw.unit_name) {
+  // 1. Mandatory Field: Unit Name / Modality
+  if (!draft.unit_name && !draft.canonical_unit) {
     missingFields.push("unit_name");
+  } else {
+    const unitRes = resolveBusinessUnit(draft.unit_name || draft.canonical_unit);
+    if (!unitRes.matched && !draft.canonical_unit) {
+      missingFields.push("unit_name");
+    }
   }
 
-  const unitInfo = raw.unit_name ? matchUnitName(raw.unit_name) : { unitName: "Unidade não identificada", modality: "Goatbotequim" };
+  const unitRes = resolveBusinessUnit(draft.unit_name || draft.canonical_unit);
   const dbModality: "Goat Botequim" | "7Steakhouse" =
-    unitInfo.modality === "Steakhouse" ? "7Steakhouse" : "Goat Botequim";
+    unitRes.dbModality === "7Steakhouse" || draft.canonical_unit === "7Steakhouse"
+      ? "7Steakhouse"
+      : "Goat Botequim";
 
-  // 2. Validate Date
-  const rawDate = raw.start_date || raw.date;
+  const unitName = dbModality === "7Steakhouse" ? "7 Steak House" : "Goat Botequim";
+
+  // 2. Mandatory Field: Start Date / Operation Date
+  const rawDate = draft.start_date || draft.date;
   const normalizedDate = normalizeDate(rawDate);
-  if (!normalizedDate) {
+  if (!normalizedDate || !/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
     missingFields.push("start_date");
   }
 
-  // 3. Validate Responsible
-  const responsible = raw.responsible?.trim() || "";
-  if (!responsible) {
-    missingFields.push("responsible");
+  // 3. Mandatory Field: Items (Drinks Sold)
+  const rawItems = draft.items || [];
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    missingFields.push("items");
   }
 
-  // 4. Validate Amount
-  const totalAmount = normalizeCurrency(raw.total_amount);
-  if (totalAmount <= 0) {
-    if (raw.total_amount == null) {
-      missingFields.push("total_amount");
-    } else {
-      errors.push("O faturamento total informado deve ser maior que zero.");
-    }
-  }
+  // 4. Normalise Items with Catalog Resolution
+  const normalizedItems: NormalizedSalesSessionItem[] = [];
+  let totalAmount = 0;
+  let totalCost = 0;
+  let totalDrinks = 0;
 
-  // 5. Normalise Payments Breakdown
-  const dinheiro = normalizeCurrency(raw.dinheiro);
-  const pix = normalizeCurrency(raw.pix);
-  const debito = normalizeCurrency(raw.debito);
-  const credito = normalizeCurrency(raw.credito);
-  const outrosMeios = normalizeCurrency(raw.outros_meios);
-  const taxas = normalizeCurrency(raw.taxas);
-  const descontos = normalizeCurrency(raw.descontos);
-  const laborValue = normalizeCurrency(raw.labor_value);
-
-  // 6. Mathematical Consistency Check
-  const sumPayments = Math.round((dinheiro + pix + debito + credito + outrosMeios) * 100) / 100;
-  if (sumPayments > 0 && totalAmount > 0) {
-    const diff = Math.round(Math.abs(sumPayments - totalAmount) * 100) / 100;
-    if (diff > 1.0) {
-      const diffFormatted = diff.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      warnings.push(`A soma das formas de pagamento (R$ ${sumPayments.toFixed(2)}) difere do faturamento total (R$ ${totalAmount.toFixed(2)}) em R$ ${diffFormatted}.`);
-    }
-  }
-
-  // 7. Normalise Items
-  const items = (raw.items || []).map((it) => {
+  for (const it of rawItems) {
     const qty = Number(it.quantity) || 1;
-    const unitPrice = normalizeCurrency(it.unit_price);
-    const totalPrice = normalizeCurrency(it.total_price) || Math.round(qty * unitPrice * 100) / 100;
-    const unitCost = normalizeCurrency(it.unit_cost);
-    return {
-      name: it.name || "Item",
-      quantity: qty,
-      unit_price: unitPrice,
-      total_price: totalPrice,
-      unit_cost: unitCost,
-    };
-  });
+    if (qty <= 0) continue;
+
+    const rawName = (it.name || "").trim();
+    if (!rawName) continue;
+
+    totalDrinks += qty;
+
+    if (drinksCatalog && drinksCatalog.length > 0) {
+      const match = resolveDrinkFromCatalog(rawName, drinksCatalog, dbModality);
+      const unitPrice = it.unit_price != null ? normalizeCurrency(it.unit_price) : match.unitPrice;
+      const unitCost = it.unit_cost != null ? normalizeCurrency(it.unit_cost) : match.unitCost;
+      const ingredientCost = it.ingredient_cost != null ? normalizeCurrency(it.ingredient_cost) : match.ingredientCost;
+      const totalPrice = Math.round(qty * unitPrice * 100) / 100;
+
+      if (!match.matched && it.unit_price == null) {
+        unknownDrinks.push(rawName);
+      }
+
+      totalAmount += totalPrice;
+      totalCost += Math.round(qty * unitCost * 100) / 100;
+
+      normalizedItems.push({
+        name: match.matched ? match.catalogName : rawName,
+        quantity: qty,
+        unit_price: unitPrice,
+        total_price: totalPrice,
+        unit_cost: unitCost,
+        ingredient_cost: ingredientCost,
+        drink_id: match.drinkId || it.drink_id,
+        isUnknown: !match.matched,
+      });
+    } else {
+      const unitPrice = normalizeCurrency(it.unit_price);
+      const unitCost = normalizeCurrency(it.unit_cost);
+      const ingredientCost = normalizeCurrency(it.ingredient_cost);
+      const totalPrice = Math.round(qty * unitPrice * 100) / 100;
+
+      totalAmount += totalPrice;
+      totalCost += Math.round(qty * unitCost * 100) / 100;
+
+      normalizedItems.push({
+        name: rawName,
+        quantity: qty,
+        unit_price: unitPrice,
+        total_price: totalPrice,
+        unit_cost: unitCost,
+        ingredient_cost: ingredientCost,
+        drink_id: it.drink_id,
+        isUnknown: false,
+      });
+    }
+  }
+
+  if (normalizedItems.length === 0 && !missingFields.includes("items")) {
+    missingFields.push("items");
+  }
+
+  if (unknownDrinks.length > 0) {
+    warnings.push(`Drink(s) não localizados no cardápio oficial: ${unknownDrinks.join(", ")}.`);
+  }
+
+  // 5. Optional Real Fields Normalization
+  const laborValue = normalizeCurrency(draft.labor_value);
+  const laborQuantity = Number(draft.labor_quantity) || (draft.labor_names ? 1 : 0);
+  const reposicaoRestaurante = normalizeCurrency(draft.reposicao_restaurante);
 
   const isValid = missingFields.length === 0 && errors.length === 0;
 
-  const normalized: NormalizedSalesSession = {
-    unit_name: unitInfo.unitName,
-    modality: dbModality,
-    start_date: normalizedDate,
-    end_date: raw.end_date ? normalizeDate(raw.end_date) : undefined,
-    responsible,
-    total_amount: totalAmount,
-    dinheiro,
-    pix,
-    debito,
-    credito,
-    outros_meios: outrosMeios,
-    taxas,
-    descontos,
-    items,
-    labor_value: laborValue,
-    notes: raw.notes,
-  };
+  const normalized: NormalizedSalesSession | undefined = isValid
+    ? {
+        unit_name: unitName,
+        modality: dbModality,
+        start_date: normalizedDate,
+        end_date: draft.end_date ? normalizeDate(draft.end_date) : undefined,
+        items: normalizedItems,
+        total_drinks: totalDrinks,
+        total_amount: Math.round(totalAmount * 100) / 100,
+        total_cost: Math.round(totalCost * 100) / 100,
+        estimated_profit: dbModality === "Goat Botequim"
+          ? Math.round(((totalAmount - totalCost) * 0.6 - laborValue) * 100) / 100
+          : Math.round((totalAmount - totalCost - laborValue - reposicaoRestaurante) * 100) / 100,
+        labor_value: laborValue,
+        labor_quantity: laborQuantity,
+        labor_names: draft.labor_names?.trim() || undefined,
+        labor_details: draft.labor_details || [],
+        reposicao_restaurante: reposicaoRestaurante,
+        custos_restaurante_detalhes: draft.custos_restaurante_detalhes || [],
+        notes: draft.notes,
+        unknown_drinks: unknownDrinks.length > 0 ? unknownDrinks : undefined,
+      }
+    : undefined;
 
   return {
     isValid,
-    normalized: isValid ? normalized : undefined,
+    normalized,
     warnings,
     missingFields,
     errors,
   };
+}
+
+/**
+ * Backward-compatibility alias for validateSalesSessionDraft.
+ */
+export function validateSalesSessionData(
+  raw: any,
+  drinksCatalog?: any[]
+): ValidationResult {
+  return validateSalesSessionDraft(raw, drinksCatalog);
 }
 
 /**
@@ -263,7 +483,7 @@ export async function checkDuplicateSalesSession(
 }
 
 /**
- * Formats a clean, professional preview message for WhatsApp.
+ * Formats a clean, professional preview message for WhatsApp based on the REAL schema.
  */
 export function formatSalesSessionWhatsAppPreview(
   session: NormalizedSalesSession,
@@ -273,48 +493,55 @@ export function formatSalesSessionWhatsAppPreview(
   const formatBRL = (val: number) =>
     val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-  const dateFormatted = session.start_date.split("-").reverse().join("/");
+  const formatDateBR = (iso: string) => iso.split("-").reverse().join("/");
+  const isSteak = session.modality === "7Steakhouse";
+
+  const periodText = session.end_date
+    ? `${formatDateBR(session.start_date)} a ${formatDateBR(session.end_date)}`
+    : formatDateBR(session.start_date);
 
   const lines: string[] = [];
-  lines.push("📋 *Sessão de vendas identificada*");
+  lines.push("📋 *Sessão de Vendas Identificada*");
   lines.push("");
   lines.push(`• *Unidade:* ${session.unit_name}`);
-  lines.push(`• *Data:* ${dateFormatted}`);
-  lines.push(`• *Faturamento:* ${formatBRL(session.total_amount)}`);
-  lines.push(`• *Responsável:* ${session.responsible}`);
+  lines.push(`• *Período / Data:* ${periodText}${isSteak ? " (Semanal)" : ""}`);
+  lines.push(`• *Total de Drinks:* ${session.total_drinks} drinks`);
 
-  if (session.dinheiro > 0) lines.push(`• *Dinheiro:* ${formatBRL(session.dinheiro)}`);
-  if (session.pix > 0) lines.push(`• *Pix:* ${formatBRL(session.pix)}`);
-  if (session.debito > 0 || session.credito > 0) {
-    const totalCards = session.debito + session.credito;
-    lines.push(`• *Cartões:* ${formatBRL(totalCards)} (Déb: ${formatBRL(session.debito)} / Créd: ${formatBRL(session.credito)})`);
+  if (session.total_amount > 0) {
+    lines.push(`• *Faturamento Estimado:* ${formatBRL(session.total_amount)}`);
   }
-  if (session.outros_meios > 0) lines.push(`• *Outros:* ${formatBRL(session.outros_meios)}`);
-  if (session.labor_value > 0) lines.push(`• *Mão de Obra:* ${formatBRL(session.labor_value)}`);
+
+  if (session.labor_value > 0) {
+    lines.push(`• *Mão de Obra:* ${formatBRL(session.labor_value)}${session.labor_names ? ` (${session.labor_names})` : ""}`);
+  }
+
+  if (session.reposicao_restaurante > 0) {
+    lines.push(`• *Reposição Restaurante:* ${formatBRL(session.reposicao_restaurante)}`);
+  }
 
   if (session.items.length > 0) {
     lines.push("");
-    lines.push(`📦 *Itens listados (${session.items.length}):*`);
-    session.items.slice(0, 5).forEach((it) => {
-      lines.push(`  - ${it.quantity}x ${it.name} (${formatBRL(it.unit_price || it.total_price / it.quantity)})`);
+    lines.push(`📦 *Drinks Lançados (${session.items.length} itens):*`);
+    session.items.forEach((it) => {
+      const priceText = it.unit_price > 0 ? ` (${formatBRL(it.unit_price)} un)` : "";
+      lines.push(`  • ${it.quantity}x ${it.name}${priceText}`);
     });
-    if (session.items.length > 5) {
-      lines.push(`  - ... e mais ${session.items.length - 5} item(ns)`);
-    }
+  }
+
+  if (session.unknown_drinks && session.unknown_drinks.length > 0) {
+    lines.push("");
+    lines.push(`⚠️ *Drinks não catalogados (preço a confirmar):* ${session.unknown_drinks.join(", ")}`);
   }
 
   if (isDuplicate) {
     lines.push("");
-    lines.push("⚠️ *Atenção:* Já existe um lançamento registrado para esta mesma unidade e data no sistema.");
-  }
-
-  if (warnings.length > 0) {
+    lines.push("⚠️ *Atenção:* Já existe uma sessão registrada para esta unidade e data.");
+    lines.push("*Deseja confirmar e lançar mesmo assim?*");
+  } else {
     lines.push("");
-    warnings.forEach((w) => lines.push(`⚠️ ${w}`));
+    lines.push("*Posso realizar o lançamento da sessão de vendas?*");
   }
-
-  lines.push("");
-  lines.push(isDuplicate ? "*Deseja confirmar e lançar mesmo assim?*" : "*Posso realizar esse lançamento?*");
 
   return lines.join("\n");
 }
+

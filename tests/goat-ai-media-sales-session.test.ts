@@ -164,39 +164,31 @@ describe("Goat AI - Multimodal Media Reading, Sales Session & Safe Confirmation"
     const valid = validateSalesSessionData({
       unit_name: "Goat Botequim",
       date: "07/08/2026",
-      responsible: "Jhansen",
-      total_amount: "R$ 8.450,00",
-      dinheiro: "1.200,00",
-      pix: "1.000,00",
-      debito: "2.250,00",
-      credito: "4.000,00",
+      items: [
+        { name: "Caipirinha", quantity: 10, unit_price: 25.0 },
+        { name: "Gin Tropical", quantity: 5, unit_price: 30.0 },
+      ],
+      labor_value: 200.0,
+      labor_names: "Jhansen",
     });
 
     expect(valid.isValid).toBe(true);
-    expect(valid.normalized?.total_amount).toBe(8450.0);
+    expect(valid.normalized?.total_drinks).toBe(15);
+    expect(valid.normalized?.total_amount).toBe(400.0);
     expect(valid.normalized?.start_date).toBe("2026-08-07");
-    expect(valid.normalized?.dinheiro).toBe(1200.0);
-    expect(valid.normalized?.pix).toBe(1000.0);
-    expect(valid.normalized?.debito).toBe(2250.0);
-    expect(valid.normalized?.credito).toBe(4000.0);
-    expect(valid.warnings).toHaveLength(0); // 1200 + 1000 + 2250 + 4000 = 8450 exact match!
+    expect(valid.normalized?.labor_value).toBe(200.0);
+    expect(valid.normalized?.labor_names).toBe("Jhansen");
+    expect(valid.warnings).toHaveLength(0);
   });
 
-  it("detects mathematical discrepancy between payments sum and total revenue with warning", () => {
-    const validWithWarning = validateSalesSessionData({
-      unit_name: "7 Steak House",
-      date: "2026-08-10",
-      responsible: "Romulo",
-      total_amount: 5000.0,
-      dinheiro: 1000.0,
-      pix: 1500.0,
-      debito: 1000.0,
-      credito: 1000.0, // sum = 4500 (diff = 500)
+  it("validates missing mandatory fields when required data is not provided", () => {
+    const invalid = validateSalesSessionData({
+      items: [{ name: "Caipirinha", quantity: 2 }],
     });
 
-    expect(validWithWarning.isValid).toBe(true);
-    expect(validWithWarning.warnings.length).toBeGreaterThan(0);
-    expect(validWithWarning.warnings[0]).toContain("difere do faturamento total");
+    expect(invalid.isValid).toBe(false);
+    expect(invalid.missingFields).toContain("unit_name");
+    expect(invalid.missingFields).toContain("start_date");
   });
 
   // 2. Safe Media Download & Log Sanitization
@@ -296,12 +288,12 @@ describe("Goat AI - Multimodal Media Reading, Sales Session & Safe Confirmation"
                     args: {
                       unit_name: "Goat Botequim",
                       start_date: "2026-08-07",
-                      responsible: "Jhansen",
-                      total_amount: 8450.0,
-                      dinheiro: 1200.0,
-                      pix: 1000.0,
-                      debito: 2250.0,
-                      credito: 4000.0,
+                      items: [
+                        { name: "Caipirinha Classica", quantity: 16, unit_price: 22.0 },
+                        { name: "Gin Tropical", quantity: 12, unit_price: 25.0 },
+                      ],
+                      labor_value: 200.0,
+                      labor_names: "Jhansen",
                     },
                   },
                 },
@@ -324,10 +316,10 @@ describe("Goat AI - Multimodal Media Reading, Sales Session & Safe Confirmation"
     });
 
     // 1. Turn response must be a preview asking for confirmation
-    expect(result.reply).toContain("Sessão de vendas identificada");
+    expect(result.reply).toContain("Sessão de Vendas Identificada");
     expect(result.reply).toContain("Goat Botequim");
-    expect(result.reply).toContain("R$ 8.450,00");
-    expect(result.reply).toContain("Posso realizar esse lançamento?");
+    expect(result.reply).toContain("28 drinks");
+    expect(result.reply).toContain("Posso realizar o lançamento da sessão de vendas?");
 
     // 2. Pending Action must be saved in ready_for_confirmation state
     expect(result.pendingAction).not.toBeNull();
@@ -348,10 +340,12 @@ describe("Goat AI - Multimodal Media Reading, Sales Session & Safe Confirmation"
       arguments: {
         unit_name: "Goat Botequim",
         start_date: "2026-08-07",
-        responsible: "Jhansen",
-        total_amount: 8450.0,
-        dinheiro: 1200.0,
-        pix: 1000.0,
+        items: [
+          { name: "Caipirinha Classica", quantity: 16, unit_price: 22.0 },
+          { name: "Gin Tropical", quantity: 12, unit_price: 25.0 },
+        ],
+        labor_value: 200.0,
+        labor_names: "Jhansen",
       },
       missing_fields: [],
       status: "ready_for_confirmation",
@@ -510,8 +504,8 @@ describe("Goat AI - Multimodal Media Reading, Sales Session & Safe Confirmation"
       arguments: {
         unit_name: "Goat Botequim",
         start_date: "2026-08-07",
-        responsible: "Jhansen",
-        total_amount: 8450.0,
+        items: [{ name: "Caipirinha", quantity: 10, unit_price: 25.0 }],
+        labor_value: 200.0,
       },
       missing_fields: [],
       status: "ready_for_confirmation",

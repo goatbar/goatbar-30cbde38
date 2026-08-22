@@ -28,7 +28,8 @@ describe("Goat AI - Tool Registry & Safety Validation", () => {
     expect(salesTool).toBeDefined();
     expect(salesTool?.parameters.type).toBe("object");
     expect(salesTool?.parameters.required).toContain("unit_name");
-    expect(salesTool?.parameters.required).toContain("responsible");
+    expect(salesTool?.parameters.required).toContain("start_date");
+    expect(salesTool?.parameters.required).toContain("items");
   });
 
   it("validates missing fields when executing create_sales_session", async () => {
@@ -38,7 +39,7 @@ describe("Goat AI - Tool Registry & Safety Validation", () => {
       channel: "web",
     };
 
-    // Missing 'responsible' and 'total_amount'
+    // Missing 'items'
     const result = await defaultToolRegistry.executeTool(
       "create_sales_session",
       { unit_name: "7 Steak House", start_date: "2026-08-12" },
@@ -46,8 +47,7 @@ describe("Goat AI - Tool Registry & Safety Validation", () => {
     );
 
     expect(result.success).toBe(false);
-    expect(result.missing_fields).toContain("responsible");
-    expect(result.missing_fields).toContain("total_amount");
+    expect(result.missing_fields).toContain("items");
   });
 
   it("validates missing fields when executing create_controller_entry", async () => {
@@ -90,19 +90,18 @@ describe("Goat AI - Tool Registry & Safety Validation", () => {
           };
         }
         if (table === "financial_sessions") {
+          const queryMock: any = {
+            order: () => queryMock,
+            limit: () => queryMock,
+            ilike: () => queryMock,
+            or: () => queryMock,
+            eq: async () => ({ data: mockSessionsData, error: null }),
+            in: async () => ({ data: mockSessionsData, error: null }),
+            gte: () => queryMock,
+            lte: async () => ({ data: [], error: null }),
+          };
           return {
-            select: () => ({
-              order: () => ({
-                limit: () => ({
-                  ilike: () => ({
-                    in: async () => ({ data: mockSessionsData, error: null }),
-                    gte: () => ({
-                      lte: async () => ({ data: [], error: null }),
-                    }),
-                  }),
-                }),
-              }),
-            }),
+            select: () => queryMock,
           };
         }
         return {};
@@ -124,6 +123,7 @@ describe("Goat AI - Tool Registry & Safety Validation", () => {
 
     expect(result.success).toBe(true);
     expect(result.data.count).toBe(1);
+    expect(result.data.sessions[0].total_drinks).toBe(10);
     expect(result.data.sessions[0].gross_revenue).toBe(250);
   });
 });

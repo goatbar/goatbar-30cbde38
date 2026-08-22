@@ -134,6 +134,21 @@ export class AIRouter {
     const candidateProviders: AIProvider[] = [];
     const skippedProviders: Array<{ id: string; reason: string }> = [];
 
+    const hasVisionAttachments = request.messages.some((m) =>
+      m.attachments?.some((att) =>
+        att.mimeType.toLowerCase().startsWith("image/") ||
+        att.mimeType.toLowerCase().includes("pdf") ||
+        att.mimeType.toLowerCase().includes("document")
+      )
+    );
+    const hasAudioAttachments = request.messages.some((m) =>
+      m.attachments?.some((att) =>
+        att.mimeType.toLowerCase().startsWith("audio/")
+      )
+    );
+    const requiresVision = Boolean(request.requiredCapabilities?.supportsVision || hasVisionAttachments);
+    const requiresAudio = Boolean(request.requiredCapabilities?.supportsAudio || hasAudioAttachments);
+
     // Filter Eligible Providers
     for (const p of this.providers) {
       // 1. Zero-Paid Policy check
@@ -145,6 +160,22 @@ export class AIRouter {
       // 2. Capabilities check
       if (requiresTools && !p.capabilities.supportsTools) {
         skippedProviders.push({ id: p.id, reason: "UNSUPPORTED_CAPABILITY_TOOLS" });
+        continue;
+      }
+
+      if (requiresVision && !p.capabilities.supportsVision) {
+        skippedProviders.push({ id: p.id, reason: "CAPABILITY_MISMATCH" });
+        console.log(
+          `[GOAT-AI][ROUTER][SKIP] provider=${p.id} reason=CAPABILITY_MISMATCH requiredCapability=vision correlationId=${correlationId}`
+        );
+        continue;
+      }
+
+      if (requiresAudio && !p.capabilities.supportsAudio) {
+        skippedProviders.push({ id: p.id, reason: "CAPABILITY_MISMATCH" });
+        console.log(
+          `[GOAT-AI][ROUTER][SKIP] provider=${p.id} reason=CAPABILITY_MISMATCH requiredCapability=audio correlationId=${correlationId}`
+        );
         continue;
       }
 
@@ -167,6 +198,12 @@ export class AIRouter {
       if (!circuit.available) {
         skippedProviders.push({ id: p.id, reason: circuit.reason || "CIRCUIT_OPEN" });
         continue;
+      }
+
+      if (requiresVision && p.capabilities.supportsVision) {
+        console.log(
+          `[GOAT-AI][MEDIA][ROUTED] provider=${p.id} supportsVision=true correlationId=${correlationId}`
+        );
       }
 
       candidateProviders.push(p);

@@ -3,6 +3,8 @@ import { matchEventCandidates, DatabaseEvent } from "../../matchers/event-matche
 
 export const searchEventsTool: GoatAIToolDefinition = {
   name: "search_events",
+  domain: "EVENTS",
+  sourceTable: "events",
   description: "Busca eventos cadastrados no sistema Goat Bar por nome do cliente, noivos, título, status ou local.",
   parameters: {
     type: "object",
@@ -63,6 +65,8 @@ export const searchEventsTool: GoatAIToolDefinition = {
 
 export const getEventDetailsTool: GoatAIToolDefinition = {
   name: "get_event_details",
+  domain: "EVENTS",
+  sourceTable: "events, event_budget_versions",
   description: "Obtém detalhes completos de um evento específico, incluindo convidados, cardápio de drinks, local e orçamento.",
   parameters: {
     type: "object",
@@ -106,6 +110,8 @@ export const getEventDetailsTool: GoatAIToolDefinition = {
 
 export const searchEventsByGuestCountTool: GoatAIToolDefinition = {
   name: "search_events_by_guest_count",
+  domain: "EVENTS",
+  sourceTable: "events",
   description: "Filtra eventos com base na quantidade de convidados (ex: eventos de aproximadamente 100 pessoas).",
   parameters: {
     type: "object",
@@ -169,6 +175,8 @@ export const searchEventsByGuestCountTool: GoatAIToolDefinition = {
 
 export const aggregateEventConsumptionTool: GoatAIToolDefinition = {
   name: "aggregate_event_consumption",
+  domain: "ANALYTICS",
+  sourceTable: "events, event_budget_versions",
   description: "Calcula estatísticas reais de consumo (gelo, insumos, bebidas) para um grupo de eventos (médias, medianas, totais).",
   parameters: {
     type: "object",

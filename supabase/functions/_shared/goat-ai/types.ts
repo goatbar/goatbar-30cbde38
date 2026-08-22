@@ -80,6 +80,8 @@ export interface ToolContext {
   userRole?: string | null;
   conversationId: string;
   channel: ConversationChannel;
+  correlationId?: string;
+  toolCallId?: string;
 }
 
 export interface ToolExecutionResult {
@@ -94,6 +96,8 @@ export interface ToolExecutionResult {
 
 export interface GoatAIToolDefinition {
   name: string;
+  domain?: "EVENTS" | "FINANCIAL" | "SALES" | "CONTROLLER" | "PURCHASES" | "ANALYTICS" | "OPERATIONS";
+  sourceTable?: string;
   description: string;
   parameters: {
     type: "object";

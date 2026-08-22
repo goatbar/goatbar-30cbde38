@@ -10,9 +10,11 @@ import { defaultToolRegistry, GoatAIToolRegistry } from "../tools/registry.ts";
 import { getEnv, getGeminiModel } from "../config.ts";
 import {
   validateSalesSessionData,
+  validateSalesSessionDraft,
   checkDuplicateSalesSession,
   formatSalesSessionWhatsAppPreview,
 } from "../validators/sales-session-validator.ts";
+import { resolveBusinessUnit } from "../matchers/unit-matcher.ts";
 import { AIRouter } from "../router/ai-router.ts";
 import {
   NormalizedAIRequest,
@@ -25,19 +27,8 @@ const MAX_TOOL_CALLS_PER_TURN = 8;
 export function determinePrivacyClass(input: AgentInput): PrivacyClassification {
   const text = (input.message || "").toLowerCase();
   if (
-    text.includes("faturamento") ||
-    text.includes("financeiro") ||
-    text.includes("r$") ||
-    text.includes("reais") ||
-    text.includes("lucro") ||
-    text.includes("custo") ||
-    text.includes("despesa") ||
-    text.includes("dre")
-  ) {
-    return "FINANCIAL";
-  }
-  if (
     text.includes("cpf") ||
+    text.includes("rg ") ||
     text.includes("telefone") ||
     text.includes("cliente") ||
     text.includes("noivos") ||
@@ -45,7 +36,16 @@ export function determinePrivacyClass(input: AgentInput): PrivacyClassification 
   ) {
     return "CUSTOMER_DATA";
   }
-  return "PUBLIC_OR_SANITIZED";
+  if (
+    text.includes("extrato bancario") ||
+    text.includes("saldo da conta") ||
+    text.includes("balanco patrimonial") ||
+    text.includes("dre consolidado") ||
+    text.includes("dre geral")
+  ) {
+    return "FINANCIAL";
+  }
+  return "COMMERCIAL";
 }
 
 export class GoatAIGeminiAgent {
@@ -227,10 +227,28 @@ export class GoatAIGeminiAgent {
       }
     }
 
-    // Contextual instruction if pending action was collecting missing fields
+    // Helper to extract recent unit from conversation history
+    const getRecentUnitFromHistory = (): string | undefined => {
+      if (activePending?.arguments?.unit_name) {
+        return activePending.arguments.unit_name;
+      }
+      for (const h of history) {
+        const res = resolveBusinessUnit(h.content);
+        if (res.matched) {
+          return res.canonicalName;
+        }
+      }
+      return undefined;
+    };
+
+    const inheritedUnit = getRecentUnitFromHistory();
+
+    // Contextual instruction if pending action was collecting missing fields or if unit was previously resolved
     let userPromptText = input.message;
     if (activePending && activePending.status === "collecting") {
       userPromptText += `\n[CONTEXTO OPERACIONAL: Há uma ação em andamento '${activePending.tool_name}' com dados já preenchidos: ${JSON.stringify(activePending.arguments)}. Campos pendentes necessários: [${activePending.missing_fields.join(", ")}]. Use os novos dados da mensagem para preencher os campos e acionar a ferramenta correspondente.]`;
+    } else if (inheritedUnit && !input.message.toLowerCase().includes("steak") && !input.message.toLowerCase().includes("botequim")) {
+      userPromptText += `\n[CONTEXTO OPERACIONAL: A unidade já identificada na conversa é '${inheritedUnit}'. Utilize esta unidade ao registrar a sessão de vendas.]`;
     }
 
     normalizedMessages.push({
@@ -302,7 +320,29 @@ export class GoatAIGeminiAgent {
           // Check if tool requires user confirmation / validation before mutation
           if (toolDef?.requiresConfirmation) {
             if (toolName === "create_sales_session") {
-              const validation = validateSalesSessionData(args);
+              const priorArgs = (activePending && activePending.status === "collecting") ? (activePending.arguments || {}) : {};
+              const mergedArgs = { ...priorArgs, ...args };
+
+              if (!mergedArgs.unit_name && inheritedUnit) {
+                mergedArgs.unit_name = inheritedUnit;
+              }
+
+              // Fetch drinks catalog for validation & price resolution
+              let catalog: any[] = [];
+              try {
+                const { data: dbDrinks } = await this.supabaseAdmin
+                  .from("drinks")
+                  .select("id, nome, custo_unitario, modality_config");
+                if (dbDrinks) catalog = dbDrinks;
+              } catch {
+                // catalog optional
+              }
+
+              const validation = validateSalesSessionDraft(mergedArgs, catalog);
+
+              console.log(
+                `[GOAT-AI][SALES_DRAFT][EXTRACTED] correlationId=${correlationId} unit="${validation.normalized?.unit_name || mergedArgs.unit_name || "none"}" date="${validation.normalized?.start_date || mergedArgs.start_date || "none"}" itemsCount=${validation.normalized?.items?.length || mergedArgs.items?.length || 0} unknownDrinksCount=${validation.normalized?.unknown_drinks?.length || 0} isValid=${validation.isValid}`
+              );
 
               if (validation.isValid && validation.normalized) {
                 const duplicateCheck = await checkDuplicateSalesSession(
@@ -334,14 +374,19 @@ export class GoatAIGeminiAgent {
                 const pending = await this.conversationManager.savePendingAction(
                   conversation.id,
                   toolName,
-                  args,
+                  mergedArgs,
                   validation.missingFields,
                   `Coletando campos faltantes: ${validation.missingFields.join(", ")}`,
                   "collecting"
                 );
                 finalPendingAction = pending;
-                const missingText = validation.missingFields.join(", ");
-                finalReply = response.text || `Identifiquei os dados da sessão, mas ainda preciso de: ${missingText}. Pode me informar?`;
+
+                const missingDescriptions: string[] = [];
+                if (validation.missingFields.includes("unit_name")) missingDescriptions.push("a unidade ('7 Steak House' ou 'Goat Botequim')");
+                if (validation.missingFields.includes("start_date")) missingDescriptions.push("a data da operação");
+                if (validation.missingFields.includes("items")) missingDescriptions.push("a lista ou foto dos drinks vendidos");
+
+                finalReply = `Identifiquei os dados da sessão, mas ainda preciso de: ${missingDescriptions.join(" e ")}. Pode informar?`;
                 hasPendingOrBreak = true;
                 break;
               } else {
@@ -386,7 +431,11 @@ export class GoatAIGeminiAgent {
           }
 
           // Execute read tool
-          const toolResult = await this.toolRegistry.executeTool(toolName, args, context);
+          const toolResult = await this.toolRegistry.executeTool(toolName, args, {
+            ...context,
+            correlationId,
+            toolCallId: toolCall.id,
+          });
           executedToolNamesSet.add(toolExecKey);
           toolsExecuted.push({
             toolName,
