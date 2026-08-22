@@ -1,6 +1,14 @@
 import { resolveBusinessUnit, CanonicalDatabaseModality } from "../matchers/unit-matcher.ts";
+import {
+  resolveDrinkMatch,
+  resolveDrinkCommercialData,
+  DrinkAlias,
+  DrinkMatchType,
+  normalizeDrinkAlias,
+} from "../matchers/drink-matcher.ts";
 
 export interface SalesSessionDraftItem {
+  rawName?: string;
   name: string;
   quantity: number;
   unit_price?: number;
@@ -9,6 +17,7 @@ export interface SalesSessionDraftItem {
   drink_id?: string;
   matchedCatalogName?: string;
   isUnknown?: boolean;
+  matchType?: DrinkMatchType;
 }
 
 export interface SalesSessionDraft {
@@ -33,6 +42,7 @@ export interface SalesSessionDraft {
 }
 
 export interface NormalizedSalesSessionItem {
+  rawName?: string;
   name: string;
   quantity: number;
   unit_price: number;
@@ -41,6 +51,7 @@ export interface NormalizedSalesSessionItem {
   ingredient_cost?: number;
   drink_id?: string;
   isUnknown?: boolean;
+  matchType?: DrinkMatchType;
 }
 
 export interface NormalizedSalesSession {
@@ -135,12 +146,7 @@ export function normalizeDate(dateStr?: string, defaultYear = 2026): string {
  * Normalizes a drink name for fuzzy matching with the catalog.
  */
 export function normalizeDrinkName(str: string): string {
-  return str
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
-    .trim();
+  return normalizeDrinkAlias(str);
 }
 
 /**
@@ -149,7 +155,8 @@ export function normalizeDrinkName(str: string): string {
 export function resolveDrinkFromCatalog(
   name: string,
   catalog: any[],
-  modality: "Goat Botequim" | "7Steakhouse"
+  modality: "Goat Botequim" | "7Steakhouse" | string,
+  aliases?: DrinkAlias[]
 ): {
   drinkId?: string;
   catalogName: string;
@@ -157,43 +164,27 @@ export function resolveDrinkFromCatalog(
   unitCost: number;
   ingredientCost: number;
   matched: boolean;
+  matchType?: DrinkMatchType;
 } {
-  const normInput = normalizeDrinkName(name);
-  if (!normInput || !catalog || catalog.length === 0) {
+  const match = resolveDrinkMatch({
+    inputName: name,
+    businessUnit: modality,
+    catalog,
+    aliases: aliases || [],
+    source: "validator",
+  });
+
+  if (match.matched && match.drink) {
+    const comm = resolveDrinkCommercialData(match.drink, modality);
     return {
-      catalogName: name.trim(),
-      unitPrice: 0,
-      unitCost: 0,
-      ingredientCost: 0,
-      matched: false,
+      drinkId: match.drinkId,
+      catalogName: match.canonicalDrinkName || name.trim(),
+      unitPrice: comm.unitPrice,
+      unitCost: comm.unitCost,
+      ingredientCost: comm.ingredientCost,
+      matched: true,
+      matchType: match.matchType,
     };
-  }
-
-  const isSteak = modality === "7Steakhouse";
-
-  for (const d of catalog) {
-    const drinkName = d.nome || d.name || "";
-    const normDrink = normalizeDrinkName(drinkName);
-
-    if (normDrink === normInput || normDrink.includes(normInput) || normInput.includes(normDrink)) {
-      const modConfig = d.modality_config || d.modalityConfig || {};
-      const config = isSteak ? (modConfig.steakhouse || {}) : (modConfig.goatbotequim || {});
-
-      const unitPrice = Number(config.price ?? d.preco_venda ?? d.precoVenda ?? 0);
-      const unitCost = Number(config.cost ?? d.custo_unitario ?? d.custoUnitario ?? 0);
-      const ingredientCost = isSteak
-        ? Number(modConfig.evento?.cost ?? d.custo_unitario ?? d.custoUnitario ?? unitCost)
-        : unitCost;
-
-      return {
-        drinkId: d.id,
-        catalogName: drinkName,
-        unitPrice,
-        unitCost,
-        ingredientCost,
-        matched: true,
-      };
-    }
   }
 
   return {
@@ -202,6 +193,7 @@ export function resolveDrinkFromCatalog(
     unitCost: 0,
     ingredientCost: 0,
     matched: false,
+    matchType: "UNKNOWN",
   };
 }
 
@@ -288,7 +280,8 @@ export function parseSalesSessionText(text: string): Partial<SalesSessionDraft> 
  */
 export function validateSalesSessionDraft(
   draft: SalesSessionDraft,
-  drinksCatalog?: any[]
+  drinksCatalog?: any[],
+  drinkAliases?: DrinkAlias[]
 ): ValidationResult {
   const missingFields: string[] = [];
   const errors: string[] = [];
@@ -336,19 +329,23 @@ export function validateSalesSessionDraft(
     const qty = Number(it.quantity) || 1;
     if (qty <= 0) continue;
 
-    const rawName = (it.name || "").trim();
+    const rawName = (it.rawName || it.name || "").trim();
     if (!rawName) continue;
 
     totalDrinks += qty;
 
     if (drinksCatalog && drinksCatalog.length > 0) {
-      const match = resolveDrinkFromCatalog(rawName, drinksCatalog, dbModality);
-      const unitPrice = it.unit_price != null ? normalizeCurrency(it.unit_price) : match.unitPrice;
-      const unitCost = it.unit_cost != null ? normalizeCurrency(it.unit_cost) : match.unitCost;
-      const ingredientCost = it.ingredient_cost != null ? normalizeCurrency(it.ingredient_cost) : match.ingredientCost;
+      let match = resolveDrinkFromCatalog(rawName, drinksCatalog, dbModality, drinkAliases);
+      if (!match.matched && it.name && it.name !== rawName) {
+        match = resolveDrinkFromCatalog(it.name, drinksCatalog, dbModality, drinkAliases);
+      }
+
+      const unitPrice = it.unit_price != null && it.unit_price > 0 ? normalizeCurrency(it.unit_price) : match.unitPrice;
+      const unitCost = it.unit_cost != null && it.unit_cost > 0 ? normalizeCurrency(it.unit_cost) : match.unitCost;
+      const ingredientCost = it.ingredient_cost != null && it.ingredient_cost > 0 ? normalizeCurrency(it.ingredient_cost) : match.ingredientCost;
       const totalPrice = Math.round(qty * unitPrice * 100) / 100;
 
-      if (!match.matched && it.unit_price == null) {
+      if (!match.matched) {
         unknownDrinks.push(rawName);
       }
 
@@ -356,7 +353,8 @@ export function validateSalesSessionDraft(
       totalCost += Math.round(qty * unitCost * 100) / 100;
 
       normalizedItems.push({
-        name: match.matched ? match.catalogName : rawName,
+        rawName,
+        name: match.matched ? match.catalogName : (it.name || rawName),
         quantity: qty,
         unit_price: unitPrice,
         total_price: totalPrice,
@@ -364,6 +362,7 @@ export function validateSalesSessionDraft(
         ingredient_cost: ingredientCost,
         drink_id: match.drinkId || it.drink_id,
         isUnknown: !match.matched,
+        matchType: match.matchType,
       });
     } else {
       const unitPrice = normalizeCurrency(it.unit_price);
@@ -375,7 +374,8 @@ export function validateSalesSessionDraft(
       totalCost += Math.round(qty * unitCost * 100) / 100;
 
       normalizedItems.push({
-        name: rawName,
+        rawName,
+        name: it.name || rawName,
         quantity: qty,
         unit_price: unitPrice,
         total_price: totalPrice,

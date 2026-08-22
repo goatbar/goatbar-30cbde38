@@ -1,5 +1,6 @@
-﻿import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import Tesseract from "tesseract.js";
+import { calculateSteakhouseSessionFinancials } from "@/lib/steakhouse-financials";
 
 export type FinancialModality = "Evento" | "Steakhouse" | "Goatbotequim" | "Geral";
 export type FinancialCategory = "Fornecedor" | "Equipe" | "Insumos" | "Operacional" | "Outros";
@@ -124,12 +125,9 @@ const toFiniteNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 const toSafeDrinkId = (drinkId: unknown): string | null => {
   const value = typeof drinkId === "string" ? drinkId.trim() : "";
-  if (!value) return null;
-  return UUID_V4_REGEX.test(value) ? value : null;
+  return value || null;
 };
 
 export const financialService = {
@@ -595,10 +593,13 @@ export const financialService = {
   },
 
   calculateMetrics(sessions: any[], events: any[], drinks: any[]) {
-    // Resolve price, operational cost and insumo cost dynamically prioritizing live drink configuration:
-    // If the drink is found in the current live database catalog, use its latest values.
-    // Otherwise, fallback to the values persisted in the session item.
+    // Preserva rigorosamente os valores de preço e custo gravados no snapshot do item da sessão.
+    // Consulta o catálogo live de drinks apenas se o lançamento original não contiver os valores salvos.
     const resolveLivePrice = (item: any, modalidade: string): number => {
+      if (item.precoUnitario !== undefined && item.precoUnitario !== null && !isNaN(Number(item.precoUnitario))) {
+        return toFiniteNumber(item.precoUnitario);
+      }
+
       const d =
         drinks.find((x: any) => x.id === item.drinkId) ||
         drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
@@ -612,10 +613,17 @@ export const financialService = {
           return toFiniteNumber(livePrice);
         }
       }
-      return toFiniteNumber(item.precoUnitario ?? 0);
+      return 0;
     };
 
     const resolvePersistedCost = (item: any, modalidade: string): number => {
+      if (item.custoInsumo !== undefined && item.custoInsumo !== null && !isNaN(Number(item.custoInsumo))) {
+        return toFiniteNumber(item.custoInsumo);
+      }
+      if (item.custoUnitario !== undefined && item.custoUnitario !== null && !isNaN(Number(item.custoUnitario))) {
+        return toFiniteNumber(item.custoUnitario);
+      }
+
       const d =
         drinks.find((x: any) => x.id === item.drinkId) ||
         drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
@@ -631,13 +639,14 @@ export const financialService = {
         return toFiniteNumber(d.custoUnitario ?? 0);
       }
 
-      if (modalidade === "7Steakhouse") {
-        return toFiniteNumber(item.custoInsumo ?? item.custoUnitario ?? 0);
-      }
-      return toFiniteNumber(item.custoUnitario ?? item.custoInsumo ?? 0);
+      return 0;
     };
 
     const resolvePersistedCustoUnitario = (item: any, modalidade: string): number => {
+      if (item.custoUnitario !== undefined && item.custoUnitario !== null && !isNaN(Number(item.custoUnitario))) {
+        return toFiniteNumber(item.custoUnitario);
+      }
+
       const d =
         drinks.find((x: any) => x.id === item.drinkId) ||
         drinks.find((x: any) => x.nome === item.nome || x.nome === item.drink_name);
@@ -652,7 +661,7 @@ export const financialService = {
         }
         return toFiniteNumber(d.custoUnitario ?? 0);
       }
-      return toFiniteNumber(item.custoUnitario ?? 0);
+      return 0;
     };
 
     // BUG 5 fix: normalize modalidade before filtering to catch LocalStorage sessions
@@ -689,48 +698,13 @@ export const financialService = {
     }, 0);
     const botLucro = (botReceita - botCusto) * 0.6 - botLabor;
 
-    // Steakhouse
+    // Steakhouse - Centralized and audited pure calculation
     const steakList = sessions.filter((s) => normalizeModality(s.modalidade) === "7Steakhouse");
-    // Receita Goatbar = O que o restaurante paga ao Goat Bar (custoUnitario no item)
-    const steakReceita = steakList.reduce(
-      (acc, s) =>
-        acc +
-        (s.items || []).reduce(
-          (sum: number, item: any) =>
-            sum +
-            resolvePersistedCustoUnitario(item, "7Steakhouse") * toFiniteNumber(item.quantidade),
-          0,
-        ),
-      0,
-    );
-    // Custo Insumos = O que o Goat Bar gasta para fazer (custoInsumo — BUG 3 fix: persisted first)
-    const steakCustoInsumos = steakList.reduce((acc, s) => {
-      return (
-        acc +
-        (s.items || []).reduce((sum: number, item: any) => {
-          // BUG 3 fix: use persisted cost first, with toFiniteNumber for safety
-          return sum + resolvePersistedCost(item, "7Steakhouse") * toFiniteNumber(item.quantidade);
-        }, 0)
-      );
-    }, 0);
-    // Total reposição do restaurante nas sessões da Steakhouse
-    const steakReposicao = steakList.reduce(
-      (acc, s) => acc + toFiniteNumber(s.reposicaoRestaurante),
-      0,
-    );
-    const steakCustoTotal = steakCustoInsumos + steakReposicao;
-    // Lucro Final = (Receita - Custo Total) - Mão de Obra
-    const steakLucro =
-      steakReceita -
-      steakCustoTotal -
-      steakList.reduce((acc, s) => {
-        if (s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0) {
-          return (
-            acc + s.maoDeObraDetalhes.reduce((a: number, b: any) => a + toFiniteNumber(b.valor), 0)
-          );
-        }
-        return acc + toFiniteNumber(s.maoDeObraValor) * toFiniteNumber(s.maoDeObraQtd);
-      }, 0);
+    const steakCalculatedList = steakList.map((s) => calculateSteakhouseSessionFinancials(s, drinks));
+
+    const steakReceita = steakCalculatedList.reduce((acc, s) => acc + s.receitaGoatBar, 0);
+    const steakCustoInsumos = steakCalculatedList.reduce((acc, s) => acc + s.custoInsumos, 0);
+    const steakLucro = steakCalculatedList.reduce((acc, s) => acc + s.lucroFinal, 0);
 
     // Events
     const confirmedEvents = events.filter((e) =>
@@ -744,7 +718,7 @@ export const financialService = {
 
     return {
       bot: { receita: botReceita, custo: botCusto, lucro: botLucro },
-      steak: { receita: steakReceita, custo: steakCustoTotal, lucro: steakLucro },
+      steak: { receita: steakReceita, custo: steakCustoInsumos, lucro: steakLucro },
       events: {
         receita: eventReceita,
         custo: eventCustos,

@@ -14,6 +14,8 @@ import {
   createEventPurchaseTool,
   getFinancialSummaryTool,
 } from "./definitions/financial.ts";
+import { upsertDrinkAliasTool } from "./definitions/drink-aliases.ts";
+import { getDrinksCatalogTool } from "./definitions/drinks.ts";
 
 function sanitizeToolArguments(args: any): string {
   if (!args || typeof args !== "object") return String(args ?? "");
@@ -50,6 +52,8 @@ export class GoatAIToolRegistry {
     this.register(searchControllerEntriesTool);
     this.register(createEventPurchaseTool);
     this.register(getFinancialSummaryTool);
+    this.register(upsertDrinkAliasTool);
+    this.register(getDrinksCatalogTool);
   }
 
   public register(tool: GoatAIToolDefinition) {

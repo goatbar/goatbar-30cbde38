@@ -144,6 +144,7 @@ export interface Evento {
     dataPagamento?: string;
   };
   coposVinculados: Record<string, string>; // drinkId -> glasswareId
+  drinksSnapshots?: Array<{ drinkId: string; nome: string; custoUnitario: number; copoId?: string; copoNome?: string }>;
   historicoAlteracoes: EventoHistoricoAlteracao[];
   historicoNegociacao: EventoHistoricoNegociacao[];
   lead_source?: string;
@@ -1203,10 +1204,14 @@ export function calcularOrcamentoEvento(evento: Evento, drinksList: Drink[] = dr
   if (!evento) return null;
 
   // --- DRINKS ---
-  const validDrinks = (evento.drinks || []).filter((id) => drinksList.some((d) => d.id === id));
+  const validDrinks = evento.drinks || [];
 
   const custoBaseDrinks = validDrinks.reduce((acc, drinkId) => {
-    const drink = drinksList.find((d) => d.id === drinkId);
+    const snap = evento.drinksSnapshots?.find((s) => s.drinkId === drinkId);
+    if (snap && typeof snap.custoUnitario === "number") {
+      return acc + snap.custoUnitario;
+    }
+    const drink = drinksList.find((d) => d.id === drinkId || d.nome === drinkId);
     return acc + (drink?.custoUnitario || 0);
   }, 0);
 

@@ -1,4 +1,4 @@
-﻿import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, StatCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
@@ -21,6 +21,7 @@ function DrinksPage() {
   const { drinks: allDrinks, updateDrink, addDrink, deleteDrink, loadingDrinks } = useAppStore();
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState("Todas");
+  const [unidadeFiltro, setUnidadeFiltro] = useState("Todas as Unidades");
   const [editingDrink, setEditingDrink] = useState<Drink | null>(null);
 
   const blankDrink: Drink = {
@@ -37,12 +38,17 @@ function DrinksPage() {
   };
 
   const CATEGORIAS = ["Todas", ...Array.from(new Set(allDrinks.map((d) => d.categoria)))];
+  const UNIDADES = ["Todas as Unidades", "Eventos", "7 Steak House", "Goat Botequim"];
 
   const filtrados = allDrinks
     .filter((d) => {
       const matchBusca = d.nome.toLowerCase().includes(busca.toLowerCase());
       const matchCategoria = categoria === "Todas" || d.categoria === categoria;
-      return matchBusca && matchCategoria;
+      let matchUnidade = true;
+      if (unidadeFiltro === "Eventos") matchUnidade = Boolean(d.modalityConfig?.evento?.active);
+      else if (unidadeFiltro === "7 Steak House") matchUnidade = Boolean(d.modalityConfig?.steakhouse?.active);
+      else if (unidadeFiltro === "Goat Botequim") matchUnidade = Boolean(d.modalityConfig?.goatbotequim?.active);
+      return matchBusca && matchCategoria && matchUnidade;
     })
     .sort((a, b) => a.nome.localeCompare(b.nome));
 
@@ -134,6 +140,17 @@ function DrinksPage() {
             {CATEGORIAS.map((c) => (
               <option key={c} value={c}>
                 {c}
+              </option>
+            ))}
+          </select>
+          <select
+            value={unidadeFiltro}
+            onChange={(e) => setUnidadeFiltro(e.target.value)}
+            className="h-10 px-4 rounded-lg border border-border bg-surface text-sm focus:border-primary focus:outline-none font-medium"
+          >
+            {UNIDADES.map((u) => (
+              <option key={u} value={u}>
+                {u}
               </option>
             ))}
           </select>

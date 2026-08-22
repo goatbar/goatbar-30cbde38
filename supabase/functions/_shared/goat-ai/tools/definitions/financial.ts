@@ -1,5 +1,10 @@
 import { GoatAIToolDefinition, ToolContext, ToolExecutionResult } from "../../types.ts";
 import { resolveBusinessUnit, matchUnitName } from "../../matchers/unit-matcher.ts";
+import {
+  loadDrinkCatalogAndAliases,
+  resolveDrinkMatch,
+  resolveDrinkCommercialData,
+} from "../../matchers/drink-matcher.ts";
 
 export function normalizeDateInput(d?: string | null, defaultYear = 2026): string {
   if (!d || typeof d !== "string") return "";
@@ -252,13 +257,13 @@ export const createSalesSessionTool: GoatAIToolDefinition = {
     const dbModality = unitInfo.dbModality === "7Steakhouse" ? "7Steakhouse" : "Goat Botequim";
     const isSteak = dbModality === "7Steakhouse";
 
-    // 2. Fetch Drinks Catalog for price/cost resolution
+    // 2. Fetch Drinks Catalog & Aliases for canonical resolution
     let catalog: any[] = [];
+    let aliases: any[] = [];
     try {
-      const { data: dbDrinks } = await ctx.supabaseAdmin
-        .from("drinks")
-        .select("id, nome, custo_unitario, modality_config");
-      if (dbDrinks) catalog = dbDrinks;
+      const loaded = await loadDrinkCatalogAndAliases(ctx.supabaseAdmin, dbModality);
+      catalog = loaded.catalog;
+      aliases = loaded.aliases;
     } catch {
       // ignore catalog fetch failure if table not accessible
     }
@@ -286,7 +291,7 @@ export const createSalesSessionTool: GoatAIToolDefinition = {
       };
     }
 
-    // 4. Insert items with catalog matching
+    // 4. Insert items with canonical matching & commercial pricing
     let totalDrinks = 0;
     let grossRevenue = 0;
 
@@ -298,23 +303,24 @@ export const createSalesSessionTool: GoatAIToolDefinition = {
       let unitCost = Number(i.unit_cost) || 0;
       let ingredientCost = Number(i.ingredient_cost) || 0;
       let drinkId = i.drink_id || null;
+      let drinkName = i.name;
 
       if (catalog.length > 0) {
-        const normItemName = i.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-        const matched = catalog.find((cd: any) => {
-          const normCatalog = (cd.nome || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-          return normCatalog === normItemName || normCatalog.includes(normItemName) || normItemName.includes(normCatalog);
+        const match = resolveDrinkMatch({
+          inputName: i.name,
+          businessUnit: dbModality,
+          catalog,
+          aliases,
+          source: "create_sales_session",
         });
 
-        if (matched) {
-          drinkId = matched.id;
-          const modConfig = matched.modality_config || {};
-          const conf = isSteak ? (modConfig.steakhouse || {}) : (modConfig.goatbotequim || {});
-          if (unitPrice <= 0) unitPrice = Number(conf.price ?? 0);
-          if (unitCost <= 0) unitCost = Number(conf.cost ?? matched.custo_unitario ?? 0);
-          if (ingredientCost <= 0) {
-            ingredientCost = isSteak ? Number(modConfig.evento?.cost ?? matched.custo_unitario ?? unitCost) : unitCost;
-          }
+        if (match.matched && match.drink) {
+          drinkId = match.drinkId || drinkId;
+          if (match.canonicalDrinkName) drinkName = match.canonicalDrinkName;
+          const comm = resolveDrinkCommercialData(match.drink, dbModality);
+          if (unitPrice <= 0) unitPrice = comm.unitPrice;
+          if (unitCost <= 0) unitCost = comm.unitCost;
+          if (ingredientCost <= 0) ingredientCost = comm.ingredientCost;
         }
       }
 
@@ -323,7 +329,7 @@ export const createSalesSessionTool: GoatAIToolDefinition = {
       return {
         session_id: session.id,
         drink_id: drinkId,
-        drink_name: i.name,
+        drink_name: drinkName,
         quantity: qty,
         unit_price: unitPrice,
         unit_cost: unitCost,

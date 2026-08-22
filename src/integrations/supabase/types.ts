@@ -433,6 +433,101 @@ export type Database = {
         }
         Relationships: []
       }
+      drink_aliases: {
+        Row: {
+          active: boolean
+          alias: string
+          business_unit: string | null
+          created_at: string
+          created_by: string | null
+          drink_id: string
+          id: string
+          normalized_alias: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          alias: string
+          business_unit?: string | null
+          created_at?: string
+          created_by?: string | null
+          drink_id: string
+          id?: string
+          normalized_alias: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          alias?: string
+          business_unit?: string | null
+          created_at?: string
+          created_by?: string | null
+          drink_id?: string
+          id?: string
+          normalized_alias?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drink_aliases_drink_id_fkey"
+            columns: ["drink_id"]
+            isOneToOne: false
+            referencedRelation: "drinks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drink_alias_history: {
+        Row: {
+          action: string
+          alias: string
+          alias_id: string | null
+          business_unit: string | null
+          changed_by: string | null
+          created_at: string
+          details: Json | null
+          id: string
+          new_drink_id: string
+          normalized_alias: string
+          old_drink_id: string | null
+          performer_name: string | null
+          source: string
+        }
+        Insert: {
+          action: string
+          alias: string
+          alias_id?: string | null
+          business_unit?: string | null
+          changed_by?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          new_drink_id: string
+          normalized_alias: string
+          old_drink_id?: string | null
+          performer_name?: string | null
+          source?: string
+        }
+        Update: {
+          action?: string
+          alias?: string
+          alias_id?: string | null
+          business_unit?: string | null
+          changed_by?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          new_drink_id?: string
+          normalized_alias?: string
+          old_drink_id?: string | null
+          performer_name?: string | null
+          source?: string
+        }
+        Relationships: []
+      }
       event_budget_history: {
         Row: {
           action: string

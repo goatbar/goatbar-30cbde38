@@ -1,4 +1,4 @@
-﻿import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { StatCard, SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
@@ -21,9 +21,14 @@ import { useState, useMemo, useEffect } from "react";
 import { useAppStore } from "@/lib/app-store";
 import { DrinkImage } from "@/components/DrinkImage";
 import { type SalesSessionItem } from "@/lib/mock-data";
+import { getDrinksForUnit, getDrinkPriceForUnit, getDrinkCostForUnit } from "@/lib/drinks-canonical";
 import { eventBudgetService } from "@/services/event-budget-service";
 import { financialService } from "@/services/financial-service";
 import { eventContractsService } from "@/services/contract-service";
+import {
+  calculateSteakhouseSessionFinancials,
+  calculateSteakhouseItemFinancials,
+} from "@/lib/steakhouse-financials";
 
 export const Route = createFileRoute("/vendas")({
   component: () => (
@@ -197,19 +202,19 @@ function VendasPage() {
   }, [activeTab]);
 
   const filteredDrinks = useMemo(() => {
-    const key = activeModalityKey as "steakhouse" | "goatbotequim" | "evento";
-
-    return allDrinks
-      .filter((d) => d.modalityConfig?.[key]?.active)
-      .sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [activeModalityKey, allDrinks]);
+    return getDrinksForUnit(allDrinks, activeTab).sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [activeTab, allDrinks]);
 
   const addItem = () => {
     const firstDrink = filteredDrinks[0] || allDrinks[0];
     if (!firstDrink) return;
 
     const isSteak = activeTab === "7Steakhouse";
-    const config = firstDrink.modalityConfig?.[activeModalityKey as "steakhouse" | "goatbotequim"];
+    const price = getDrinkPriceForUnit(firstDrink, activeTab);
+    const cost = getDrinkCostForUnit(firstDrink, activeTab);
+    const ingredientCost = isSteak
+      ? Number(firstDrink.modalityConfig?.evento?.cost ?? firstDrink.custoUnitario ?? 0)
+      : cost;
 
     setModalItems([
       ...modalItems,
@@ -217,11 +222,9 @@ function VendasPage() {
         drinkId: firstDrink.id,
         nome: firstDrink.nome,
         quantidade: 1,
-        precoUnitario: config?.price || 0,
-        custoUnitario: config?.cost || 0,
-        custoInsumo: isSteak
-          ? (firstDrink.modalityConfig?.evento?.cost ?? firstDrink.custoUnitario)
-          : config?.cost,
+        precoUnitario: price,
+        custoUnitario: cost,
+        custoInsumo: ingredientCost,
       },
     ]);
   };
@@ -234,15 +237,19 @@ function VendasPage() {
 
       if (d) {
         const isSteak = activeTab === "7Steakhouse";
-        const config = d.modalityConfig?.[activeModalityKey as "steakhouse" | "goatbotequim"];
+        const price = getDrinkPriceForUnit(d, activeTab);
+        const cost = getDrinkCostForUnit(d, activeTab);
+        const ingredientCost = isSteak
+          ? Number(d.modalityConfig?.evento?.cost ?? d.custoUnitario ?? 0)
+          : cost;
 
         newItems[index] = {
           ...newItems[index],
           drinkId: d.id,
           nome: d.nome,
-          precoUnitario: config?.price || 0,
-          custoUnitario: config?.cost || 0,
-          custoInsumo: isSteak ? (d.modalityConfig?.evento?.cost ?? d.custoUnitario) : config?.cost,
+          precoUnitario: price,
+          custoUnitario: cost,
+          custoInsumo: ingredientCost,
         };
       }
     } else {
@@ -291,22 +298,30 @@ function VendasPage() {
 
       const config = matchedDrink?.modalityConfig?.[key];
 
+      const priceSnapshot =
+        item.precoUnitario !== undefined && item.precoUnitario !== null
+          ? Number(item.precoUnitario)
+          : Number(config?.price ?? 0);
+
+      const costSnapshot =
+        item.custoUnitario !== undefined && item.custoUnitario !== null
+          ? Number(item.custoUnitario)
+          : Number(config?.cost ?? 0);
+
+      const ingredientSnapshot =
+        item.custoInsumo !== undefined && item.custoInsumo !== null
+          ? Number(item.custoInsumo)
+          : (activeTab === "7Steakhouse"
+              ? Number(matchedDrink?.modalityConfig?.evento?.cost ?? matchedDrink?.custoUnitario ?? 0)
+              : costSnapshot);
+
       return {
         ...item,
         drinkId: matchedDrink?.id ?? item.drinkId,
         nome: item.nome ?? item.drink_name ?? matchedDrink?.nome ?? "",
-        precoUnitario: Number(config?.price ?? item.precoUnitario ?? 0),
-        custoUnitario: Number(config?.cost ?? item.custoUnitario ?? 0),
-        custoInsumo:
-          activeTab === "7Steakhouse"
-            ? Number(
-                matchedDrink?.modalityConfig?.evento?.cost ??
-                  matchedDrink?.custoUnitario ??
-                  item.custoInsumo ??
-                  item.custoUnitario ??
-                  0,
-              )
-            : Number(config?.cost ?? item.custoInsumo ?? item.custoUnitario ?? 0),
+        precoUnitario: priceSnapshot,
+        custoUnitario: costSnapshot,
+        custoInsumo: ingredientSnapshot,
       } as SalesSessionItem;
     });
 
@@ -572,6 +587,23 @@ function VendasPage() {
           : s.maoDeObraValor * s.maoDeObraQtd;
 
       if (s.modalidade === "Goat Botequim") {
+        const sessionReceita = (s.items || []).reduce(
+          (acc: number, item: any) =>
+            acc + Number(item.precoUnitario || 0) * Number(item.quantidade || 0),
+          0,
+        );
+
+        const sessionCusto = (s.items || []).reduce((acc: number, item: any) => {
+          const d = allDrinks.find((x) => x.id === item.drinkId);
+          const goatCost = Number(item.custoUnitario ?? d?.modalityConfig?.goatbotequim?.cost ?? 0);
+          return acc + goatCost * Number(item.quantidade || 0);
+        }, 0);
+
+        const maoDeObra =
+          s.maoDeObraDetalhes && s.maoDeObraDetalhes.length > 0
+            ? s.maoDeObraDetalhes.reduce((a: number, b: any) => a + Number(b.valor || 0), 0)
+            : Number(s.maoDeObraValor || 0) * Number(s.maoDeObraQtd || 0);
+
         const resLiq = sessionReceita - sessionCusto;
         const sessionLucro = resLiq * 0.6 - maoDeObra;
 
@@ -580,24 +612,12 @@ function VendasPage() {
         meses[key].lucro += sessionLucro;
         meses[key].bot += sessionLucro;
       } else {
-        const receitaGoat = (s.items || []).reduce((acc: number, item: any) => {
-          const d =
-            allDrinks.find((x) => x.id === item.drinkId) ||
-            allDrinks.find((x) => x.nome === item.nome || x.nome === item.drink_name);
-          const cost =
-            item.custoUnitario !== undefined && item.custoUnitario !== null
-              ? Number(item.custoUnitario)
-              : Number(d?.modalityConfig?.steakhouse?.cost ?? 0);
-          return acc + cost * Number(item.quantidade || 0);
-        }, 0);
+        const steakFin = calculateSteakhouseSessionFinancials(s, allDrinks);
 
-        const reposicao = Number(s.reposicaoRestaurante || 0);
-        const sessionLucro = receitaGoat - sessionCusto - maoDeObra - reposicao;
-
-        meses[key].receita += receitaGoat;
-        meses[key].custos += sessionCusto + maoDeObra + reposicao;
-        meses[key].lucro += sessionLucro;
-        meses[key].steak += sessionLucro;
+        meses[key].receita += steakFin.receitaGoatBar;
+        meses[key].custos += steakFin.custoOperacionalGoatBar;
+        meses[key].lucro += steakFin.lucroFinal;
+        meses[key].steak += steakFin.lucroFinal;
       }
     });
 
@@ -648,15 +668,8 @@ function VendasPage() {
     const valorRetido7Steakhouse = filteredSessions
       .filter((s) => s.modalidade === "7Steakhouse")
       .reduce((acc, s) => {
-        const retidoSessao = (s.items || []).reduce((sum: number, item: any) => {
-          const d =
-            allDrinks.find((x) => x.id === item.drinkId) ||
-            allDrinks.find((x) => x.nome === item.nome || x.nome === item.drink_name);
-          const cost = Number(d?.modalityConfig?.steakhouse?.cost ?? item.custoUnitario ?? 0);
-          return sum + (Number(item.precoUnitario || 0) - cost) * Number(item.quantidade || 0);
-        }, 0);
-
-        return acc + retidoSessao;
+        const steakFin = calculateSteakhouseSessionFinancials(s, allDrinks);
+        return acc + steakFin.valorRetidoRestaurante;
       }, 0);
 
     return { valorRepassadoGoatBotequim, valorRetido7Steakhouse };
@@ -1498,7 +1511,7 @@ function VendasPage() {
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-[220px] overflow-y-auto p-1.5 border border-border rounded-lg bg-background/50">
-                  {allDrinks
+                  {getDrinksForUnit(allDrinks, activeTab)
                     .filter((d) => d.nome.toLowerCase().includes(buscaDrinkLegacy.toLowerCase()))
                     .sort((a, b) => a.nome.localeCompare(b.nome))
                     .map((d) => {
@@ -1604,55 +1617,29 @@ function SessionRow({
     return Number.isFinite(parsed) ? parsed : 0;
   };
 
-  const items = session.items || [];
-  const totalDrinks = items.reduce((acc: number, i: any) => acc + Number(i.quantidade || 0), 0);
   const sessionDate = new Date(session.data + "T12:00:00");
   const sessionEndDate = new Date(sessionDate.getTime() + 3 * 24 * 60 * 60 * 1000);
 
-  const calc = useMemo(() => {
+  const steakFin = useMemo(() => {
+    if (!isSteak) return null;
+    return calculateSteakhouseSessionFinancials(session, drinks);
+  }, [session, drinks, isSteak]);
+
+  const botCalc = useMemo(() => {
+    if (isSteak) return null;
+    const items = session.items || [];
     const rb = items.reduce((acc: number, i: any) => {
       const fallbackDrink =
         drinks.find((d) => d.id === i.drinkId) ||
         drinks.find((d) => d.nome === i.nome || d.nome === i.drink_name);
 
-      const livePrice = fallbackDrink
-        ? (isSteak ? fallbackDrink.modalityConfig?.steakhouse?.price : fallbackDrink.modalityConfig?.goatbotequim?.price)
-        : undefined;
-
+      const livePrice = fallbackDrink?.modalityConfig?.goatbotequim?.price;
       const price = toFiniteNumber(
-        livePrice !== undefined && livePrice !== null ? livePrice : i.precoUnitario
+        i.precoUnitario !== undefined && i.precoUnitario !== null
+          ? i.precoUnitario
+          : (livePrice ?? 0),
       );
-
       return acc + price * toFiniteNumber(i.quantidade);
-    }, 0);
-
-    const rg = items.reduce((acc: number, i: any) => {
-      const fallbackDrink =
-        drinks.find((d) => d.id === i.drinkId) ||
-        drinks.find((d) => d.nome === i.nome || d.nome === i.drink_name);
-
-      const liveSteakCost = fallbackDrink?.modalityConfig?.steakhouse?.cost;
-      const liveGoatCost = fallbackDrink?.modalityConfig?.goatbotequim?.cost;
-
-      const steakOperationalCost = toFiniteNumber(
-        liveSteakCost !== undefined && liveSteakCost !== null
-          ? liveSteakCost
-          : (i.custoUnitario !== undefined && i.custoUnitario !== null
-            ? i.custoUnitario
-            : (fallbackDrink?.custoUnitario ?? 0))
-      );
-
-      const goatOperationalCost = toFiniteNumber(
-        liveGoatCost !== undefined && liveGoatCost !== null
-          ? liveGoatCost
-          : (i.custoUnitario !== undefined && i.custoUnitario !== null
-            ? i.custoUnitario
-            : (fallbackDrink?.custoUnitario ?? 0))
-      );
-
-      const operationalCost = isSteak ? steakOperationalCost : goatOperationalCost;
-
-      return acc + operationalCost * toFiniteNumber(i.quantidade);
     }, 0);
 
     const ci = items.reduce((acc: number, i: any) => {
@@ -1660,19 +1647,14 @@ function SessionRow({
         drinks.find((d) => d.id === i.drinkId) ||
         drinks.find((d) => d.nome === i.nome || d.nome === i.drink_name);
 
-      let liveCost: number | undefined;
-      if (fallbackDrink) {
-        liveCost = isSteak
-          ? (fallbackDrink.modalityConfig?.evento?.cost ?? fallbackDrink.custoUnitario)
-          : (fallbackDrink.modalityConfig?.goatbotequim?.cost ?? fallbackDrink.custoUnitario);
-      }
-
+      const liveCost = fallbackDrink?.modalityConfig?.goatbotequim?.cost ?? fallbackDrink?.custoUnitario;
       const itemCost = toFiniteNumber(
-        liveCost !== undefined && liveCost !== null
-          ? liveCost
-          : (isSteak ? (i.custoInsumo ?? i.custoUnitario ?? 0) : (i.custoUnitario ?? i.custoInsumo ?? 0))
+        i.custoInsumo !== undefined && i.custoInsumo !== null
+          ? i.custoInsumo
+          : (i.custoUnitario !== undefined && i.custoUnitario !== null
+              ? i.custoUnitario
+              : (liveCost ?? 0)),
       );
-
       return acc + itemCost * toFiniteNumber(i.quantidade);
     }, 0);
 
@@ -1685,21 +1667,24 @@ function SessionRow({
         ? session.maoDeObraDetalhes.reduce((a: number, b: any) => a + toFiniteNumber(b.valor), 0)
         : toFiniteNumber(session.maoDeObraValor) * toFiniteNumber(session.maoDeObraQtd);
 
-    const reposicao = Number(session.reposicaoRestaurante || 0);
-
     return {
       receitaBruta: rb,
-      receitaGoat: rg,
       custoInsumos: ci,
-      lucroRetidoRest: rb - rg,
-      lucroBruto: isSteak ? rg - ci : lb,
+      lucroBruto: lb,
       repasse: rep,
       saldoGoat: saldo,
       maoDeObra: mo,
-      reposicao,
-      lucroFinal: isSteak ? rg - ci - mo - reposicao : saldo - mo,
+      lucroFinal: saldo - mo,
     };
   }, [session, isSteak, drinks]);
+
+  const totalDrinks = isSteak
+    ? (steakFin?.totalDrinks ?? 0)
+    : (session.items || []).reduce((acc: number, i: any) => acc + Number(i.quantidade || 0), 0);
+
+  const displayReceitaBruta = isSteak ? (steakFin?.valorTotalBruto ?? 0) : (botCalc?.receitaBruta ?? 0);
+  const displayReceitaGoat = isSteak ? (steakFin?.receitaGoatBar ?? 0) : (botCalc?.saldoGoat ?? 0);
+  const displayLucroFinal = isSteak ? (steakFin?.lucroFinal ?? 0) : (botCalc?.lucroFinal ?? 0);
 
   return (
     <div
@@ -1761,7 +1746,7 @@ function SessionRow({
               <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-0.5">
                 {isSteak ? "Venda Final" : "Receita"}
               </div>
-              <div className="font-black text-sm">{fmtBRL(calc.receitaBruta)}</div>
+              <div className="font-black text-sm">{fmtBRL(displayReceitaBruta)}</div>
             </div>
 
             {isSteak && (
@@ -1769,7 +1754,7 @@ function SessionRow({
                 <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-0.5">
                   Receita Goat Bar
                 </div>
-                <div className="font-black text-sm text-primary">{fmtBRL(calc.receitaGoat)}</div>
+                <div className="font-black text-sm text-primary">{fmtBRL(displayReceitaGoat)}</div>
               </div>
             )}
 
@@ -1777,7 +1762,7 @@ function SessionRow({
               <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-0.5">
                 Lucro Final
               </div>
-              <div className="font-black text-sm text-success">{fmtBRL(calc.lucroFinal)}</div>
+              <div className="font-black text-sm text-success">{fmtBRL(displayLucroFinal)}</div>
             </div>
           </div>
 
@@ -1825,96 +1810,118 @@ function SessionRow({
               </h4>
 
               <div className="space-y-3">
-                {items.map((it: any, i: number) => {
-                  const drinkObj =
-                    drinks.find((d) => d.id === it.drinkId) ||
-                    drinks.find((d) => d.nome === it.nome || d.nome === it.drink_name);
-
-                  const livePrice = drinkObj
-                    ? (isSteak ? drinkObj.modalityConfig?.steakhouse?.price : drinkObj.modalityConfig?.goatbotequim?.price)
-                    : undefined;
-
-                  const resolvedPrecoUnitario = toFiniteNumber(
-                    livePrice !== undefined && livePrice !== null ? livePrice : it.precoUnitario
-                  );
-
-                  const liveCost = drinkObj
-                    ? (isSteak ? drinkObj.modalityConfig?.steakhouse?.cost : drinkObj.modalityConfig?.goatbotequim?.cost)
-                    : undefined;
-
-                  const resolvedCustoUnitario = toFiniteNumber(
-                    liveCost !== undefined && liveCost !== null
-                      ? liveCost
-                      : (it.custoUnitario !== undefined && it.custoUnitario !== null
-                        ? it.custoUnitario
-                        : (drinkObj?.custoUnitario ?? 0))
-                  );
-
-                  return (
+                {isSteak &&
+                  steakFin?.items.map((it, i) => (
                     <div
                       key={i}
-                      className="flex justify-between items-start text-xs group/item py-0.5"
+                      className="flex justify-between items-start text-xs group/item py-1 border-b border-border/10 last:border-0"
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-primary w-6">{it.quantidade}x</span>
-                        <span className="font-medium text-foreground/80">{it.nome}</span>
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-primary w-6">{it.quantidade}x</span>
+                          <span className="font-medium text-foreground">{it.nome}</span>
+                        </div>
+                        <div className="text-[10px] text-muted-foreground/80 pl-8 space-x-2">
+                          <span>Venda: {fmtBRL(it.precoVenda7Steakhouse)}</span>
+                          <span>·</span>
+                          <span className="text-primary font-medium">Rec. Goat: {fmtBRL(it.custoOperacional7Steakhouse)}</span>
+                          <span>·</span>
+                          <span>Insumos: {fmtBRL(it.custoEventoDrink)}</span>
+                        </div>
                       </div>
 
-                      <div className="text-right">
-                        {isSteak ? (
-                          <>
-                            <div className="font-bold text-muted-foreground group-hover/item:text-foreground transition-colors">
-                              {fmtBRL(
-                                resolvedPrecoUnitario * toFiniteNumber(it.quantidade),
-                              )}
-                              <span className="text-[10px] font-normal ml-1 text-muted-foreground/60">
-                                (Venda)
-                              </span>
-                            </div>
-                            <div className="text-[10px] text-primary font-bold">
-                              {fmtBRL(
-                                resolvedCustoUnitario * toFiniteNumber(it.quantidade),
-                              )}
-                              <span className="text-[9px] font-normal ml-1 text-muted-foreground/60">
-                                (Custo Op.)
-                              </span>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="font-bold text-muted-foreground group-hover/item:text-foreground transition-colors">
-                            {fmtBRL(
-                              resolvedPrecoUnitario * toFiniteNumber(it.quantidade),
-                            )}
-                          </div>
-                        )}
+                      <div className="text-right space-y-0.5">
+                        <div className="font-bold text-foreground">
+                          {fmtBRL(it.valorTotalBruto)}
+                          <span className="text-[10px] font-normal ml-1 text-muted-foreground/60">
+                            (Venda)
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-primary font-bold">
+                          {fmtBRL(it.receitaGoatBar)}
+                          <span className="text-[9px] font-normal ml-1 text-muted-foreground/60">
+                            (Rec. Goat)
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-success font-semibold">
+                          Margem: {fmtBRL(it.margemContribuicao)}
+                        </div>
                       </div>
                     </div>
-                  );
-                })}
+                  ))}
+
+                {!isSteak &&
+                  (session.items || []).map((it: any, i: number) => {
+                    const drinkObj =
+                      drinks.find((d) => d.id === it.drinkId) ||
+                      drinks.find((d) => d.nome === it.nome || d.nome === it.drink_name);
+                    const livePrice = drinkObj?.modalityConfig?.goatbotequim?.price;
+                    const resolvedPrice = toFiniteNumber(
+                      livePrice !== undefined && livePrice !== null ? livePrice : it.precoUnitario,
+                    );
+
+                    return (
+                      <div
+                        key={i}
+                        className="flex justify-between items-start text-xs group/item py-0.5"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-primary w-6">{it.quantidade}x</span>
+                          <span className="font-medium text-foreground/80">{it.nome}</span>
+                        </div>
+
+                        <div className="text-right">
+                          <div className="font-bold text-muted-foreground group-hover/item:text-foreground transition-colors">
+                            {fmtBRL(resolvedPrice * toFiniteNumber(it.quantidade))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
 
                 <div className="pt-3 border-t border-border/40 flex justify-between items-center">
                   <span className="text-[10px] font-bold text-muted-foreground uppercase">
                     {isSteak ? "Valor de Venda Final" : "Total Receita"}
                   </span>
-                  <span className="font-black text-sm">{fmtBRL(calc.receitaBruta)}</span>
+                  <span className="font-black text-sm">{fmtBRL(displayReceitaBruta)}</span>
                 </div>
 
                 {isSteak && (
-                  <div className="pt-2 flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">
-                      Receita Goat Bar
-                    </span>
-                    <span className="font-black text-sm text-primary">
-                      {fmtBRL(calc.receitaGoat)}
-                    </span>
-                  </div>
+                  <>
+                    <div className="pt-1 flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase">
+                        Receita Goat Bar
+                      </span>
+                      <span className="font-black text-sm text-primary">
+                        {fmtBRL(steakFin?.receitaGoatBar ?? 0)}
+                      </span>
+                    </div>
+
+                    <div className="pt-1 flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase">
+                        Custo dos Insumos
+                      </span>
+                      <span className="font-bold text-sm text-muted-foreground">
+                        {fmtBRL(steakFin?.custoInsumos ?? 0)}
+                      </span>
+                    </div>
+
+                    <div className="pt-1 flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase">
+                        Margem de Contribuição Total
+                      </span>
+                      <span className="font-black text-sm text-success">
+                        {fmtBRL(steakFin?.margemContribuicao ?? 0)}
+                      </span>
+                    </div>
+                  </>
                 )}
 
                 <div className="pt-1 border-t border-border/20 flex justify-between items-center">
                   <span className="text-[10px] font-bold text-muted-foreground uppercase">
                     Lucro Final
                   </span>
-                  <span className="font-black text-sm text-success">{fmtBRL(calc.lucroFinal)}</span>
+                  <span className="font-black text-sm text-success">{fmtBRL(displayLucroFinal)}</span>
                 </div>
               </div>
 
@@ -1923,7 +1930,7 @@ function SessionRow({
                 session.custosRestauranteDetalhes.length > 0 && (
                   <div className="mt-6 pt-6 border-t border-border/50 space-y-4">
                     <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-4">
-                      Reposições do Restaurante
+                      Reposições do Restaurante (Informativo)
                     </h4>
 
                     <div className="space-y-3">
@@ -1943,8 +1950,8 @@ function SessionRow({
                         <span className="text-[10px] font-bold text-muted-foreground uppercase">
                           Total Reposição
                         </span>
-                        <span className="font-black text-sm text-destructive">
-                          {fmtBRL(calc.reposicao)}
+                        <span className="font-bold text-sm text-muted-foreground">
+                          {fmtBRL(steakFin?.reposicaoRestaurante ?? 0)}
                         </span>
                       </div>
                     </div>
@@ -1958,87 +1965,122 @@ function SessionRow({
               </h4>
 
               <div className="bg-background/40 rounded-2xl p-5 border border-border/50 space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">
-                      {isSteak ? "Valor de Venda Final" : "Receita Bruta"}
-                    </span>
-                    <span className="font-bold">{fmtBRL(calc.receitaBruta)}</span>
-                  </div>
-
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">
-                      (-) {isSteak ? "Custo Insumos (Produção)" : "Custo dos Drinks"}
-                    </span>
-                    <span className="text-muted-foreground">{fmtBRL(calc.custoInsumos)}</span>
-                  </div>
-
-                  <div className="flex justify-between text-sm pt-2 border-t border-border/20">
-                    <span className="font-bold">(=) Lucro Bruto</span>
-                    <span className="font-black">{fmtBRL(calc.lucroBruto)}</span>
-                  </div>
-                </div>
-
                 {isSteak && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-primary font-medium">Receita Goat Bar</span>
-                      <span className="text-primary font-bold">{fmtBRL(calc.receitaGoat)}</span>
+                  <>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Valor de Venda Final</span>
+                        <span className="font-bold">{fmtBRL(steakFin?.valorTotalBruto ?? 0)}</span>
+                      </div>
+
+                      <div className="flex justify-between text-xs">
+                        <span className="text-warning font-medium">
+                          (-) Valor Retido pelo Restaurante
+                        </span>
+                        <span className="text-warning font-bold">
+                          {fmtBRL(steakFin?.valorRetidoRestaurante ?? 0)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between text-sm pt-2 border-t border-border/20">
+                        <span className="font-bold text-primary">(=) Receita Goat Bar</span>
+                        <span className="font-black text-primary">
+                          {fmtBRL(steakFin?.receitaGoatBar ?? 0)}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="flex justify-between text-xs">
-                      <span className="text-warning font-medium">Lucro Retido (Restaurante)</span>
-                      <span className="text-warning font-bold">{fmtBRL(calc.lucroRetidoRest)}</span>
+                    <div className="space-y-2 pt-2 border-t border-border/20">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          (-) Custo dos Insumos (Produção)
+                        </span>
+                        <span className="text-muted-foreground font-semibold">
+                          {fmtBRL(steakFin?.custoInsumos ?? 0)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between text-xs">
+                        <span className="text-destructive font-medium">(-) Mão de Obra Semanal</span>
+                        <span className="text-destructive font-bold">
+                          {fmtBRL(steakFin?.maoDeObraSemanal ?? 0)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
+
+                    <div className="pt-4 border-t border-primary/20 flex justify-between items-end">
+                      <div>
+                        <div className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">
+                          Lucro Final Goat Bar
+                        </div>
+                        <div className="text-2xl font-black font-display text-success">
+                          {fmtBRL(steakFin?.lucroFinal ?? 0)}
+                        </div>
+                      </div>
+
+                      <div className="pb-1">
+                        <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
+                      </div>
+                    </div>
+                  </>
                 )}
 
-                {!isSteak && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-warning font-medium">(-) Repasse 40% Restaurante</span>
-                      <span className="text-warning font-bold">{fmtBRL(calc.repasse)}</span>
+                {!isSteak && botCalc && (
+                  <>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Receita Bruta</span>
+                        <span className="font-bold">{fmtBRL(botCalc.receitaBruta)}</span>
+                      </div>
+
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">(-) Custo dos Drinks</span>
+                        <span className="text-muted-foreground">{fmtBRL(botCalc.custoInsumos)}</span>
+                      </div>
+
+                      <div className="flex justify-between text-sm pt-2 border-t border-border/20">
+                        <span className="font-bold">(=) Lucro Bruto</span>
+                        <span className="font-black">{fmtBRL(botCalc.lucroBruto)}</span>
+                      </div>
                     </div>
 
-                    <div className="flex justify-between text-xs pt-1">
-                      <span className="font-bold text-foreground/70">
-                        (=) Saldo Operacional (GoatBar)
-                      </span>
-                      <span className="font-bold">{fmtBRL(calc.saldoGoat)}</span>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-warning font-medium">(-) Repasse 40% Restaurante</span>
+                        <span className="text-warning font-bold">{fmtBRL(botCalc.repasse)}</span>
+                      </div>
+
+                      <div className="flex justify-between text-xs pt-1">
+                        <span className="font-bold text-foreground/70">
+                          (=) Saldo Operacional (GoatBar)
+                        </span>
+                        <span className="font-bold">{fmtBRL(botCalc.saldoGoat)}</span>
+                      </div>
                     </div>
-                  </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-destructive font-medium">(-) Mão de Obra do Dia</span>
+                        <span className="text-destructive font-bold">{fmtBRL(botCalc.maoDeObra)}</span>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-primary/20 flex justify-between items-end">
+                      <div>
+                        <div className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">
+                          Lucro Final
+                        </div>
+                        <div className="text-2xl font-black font-display text-success">
+                          {fmtBRL(botCalc.lucroFinal)}
+                        </div>
+                      </div>
+
+                      <div className="pb-1">
+                        <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
+                      </div>
+                    </div>
+                  </>
                 )}
-
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-destructive font-medium">
-                      (-) Mão de Obra {isSteak ? "Semanal" : "do Dia"}
-                    </span>
-                    <span className="text-destructive font-bold">{fmtBRL(calc.maoDeObra)}</span>
-                  </div>
-
-                  {isSteak && (
-                    <div className="flex justify-between text-xs text-destructive">
-                      <span className="font-medium">(-) Reposição Restaurante</span>
-                      <span className="font-bold">{fmtBRL(calc.reposicao)}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-4 border-t border-primary/20 flex justify-between items-end">
-                  <div>
-                    <div className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">
-                      Lucro Final
-                    </div>
-                    <div className="text-2xl font-black font-display text-success">
-                      {fmtBRL(calc.lucroFinal)}
-                    </div>
-                  </div>
-
-                  <div className="pb-1">
-                    <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
-                  </div>
-                </div>
               </div>
             </div>
           </div>

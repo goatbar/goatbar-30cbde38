@@ -15,6 +15,14 @@ import {
   formatSalesSessionWhatsAppPreview,
 } from "../validators/sales-session-validator.ts";
 import { resolveBusinessUnit } from "../matchers/unit-matcher.ts";
+import {
+  loadDrinkCatalogAndAliases,
+  parseDrinkMatchInstructions,
+  learnDrinkAlias,
+  resolveDrinkMatch,
+  resolveDrinkCommercialData,
+  toCanonicalBusinessUnitId,
+} from "../matchers/drink-matcher.ts";
 import { AIRouter } from "../router/ai-router.ts";
 import {
   NormalizedAIRequest,
@@ -207,7 +215,207 @@ export class GoatAIGeminiAgent {
       }
     }
 
-    // 3. Prepare Canonical Multi-turn Messages
+    // 3. Check for Explicit Drink Match Instructions ("Spritz Veneziano = Aperol", etc.)
+    const parsedMatches = parseDrinkMatchInstructions(input.message);
+    if (parsedMatches.length > 0) {
+      const pendingUnit = activePending?.arguments?.unit_name || activePending?.arguments?.modality;
+      const targetUnitId = toCanonicalBusinessUnitId(pendingUnit);
+
+      const applied: any[] = [];
+      const conflicts: any[] = [];
+      const failed: any[] = [];
+      const ambiguous: any[] = [];
+      const toolCallsExecuted: any[] = [];
+
+      for (const m of parsedMatches) {
+        const learnResult = await learnDrinkAlias({
+          supabaseAdmin: this.supabaseAdmin,
+          alias: m.alias,
+          targetDrinkName: m.targetDrinkName,
+          businessUnit: targetUnitId,
+          userId: input.userId,
+          performerName: input.userName || "Usuário",
+          userRole: input.userRole,
+          source: "chat",
+        });
+
+        if (learnResult.status === "CREATED" || learnResult.status === "UPDATED" || learnResult.status === "IDEMPOTENT") {
+          applied.push(learnResult);
+          toolCallsExecuted.push({
+            toolName: "upsert_drink_alias",
+            arguments: { alias: m.alias, target_drink: m.targetDrinkName, business_unit: targetUnitId },
+            result: learnResult,
+            status: "success",
+          });
+        } else if (learnResult.status === "ALIAS_CONFLICT") {
+          conflicts.push(learnResult);
+        } else if (learnResult.status === "AMBIGUOUS") {
+          ambiguous.push(learnResult);
+        } else {
+          failed.push(learnResult);
+        }
+      }
+
+      // If we have an active pending draft for create_sales_session, reprocess it immediately
+      if (activePending && activePending.tool_name === "create_sales_session") {
+        const { catalog, aliases } = await loadDrinkCatalogAndAliases(this.supabaseAdmin, targetUnitId);
+        const draftArgs = { ...(activePending.arguments || {}) };
+        const rawItems = draftArgs.items || [];
+
+        const updatedItems = rawItems.map((it: any) => {
+          const rawName = it.rawName || it.name;
+          const match = resolveDrinkMatch({
+            inputName: rawName,
+            businessUnit: draftArgs.modality || draftArgs.unit_name || targetUnitId,
+            catalog,
+            aliases,
+            source: "reprocess_draft",
+          });
+
+          if (match.matched && match.drink) {
+            const comm = resolveDrinkCommercialData(match.drink, draftArgs.modality || draftArgs.unit_name || targetUnitId);
+            const unitPrice = it.unit_price != null && it.unit_price > 0 && !it.isUnknown ? it.unit_price : comm.unitPrice;
+            const unitCost = it.unit_cost != null && it.unit_cost > 0 && !it.isUnknown ? it.unit_cost : comm.unitCost;
+            const ingredientCost = it.ingredient_cost != null && it.ingredient_cost > 0 && !it.isUnknown ? it.ingredient_cost : comm.ingredientCost;
+            return {
+              rawName,
+              name: match.canonicalDrinkName || it.name,
+              quantity: it.quantity,
+              unit_price: unitPrice,
+              unit_cost: unitCost,
+              ingredient_cost: ingredientCost,
+              total_price: Math.round(it.quantity * unitPrice * 100) / 100,
+              drink_id: match.drinkId,
+              isUnknown: false,
+              matchType: match.matchType,
+            };
+          }
+
+          return it;
+        });
+
+        draftArgs.items = updatedItems;
+        const validation = validateSalesSessionDraft(draftArgs, catalog, aliases);
+
+        let finalPendingAction: any = activePending;
+        let preview = "";
+
+        if (validation.isValid && validation.normalized) {
+          const duplicateCheck = await checkDuplicateSalesSession(
+            this.supabaseAdmin,
+            validation.normalized.modality,
+            validation.normalized.start_date
+          );
+
+          preview = formatSalesSessionWhatsAppPreview(
+            validation.normalized,
+            validation.warnings,
+            duplicateCheck.isDuplicate
+          );
+
+          finalPendingAction = await this.conversationManager.updatePendingActionArgs(
+            activePending.id,
+            validation.normalized,
+            [],
+            preview
+          );
+        }
+
+        const replyLines: string[] = [];
+        if (applied.length > 0) {
+          replyLines.push(`✅ *Vínculos aprendidos:*`);
+          applied.forEach((a) => replyLines.push(`• *${a.alias}* → ${a.targetDrinkName}`));
+        }
+        if (conflicts.length > 0) {
+          replyLines.push(``);
+          replyLines.push(`⚠️ *Conflito de mapeamento:*`);
+          conflicts.forEach((c) =>
+            replyLines.push(`• *${c.alias}* já aponta para '${c.currentTarget}'. Para alterar para '${c.requestedTarget}', confirme a substituição.`)
+          );
+        }
+        if (failed.length > 0) {
+          replyLines.push(``);
+          replyLines.push(`⚠️ *Drinks não localizados no catálogo:*`);
+          failed.forEach((f) => replyLines.push(`• *${f.alias}*: drink '${f.targetDrinkName}' não existe no catálogo oficial.`));
+        }
+        if (ambiguous.length > 0) {
+          replyLines.push(``);
+          replyLines.push(`⚠️ *Múltiplos drinks compatíveis:*`);
+          ambiguous.forEach((amb) => replyLines.push(`• *${amb.alias}*: compatível com [${amb.candidates?.join(", ")}].`));
+        }
+
+        if (preview) {
+          replyLines.push(``);
+          replyLines.push(preview);
+        }
+
+        const finalReply = replyLines.join("\n");
+        const assistantMsg = await this.conversationManager.saveMessage(
+          conversation.id,
+          "assistant",
+          finalReply,
+          "text"
+        );
+
+        return {
+          conversationId: conversation.id,
+          messageId: assistantMsg.id,
+          reply: finalReply,
+          toolCallsExecuted,
+          pendingAction: finalPendingAction
+            ? {
+                id: finalPendingAction.id,
+                toolName: finalPendingAction.tool_name || (finalPendingAction as any).toolName,
+                status: finalPendingAction.status,
+                missingFields: finalPendingAction.missing_fields || (finalPendingAction as any).missingFields || [],
+                summary: finalPendingAction.summary,
+              }
+            : null,
+        };
+      } else {
+        // No pending sales session action: simply confirm learned aliases
+        const replyLines: string[] = [];
+        if (applied.length > 0) {
+          replyLines.push(`✅ *Vínculos aprendidos com sucesso:*`);
+          applied.forEach((a) => replyLines.push(`• *${a.alias}* → ${a.targetDrinkName}`));
+        }
+        if (conflicts.length > 0) {
+          replyLines.push(``);
+          replyLines.push(`⚠️ *Conflito de mapeamento:*`);
+          conflicts.forEach((c) =>
+            replyLines.push(`• *${c.alias}* já aponta para '${c.currentTarget}'. Para alterar para '${c.requestedTarget}', confirme a substituição.`)
+          );
+        }
+        if (failed.length > 0) {
+          replyLines.push(``);
+          replyLines.push(`⚠️ *Drinks não localizados no catálogo:*`);
+          failed.forEach((f) => replyLines.push(`• *${f.alias}*: drink '${f.targetDrinkName}' não existe no catálogo oficial.`));
+        }
+        if (ambiguous.length > 0) {
+          replyLines.push(``);
+          replyLines.push(`⚠️ *Múltiplos drinks compatíveis:*`);
+          ambiguous.forEach((amb) => replyLines.push(`• *${amb.alias}*: compatível com [${amb.candidates?.join(", ")}].`));
+        }
+
+        const finalReply = replyLines.join("\n") || "Nenhum vínculo pôde ser processado.";
+        const assistantMsg = await this.conversationManager.saveMessage(
+          conversation.id,
+          "assistant",
+          finalReply,
+          "text"
+        );
+
+        return {
+          conversationId: conversation.id,
+          messageId: assistantMsg.id,
+          reply: finalReply,
+          toolCallsExecuted,
+          pendingAction: null,
+        };
+      }
+    }
+
+    // 4. Prepare Canonical Multi-turn Messages
     const history = await this.conversationManager.getRecentMessages(conversation.id, 10);
     const normalizedMessages: NormalizedMessage[] = [];
 
@@ -327,18 +535,18 @@ export class GoatAIGeminiAgent {
                 mergedArgs.unit_name = inheritedUnit;
               }
 
-              // Fetch drinks catalog for validation & price resolution
+              // Fetch drinks catalog & aliases for validation & price resolution
               let catalog: any[] = [];
+              let aliases: any[] = [];
               try {
-                const { data: dbDrinks } = await this.supabaseAdmin
-                  .from("drinks")
-                  .select("id, nome, custo_unitario, modality_config");
-                if (dbDrinks) catalog = dbDrinks;
+                const loaded = await loadDrinkCatalogAndAliases(this.supabaseAdmin, mergedArgs.unit_name);
+                catalog = loaded.catalog;
+                aliases = loaded.aliases;
               } catch {
                 // catalog optional
               }
 
-              const validation = validateSalesSessionDraft(mergedArgs, catalog);
+              const validation = validateSalesSessionDraft(mergedArgs, catalog, aliases);
 
               console.log(
                 `[GOAT-AI][SALES_DRAFT][EXTRACTED] correlationId=${correlationId} unit="${validation.normalized?.unit_name || mergedArgs.unit_name || "none"}" date="${validation.normalized?.start_date || mergedArgs.start_date || "none"}" itemsCount=${validation.normalized?.items?.length || mergedArgs.items?.length || 0} unknownDrinksCount=${validation.normalized?.unknown_drinks?.length || 0} isValid=${validation.isValid}`
