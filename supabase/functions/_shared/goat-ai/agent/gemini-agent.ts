@@ -16,6 +16,7 @@ import {
   checkDuplicateSalesSession,
   formatSalesSessionWhatsAppPreview,
   extractLaborIntent,
+  normalizeDayKey,
   normalizeDate,
   SalesSessionDraft,
 } from "../validators/sales-session-validator.ts";
@@ -268,12 +269,35 @@ export class GoatAIGeminiAgent {
       }
     }
 
-    // 2.1 Check for Sales Session Direct Modifications (e.g. updating labor_value / Mão de Obra Semanal)
+    // 2.1 Check for Sales Session Direct Modifications (e.g. updating labor_value / Mão de Obra Semanal / Por Dia)
     if (activePending && activePending.tool_name === "create_sales_session") {
       const draftArgs = { ...(activePending.arguments || {}) };
       const laborIntent = extractLaborIntent(input.message, draftArgs.unit_name || draftArgs.modality);
       if (laborIntent.isLabor && laborIntent.amount) {
-        draftArgs.labor_value = laborIntent.amount;
+        if (laborIntent.isDaily) {
+          const existingDetails = Array.isArray(draftArgs.labor_details)
+            ? [...draftArgs.labor_details]
+            : [];
+
+          for (const newDay of laborIntent.dailyDetails) {
+            const normNewDay = normalizeDayKey(newDay.dia) || newDay.dia;
+            const idx = existingDetails.findIndex(
+              (d: any) => (normalizeDayKey(d.dia) || d.dia) === normNewDay
+            );
+            if (idx >= 0) {
+              existingDetails[idx] = { ...existingDetails[idx], dia: normNewDay, valor: newDay.valor };
+            } else {
+              existingDetails.push({ dia: normNewDay, valor: newDay.valor });
+            }
+          }
+
+          draftArgs.labor_details = existingDetails;
+          draftArgs.labor_value = existingDetails.reduce((acc: number, d: any) => acc + (Number(d.valor) || 0), 0);
+        } else {
+          draftArgs.labor_value = laborIntent.amount;
+          draftArgs.labor_details = [];
+        }
+
         if (laborIntent.isSteakhouse) {
           draftArgs.unit_name = "7 Steak House";
           draftArgs.modality = "7Steakhouse";
@@ -716,6 +740,7 @@ export class GoatAIGeminiAgent {
         canonical_unit: "7Steakhouse",
         start_date: startDate,
         labor_value: laborIntent.amount,
+        labor_details: laborIntent.isDaily ? laborIntent.dailyDetails : [],
         items: [],
       };
 

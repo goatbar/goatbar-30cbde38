@@ -28,6 +28,9 @@ import { eventContractsService } from "@/services/contract-service";
 import {
   calculateSteakhouseSessionFinancials,
   calculateSteakhouseItemFinancials,
+  STEAKHOUSE_DAYS_OF_WEEK,
+  DayOfWeekKey,
+  normalizeDayKey,
 } from "@/lib/steakhouse-financials";
 
 export const Route = createFileRoute("/vendas")({
@@ -136,12 +139,28 @@ function VendasPage() {
   const [maoDeObraValor, setMaoDeObraValor] = useState(0);
   const [maoDeObraQtd, setMaoDeObraQtd] = useState(0);
   const [maoDeObraNomes, setMaoDeObraNomes] = useState("");
+  const [laborMode, setLaborMode] = useState<"semanal" | "por_dia">("semanal");
+  const [steakhouseDays, setSteakhouseDays] = useState<
+    { dia: DayOfWeekKey; label: string; valor: number; qtdPessoas?: number; nomes?: string }[]
+  >(
+    STEAKHOUSE_DAYS_OF_WEEK.map((d) => ({
+      dia: d.key,
+      label: d.label,
+      valor: 0,
+      qtdPessoas: 1,
+      nomes: "",
+    }))
+  );
   const [maoDeObraDetalhes, setMaoDeObraDetalhes] = useState<
-    { data: string; valor: number; qtdPessoas: number; nomes?: string }[]
+    { data?: string; dia?: string; valor: number; qtdPessoas?: number; nomes?: string }[]
   >([]);
   const [custosRestauranteDetalhes, setCustosRestauranteDetalhes] = useState<
     { descricao: string; valor: number }[]
   >([]);
+
+  const totalMaoDeObraCalculada = useMemo(() => {
+    return steakhouseDays.reduce((acc, d) => acc + (Number(d.valor) || 0), 0);
+  }, [steakhouseDays]);
 
   const reposicaoRestaurante = useMemo(() => {
     return custosRestauranteDetalhes.reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
@@ -281,8 +300,18 @@ function VendasPage() {
     setModalDate(new Date().toISOString().split("T")[0]);
     setModalItems([]);
     setMaoDeObraValor(0);
-    setMaoDeObraQtd(0);
+    setMaoDeObraQtd(1);
     setMaoDeObraNomes("");
+    setLaborMode("semanal");
+    setSteakhouseDays(
+      STEAKHOUSE_DAYS_OF_WEEK.map((d) => ({
+        dia: d.key,
+        label: d.label,
+        valor: 0,
+        qtdPessoas: 1,
+        nomes: "",
+      }))
+    );
     setMaoDeObraDetalhes([]);
     setCustosRestauranteDetalhes([]);
     setShowModal(true);
@@ -328,9 +357,51 @@ function VendasPage() {
     setEditingSessionId(session.id);
     setModalDate(session.data);
     setModalItems(normalizedItems);
-    setMaoDeObraValor(session.maoDeObraValor);
-    setMaoDeObraQtd(session.maoDeObraQtd);
+    setMaoDeObraQtd(session.maoDeObraQtd || 1);
     setMaoDeObraNomes(session.maoDeObraNomes || "");
+
+    const rawDetails = session.maoDeObraDetalhes || session.labor_details || [];
+    const hasValidDailyDetails =
+      Array.isArray(rawDetails) &&
+      rawDetails.length > 0 &&
+      rawDetails.some((d: any) => Number(d.valor || 0) > 0);
+
+    if (activeTab === "7Steakhouse") {
+      if (hasValidDailyDetails) {
+        setLaborMode("por_dia");
+        const populated = STEAKHOUSE_DAYS_OF_WEEK.map((dayDef) => {
+          const match = rawDetails.find((d: any) => {
+            if (d.dia && normalizeDayKey(d.dia) === dayDef.key) return true;
+            return false;
+          });
+          return {
+            dia: dayDef.key,
+            label: dayDef.label,
+            valor: match ? Number(match.valor || 0) : 0,
+            qtdPessoas: match?.qtdPessoas ?? 1,
+            nomes: match?.nomes ?? "",
+          };
+        });
+        setSteakhouseDays(populated);
+        const sum = populated.reduce((acc, d) => acc + d.valor, 0);
+        setMaoDeObraValor(sum);
+      } else {
+        setLaborMode("semanal");
+        setMaoDeObraValor(Number(session.maoDeObraValor ?? session.labor_value ?? 0));
+        setSteakhouseDays(
+          STEAKHOUSE_DAYS_OF_WEEK.map((d) => ({
+            dia: d.key,
+            label: d.label,
+            valor: 0,
+            qtdPessoas: 1,
+            nomes: "",
+          }))
+        );
+      }
+    } else {
+      setMaoDeObraValor(Number(session.maoDeObraValor || 0));
+    }
+
     setMaoDeObraDetalhes(
       session.maoDeObraDetalhes ? JSON.parse(JSON.stringify(session.maoDeObraDetalhes)) : [],
     );
@@ -343,14 +414,32 @@ function VendasPage() {
   };
 
   const handleSave = async () => {
+    let finalLaborValue = Number(maoDeObraValor) || 0;
+    let finalLaborDetails: any[] | undefined = undefined;
+
+    if (activeTab === "7Steakhouse") {
+      if (laborMode === "por_dia") {
+        finalLaborDetails = steakhouseDays.map((d) => ({
+          dia: d.dia,
+          valor: Number(d.valor) || 0,
+          qtdPessoas: d.qtdPessoas || 1,
+          nomes: d.nomes || "",
+        }));
+        finalLaborValue = finalLaborDetails.reduce((acc, d) => acc + d.valor, 0);
+      } else {
+        finalLaborDetails = [];
+        finalLaborValue = Number(maoDeObraValor) || 0;
+      }
+    }
+
     const payload = {
       data: modalDate,
       modalidade: activeTab,
       items: modalItems,
-      maoDeObraValor,
-      maoDeObraQtd,
+      maoDeObraValor: finalLaborValue,
+      maoDeObraQtd: activeTab === "7Steakhouse" ? 1 : maoDeObraQtd,
       maoDeObraNomes,
-      maoDeObraDetalhes: activeTab === "7Steakhouse" ? maoDeObraDetalhes : undefined,
+      maoDeObraDetalhes: activeTab === "7Steakhouse" ? finalLaborDetails : undefined,
       reposicaoRestaurante: activeTab === "7Steakhouse" ? reposicaoRestaurante : 0,
       custosRestauranteDetalhes: activeTab === "7Steakhouse" ? custosRestauranteDetalhes : [],
     };
@@ -1181,83 +1270,119 @@ function VendasPage() {
               {activeTab === "7Steakhouse" ? (
                 <div className="space-y-6">
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <label className="label-eyebrow">Mão de Obra Detalhada (Semanal)</label>
-                      <GhostButton
-                        onClick={() => setMaoDeObraDetalhes(generateSteakhouseDays(modalDate))}
-                        className="h-8 text-[10px] uppercase font-bold"
-                      >
-                        Gerar Dias
-                      </GhostButton>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {maoDeObraDetalhes.map((d, i) => (
-                        <div
-                          key={i}
-                          className="p-3 rounded-xl border border-border bg-background/40 space-y-2"
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <label className="label-eyebrow">Mão de Obra</label>
+                      <div className="inline-flex rounded-lg border border-border p-1 bg-background/50">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLaborMode("semanal");
+                          }}
+                          className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                            laborMode === "semanal"
+                              ? "bg-primary text-primary-foreground shadow-sm"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
                         >
-                          <div className="text-[10px] font-bold text-muted-foreground uppercase">
-                            {new Date(d.data + "T12:00:00").toLocaleDateString("pt-BR", {
-                              weekday: "long",
-                              day: "2-digit",
-                              month: "2-digit",
-                            })}
-                          </div>
-
-                          <div className="flex gap-2">
-                            <div className="flex-1">
-                              <label className="text-[8px] uppercase text-muted-foreground block mb-1">
-                                Valor
-                              </label>
-                              <input
-                                type="number"
-                                value={d.valor}
-                                onChange={(e) => {
-                                  const newD = [...maoDeObraDetalhes];
-                                  newD[i].valor = Number(e.target.value);
-                                  setMaoDeObraDetalhes(newD);
-                                }}
-                                className="w-full h-8 px-2 rounded bg-input border border-border text-xs"
-                              />
-                            </div>
-
-                            <div className="flex-1">
-                              <label className="text-[8px] uppercase text-muted-foreground block mb-1">
-                                Pessoas
-                              </label>
-                              <input
-                                type="number"
-                                value={d.qtdPessoas}
-                                onChange={(e) => {
-                                  const newD = [...maoDeObraDetalhes];
-                                  newD[i].qtdPessoas = Number(e.target.value);
-                                  setMaoDeObraDetalhes(newD);
-                                }}
-                                className="w-full h-8 px-2 rounded bg-input border border-border text-xs"
-                              />
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="text-[8px] uppercase text-muted-foreground block mb-1">
-                              Nomes
-                            </label>
-                            <input
-                              type="text"
-                              value={d.nomes || ""}
-                              onChange={(e) => {
-                                const newD = [...maoDeObraDetalhes];
-                                newD[i].nomes = e.target.value;
-                                setMaoDeObraDetalhes(newD);
-                              }}
-                              placeholder="Ex.: João e Maria"
-                              className="w-full h-8 px-2 rounded bg-input border border-border text-xs"
-                            />
-                          </div>
-                        </div>
-                      ))}
+                          Semanal
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLaborMode("por_dia");
+                            const sum = steakhouseDays.reduce(
+                              (acc, d) => acc + (Number(d.valor) || 0),
+                              0,
+                            );
+                            setMaoDeObraValor(sum);
+                          }}
+                          className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                            laborMode === "por_dia"
+                              ? "bg-primary text-primary-foreground shadow-sm"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          Por dia
+                        </button>
+                      </div>
                     </div>
+
+                    {laborMode === "semanal" ? (
+                      <div className="space-y-3 p-4 rounded-xl border border-border bg-background/40">
+                        <div>
+                          <label className="text-xs font-bold text-muted-foreground uppercase block mb-1">
+                            Mão de Obra Semanal (R$)
+                          </label>
+                          <input
+                            type="number"
+                            value={maoDeObraValor || ""}
+                            onChange={(e) => setMaoDeObraValor(Number(e.target.value))}
+                            placeholder="Ex.: 2800"
+                            className="w-full h-10 px-3 rounded-lg bg-input border border-border text-sm font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] uppercase text-muted-foreground block mb-1">
+                            Responsáveis / Observação (Opcional)
+                          </label>
+                          <input
+                            type="text"
+                            value={maoDeObraNomes}
+                            onChange={(e) => setMaoDeObraNomes(e.target.value)}
+                            placeholder="Ex.: João, Maria"
+                            className="w-full h-8 px-3 rounded bg-input border border-border text-xs"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                          {steakhouseDays.map((d, i) => (
+                            <div
+                              key={d.dia}
+                              className="p-3 rounded-xl border border-border bg-background/40 space-y-1.5"
+                            >
+                              <div className="text-[11px] font-bold text-foreground">
+                                {d.label}
+                              </div>
+                              <div>
+                                <label className="text-[9px] uppercase text-muted-foreground block mb-0.5">
+                                  Valor (R$)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={d.valor || ""}
+                                  onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    setSteakhouseDays((prev) => {
+                                      const next = [...prev];
+                                      next[i] = { ...next[i], valor: val };
+                                      const sum = next.reduce(
+                                        (acc, item) => acc + (Number(item.valor) || 0),
+                                        0,
+                                      );
+                                      setMaoDeObraValor(sum);
+                                      return next;
+                                    });
+                                  }}
+                                  placeholder="0,00"
+                                  className="w-full h-8 px-2 rounded bg-input border border-border text-xs font-semibold"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="p-3 rounded-xl border border-primary/30 bg-primary/5 flex items-center justify-between">
+                          <span className="text-xs font-bold text-muted-foreground">
+                            Total semanal calculado:
+                          </span>
+                          <span className="text-base font-black text-primary">
+                            {fmtBRL(totalMaoDeObraCalculada)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-4 pt-4 border-t border-border/50">

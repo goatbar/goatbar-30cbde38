@@ -6,6 +6,8 @@ import {
   checkDuplicateSalesSession,
   resolveDrinkFromCatalog,
   extractLaborIntent,
+  normalizeDayKey,
+  extractDailyLaborItems,
 } from "../supabase/functions/_shared/goat-ai/validators/sales-session-validator";
 import { resolveBusinessUnit } from "../supabase/functions/_shared/goat-ai/matchers/unit-matcher";
 import { GoatAIGeminiAgent } from "../supabase/functions/_shared/goat-ai/agent/gemini-agent";
@@ -1189,6 +1191,268 @@ MO 500`;
     expect(insertedExpenses[0].description).toBe("Mão de Obra Semanal");
     expect(insertedExpenses[0].amount).toBe(500);
     expect(insertedSessions).toHaveLength(0); // Zero inserções em financial_sessions
+  });
+
+  // 37. Lançamento de vários dias na mesma mensagem
+  it("37. 'segunda mão de obra 400, terça 350, quarta 450' parses 3 days, calculates labor_value = 1200 and fills labor_details", async () => {
+    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", defaultToolRegistry);
+    const result = await agent.processTurn({
+      channel: "whatsapp",
+      message: "segunda mão de obra 400, terça 350, quarta 450 para 7 steak house",
+      userId: "user-1",
+    });
+
+    expect(result.reply).toContain("7 Steak House");
+    expect(result.reply).toContain("Mão de Obra Semanal:");
+    expect(result.reply).toMatch(/1\.?200[,.]00/);
+    expect(result.reply).toContain("Detalhamento Diário:");
+    expect(result.reply).toMatch(/Segunda-feira:\s*R\$\s*400[,.]00/i);
+    expect(result.reply).toMatch(/Terça-feira:\s*R\$\s*350[,.]00/i);
+    expect(result.reply).toMatch(/Quarta-feira:\s*R\$\s*450[,.]00/i);
+
+    const lastPending = pendingActions[pendingActions.length - 1];
+    expect(lastPending.arguments.labor_value).toBe(1200);
+    expect(lastPending.arguments.labor_details).toHaveLength(3);
+    expect(lastPending.arguments.labor_details).toEqual([
+      { dia: "segunda", valor: 400 },
+      { dia: "terca", valor: 350 },
+      { dia: "quarta", valor: 450 },
+    ]);
+  });
+
+  // 38. Lançamento de apenas um dia
+  it("38. 'mão de obra de sábado 700' parses single day with labor_value = 700", async () => {
+    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", defaultToolRegistry);
+    const result = await agent.processTurn({
+      channel: "whatsapp",
+      message: "mão de obra de sábado 700 para 7 steak house",
+      userId: "user-1",
+    });
+
+    expect(result.reply).toContain("Mão de Obra Semanal:");
+    expect(result.reply).toMatch(/700[,.]00/);
+    expect(result.reply).toMatch(/Sábado:\s*R\$\s*700[,.]00/i);
+
+    const lastPending = pendingActions[pendingActions.length - 1];
+    expect(lastPending.arguments.labor_value).toBe(700);
+    expect(lastPending.arguments.labor_details).toEqual([{ dia: "sabado", valor: 700 }]);
+  });
+
+  // 39. Atualização do mesmo dia duas vezes (substitui sem duplicar)
+  it("39. Updating the same day replaces the previous value without duplicating records", async () => {
+    pendingActions.push({
+      id: "pending-sess-dup",
+      conversation_id: "conv-test",
+      tool_name: "create_sales_session",
+      status: "ready_for_confirmation",
+      arguments: {
+        unit_name: "7 Steak House",
+        modality: "7Steakhouse",
+        start_date: "2026-08-05",
+        labor_value: 400,
+        labor_details: [{ dia: "sabado", valor: 400 }],
+        items: [{ name: "Caipirinha", quantity: 2, unit_price: 28 }],
+      },
+      missing_fields: [],
+    });
+
+    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", defaultToolRegistry);
+    const result = await agent.processTurn({
+      channel: "whatsapp",
+      message: "mão de obra de sábado 700",
+      userId: "user-1",
+    });
+
+    expect(result.reply).toMatch(/Sábado:\s*R\$\s*700[,.]00/i);
+    const lastPending = pendingActions[pendingActions.length - 1];
+    expect(lastPending.arguments.labor_value).toBe(700);
+    // Deve ter apenas 1 registro para sábado, com valor substituído para 700
+    expect(lastPending.arguments.labor_details).toEqual([{ dia: "sabado", valor: 700 }]);
+  });
+
+  // 40. Troca de modo diário para semanal
+  it("40. Switching from daily to weekly mode sets direct labor_value and clears labor_details", async () => {
+    pendingActions.push({
+      id: "pending-sess-switch-w",
+      conversation_id: "conv-test",
+      tool_name: "create_sales_session",
+      status: "ready_for_confirmation",
+      arguments: {
+        unit_name: "7 Steak House",
+        modality: "7Steakhouse",
+        start_date: "2026-08-05",
+        labor_value: 1200,
+        labor_details: [
+          { dia: "segunda", valor: 400 },
+          { dia: "terca", valor: 350 },
+          { dia: "quarta", valor: 450 },
+        ],
+        items: [{ name: "Caipirinha", quantity: 2, unit_price: 28 }],
+      },
+      missing_fields: [],
+    });
+
+    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", defaultToolRegistry);
+    const result = await agent.processTurn({
+      channel: "whatsapp",
+      message: "mão de obra da semana 2800",
+      userId: "user-1",
+    });
+
+    expect(result.reply).toContain("Mão de Obra Semanal:");
+    expect(result.reply).toMatch(/2\.?800[,.]00/);
+    expect(result.reply).not.toContain("Detalhamento Diário:");
+
+    const lastPending = pendingActions[pendingActions.length - 1];
+    expect(lastPending.arguments.labor_value).toBe(2800);
+    expect(lastPending.arguments.labor_details).toEqual([]);
+  });
+
+  // 41. Troca de modo semanal para diário
+  it("41. Switching from weekly to daily mode sets daily details and recalculates labor_value as sum", async () => {
+    pendingActions.push({
+      id: "pending-sess-switch-d",
+      conversation_id: "conv-test",
+      tool_name: "create_sales_session",
+      status: "ready_for_confirmation",
+      arguments: {
+        unit_name: "7 Steak House",
+        modality: "7Steakhouse",
+        start_date: "2026-08-05",
+        labor_value: 2800,
+        labor_details: [],
+        items: [{ name: "Caipirinha", quantity: 2, unit_price: 28 }],
+      },
+      missing_fields: [],
+    });
+
+    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", defaultToolRegistry);
+    const result = await agent.processTurn({
+      channel: "whatsapp",
+      message: "segunda mão de obra 400, terça 350, quarta 450",
+      userId: "user-1",
+    });
+
+    expect(result.reply).toContain("Mão de Obra Semanal:");
+    expect(result.reply).toMatch(/1\.?200[,.]00/);
+    expect(result.reply).toContain("Detalhamento Diário:");
+
+    const lastPending = pendingActions[pendingActions.length - 1];
+    expect(lastPending.arguments.labor_value).toBe(1200);
+    expect(lastPending.arguments.labor_details).toHaveLength(3);
+  });
+
+  // 42. Normalização de aliases de dias: sábado / sabado / sab
+  it("42. Day aliases 'sábado', 'sabado', 'sab' all normalize to canonical key 'sabado'", () => {
+    expect(normalizeDayKey("sábado")).toBe("sabado");
+    expect(normalizeDayKey("sabado")).toBe("sabado");
+    expect(normalizeDayKey("sab")).toBe("sabado");
+
+    const parsed1 = extractDailyLaborItems("mão de obra sábado 700");
+    expect(parsed1[0].dia).toBe("sabado");
+    expect(parsed1[0].valor).toBe(700);
+
+    const parsed2 = extractDailyLaborItems("sab 700 mo");
+    expect(parsed2[0].dia).toBe("sabado");
+    expect(parsed2[0].valor).toBe(700);
+  });
+
+  // 43. Normalização de aliases de dias: terça / terca / ter
+  it("43. Day aliases 'terça', 'terca', 'ter' all normalize to canonical key 'terca'", () => {
+    expect(normalizeDayKey("terça")).toBe("terca");
+    expect(normalizeDayKey("terca")).toBe("terca");
+    expect(normalizeDayKey("ter")).toBe("terca");
+    expect(normalizeDayKey("terça-feira")).toBe("terca");
+
+    const parsed1 = extractDailyLaborItems("mão de obra terça 350");
+    expect(parsed1[0].dia).toBe("terca");
+    expect(parsed1[0].valor).toBe(350);
+
+    const parsed2 = extractDailyLaborItems("ter 350 mo");
+    expect(parsed2[0].dia).toBe("terca");
+    expect(parsed2[0].valor).toBe(350);
+  });
+
+  // 44. Divergência entre labor_value e soma dos detalhes (corrige para soma dos detalhes no modo diário)
+  it("44. Inconsistent labor_value vs labor_details sum is corrected deterministically in daily mode", () => {
+    const draft = {
+      unit_name: "7 Steak House",
+      canonical_unit: "7Steakhouse" as const,
+      start_date: "2026-08-05",
+      labor_value: 2500, // Divergente da soma (1800)
+      labor_details: [
+        { dia: "segunda", valor: 1000 },
+        { dia: "terca", valor: 800 },
+      ],
+      items: [],
+    };
+
+    const validation = validateSalesSessionDraft(draft);
+    expect(validation.isValid).toBe(true);
+    expect(validation.normalized?.labor_value).toBe(1800); // 1000 + 800 (corrigido para a soma dos detalhes)
+  });
+
+  // 45. labor_details vazio ou com zeros mantém o modo semanal e labor_value informado
+  it("45. Empty or all-zero labor_details preserves weekly mode with direct labor_value", () => {
+    const draftEmpty = {
+      unit_name: "7 Steak House",
+      canonical_unit: "7Steakhouse" as const,
+      start_date: "2026-08-05",
+      labor_value: 2800,
+      labor_details: [],
+      items: [],
+    };
+
+    const validationEmpty = validateSalesSessionDraft(draftEmpty);
+    expect(validationEmpty.isValid).toBe(true);
+    expect(validationEmpty.normalized?.labor_value).toBe(2800);
+    expect(validationEmpty.normalized?.labor_details).toEqual([]);
+
+    const draftZeros = {
+      unit_name: "7 Steak House",
+      canonical_unit: "7Steakhouse" as const,
+      start_date: "2026-08-05",
+      labor_value: 2800,
+      labor_details: [
+        { dia: "segunda", valor: 0 },
+        { dia: "terca", valor: 0 },
+      ],
+      items: [],
+    };
+
+    const validationZeros = validateSalesSessionDraft(draftZeros);
+    expect(validationZeros.isValid).toBe(true);
+    expect(validationZeros.normalized?.labor_value).toBe(2800);
+    expect(validationZeros.normalized?.labor_details).toEqual([]);
+  });
+
+  // 46. Preview da GIA exibe somente dias com valor maior que zero, mantendo o total semanal acima
+  it("46. formatSalesSessionWhatsAppPreview displays only days with valor > 0 under the weekly total", () => {
+    const session = {
+      unit_name: "7 Steak House",
+      modality: "7Steakhouse" as const,
+      start_date: "2026-08-05",
+      items: [],
+      total_drinks: 0,
+      total_amount: 0,
+      total_cost: 0,
+      labor_value: 1200,
+      labor_quantity: 1,
+      labor_details: [
+        { dia: "segunda", valor: 400 },
+        { dia: "terca", valor: 0 }, // Deve ser ocultado do preview
+        { dia: "quarta", valor: 800 },
+        { dia: "quinta", valor: 0 }, // Deve ser ocultado do preview
+      ],
+      reposicao_restaurante: 0,
+    };
+
+    const preview = formatSalesSessionWhatsAppPreview(session);
+    expect(preview).toMatch(/• \*Mão de Obra Semanal:\*\s*R\$\s*1\.?200[,.]00/i);
+    expect(preview).toMatch(/Segunda-feira:\s*R\$\s*400[,.]00/i);
+    expect(preview).toMatch(/Quarta-feira:\s*R\$\s*800[,.]00/i);
+    expect(preview).not.toContain("Terça-feira");
+    expect(preview).not.toContain("Quinta-feira");
   });
 });
 

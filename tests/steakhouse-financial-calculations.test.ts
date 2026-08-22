@@ -520,4 +520,74 @@ describe("Auditoria e Cálculos Financeiros da 7 Steak House", () => {
     expect(metrics.consolidated.receita).toBe(288.8);
     expect(metrics.consolidated.lucro).toBe(78.8);
   });
+
+  // =========================================================================
+  // 19. Modo Semanal: Mão de obra semanal informada diretamente
+  // =========================================================================
+  it("19. Mão de Obra Semanal informada diretamente (ex: R$ 2.800,00) sem labor_details", () => {
+    const session = {
+      id: "sess-semanal-direta",
+      data: "2026-08-05",
+      modalidade: "7Steakhouse",
+      items: [
+        { drinkId: "drink-a", quantidade: 10, precoUnitario: 32.0, custoUnitario: 16.76, custoInsumo: 6.0 },
+      ],
+      maoDeObraValor: 2800,
+      labor_details: [],
+    };
+
+    const fin = calculateSteakhouseSessionFinancials(session, catalogMock);
+    expect(fin.maoDeObraSemanal).toBe(2800.0);
+    expect(fin.receitaGoatBar).toBe(167.6);
+    expect(fin.custoInsumos).toBe(60.0);
+    expect(fin.custoOperacionalGoatBar).toBe(2860.0); // 2800 + 60
+    expect(fin.lucroFinal).toBe(-2692.4); // 167.60 - 2860.00
+  });
+
+  // =========================================================================
+  // 20. Modo Por Dia: Mão de obra calculada a partir de labor_details
+  // =========================================================================
+  it("20. Mão de Obra Por Dia calculada automaticamente pela soma de labor_details", () => {
+    const session = {
+      id: "sess-por-dia",
+      data: "2026-08-05",
+      modalidade: "7Steakhouse",
+      items: [
+        { drinkId: "drink-a", quantidade: 10, precoUnitario: 32.0, custoUnitario: 16.76, custoInsumo: 6.0 },
+      ],
+      labor_value: 1200,
+      labor_details: [
+        { dia: "segunda", valor: 400 },
+        { dia: "terca", valor: 350 },
+        { dia: "quarta", valor: 450 },
+      ],
+    };
+
+    const fin = calculateSteakhouseSessionFinancials(session, catalogMock);
+    expect(fin.maoDeObraSemanal).toBe(1200.0); // 400 + 350 + 450
+    expect(fin.receitaGoatBar).toBe(167.6);
+    expect(fin.custoInsumos).toBe(60.0);
+    expect(fin.custoOperacionalGoatBar).toBe(1260.0); // 1200 + 60
+    expect(fin.lucroFinal).toBe(-1092.4); // 167.60 - 1260.00
+  });
+
+  // =========================================================================
+  // 21. Preservação de retrocompatibilidade com labor_details zerado
+  // =========================================================================
+  it("21. Preservação retrocompatível: labor_details zerado utiliza labor_value direto", () => {
+    const session = {
+      id: "sess-zeros",
+      data: "2026-08-05",
+      modalidade: "7Steakhouse",
+      items: [],
+      labor_value: 2800,
+      labor_details: [
+        { dia: "segunda", valor: 0 },
+        { dia: "terca", valor: 0 },
+      ],
+    };
+
+    const fin = calculateSteakhouseSessionFinancials(session, catalogMock);
+    expect(fin.maoDeObraSemanal).toBe(2800.0);
+  });
 });

@@ -30,7 +30,7 @@ export interface SalesSessionDraft {
   labor_value?: number | string;
   labor_quantity?: number | string;
   labor_names?: string;
-  labor_details?: Array<{ data: string; valor: number; qtdPessoas: number; nomes?: string }>;
+  labor_details?: Array<{ data?: string; dia?: string; valor: number; qtdPessoas?: number; nomes?: string }>;
   reposicao_restaurante?: number | string;
   custos_restaurante_detalhes?: Array<{ descricao: string; valor: number }>;
   notes?: string;
@@ -67,7 +67,7 @@ export interface NormalizedSalesSession {
   labor_value: number;
   labor_quantity: number;
   labor_names?: string;
-  labor_details?: Array<{ data: string; valor: number; qtdPessoas: number; nomes?: string }>;
+  labor_details?: Array<{ data?: string; dia?: string; valor: number; qtdPessoas?: number; nomes?: string }>;
   reposicao_restaurante: number;
   custos_restaurante_detalhes?: Array<{ descricao: string; valor: number }>;
   notes?: string;
@@ -197,16 +197,145 @@ export function resolveDrinkFromCatalog(
   };
 }
 
+export type CanonicalDayKey =
+  | "segunda"
+  | "terca"
+  | "quarta"
+  | "quinta"
+  | "sexta"
+  | "sabado"
+  | "domingo";
+
+export interface DailyLaborDetail {
+  dia: CanonicalDayKey;
+  data?: string;
+  valor: number;
+  qtdPessoas?: number;
+  nomes?: string;
+}
+
+export function normalizeDayKey(input: string): CanonicalDayKey | null {
+  if (!input || typeof input !== "string") return null;
+  const norm = input
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+  if (/^(segunda(-feira)?|seg)$/i.test(norm)) return "segunda";
+  if (/^(terca(-feira)?|ter)$/i.test(norm)) return "terca";
+  if (/^(quarta(-feira)?|qua)$/i.test(norm)) return "quarta";
+  if (/^(quinta(-feira)?|qui)$/i.test(norm)) return "quinta";
+  if (/^(sexta(-feira)?|sex)$/i.test(norm)) return "sexta";
+  if (/^(sabado|sab)$/i.test(norm)) return "sabado";
+  if (/^(domingo|dom)$/i.test(norm)) return "domingo";
+
+  return null;
+}
+
+export function getDayDisplayName(dayKey?: string): string {
+  if (!dayKey) return "Dia";
+  const canonical = normalizeDayKey(dayKey);
+  switch (canonical) {
+    case "segunda":
+      return "Segunda-feira";
+    case "terca":
+      return "Terça-feira";
+    case "quarta":
+      return "Quarta-feira";
+    case "quinta":
+      return "Quinta-feira";
+    case "sexta":
+      return "Sexta-feira";
+    case "sabado":
+      return "Sábado";
+    case "domingo":
+      return "Domingo";
+    default:
+      return dayKey.charAt(0).toUpperCase() + dayKey.slice(1);
+  }
+}
+
+export function extractDailyLaborItems(message: string): DailyLaborDetail[] {
+  if (!message || typeof message !== "string") return [];
+
+  const norm = message
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  // Word boundary for days and short abbreviations
+  const dayRegex =
+    /\b(segunda(?:-feira)?|seg|terca(?:-feira)?|ter|quarta(?:-feira)?|qua|quinta(?:-feira)?|qui|sexta(?:-feira)?|sex|sabado|sab|domingo|dom)\b/gi;
+
+  const matches: { day: CanonicalDayKey; index: number; raw: string }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = dayRegex.exec(norm)) !== null) {
+    const canonicalDay = normalizeDayKey(m[1]);
+    if (canonicalDay) {
+      matches.push({ day: canonicalDay, index: m.index, raw: m[1] });
+    }
+  }
+
+  if (matches.length === 0) return [];
+
+  const resultsMap = new Map<CanonicalDayKey, number>();
+
+  for (let i = 0; i < matches.length; i++) {
+    const current = matches[i];
+    const nextIndex = i + 1 < matches.length ? matches[i + 1].index : norm.length;
+    const chunk = norm.slice(current.index, nextIndex);
+
+    // Look for number in chunk after the day
+    const numMatch = chunk.match(/(?:r\$\s*)?(\d+(?:[.,]\d{2})?|\d+)(?:\s*(?:reais|rs))?/i);
+    if (numMatch) {
+      const val = normalizeCurrency(numMatch[1]);
+      if (val > 0) {
+        resultsMap.set(current.day, val);
+        continue;
+      }
+    }
+
+    // Look for number in previous chunk (e.g. "400 no sabado")
+    if (i === 0) {
+      const prevChunk = norm.slice(0, current.index);
+      const prevNumMatch = prevChunk.match(
+        /(?:r\$\s*)?(\d+(?:[.,]\d{2})?|\d+)(?:\s*(?:reais|rs))?(?:\s*(?:no|na|de|em|para))?\s*$/i
+      );
+      if (prevNumMatch) {
+        const val = normalizeCurrency(prevNumMatch[1]);
+        if (val > 0) {
+          resultsMap.set(current.day, val);
+        }
+      }
+    }
+  }
+
+  const items: DailyLaborDetail[] = [];
+  for (const [day, valor] of resultsMap.entries()) {
+    items.push({ dia: day, valor });
+  }
+
+  return items;
+}
+
 /**
  * Extrai deterministicamente a intenção de lançamento de Mão de Obra e seu valor,
- * validando o contexto da 7 Steak House e seus aliases oficiais.
+ * validando o contexto da 7 Steak House e seus aliases oficiais (Semanal e Diário).
  */
 export function extractLaborIntent(
   message: string,
   contextUnit?: string
-): { isLabor: boolean; amount?: number; isSteakhouse: boolean; laborAlias?: string } {
+): {
+  isLabor: boolean;
+  amount?: number;
+  isSteakhouse: boolean;
+  laborAlias?: string;
+  isDaily: boolean;
+  dailyDetails: DailyLaborDetail[];
+} {
   if (!message || typeof message !== "string") {
-    return { isLabor: false, isSteakhouse: false };
+    return { isLabor: false, isSteakhouse: false, isDaily: false, dailyDetails: [] };
   }
 
   const norm = message
@@ -221,30 +350,74 @@ export function extractLaborIntent(
     norm.includes("steakhouse") ||
     norm.includes("sete steak") ||
     norm.includes("steak") ||
-    (contextUnit ? (contextUnit.includes("Steak") || contextUnit.includes("7Steakhouse") || contextUnit === "7Steakhouse") : false);
+    (contextUnit
+      ? contextUnit.includes("Steak") ||
+        contextUnit.includes("7Steakhouse") ||
+        contextUnit === "7Steakhouse"
+      : false);
+
+  // Check for explicit weekly keywords
+  const isWeeklyKeyword =
+    norm.includes("mao de obra semanal") ||
+    norm.includes("mão de obra semanal") ||
+    norm.includes("mao de obra da semana") ||
+    norm.includes("mão de obra da semana") ||
+    norm.includes("semanal") ||
+    norm.includes("da semana");
+
+  // Check for labor keywords
+  const hasLaborKeyword =
+    norm.includes("mao de obra") ||
+    norm.includes("mão de obra") ||
+    (isExplicitSteak && /\bmo\b/i.test(norm));
+
+  const dailyItems = extractDailyLaborItems(message);
+  const isDaily = dailyItems.length > 0 && !isWeeklyKeyword;
 
   let matchedAlias: string | undefined;
   if (norm.includes("mao de obra semanal")) matchedAlias = "mão de obra semanal";
   else if (norm.includes("mao de obra da semana")) matchedAlias = "mão de obra da semana";
   else if (norm.includes("mao de obra")) matchedAlias = "mão de obra";
   else if (isExplicitSteak && /\bmo\b/i.test(norm)) matchedAlias = "MO";
+  else if (isDaily && isExplicitSteak) matchedAlias = "mão de obra por dia";
 
-  if (!matchedAlias) {
-    return { isLabor: false, isSteakhouse: Boolean(isExplicitSteak) };
+  if (!matchedAlias && !isDaily) {
+    return { isLabor: false, isSteakhouse: Boolean(isExplicitSteak), isDaily: false, dailyDetails: [] };
   }
 
-  // Extract amount (e.g. 500, 500 reais, R$ 500,00, 500,00)
+  if (isDaily && (hasLaborKeyword || isExplicitSteak)) {
+    const sum = dailyItems.reduce((acc, d) => acc + d.valor, 0);
+    return {
+      isLabor: true,
+      amount: sum > 0 ? sum : undefined,
+      isSteakhouse: Boolean(isExplicitSteak),
+      laborAlias: matchedAlias || "mão de obra por dia",
+      isDaily: true,
+      dailyDetails: dailyItems,
+    };
+  }
+
+  // Extract amount for weekly (e.g. 500, 500 reais, R$ 500,00, 500,00)
   let amount: number | undefined;
-  const numMatch = message.match(/(?:r\$\s*)?(\d+(?:[\.,]\d{2})?)(?:\s*(?:reais|rs))?/i);
-  if (numMatch) {
-    amount = normalizeCurrency(numMatch[1]);
+  const laborNumMatch = message.match(
+    /(?:m[aã]o\s+de\s+obra(?:\s+semanal|\s+da\s+semana)?|\bmo\b)(?:[\s:]*(?:de|no\s+valor\s+de|em)?[\s:]*)?(?:r\$\s*)?(\d+(?:[\.,]\d{2})?)/i
+  );
+  if (laborNumMatch) {
+    amount = normalizeCurrency(laborNumMatch[1]);
+  } else {
+    const numMatch = message.match(/(?:r\$\s*)?(\d+(?:[\.,]\d{2})?)(?:\s*(?:reais|rs))?/i);
+    if (numMatch) {
+      amount = normalizeCurrency(numMatch[1]);
+    }
   }
 
   return {
-    isLabor: true,
+    isLabor: Boolean(matchedAlias),
     amount: amount && amount > 0 ? amount : undefined,
     isSteakhouse: Boolean(isExplicitSteak),
-    laborAlias: matchedAlias,
+    laborAlias: matchedAlias || "mão de obra",
+    isDaily: false,
+    dailyDetails: [],
   };
 }
 
@@ -278,8 +451,19 @@ export function parseSalesSessionText(text: string): Partial<SalesSessionDraft> 
     }
   }
 
-  // 3. Extract Labor Value (Mão de Obra / Mão de Obra Semanal / MO)
-  // Precedence over drinks: must be extracted first and excluded from items list
+  // 3. Extract Labor Value (Mão de Obra / Mão de Obra Semanal / MO / Daily Labor)
+  const laborIntent = extractLaborIntent(text, draft.unit_name || draft.canonical_unit);
+  if (laborIntent.isLabor && laborIntent.amount) {
+    draft.labor_value = laborIntent.amount;
+    if (laborIntent.isDaily && laborIntent.dailyDetails.length > 0) {
+      draft.labor_details = laborIntent.dailyDetails;
+    } else {
+      draft.labor_details = [];
+    }
+  }
+
+  // 4. Extract Drink Items
+  const items: SalesSessionDraftItem[] = [];
   const laborAliases = [
     "mao de obra semanal",
     "mão de obra semanal",
@@ -288,33 +472,6 @@ export function parseSalesSessionText(text: string): Partial<SalesSessionDraft> 
     "mao de obra",
     "mão de obra",
   ];
-
-  for (const line of lines) {
-    const normLine = line
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
-
-    // Check full labor aliases
-    const isLaborMatch = laborAliases.some((alias) => {
-      const normAlias = alias.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-      return normLine.includes(normAlias);
-    });
-
-    // Check MO alias only in session / 7 steakhouse context
-    const isMoMatch = (draft.unit_name?.includes("Steak") || draft.canonical_unit === "7Steakhouse" || text.toLowerCase().includes("steak") || text.toLowerCase().includes("sessao")) &&
-      /\bmo\b/i.test(line);
-
-    if (isLaborMatch || isMoMatch) {
-      const amountMatch = line.match(/(?:r\$\s*)?(\d+(?:[\.,]\d{2})?)/i);
-      if (amountMatch) {
-        draft.labor_value = normalizeCurrency(amountMatch[1]);
-      }
-    }
-  }
-
-  // 4. Extract Drink Items
-  const items: SalesSessionDraftItem[] = [];
   const nonItemKeywords = [
     "steak house",
     "steakhouse",
@@ -349,6 +506,10 @@ export function parseSalesSessionText(text: string): Partial<SalesSessionDraft> 
       continue;
     }
 
+    if (extractDailyLaborItems(line).length > 0 && (normLine.includes("mao") || /\bmo\b/i.test(normLine) || draft.canonical_unit === "7Steakhouse" || draft.unit_name?.includes("Steak"))) {
+      continue;
+    }
+
     if (resolveBusinessUnit(line).matched) {
       continue;
     }
@@ -363,7 +524,7 @@ export function parseSalesSessionText(text: string): Partial<SalesSessionDraft> 
       const name = endQtyMatch[1].trim();
       const qty = parseInt(endQtyMatch[2], 10);
       const normName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-      const isLaborName = laborAliases.some((a) => normName.includes(a.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())) || normName === "mo";
+      const isLaborName = laborAliases.some((a) => normName.includes(a.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())) || /\bmo\b/i.test(normName);
       if (name.length > 1 && qty > 0 && !resolveBusinessUnit(name).matched && !isLaborName) {
         items.push({ name, quantity: qty });
         continue;
@@ -376,7 +537,7 @@ export function parseSalesSessionText(text: string): Partial<SalesSessionDraft> 
       const qty = parseInt(startQtyMatch[1], 10);
       const name = startQtyMatch[2].trim();
       const normName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-      const isLaborName = laborAliases.some((a) => normName.includes(a.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())) || normName === "mo";
+      const isLaborName = laborAliases.some((a) => normName.includes(a.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())) || /\bmo\b/i.test(normName);
       if (name.length > 1 && qty > 0 && !resolveBusinessUnit(name).matched && !isLaborName) {
         items.push({ name, quantity: qty });
         continue;
@@ -513,9 +674,40 @@ export function validateSalesSessionDraft(
   }
 
   // 5. Optional Real Fields Normalization
-  const laborValue = normalizeCurrency(draft.labor_value);
+  let laborValue = normalizeCurrency(draft.labor_value);
   const laborQuantity = Number(draft.labor_quantity) || (draft.labor_names ? 1 : 0);
   const reposicaoRestaurante = normalizeCurrency(draft.reposicao_restaurante);
+
+  let laborDetails = draft.labor_details ? [...draft.labor_details] : [];
+
+  if (dbModality === "7Steakhouse") {
+    const hasValidDetails =
+      Array.isArray(laborDetails) &&
+      laborDetails.length > 0 &&
+      laborDetails.some((d: any) => normalizeCurrency(d.valor) > 0);
+
+    if (hasValidDetails) {
+      // Deduplicate days and normalize canonical day keys
+      const dayMap = new Map<string, any>();
+      for (const d of laborDetails) {
+        const canonicalKey = normalizeDayKey(d.dia) || d.dia || "dia";
+        const val = normalizeCurrency(d.valor);
+        dayMap.set(canonicalKey, {
+          ...d,
+          dia: canonicalKey,
+          valor: val,
+        });
+      }
+      laborDetails = Array.from(dayMap.values());
+      // labor_value MUST always be recalculated as sum of daily details in daily mode
+      laborValue = Math.round(
+        laborDetails.reduce((acc, d) => acc + normalizeCurrency(d.valor), 0) * 100
+      ) / 100;
+    } else {
+      // Weekly mode: clear labor_details to prevent inconsistent state
+      laborDetails = [];
+    }
+  }
 
   const isValid = missingFields.length === 0 && errors.length === 0;
 
@@ -535,7 +727,7 @@ export function validateSalesSessionDraft(
         labor_value: laborValue,
         labor_quantity: laborQuantity,
         labor_names: draft.labor_names?.trim() || undefined,
-        labor_details: draft.labor_details || [],
+        labor_details: laborDetails,
         reposicao_restaurante: reposicaoRestaurante,
         custos_restaurante_detalhes: draft.custos_restaurante_detalhes || [],
         notes: draft.notes,
@@ -631,6 +823,17 @@ export function formatSalesSessionWhatsAppPreview(
   if (session.labor_value > 0) {
     const laborLabel = isSteak ? "Mão de Obra Semanal" : "Mão de Obra";
     lines.push(`• *${laborLabel}:* ${formatBRL(session.labor_value)}${session.labor_names ? ` (${session.labor_names})` : ""}`);
+
+    if (isSteak && session.labor_details && session.labor_details.length > 0) {
+      const validDays = session.labor_details.filter((d: any) => normalizeCurrency(d.valor) > 0);
+      if (validDays.length > 0) {
+        lines.push(`  *Detalhamento Diário:*`);
+        validDays.forEach((d: any) => {
+          const dayName = getDayDisplayName(d.dia);
+          lines.push(`    - ${dayName}: ${formatBRL(normalizeCurrency(d.valor))}${d.nomes ? ` (${d.nomes})` : ""}`);
+        });
+      }
+    }
   }
 
   if (session.reposicao_restaurante > 0) {

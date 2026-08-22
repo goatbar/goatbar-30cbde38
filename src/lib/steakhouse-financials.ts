@@ -169,6 +169,52 @@ export function calculateSteakhouseItemFinancials(
   };
 }
 
+export type DayOfWeekKey =
+  | "segunda"
+  | "terca"
+  | "quarta"
+  | "quinta"
+  | "sexta"
+  | "sabado"
+  | "domingo";
+
+export interface SteakhouseDailyLabor {
+  dia: DayOfWeekKey | string;
+  data?: string;
+  valor: number;
+  qtdPessoas?: number;
+  nomes?: string;
+}
+
+export const STEAKHOUSE_DAYS_OF_WEEK: { key: DayOfWeekKey; label: string; shortLabel: string }[] = [
+  { key: "segunda", label: "Segunda-feira", shortLabel: "Seg" },
+  { key: "terca", label: "Terça-feira", shortLabel: "Ter" },
+  { key: "quarta", label: "Quarta-feira", shortLabel: "Qua" },
+  { key: "quinta", label: "Quinta-feira", shortLabel: "Qui" },
+  { key: "sexta", label: "Sexta-feira", shortLabel: "Sex" },
+  { key: "sabado", label: "Sábado", shortLabel: "Sáb" },
+  { key: "domingo", label: "Domingo", shortLabel: "Dom" },
+];
+
+export function normalizeDayKey(input: string): DayOfWeekKey | null {
+  if (!input || typeof input !== "string") return null;
+  const norm = input
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+  if (/^(segunda(-feira)?|seg)$/i.test(norm)) return "segunda";
+  if (/^(terca(-feira)?|ter)$/i.test(norm)) return "terca";
+  if (/^(quarta(-feira)?|qua)$/i.test(norm)) return "quarta";
+  if (/^(quinta(-feira)?|qui)$/i.test(norm)) return "quinta";
+  if (/^(sexta(-feira)?|sex)$/i.test(norm)) return "sexta";
+  if (/^(sabado|sab)$/i.test(norm)) return "sabado";
+  if (/^(domingo|dom)$/i.test(norm)) return "domingo";
+
+  return null;
+}
+
 /**
  * Calcula a apuração financeira consolidada de uma sessão semanal da 7 Steak House.
  */
@@ -191,12 +237,17 @@ export function calculateSteakhouseSessionFinancials(
   // Cálculo da Mão de Obra Semanal
   let maoDeObraSemanal = 0;
   const laborDetails = session?.maoDeObraDetalhes || session?.labor_details;
-  if (Array.isArray(laborDetails) && laborDetails.length > 0) {
+  const hasValidDetails =
+    Array.isArray(laborDetails) &&
+    laborDetails.length > 0 &&
+    laborDetails.some((d: any) => toFiniteNumber(d.valor) > 0);
+
+  if (hasValidDetails) {
     maoDeObraSemanal = laborDetails.reduce((acc, d) => acc + toFiniteNumber(d.valor), 0);
   } else {
     const laborVal = toFiniteNumber(session?.maoDeObraValor ?? session?.labor_value ?? 0);
     const laborQtd = toFiniteNumber(session?.maoDeObraQtd ?? session?.labor_quantity ?? 0);
-    maoDeObraSemanal = laborVal * laborQtd;
+    maoDeObraSemanal = laborQtd > 0 ? laborVal * laborQtd : laborVal;
   }
   maoDeObraSemanal = Math.round(maoDeObraSemanal * 100) / 100;
 
