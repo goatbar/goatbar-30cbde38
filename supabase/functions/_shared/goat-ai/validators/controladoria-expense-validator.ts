@@ -236,7 +236,10 @@ export function normalizeControladoriaCategory(val?: string | null, textHint = "
     target.includes("barman") ||
     target.includes("garcom") ||
     target.includes("diaria") ||
-    target.includes("staff")
+    target.includes("staff") ||
+    target.includes("mao de obra") ||
+    target.includes("mão de obra") ||
+    /\bmo\b/i.test(target)
   ) {
     return "Equipe";
   }
@@ -385,7 +388,18 @@ export function validateControladoriaExpenseDraft(
 
   // 10. Description
   let description = (draft.description || "").trim();
-  if (!description) {
+  const isLabor =
+    category === "Equipe" &&
+    (`${draft.category || ""} ${draft.description || ""} ${draft.supplier_name || ""}`
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .includes("mao de obra") ||
+      /\bmo\b/i.test(`${draft.category || ""} ${draft.description || ""} ${draft.supplier_name || ""}`));
+
+  if (resolvedModality === "Steakhouse" && isLabor) {
+    description = "Mão de Obra Semanal";
+  } else if (!description) {
     if (normalizedItems.length > 0) {
       const itemsSummary = normalizedItems.map((i) => `${i.quantity}x ${i.product_name}`).slice(0, 3).join(", ");
       description = `Compra de ${supplierName !== "Fornecedor não identificado" ? supplierName : category} (${itemsSummary})`;
@@ -478,11 +492,19 @@ export function formatControladoriaExpenseWhatsAppPreview(
         ? "Transferência"
         : expense.payment_method;
 
+  const isSteakLabor =
+    expense.modality === "Steakhouse" &&
+    (expense.description === "Mão de Obra Semanal" ||
+      expense.description.toLowerCase().includes("mão de obra") ||
+      expense.description.toLowerCase().includes("mao de obra"));
+
+  const categoryDisplay = isSteakLabor ? "Mão de Obra Semanal" : expense.category;
+
   const lines: string[] = [
     `🧾 *Lançamento de Gasto na Controladoria*`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `📍 *Unidade/Destino:* ${modalityDisplay}`,
-    `🏷️ *Categoria:* ${expense.category}`,
+    `🏷️ *Categoria/Campo:* ${categoryDisplay}`,
     `🏪 *Fornecedor:* ${expense.supplier_name}`,
   ];
 

@@ -5,6 +5,8 @@ import {
   ConversationChannel,
   MessageType,
   ToolContext,
+  ContextualEvent,
+  RecentEntitiesContext,
 } from "../types.ts";
 import { defaultToolRegistry, GoatAIToolRegistry } from "../tools/registry.ts";
 import {
@@ -337,6 +339,148 @@ export class ConversationManager {
       .limit(limit);
 
     return (messages || []).reverse() as AIMessage[];
+  }
+
+  public async getConversation(conversationId: string): Promise<AIConversation | null> {
+    if (!this.supabaseAdmin || typeof this.supabaseAdmin.from !== "function") return null;
+    try {
+      const fromObj = this.supabaseAdmin.from("ai_conversations");
+      if (!fromObj || typeof fromObj.select !== "function") return null;
+      const selectObj = fromObj.select("*");
+      if (!selectObj || typeof selectObj.eq !== "function") return null;
+      const eqObj = selectObj.eq("id", conversationId);
+
+      if (eqObj && typeof eqObj.maybeSingle === "function") {
+        const { data: conv } = await eqObj.maybeSingle();
+        return (conv as AIConversation) || null;
+      }
+      if (eqObj && typeof eqObj.single === "function") {
+        const { data: conv } = await eqObj.single();
+        return (conv as AIConversation) || null;
+      }
+      if (eqObj && typeof eqObj.limit === "function") {
+        const limitObj = eqObj.limit(1);
+        if (limitObj && typeof limitObj.maybeSingle === "function") {
+          const { data: conv } = await limitObj.maybeSingle();
+          return (conv as AIConversation) || null;
+        }
+      }
+      if (eqObj && typeof eqObj.then === "function") {
+        const res = await eqObj;
+        const conv = Array.isArray(res?.data) ? res.data[0] : res?.data;
+        return (conv as AIConversation) || null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  public async getRecentEntities(conversationId: string): Promise<RecentEntitiesContext> {
+    const conv = await this.getConversation(conversationId);
+    return conv?.metadata?.recentEntities || {};
+  }
+
+  public async updateConversationMetadata(
+    conversationId: string,
+    patch: Record<string, any>
+  ): Promise<void> {
+    const conv = await this.getConversation(conversationId);
+    const existingMetadata = conv?.metadata || {};
+    const updatedMetadata = { ...existingMetadata, ...patch };
+
+    await this.supabaseAdmin
+      .from("ai_conversations")
+      .update({
+        metadata: updatedMetadata,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", conversationId);
+  }
+
+  public async saveRecentEvents(
+    conversationId: string,
+    newEvents: ContextualEvent[],
+    presentedIds?: string[]
+  ): Promise<void> {
+    if (!newEvents || newEvents.length === 0) return;
+
+    const conv = await this.getConversation(conversationId);
+    const existingMetadata = conv?.metadata || {};
+    const recentEntities: RecentEntitiesContext = existingMetadata.recentEntities || {};
+    const existingEvents: ContextualEvent[] = recentEntities.events || [];
+
+    const eventMap = new Map<string, ContextualEvent>();
+    existingEvents.forEach((e) => {
+      if (e?.eventId) eventMap.set(e.eventId, e);
+    });
+
+    const now = new Date().toISOString();
+
+    // Sanitize and merge without storing full drinks list
+    const sanitizedNewEvents: ContextualEvent[] = newEvents.map((e) => {
+      const existing = eventMap.get(e.eventId) || {};
+      return {
+        ...existing,
+        eventId: e.eventId,
+        clientName: e.clientName || (existing as any).clientName,
+        eventName: e.eventName || (existing as any).eventName,
+        groomName: e.groomName || (existing as any).groomName,
+        brideName: e.brideName || (existing as any).brideName,
+        date: e.date || (existing as any).date,
+        location: e.location || (existing as any).location,
+        city: e.city || (existing as any).city,
+        guests: e.guests ?? (existing as any).guests,
+        status: e.status || (existing as any).status,
+        currentBudgetValue: e.currentBudgetValue ?? (existing as any).currentBudgetValue,
+        lastReferencedAt: now,
+      };
+    });
+
+    sanitizedNewEvents.forEach((e) => eventMap.set(e.eventId, e));
+
+    const mergedList: ContextualEvent[] = [
+      ...sanitizedNewEvents,
+      ...existingEvents.filter((e) => !sanitizedNewEvents.some((ne) => ne.eventId === e.eventId)),
+    ].slice(0, 20);
+
+    const updatedRecentEntities: RecentEntitiesContext = {
+      ...recentEntities,
+      events: mergedList,
+      lastFocusedEventId:
+        sanitizedNewEvents.length === 1
+          ? sanitizedNewEvents[0].eventId
+          : recentEntities.lastFocusedEventId || (sanitizedNewEvents.length > 0 ? sanitizedNewEvents[0].eventId : null),
+    };
+
+    if (presentedIds && presentedIds.length > 0) {
+      updatedRecentEntities.lastPresentedEventIds = presentedIds;
+    } else if (!updatedRecentEntities.lastPresentedEventIds && sanitizedNewEvents.length > 1) {
+      updatedRecentEntities.lastPresentedEventIds = sanitizedNewEvents.map((e) => e.eventId);
+    }
+
+    await this.updateConversationMetadata(conversationId, {
+      recentEntities: updatedRecentEntities,
+    });
+  }
+
+  public async setLastFocusedEvent(conversationId: string, eventId: string): Promise<void> {
+    const conv = await this.getConversation(conversationId);
+    const existingMetadata = conv?.metadata || {};
+    const recentEntities: RecentEntitiesContext = existingMetadata.recentEntities || {};
+    const events = (recentEntities.events || []).map((e) =>
+      e.eventId === eventId ? { ...e, lastReferencedAt: new Date().toISOString() } : e
+    );
+
+    const updatedRecentEntities: RecentEntitiesContext = {
+      ...recentEntities,
+      events,
+      lastFocusedEventId: eventId,
+    };
+
+    await this.updateConversationMetadata(conversationId, {
+      recentEntities: updatedRecentEntities,
+    });
   }
 
   public async getActivePendingAction(conversationId: string): Promise<AIPendingAction | null> {

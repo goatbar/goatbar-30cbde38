@@ -19,7 +19,7 @@ import {
   LayoutTemplate,
   Sparkles,
 } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { goatAIService } from "@/services/goat-ai/goat-ai-service";
 import logo from "@/assets/goatbar-logo.png";
@@ -29,18 +29,17 @@ const nav: {
   label: string;
   icon: typeof LayoutDashboard;
   exact?: boolean;
-  roles?: string[];
 }[] = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { to: "/gia", label: "GIA", icon: Sparkles, exact: true },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/vendas", label: "Vendas", icon: ShoppingBag },
   { to: "/drinks", label: "Drinks", icon: Wine },
   { to: "/inventario", label: "Inventário", icon: Package },
   { to: "/eventos", label: "Eventos", icon: CalendarRange },
-  { to: "/gia", label: "GIA", icon: Sparkles, roles: ["admin", "financeiro", "comercial"] },
-  { to: "/controladoria", label: "Controladoria", icon: BarChart3, roles: ["admin", "financeiro"] },
-  { to: "/contratos", label: "Contratos", icon: FileText, roles: ["admin", "comercial"] },
-  { to: "/modelos", label: "Modelos de Proposta", icon: LayoutTemplate, roles: ["admin"] },
-  { to: "/configuracoes", label: "Configurações", icon: Settings, roles: ["admin"] },
+  { to: "/controladoria", label: "Controladoria", icon: BarChart3 },
+  { to: "/contratos", label: "Contratos", icon: FileText },
+  { to: "/modelos", label: "Modelos de Proposta", icon: LayoutTemplate },
+  { to: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
 export function AppShell({ children }: { children?: ReactNode }) {
@@ -48,11 +47,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const { loading, user, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [pendingAiCount, setPendingAiCount] = useState<number>(0);
-  const role = (user?.user_metadata?.role as string | undefined)?.toLowerCase() ?? "admin";
-  const visibleNav = useMemo(
-    () => nav.filter((item) => !item.roles || item.roles.includes(role)),
-    [role],
-  );
+  const visibleNav = nav;
 
   useEffect(() => {
     if (!user) return;
@@ -77,7 +72,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
     <div className="flex h-screen w-full min-w-0 max-w-[100vw] flex-col overflow-hidden bg-background text-foreground md:flex-row">
       {/* MOBILE TOPBAR */}
       <div className="shrink-0 flex items-center justify-between border-b border-border bg-surface p-4 md:hidden">
-        <Link to="/" className="flex items-center gap-3">
+        <Link to="/gia" className="flex items-center gap-3">
           <img src={logo} alt="GOAT BAR" className="h-8 w-auto" />
           <div className="font-display text-[11px] font-semibold tracking-[0.18em] leading-none">
             GOAT BAR
@@ -101,7 +96,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
           <div className="relative w-72 max-w-[80vw] h-full bg-sidebar border-r border-sidebar-border shadow-2xl flex flex-col animate-in slide-in-from-left">
             <div className="flex items-center justify-between px-6 pt-7 pb-8 shrink-0">
               <Link
-                to="/"
+                to="/gia"
                 className="flex items-center gap-3"
                 onClick={() => setMobileMenuOpen(false)}
               >
@@ -117,7 +112,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
 
             <div className="px-3 mb-2 label-eyebrow shrink-0">Operação</div>
             <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
-              {visibleNav.map((item) => {
+              {nav.map((item) => {
                 const Icon = item.icon;
                 const active = item.exact
                   ? location.pathname === item.to
@@ -168,7 +163,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex flex-col w-64 shrink-0 bg-sidebar border-r border-sidebar-border h-screen overflow-y-auto">
         <div className="px-6 pt-7 pb-8 shrink-0">
-          <Link to="/" className="flex items-center gap-3">
+          <Link to="/gia" className="flex items-center gap-3">
             <img src={logo} alt="GOAT BAR" className="h-12 w-auto" />
             <div>
               <div className="font-display text-[13px] font-semibold tracking-[0.18em] leading-none">
@@ -181,7 +176,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
 
         <div className="px-3 mb-2 label-eyebrow shrink-0">Operação</div>
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto min-h-0">
-          {visibleNav.map((item) => {
+          {nav.map((item) => {
             const Icon = item.icon;
             const active = item.exact
               ? location.pathname === item.to
@@ -236,7 +231,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
 
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
         <div className="grid grid-cols-5 px-2 py-2">
-          {visibleNav.slice(0, 5).map((item) => {
+          {nav.slice(0, 5).map((item) => {
             const Icon = item.icon;
             const active = item.exact
               ? location.pathname === item.to

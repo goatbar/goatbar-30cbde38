@@ -1,17 +1,27 @@
 import { GoatAIToolDefinition, ToolContext, ToolExecutionResult } from "../../types.ts";
-import { matchEventCandidates, DatabaseEvent } from "../../matchers/event-matcher.ts";
+import {
+  matchEventCandidates,
+  matchContextualEventReference,
+  extractMeaningfulWords,
+  normalizeStr,
+  DatabaseEvent,
+} from "../../matchers/event-matcher.ts";
 
 export const searchEventsTool: GoatAIToolDefinition = {
   name: "search_events",
   domain: "EVENTS",
   sourceTable: "events",
-  description: "Busca eventos cadastrados no sistema Goat Bar por nome do cliente, noivos, título, status ou local.",
+  description: "Busca eventos cadastrados no sistema Goat Bar por nome do cliente, noivos, título, status, local ou ID do evento.",
   parameters: {
     type: "object",
     properties: {
       query: {
         type: "string",
-        description: "Termo de busca (nome do cliente, noivos, evento ou cidade).",
+        description: "Termo de busca (nome do cliente, noivos, título do evento, cidade ou 'confirmados').",
+      },
+      event_id: {
+        type: "string",
+        description: "ID (UUID) específico do evento se já conhecido.",
       },
       status: {
         type: "string",
@@ -22,36 +32,142 @@ export const searchEventsTool: GoatAIToolDefinition = {
         description: "Limite de resultados (padrão 10).",
       },
     },
-    required: ["query"],
+    required: [],
   },
   requiresConfirmation: false,
-  execute: async (ctx: ToolContext, args: { query: string; status?: string; limit?: number }): Promise<ToolExecutionResult> => {
+  execute: async (
+    ctx: ToolContext,
+    args: { query?: string; event_id?: string; status?: string; limit?: number }
+  ): Promise<ToolExecutionResult> => {
+    const rawQuery = (args.query || "").trim();
+    const limit = args.limit || 15;
+
+    // 1. Direct ID lookup if event_id is provided or query is UUID
+    const uuidMatch = (args.event_id || rawQuery).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    if (uuidMatch) {
+      const targetId = uuidMatch[0];
+      const { data: eventById, error: idErr } = await ctx.supabaseAdmin
+        .from("events")
+        .select("id, client_name, groom_name, bride_name, event_name, date, event_time, event_location, city, event_type, guests, status, current_budget_value, drinks")
+        .eq("id", targetId)
+        .maybeSingle();
+
+      if (!idErr && eventById) {
+        // Also fetch current budget drinks if event.drinks is empty
+        let drinksList = eventById.drinks || [];
+        if (!drinksList || drinksList.length === 0) {
+          const { data: budget } = await ctx.supabaseAdmin
+            .from("event_budget_versions")
+            .select("selected_drinks")
+            .eq("event_id", targetId)
+            .eq("is_current", true)
+            .maybeSingle();
+
+          if (budget?.selected_drinks && Array.isArray(budget.selected_drinks)) {
+            drinksList = budget.selected_drinks.map((d: any) => d.name || d.nome || String(d));
+          }
+        }
+
+        const enrichedEvent = { ...eventById, drinks: drinksList, match_confidence: 1.0, match_reason: "Busca por ID direto" };
+        return {
+          success: true,
+          data: {
+            count: 1,
+            events: [enrichedEvent],
+          },
+          message: `Evento encontrado: ${enrichedEvent.event_name || enrichedEvent.client_name}`,
+        };
+      }
+    }
+
+    // 2. Build Database Query
     let queryBuilder = ctx.supabaseAdmin
       .from("events")
-      .select("id, client_name, groom_name, bride_name, event_name, date, event_time, event_location, city, event_type, guests, status, current_budget_value")
+      .select("id, client_name, groom_name, bride_name, event_name, date, event_time, event_location, city, event_type, guests, status, current_budget_value, drinks")
       .order("date", { ascending: false })
-      .limit(args.limit || 15);
+      .limit(40);
+
+    const isStatusOnlyQuery =
+      rawQuery.toLowerCase() === "confirmado" ||
+      rawQuery.toLowerCase() === "confirmados" ||
+      rawQuery.toLowerCase() === "novo_orcamento" ||
+      rawQuery.toLowerCase() === "finalizado" ||
+      rawQuery.toLowerCase() === "cancelado" ||
+      rawQuery.toLowerCase() === "todos" ||
+      rawQuery === "";
 
     if (args.status) {
       queryBuilder = queryBuilder.ilike("status", `%${args.status}%`);
+    } else if (isStatusOnlyQuery && (rawQuery.toLowerCase().includes("confirmad") || rawQuery === "confirmados")) {
+      queryBuilder = queryBuilder.ilike("status", "%confirmado%");
     }
 
-    const { data: events, error } = await queryBuilder;
+    const meaningfulWords = extractMeaningfulWords(rawQuery);
+
+    // If query contains meaningful entity words (names, cities, etc.), use OR filter in DB
+    if (!isStatusOnlyQuery && meaningfulWords.length > 0) {
+      const orConditions: string[] = [];
+      for (const w of meaningfulWords.slice(0, 4)) {
+        orConditions.push(`client_name.ilike.%${w}%`);
+        orConditions.push(`event_name.ilike.%${w}%`);
+        orConditions.push(`groom_name.ilike.%${w}%`);
+        orConditions.push(`bride_name.ilike.%${w}%`);
+        orConditions.push(`city.ilike.%${w}%`);
+        orConditions.push(`event_location.ilike.%${w}%`);
+      }
+      if (orConditions.length > 0) {
+        queryBuilder = queryBuilder.or(orConditions.join(","));
+      }
+    }
+
+    const { data: dbEvents, error } = await queryBuilder;
     if (error) {
       return { success: false, error: `Erro ao buscar eventos: ${error.message}` };
     }
 
-    if (!events || events.length === 0) {
+    const eventList = (dbEvents || []) as DatabaseEvent[];
+
+    if (eventList.length === 0) {
       return { success: true, data: { count: 0, events: [] }, message: "Nenhum evento encontrado." };
     }
 
-    const candidates = matchEventCandidates(events as DatabaseEvent[], args.query);
-    const matchedList = candidates.length > 0
-      ? candidates.map((c) => {
-          const raw = events.find((e) => e.id === c.eventId);
-          return { ...raw, match_confidence: c.confidence, match_reason: c.reason };
-        })
-      : events.slice(0, args.limit || 5);
+    // If query was just a list/status request (e.g. "quantos eventos temos confirmados"), return list directly
+    if (isStatusOnlyQuery) {
+      const limited = eventList.slice(0, limit);
+      return {
+        success: true,
+        data: {
+          count: limited.length,
+          events: limited,
+        },
+        message: `${limited.length} evento(s) encontrado(s).`,
+      };
+    }
+
+    // 3. Tolerant semantic candidate matching in TypeScript
+    const candidates = matchEventCandidates(eventList, rawQuery);
+
+    if (candidates.length === 0) {
+      // NEVER return random fallback slice when searching for a specific query!
+      return {
+        success: true,
+        data: {
+          count: 0,
+          events: [],
+        },
+        message: `Nenhum evento correspondente encontrado para "${rawQuery}".`,
+      };
+    }
+
+    const matchedList = candidates.slice(0, limit).map((c) => {
+      const raw = eventList.find((e) => e.id === c.eventId) || {};
+      return {
+        ...raw,
+        match_confidence: c.confidence,
+        match_reason: c.reason,
+        drinks: (raw as any).drinks || c.drinks || [],
+      };
+    });
 
     return {
       success: true,
@@ -59,6 +175,7 @@ export const searchEventsTool: GoatAIToolDefinition = {
         count: matchedList.length,
         events: matchedList,
       },
+      message: `${matchedList.length} evento(s) correspondente(s) encontrado(s).`,
     };
   },
 };
@@ -67,7 +184,7 @@ export const getEventDetailsTool: GoatAIToolDefinition = {
   name: "get_event_details",
   domain: "EVENTS",
   sourceTable: "events, event_budget_versions",
-  description: "Obtém detalhes completos de um evento específico, incluindo convidados, cardápio de drinks, local e orçamento.",
+  description: "Obtém detalhes completos de um evento específico pelo ID (UUID), incluindo convidados, cardápio de drinks, local e orçamento.",
   parameters: {
     type: "object",
     properties: {
@@ -80,6 +197,10 @@ export const getEventDetailsTool: GoatAIToolDefinition = {
   },
   requiresConfirmation: false,
   execute: async (ctx: ToolContext, args: { event_id: string }): Promise<ToolExecutionResult> => {
+    if (!args.event_id) {
+      return { success: false, error: "Parâmetro 'event_id' é obrigatório." };
+    }
+
     const { data: event, error } = await ctx.supabaseAdmin
       .from("events")
       .select("*")
@@ -98,12 +219,27 @@ export const getEventDetailsTool: GoatAIToolDefinition = {
       .eq("is_current", true)
       .maybeSingle();
 
+    // Extract drinks from event or budget
+    let drinksList: string[] = [];
+    if (event.drinks && Array.isArray(event.drinks) && event.drinks.length > 0) {
+      drinksList = event.drinks;
+    } else if (budget?.selected_drinks && Array.isArray(budget.selected_drinks)) {
+      drinksList = budget.selected_drinks.map((d: any) => d.name || d.nome || String(d));
+    }
+
+    const detailedEvent = {
+      ...event,
+      drinks: drinksList,
+    };
+
     return {
       success: true,
       data: {
-        event,
+        event: detailedEvent,
         current_budget: budget || null,
+        drinks: drinksList,
       },
+      message: `Detalhes do evento ${event.event_name || event.client_name} obtidos com sucesso.`,
     };
   },
 };

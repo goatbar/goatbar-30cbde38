@@ -17,6 +17,7 @@ import { Route as GoatAiRouteImport } from './routes/goat-ai'
 import { Route as GiaRouteImport } from './routes/gia'
 import { Route as EventosRouteImport } from './routes/eventos'
 import { Route as DrinksRouteImport } from './routes/drinks'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ControladoriaRouteImport } from './routes/controladoria'
 import { Route as ContratosRouteImport } from './routes/contratos'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
@@ -65,6 +66,11 @@ const EventosRoute = EventosRouteImport.update({
 const DrinksRoute = DrinksRouteImport.update({
   id: '/drinks',
   path: '/drinks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ControladoriaRoute = ControladoriaRouteImport.update({
@@ -118,6 +124,7 @@ export interface FileRoutesByFullPath {
   '/configuracoes': typeof ConfiguracoesRoute
   '/contratos': typeof ContratosRoute
   '/controladoria': typeof ControladoriaRoute
+  '/dashboard': typeof DashboardRoute
   '/drinks': typeof DrinksRoute
   '/eventos': typeof EventosRouteWithChildren
   '/gia': typeof GiaRoute
@@ -137,6 +144,7 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof ConfiguracoesRoute
   '/contratos': typeof ContratosRoute
   '/controladoria': typeof ControladoriaRoute
+  '/dashboard': typeof DashboardRoute
   '/drinks': typeof DrinksRoute
   '/gia': typeof GiaRoute
   '/goat-ai': typeof GoatAiRoute
@@ -156,6 +164,7 @@ export interface FileRoutesById {
   '/configuracoes': typeof ConfiguracoesRoute
   '/contratos': typeof ContratosRoute
   '/controladoria': typeof ControladoriaRoute
+  '/dashboard': typeof DashboardRoute
   '/drinks': typeof DrinksRoute
   '/eventos': typeof EventosRouteWithChildren
   '/gia': typeof GiaRoute
@@ -177,6 +186,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/contratos'
     | '/controladoria'
+    | '/dashboard'
     | '/drinks'
     | '/eventos'
     | '/gia'
@@ -196,6 +206,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/contratos'
     | '/controladoria'
+    | '/dashboard'
     | '/drinks'
     | '/gia'
     | '/goat-ai'
@@ -214,6 +225,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/contratos'
     | '/controladoria'
+    | '/dashboard'
     | '/drinks'
     | '/eventos'
     | '/gia'
@@ -234,6 +246,7 @@ export interface RootRouteChildren {
   ConfiguracoesRoute: typeof ConfiguracoesRoute
   ContratosRoute: typeof ContratosRoute
   ControladoriaRoute: typeof ControladoriaRoute
+  DashboardRoute: typeof DashboardRoute
   DrinksRoute: typeof DrinksRoute
   EventosRoute: typeof EventosRouteWithChildren
   GiaRoute: typeof GiaRoute
@@ -303,6 +316,13 @@ declare module '@tanstack/react-router' {
       path: '/drinks'
       fullPath: '/drinks'
       preLoaderRoute: typeof DrinksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/controladoria': {
@@ -389,6 +409,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConfiguracoesRoute: ConfiguracoesRoute,
   ContratosRoute: ContratosRoute,
   ControladoriaRoute: ControladoriaRoute,
+  DashboardRoute: DashboardRoute,
   DrinksRoute: DrinksRoute,
   EventosRoute: EventosRouteWithChildren,
   GiaRoute: GiaRoute,

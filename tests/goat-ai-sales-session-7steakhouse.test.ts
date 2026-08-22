@@ -5,6 +5,7 @@ import {
   formatSalesSessionWhatsAppPreview,
   checkDuplicateSalesSession,
   resolveDrinkFromCatalog,
+  extractLaborIntent,
 } from "../supabase/functions/_shared/goat-ai/validators/sales-session-validator";
 import { resolveBusinessUnit } from "../supabase/functions/_shared/goat-ai/matchers/unit-matcher";
 import { GoatAIGeminiAgent } from "../supabase/functions/_shared/goat-ai/agent/gemini-agent";
@@ -14,11 +15,14 @@ import { WhatsAppChannelAdapter } from "../supabase/functions/_shared/goat-ai/ch
 import { AIRouter } from "../supabase/functions/_shared/goat-ai/router/ai-router";
 import { OpenAICompatibleProvider } from "../supabase/functions/_shared/goat-ai/router/providers/openai-compatible-provider";
 import { GeminiRouterAdapter } from "../supabase/functions/_shared/goat-ai/router/providers/gemini-adapter";
+import { calculateSteakhouseSessionFinancials } from "../src/lib/steakhouse-financials";
 
 describe("GIA WhatsApp - Full Audit & Fix for 7 Steak House Sales Sessions (27 Requirements)", () => {
   let mockSupabase: any;
   let insertedSessions: any[];
   let insertedSessionItems: any[];
+  let insertedExpenses: any[];
+  let insertedExpenseItems: any[];
   let pendingActions: any[];
   let messages: any[];
 
@@ -79,6 +83,8 @@ describe("GIA WhatsApp - Full Audit & Fix for 7 Steak House Sales Sessions (27 R
     vi.restoreAllMocks();
     insertedSessions = [];
     insertedSessionItems = [];
+    insertedExpenses = [];
+    insertedExpenseItems = [];
     pendingActions = [];
     messages = [];
 
@@ -103,6 +109,14 @@ describe("GIA WhatsApp - Full Audit & Fix for 7 Steak House Sales Sessions (27 R
           } else if (table === "financial_session_items") {
             const items = Array.isArray(payload) ? payload : [payload];
             insertedSessionItems.push(...items);
+            insertPayload = items;
+          } else if (table === "financial_expenses") {
+            const expense = { id: `exp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, ...payload };
+            insertedExpenses.push(expense);
+            insertPayload = expense;
+          } else if (table === "financial_expense_items") {
+            const items = Array.isArray(payload) ? payload : [payload];
+            insertedExpenseItems.push(...items);
             insertPayload = items;
           } else if (table === "ai_pending_actions") {
             const pending = { id: `pending_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, ...payload };
@@ -135,6 +149,9 @@ describe("GIA WhatsApp - Full Audit & Fix for 7 Steak House Sales Sessions (27 R
         single: vi.fn(async () => {
           if (table === "financial_sessions") {
             return { data: insertPayload || insertedSessions[0] || null, error: null };
+          }
+          if (table === "financial_expenses") {
+            return { data: insertPayload || insertedExpenses[0] || null, error: null };
           }
           if (table === "ai_pending_actions") {
             return { data: insertPayload || pendingActions[pendingActions.length - 1] || null, error: null };
@@ -182,6 +199,12 @@ describe("GIA WhatsApp - Full Audit & Fix for 7 Steak House Sales Sessions (27 R
           if (table === "financial_sessions") {
             const found = insertedSessions.find((s) => {
               return filters.every((f) => f.type === "eq" ? s[f.col] === f.val : true);
+            });
+            return { data: found || null, error: null };
+          }
+          if (table === "financial_expenses") {
+            const found = insertedExpenses.find((e) => {
+              return filters.every((f) => f.type === "eq" ? e[f.col] === f.val : true);
             });
             return { data: found || null, error: null };
           }
@@ -876,4 +899,296 @@ FITZ GERALD 16`);
     expect(validation.errors).toHaveLength(0);
     expect(validation.missingFields).toHaveLength(0);
   });
+
+  // 28. 'mão de obra 500' em sessão ativa da 7 Steak House atualiza labor_value para 500 com label 'Mão de Obra Semanal' sem pedir esclarecimento
+  it("28. 'mão de obra 500' in active 7 Steak House session updates labor_value to 500 and displays 'Mão de Obra Semanal'", async () => {
+    // Session in progress for 7 Steak House
+    pendingActions.push({
+      id: "pending-sess-1",
+      conversation_id: "conv-test",
+      tool_name: "create_sales_session",
+      status: "ready_for_confirmation",
+      arguments: {
+        unit_name: "7 Steak House",
+        modality: "7Steakhouse",
+        start_date: "2026-08-05",
+        items: [{ name: "Caipirinha", quantity: 2, unit_price: 28 }],
+      },
+      missing_fields: [],
+      summary: "Sessão 7 Steak House",
+    });
+
+    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", defaultToolRegistry);
+    const result = await agent.processTurn({
+      channel: "whatsapp",
+      message: "mão de obra 500",
+      userId: "user-1",
+    });
+
+    expect(result.reply).toContain("Mão de Obra Semanal:");
+    expect(result.reply).toMatch(/500[,.]00/);
+    expect(result.reply).not.toContain("qual tipo de mão de obra");
+    expect(result.reply).not.toContain("• *Mão de Obra:*");
+    expect(result.pendingAction?.status).toBe("ready_for_confirmation");
+    const lastPending = pendingActions[pendingActions.length - 1];
+    expect(lastPending.arguments.labor_value).toBe(500);
+  });
+
+  // 29. 'mao de obra 500' (sem acento) resolve labor_value para 500
+  it("29. 'mao de obra 500' (unaccented alias) resolves labor_value to 500", async () => {
+    pendingActions.push({
+      id: "pending-sess-2",
+      conversation_id: "conv-test",
+      tool_name: "create_sales_session",
+      status: "ready_for_confirmation",
+      arguments: {
+        unit_name: "7 Steak House",
+        modality: "7Steakhouse",
+        start_date: "2026-08-05",
+        items: [{ name: "Caipirinha", quantity: 2, unit_price: 28 }],
+      },
+      missing_fields: [],
+    });
+
+    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", defaultToolRegistry);
+    const result = await agent.processTurn({
+      channel: "whatsapp",
+      message: "mao de obra 500",
+      userId: "user-1",
+    });
+
+    expect(result.reply).toContain("Mão de Obra Semanal:");
+    expect(result.reply).toMatch(/500[,.]00/);
+    const lastPending = pendingActions[pendingActions.length - 1];
+    expect(lastPending.arguments.labor_value).toBe(500);
+  });
+
+  // 30. 'mão de obra semanal 500' resolve labor_value para 500
+  it("30. 'mão de obra semanal 500' resolves labor_value to 500", async () => {
+    pendingActions.push({
+      id: "pending-sess-3",
+      conversation_id: "conv-test",
+      tool_name: "create_sales_session",
+      status: "ready_for_confirmation",
+      arguments: {
+        unit_name: "7 Steak House",
+        modality: "7Steakhouse",
+        start_date: "2026-08-05",
+        items: [{ name: "Caipirinha", quantity: 2, unit_price: 28 }],
+      },
+      missing_fields: [],
+    });
+
+    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", defaultToolRegistry);
+    const result = await agent.processTurn({
+      channel: "whatsapp",
+      message: "mão de obra semanal 500",
+      userId: "user-1",
+    });
+
+    expect(result.reply).toContain("Mão de Obra Semanal:");
+    expect(result.reply).toMatch(/500[,.]00/);
+    const lastPending = pendingActions[pendingActions.length - 1];
+    expect(lastPending.arguments.labor_value).toBe(500);
+  });
+
+  // 31. 'mão de obra 500 para 7 steak house' resolve unidade 7 Steak House e Mão de Obra Semanal 500
+  it("31. 'mão de obra 500 para 7 steak house' creates 7 Steak House session preview with Mão de Obra Semanal", async () => {
+    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", defaultToolRegistry);
+    const result = await agent.processTurn({
+      channel: "whatsapp",
+      message: "mão de obra 500 para 7 steak house",
+      userId: "user-1",
+    });
+
+    expect(result.reply).toContain("7 Steak House");
+    expect(result.reply).toContain("Mão de Obra Semanal:");
+    expect(result.reply).toMatch(/500[,.]00/);
+    expect(result.pendingAction?.status).toBe("ready_for_confirmation");
+    const lastPending31 = pendingActions[pendingActions.length - 1];
+    expect(lastPending31.arguments.labor_value).toBe(500);
+    expect(lastPending31.arguments.unit_name).toBe("7 Steak House");
+  });
+
+  // 32. 'Lançar mão de obra 500 reais para sessão 7 Steak House' -> confirmação -> persistência em financial_sessions e cálculo de fechamento
+  it("32. 'Lançar mão de obra 500 reais para sessão 7 Steak House' persists financial_sessions.labor_value = 500 and integrates with SteakhouseSessionFinancials", async () => {
+    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", defaultToolRegistry);
+
+    // Turn 1: Mensagem inicial
+    const turn1 = await agent.processTurn({
+      channel: "whatsapp",
+      message: "Lançar mão de obra 500 reais para sessão 7 Steak House",
+      userId: "user-1",
+      userName: "Mariana",
+    });
+
+    expect(turn1.reply).toContain("7 Steak House");
+    expect(turn1.reply).toContain("Mão de Obra Semanal:");
+    expect(turn1.reply).toMatch(/500[,.]00/);
+    expect(turn1.pendingAction?.status).toBe("ready_for_confirmation");
+    expect(insertedSessions).toHaveLength(0); // Zero inserção antes da confirmação
+
+    // Turn 2: Confirmação do usuário com 'sim'
+    const turn2 = await agent.processTurn({
+      channel: "whatsapp",
+      message: "sim",
+      userId: "user-1",
+      userName: "Mariana",
+    });
+
+    expect(turn2.reply).toContain("registrada com sucesso");
+    expect(insertedSessions).toHaveLength(1);
+    expect(insertedSessions[0].modality).toBe("7Steakhouse");
+    expect(insertedSessions[0].labor_value).toBe(500);
+    expect(insertedExpenses).toHaveLength(0); // Precedência: NUNCA grava em financial_expenses
+
+    // Simulação do recarregamento pelo formulário real (financialService.listSessions mapping)
+    const sessionFromDb = {
+      ...insertedSessions[0],
+      data: insertedSessions[0].date,
+      modalidade: insertedSessions[0].modality,
+      maoDeObraValor: insertedSessions[0].labor_value,
+      maoDeObraQtd: insertedSessions[0].labor_quantity || 1,
+      maoDeObraNomes: insertedSessions[0].labor_names,
+      maoDeObraDetalhes: insertedSessions[0].labor_details,
+      items: [
+        { drinkId: "drink-caipirinha", nome: "Caipirinha", quantidade: 10, precoUnitario: 28, custoUnitario: 7, custoInsumo: 5 },
+      ],
+    };
+
+    const calculated = calculateSteakhouseSessionFinancials(sessionFromDb, mockDrinksCatalog);
+    expect(calculated.maoDeObraSemanal).toBe(500);
+    expect(calculated.receitaGoatBar).toBe(70); // 10 * 7.0
+    expect(calculated.custoInsumos).toBe(50); // 10 * 5.0
+    expect(calculated.custoOperacionalGoatBar).toBe(550); // 500 (mão de obra) + 50 (insumos)
+    expect(calculated.lucroFinal).toBe(-480); // 70 - 550
+  });
+
+  // 33. Proteção contra falso drink: 'mão de obra 500' e 'MO 500' não geram nenhum drink vendido
+  it("33. Protection against false drink: 'mão de obra 500' and 'MO 500' produce 0 drink items", () => {
+    const rawText = `7 Steak House
+05/08/2026 a 09/08/2026
+CAIPIRINHA 2
+mão de obra 500`;
+
+    const draft = parseSalesSessionText(rawText);
+    expect(draft.labor_value).toBe(500);
+    expect(draft.items).toHaveLength(1);
+    expect(draft.items?.[0].name).toBe("CAIPIRINHA");
+
+    const textOnlyLabor = `7 Steak House
+05/08/2026
+mão de obra 500
+MO 500`;
+
+    const draft2 = parseSalesSessionText(textOnlyLabor);
+    expect(draft2.labor_value).toBe(500);
+    expect(draft2.items).toHaveLength(0); // Zero falso drink
+  });
+
+  // 34. Proteção contra ambiguidade de 'MO': 'MO 500' sem contexto de 7 Steak House NÃO é resolvido como mão de obra
+  it("34. Standalone 'MO 500' without 7 Steak House context is NOT resolved as 7 Steak House labor", () => {
+    const intentWithoutContext = extractLaborIntent("MO 500");
+    expect(intentWithoutContext.isLabor).toBe(false);
+    expect(intentWithoutContext.isSteakhouse).toBe(false);
+
+    const intentWithContext = extractLaborIntent("MO 500", "7 Steak House");
+    expect(intentWithContext.isLabor).toBe(true);
+    expect(intentWithContext.isSteakhouse).toBe(true);
+    expect(intentWithContext.amount).toBe(500);
+  });
+
+  // 35. 'MO 500' em contexto de sessão da 7 Steak House resolve para Mão de Obra Semanal
+  it("35. 'MO 500' in active 7 Steak House session resolves to Mão de Obra Semanal", async () => {
+    pendingActions.push({
+      id: "pending-sess-mo",
+      conversation_id: "conv-test",
+      tool_name: "create_sales_session",
+      status: "ready_for_confirmation",
+      arguments: {
+        unit_name: "7 Steak House",
+        modality: "7Steakhouse",
+        start_date: "2026-08-05",
+        items: [{ name: "Caipirinha", quantity: 2, unit_price: 28 }],
+      },
+      missing_fields: [],
+    });
+
+    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", defaultToolRegistry);
+    const result = await agent.processTurn({
+      channel: "whatsapp",
+      message: "MO 500",
+      userId: "user-1",
+    });
+
+    expect(result.reply).toContain("Mão de Obra Semanal:");
+    expect(result.reply).toMatch(/500[,.]00/);
+    const lastPendingMo = pendingActions[pendingActions.length - 1];
+    expect(lastPendingMo.arguments.labor_value).toBe(500);
+  });
+
+  // 36. Pedido explícito na Controladoria ('lançar uma despesa de mão de obra de 500 na controladoria da 7 steak') grava em financial_expenses e nunca em financial_sessions
+  it("36. Explicit Controladoria request records in financial_expenses with category Equipe and description Mão de Obra Semanal", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              role: "model",
+              parts: [
+                {
+                  functionCall: {
+                    name: "create_controladoria_expense",
+                    args: {
+                      supplier_name: "Equipe Bartenders",
+                      amount: 500.0,
+                      date: "2026-08-21",
+                      modality: "7 Steakhouse",
+                      category: "Equipe",
+                      description: "Mão de Obra Semanal",
+                      payment_method: "PIX",
+                    },
+                  },
+                },
+              ],
+            },
+            finishReason: "STOP",
+          },
+        ],
+      }),
+    } as any);
+
+    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", defaultToolRegistry);
+    const turn1 = await agent.processTurn({
+      channel: "whatsapp",
+      message: "lançar uma despesa de mão de obra de 500 na controladoria da 7 steak",
+      userId: "user-1",
+      userName: "Mariana",
+    });
+
+    expect(turn1.reply).toContain("🧾 *Lançamento de Gasto na Controladoria*");
+    expect(turn1.reply).toContain("7 Steakhouse");
+    expect(turn1.reply).toContain("Mão de Obra Semanal");
+    expect(turn1.reply).toContain("R$ 500,00");
+    expect(turn1.pendingAction?.status).toBe("ready_for_confirmation");
+
+    // Confirmação
+    const turn2 = await agent.processTurn({
+      channel: "whatsapp",
+      message: "sim",
+      userId: "user-1",
+      userName: "Mariana",
+    });
+
+    expect(turn2.reply).toContain("lançado com sucesso na Controladoria");
+    expect(insertedExpenses).toHaveLength(1);
+    expect(insertedExpenses[0].modality).toBe("Steakhouse");
+    expect(insertedExpenses[0].category).toBe("Equipe");
+    expect(insertedExpenses[0].description).toBe("Mão de Obra Semanal");
+    expect(insertedExpenses[0].amount).toBe(500);
+    expect(insertedSessions).toHaveLength(0); // Zero inserções em financial_sessions
+  });
 });
+

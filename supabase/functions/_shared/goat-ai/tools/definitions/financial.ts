@@ -248,7 +248,9 @@ export const createSalesSessionTool: GoatAIToolDefinition = {
     const missing: string[] = [];
     if (!args.unit_name) missing.push("unit_name");
     if (!args.start_date) missing.push("start_date");
-    if (!args.items || !Array.isArray(args.items) || args.items.length === 0) missing.push("items");
+    if ((!args.items || !Array.isArray(args.items) || args.items.length === 0) && (Number(args.labor_value) || 0) <= 0) {
+      missing.push("items");
+    }
 
     if (missing.length > 0) {
       return {

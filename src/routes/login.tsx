@@ -18,7 +18,7 @@ function LoginPage() {
 
   useEffect(() => {
     if (!sessionLoading && user) {
-      navigate({ to: "/", replace: true });
+      navigate({ to: "/gia", replace: true });
     }
   }, [sessionLoading, user, navigate]);
 

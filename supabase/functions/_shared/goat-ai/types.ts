@@ -4,6 +4,27 @@ export type MessageType = "text" | "image" | "document" | "audio" | "action_prom
 export type PendingActionStatus = "collecting" | "ready_for_confirmation" | "awaiting_confirmation" | "executing" | "executed" | "completed" | "cancelled" | "expired";
 export type ToolCallStatus = "pending" | "running" | "success" | "error" | "rejected";
 
+export interface ContextualEvent {
+  eventId: string;
+  clientName?: string;
+  eventName?: string;
+  groomName?: string;
+  brideName?: string;
+  date?: string;
+  location?: string;
+  city?: string;
+  guests?: number;
+  status?: string;
+  currentBudgetValue?: number;
+  lastReferencedAt?: string;
+}
+
+export interface RecentEntitiesContext {
+  events?: ContextualEvent[];
+  lastFocusedEventId?: string | null;
+  lastPresentedEventIds?: string[];
+}
+
 export interface AIConversation {
   id: string;
   user_id?: string | null;
@@ -11,7 +32,10 @@ export interface AIConversation {
   external_conversation_id?: string | null;
   title: string;
   status: "active" | "archived" | "closed";
-  metadata: Record<string, any>;
+  metadata: {
+    recentEntities?: RecentEntitiesContext;
+    [key: string]: any;
+  };
   created_at: string;
   updated_at: string;
 }

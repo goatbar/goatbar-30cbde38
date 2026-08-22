@@ -1,9 +1,11 @@
 import {
   AgentInput,
   AgentTurnResponse,
+  ContextualEvent,
   PrivacyClassification,
   ToolContext,
 } from "../types.ts";
+import { matchContextualEventReference } from "../matchers/event-matcher.ts";
 import { GOAT_AI_CONVERSATIONAL_SYSTEM_PROMPT } from "../prompts/system.ts";
 import { ConversationManager } from "../conversation/manager.ts";
 import { defaultToolRegistry, GoatAIToolRegistry } from "../tools/registry.ts";
@@ -13,6 +15,9 @@ import {
   validateSalesSessionDraft,
   checkDuplicateSalesSession,
   formatSalesSessionWhatsAppPreview,
+  extractLaborIntent,
+  normalizeDate,
+  SalesSessionDraft,
 } from "../validators/sales-session-validator.ts";
 import {
   validateControladoriaExpenseDraft,
@@ -263,7 +268,72 @@ export class GoatAIGeminiAgent {
       }
     }
 
-    // 2.1 Check for Controladoria Direct Modifications (unit selection or amount correction on active pending action)
+    // 2.1 Check for Sales Session Direct Modifications (e.g. updating labor_value / Mão de Obra Semanal)
+    if (activePending && activePending.tool_name === "create_sales_session") {
+      const draftArgs = { ...(activePending.arguments || {}) };
+      const laborIntent = extractLaborIntent(input.message, draftArgs.unit_name || draftArgs.modality);
+      if (laborIntent.isLabor && laborIntent.amount) {
+        draftArgs.labor_value = laborIntent.amount;
+        if (laborIntent.isSteakhouse) {
+          draftArgs.unit_name = "7 Steak House";
+          draftArgs.modality = "7Steakhouse";
+        }
+        let catalog: any[] = [];
+        let aliases: any[] = [];
+        try {
+          const loaded = await loadDrinkCatalogAndAliases(this.supabaseAdmin, draftArgs.unit_name);
+          catalog = loaded.catalog;
+          aliases = loaded.aliases;
+        } catch {}
+
+        const validation = validateSalesSessionDraft(draftArgs, catalog, aliases);
+        if (validation.isValid && validation.normalized) {
+          const duplicateCheck = await checkDuplicateSalesSession(
+            this.supabaseAdmin,
+            validation.normalized.modality,
+            validation.normalized.start_date
+          );
+
+          const preview = formatSalesSessionWhatsAppPreview(
+            validation.normalized,
+            validation.warnings,
+            duplicateCheck.isDuplicate
+          );
+
+          const finalPending = await this.conversationManager.savePendingAction(
+            conversation.id,
+            activePending.tool_name,
+            validation.normalized,
+            [],
+            preview,
+            "ready_for_confirmation"
+          );
+
+          const assistantMsg = await this.conversationManager.saveMessage(
+            conversation.id,
+            "assistant",
+            preview,
+            "text"
+          );
+
+          return {
+            conversationId: conversation.id,
+            messageId: assistantMsg.id,
+            reply: preview,
+            toolCallsExecuted: [],
+            pendingAction: {
+              id: finalPending.id,
+              toolName: finalPending.tool_name,
+              status: finalPending.status,
+              missingFields: [],
+              summary: finalPending.summary,
+            },
+          };
+        }
+      }
+    }
+
+    // 2.2 Check for Controladoria Direct Modifications (unit selection or amount correction on active pending action)
     if (activePending && (activePending.tool_name === "create_controladoria_expense" || activePending.tool_name === "create_controller_entry")) {
       const draftArgs = { ...(activePending.arguments || {}) };
       let draftModified = false;
@@ -278,6 +348,17 @@ export class GoatAIGeminiAgent {
       const modRes = normalizeControladoriaModality(input.message);
       if (modRes.matched) {
         draftArgs.modality = modRes.displayName;
+        draftModified = true;
+      }
+
+      // Check if user is supplying labor
+      const laborIntent = extractLaborIntent(input.message, draftArgs.modality);
+      if (laborIntent.isLabor && laborIntent.amount) {
+        draftArgs.amount = laborIntent.amount;
+        draftArgs.category = "Equipe";
+        if (laborIntent.isSteakhouse || draftArgs.modality === "Steakhouse" || draftArgs.modality === "7 Steakhouse") {
+          draftArgs.description = "Mão de Obra Semanal";
+        }
         draftModified = true;
       }
 
@@ -597,6 +678,14 @@ export class GoatAIGeminiAgent {
       }
     }
 
+    // 3.1 Contextual Event Reference Resolution against Recent Entities
+    const recentEntities = await this.conversationManager.getRecentEntities(conversation.id);
+    const contextualEventMatch = matchContextualEventReference(input.message, recentEntities);
+
+    if (contextualEventMatch.matched && contextualEventMatch.eventId) {
+      await this.conversationManager.setLastFocusedEvent(conversation.id, contextualEventMatch.eventId);
+    }
+
     // Helper to extract recent unit from conversation history
     const getRecentUnitFromHistory = (): string | undefined => {
       if (activePending?.arguments?.unit_name) {
@@ -613,8 +702,94 @@ export class GoatAIGeminiAgent {
 
     const inheritedUnit = getRecentUnitFromHistory();
 
-    // Contextual instruction if pending action was collecting missing fields or if unit was previously resolved
+    // 3.2 Check for Direct Labor Launch in 7 Steak House session (Deterministic Resolution)
+    const laborIntent = extractLaborIntent(input.message, inheritedUnit);
+    const isExplicitControladoria = input.message.toLowerCase().includes("controladoria");
+
+    if (laborIntent.isLabor && laborIntent.isSteakhouse && laborIntent.amount && !isExplicitControladoria) {
+      const today = new Date().toISOString().split("T")[0];
+      // Try to extract a date from the message; fall back to today
+      const dateFromMsg = (input.message.match(/\b(\d{1,2}[\\/\-]\d{1,2}(?:[\\/\-]\d{2,4})?)\b/) || [])[1];
+      const startDate = (dateFromMsg ? normalizeDate(dateFromMsg) : null) || today;
+      const draftArgs: SalesSessionDraft = {
+        unit_name: "7 Steak House",
+        canonical_unit: "7Steakhouse",
+        start_date: startDate,
+        labor_value: laborIntent.amount,
+        items: [],
+      };
+
+      const validation = validateSalesSessionDraft(draftArgs);
+      if (validation.isValid && validation.normalized) {
+        const duplicateCheck = await checkDuplicateSalesSession(
+          this.supabaseAdmin,
+          validation.normalized.modality,
+          validation.normalized.start_date
+        );
+
+        const preview = formatSalesSessionWhatsAppPreview(
+          validation.normalized,
+          validation.warnings,
+          duplicateCheck.isDuplicate
+        );
+
+        const pending = await this.conversationManager.savePendingAction(
+          conversation.id,
+          "create_sales_session",
+          validation.normalized,
+          [],
+          preview,
+          "ready_for_confirmation"
+        );
+
+        const assistantMsg = await this.conversationManager.saveMessage(
+          conversation.id,
+          "assistant",
+          preview,
+          "text"
+        );
+
+        return {
+          conversationId: conversation.id,
+          messageId: assistantMsg.id,
+          reply: preview,
+          toolCallsExecuted: [],
+          pendingAction: {
+            id: pending.id,
+            toolName: pending.tool_name,
+            status: pending.status,
+            missingFields: [],
+            summary: pending.summary,
+          },
+        };
+      }
+    }
+
+    // Contextual instruction if pending action was collecting missing fields, unit was resolved, or entities are present
     let userPromptText = input.message;
+
+    if (recentEntities.events && recentEntities.events.length > 0) {
+      const formattedRecent = recentEntities.events.slice(0, 8).map((ev, i) =>
+        `${i + 1}. ID: '${ev.eventId}' | Cliente: '${ev.clientName || "N/A"}' | Evento: '${ev.eventName || ev.clientName || "N/A"}' | Data: '${ev.date || "N/A"}' | Local/Cidade: '${ev.city || ev.location || "N/A"}' | Status: '${ev.status || "N/A"}'`
+      ).join("\n");
+
+      userPromptText += `\n\n[CONTEXTO OPERACIONAL - EVENTOS RECENTEMENTE APRESENTADOS NA CONVERSA:\n${formattedRecent}\n]`;
+    }
+
+    if (contextualEventMatch.matched && contextualEventMatch.event) {
+      const fEv = contextualEventMatch.event;
+      userPromptText += `\n\n[CONTEXTO OPERACIONAL - EVENTO EM FOCO RESOLVIDO]:
+• ID: '${contextualEventMatch.eventId}'
+• Cliente: '${fEv.clientName || ""}'
+• Evento: '${fEv.eventName || fEv.clientName || ""}'
+• Data: '${fEv.date || ""}'
+• Local: '${fEv.city || fEv.location || ""}'
+• Status: '${fEv.status || ""}'
+INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados gerais, local ou convidados deste evento, chame a ferramenta 'get_event_details' passando event_id: '${contextualEventMatch.eventId}'. NUNCA faça nova busca textual genérica por nome no banco de dados.`;
+    } else if (contextualEventMatch.ambiguous && contextualEventMatch.candidates && contextualEventMatch.candidates.length > 1) {
+      userPromptText += `\n\n[CONTEXTO OPERACIONAL - AMBIGUIDADE DE EVENTOS]:\n${contextualEventMatch.disambiguationMessage}\nPeça a confirmação do usuário apresentando educadamente as opções identificadas.`;
+    }
+
     if (activePending && activePending.status === "collecting") {
       userPromptText += `\n[CONTEXTO OPERACIONAL: Há uma ação em andamento '${activePending.tool_name}' com dados já preenchidos: ${JSON.stringify(activePending.arguments)}. Campos pendentes necessários: [${activePending.missing_fields.join(", ")}]. Use os novos dados da mensagem para preencher os campos e acionar a ferramenta correspondente.]`;
     } else if (activePending && activePending.status === "ready_for_confirmation") {
@@ -892,6 +1067,53 @@ export class GoatAIGeminiAgent {
             result: toolResult.data,
             status: toolResult.success ? "success" : "error",
           });
+
+          // Persist contextual events when events tools execute
+          if (toolResult.success && toolResult.data) {
+            try {
+              if (toolName === "search_events" || toolName === "search_events_by_guest_count") {
+                const events = toolResult.data.events;
+                if (Array.isArray(events) && events.length > 0) {
+                  const contextualList: ContextualEvent[] = events.map((ev: any) => ({
+                    eventId: ev.id || ev.eventId,
+                    clientName: ev.client_name || ev.clientName,
+                    eventName: ev.event_name || ev.eventName,
+                    groomName: ev.groom_name || ev.groomName,
+                    brideName: ev.bride_name || ev.brideName,
+                    date: ev.date,
+                    location: ev.event_location || ev.location,
+                    city: ev.city,
+                    guests: ev.guests,
+                    status: ev.status,
+                    currentBudgetValue: ev.current_budget_value || ev.currentBudgetValue,
+                  }));
+                  const presentedIds = contextualList.map((e) => e.eventId);
+                  await this.conversationManager.saveRecentEvents(conversation.id, contextualList, presentedIds);
+                }
+              } else if (toolName === "get_event_details") {
+                const ev = toolResult.data.event;
+                if (ev) {
+                  const contextualEvent: ContextualEvent = {
+                    eventId: ev.id || ev.eventId || args.event_id,
+                    clientName: ev.client_name || ev.clientName,
+                    eventName: ev.event_name || ev.eventName,
+                    groomName: ev.groom_name || ev.groomName,
+                    brideName: ev.bride_name || ev.brideName,
+                    date: ev.date,
+                    location: ev.event_location || ev.location,
+                    city: ev.city,
+                    guests: ev.guests,
+                    status: ev.status,
+                    currentBudgetValue: ev.current_budget_value || ev.currentBudgetValue,
+                  };
+                  await this.conversationManager.saveRecentEvents(conversation.id, [contextualEvent]);
+                  await this.conversationManager.setLastFocusedEvent(conversation.id, contextualEvent.eventId);
+                }
+              }
+            } catch (saveErr) {
+              console.warn("[GOAT-AI][CONTEXTUAL_EVENTS_SAVE_WARN]", saveErr);
+            }
+          }
 
           // Append assistant toolCall and user toolResult to canonical messages
           normalizedMessages.push({

@@ -198,6 +198,57 @@ export function resolveDrinkFromCatalog(
 }
 
 /**
+ * Extrai deterministicamente a intenção de lançamento de Mão de Obra e seu valor,
+ * validando o contexto da 7 Steak House e seus aliases oficiais.
+ */
+export function extractLaborIntent(
+  message: string,
+  contextUnit?: string
+): { isLabor: boolean; amount?: number; isSteakhouse: boolean; laborAlias?: string } {
+  if (!message || typeof message !== "string") {
+    return { isLabor: false, isSteakhouse: false };
+  }
+
+  const norm = message
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+  const isExplicitSteak =
+    norm.includes("7 steak") ||
+    norm.includes("7steak") ||
+    norm.includes("steakhouse") ||
+    norm.includes("sete steak") ||
+    norm.includes("steak") ||
+    (contextUnit ? (contextUnit.includes("Steak") || contextUnit.includes("7Steakhouse") || contextUnit === "7Steakhouse") : false);
+
+  let matchedAlias: string | undefined;
+  if (norm.includes("mao de obra semanal")) matchedAlias = "mão de obra semanal";
+  else if (norm.includes("mao de obra da semana")) matchedAlias = "mão de obra da semana";
+  else if (norm.includes("mao de obra")) matchedAlias = "mão de obra";
+  else if (isExplicitSteak && /\bmo\b/i.test(norm)) matchedAlias = "MO";
+
+  if (!matchedAlias) {
+    return { isLabor: false, isSteakhouse: Boolean(isExplicitSteak) };
+  }
+
+  // Extract amount (e.g. 500, 500 reais, R$ 500,00, 500,00)
+  let amount: number | undefined;
+  const numMatch = message.match(/(?:r\$\s*)?(\d+(?:[\.,]\d{2})?)(?:\s*(?:reais|rs))?/i);
+  if (numMatch) {
+    amount = normalizeCurrency(numMatch[1]);
+  }
+
+  return {
+    isLabor: true,
+    amount: amount && amount > 0 ? amount : undefined,
+    isSteakhouse: Boolean(isExplicitSteak),
+    laborAlias: matchedAlias,
+  };
+}
+
+/**
  * Deterministically parses sales session text (e.g. WhatsApp list of drinks with dates & unit).
  */
 export function parseSalesSessionText(text: string): Partial<SalesSessionDraft> {
@@ -227,13 +278,74 @@ export function parseSalesSessionText(text: string): Partial<SalesSessionDraft> 
     }
   }
 
-  // 3. Extract Drink Items
+  // 3. Extract Labor Value (Mão de Obra / Mão de Obra Semanal / MO)
+  // Precedence over drinks: must be extracted first and excluded from items list
+  const laborAliases = [
+    "mao de obra semanal",
+    "mão de obra semanal",
+    "mao de obra da semana",
+    "mão de obra da semana",
+    "mao de obra",
+    "mão de obra",
+  ];
+
+  for (const line of lines) {
+    const normLine = line
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+
+    // Check full labor aliases
+    const isLaborMatch = laborAliases.some((alias) => {
+      const normAlias = alias.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      return normLine.includes(normAlias);
+    });
+
+    // Check MO alias only in session / 7 steakhouse context
+    const isMoMatch = (draft.unit_name?.includes("Steak") || draft.canonical_unit === "7Steakhouse" || text.toLowerCase().includes("steak") || text.toLowerCase().includes("sessao")) &&
+      /\bmo\b/i.test(line);
+
+    if (isLaborMatch || isMoMatch) {
+      const amountMatch = line.match(/(?:r\$\s*)?(\d+(?:[\.,]\d{2})?)/i);
+      if (amountMatch) {
+        draft.labor_value = normalizeCurrency(amountMatch[1]);
+      }
+    }
+  }
+
+  // 4. Extract Drink Items
   const items: SalesSessionDraftItem[] = [];
-  const nonItemKeywords = ["steak house", "steakhouse", "botequim", "goat", "data", "periodo", "total", "fechamento", "relatorio", "vendas"];
+  const nonItemKeywords = [
+    "steak house",
+    "steakhouse",
+    "botequim",
+    "goat",
+    "data",
+    "periodo",
+    "total",
+    "fechamento",
+    "relatorio",
+    "vendas",
+    "mao de obra",
+    "mão de obra",
+    "mao de obra semanal",
+    "mão de obra semanal",
+    "mao de obra da semana",
+    "mão de obra da semana",
+    "mo",
+  ];
 
   for (const line of lines) {
     const lowerLine = line.toLowerCase();
-    if (nonItemKeywords.some((kw) => lowerLine === kw || lowerLine.startsWith(kw + ":"))) {
+    const normLine = line
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+
+    if (nonItemKeywords.some((kw) => {
+      const normKw = kw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      return normLine === normKw || normLine.startsWith(normKw + ":") || normLine.startsWith(normKw + " ") || normLine.startsWith(normKw + "-");
+    })) {
       continue;
     }
 
@@ -250,7 +362,9 @@ export function parseSalesSessionText(text: string): Partial<SalesSessionDraft> 
     if (endQtyMatch) {
       const name = endQtyMatch[1].trim();
       const qty = parseInt(endQtyMatch[2], 10);
-      if (name.length > 1 && qty > 0 && !resolveBusinessUnit(name).matched) {
+      const normName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const isLaborName = laborAliases.some((a) => normName.includes(a.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())) || normName === "mo";
+      if (name.length > 1 && qty > 0 && !resolveBusinessUnit(name).matched && !isLaborName) {
         items.push({ name, quantity: qty });
         continue;
       }
@@ -261,7 +375,9 @@ export function parseSalesSessionText(text: string): Partial<SalesSessionDraft> 
     if (startQtyMatch) {
       const qty = parseInt(startQtyMatch[1], 10);
       const name = startQtyMatch[2].trim();
-      if (name.length > 1 && qty > 0 && !resolveBusinessUnit(name).matched) {
+      const normName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const isLaborName = laborAliases.some((a) => normName.includes(a.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())) || normName === "mo";
+      if (name.length > 1 && qty > 0 && !resolveBusinessUnit(name).matched && !isLaborName) {
         items.push({ name, quantity: qty });
         continue;
       }
@@ -313,9 +429,10 @@ export function validateSalesSessionDraft(
     missingFields.push("start_date");
   }
 
-  // 3. Mandatory Field: Items (Drinks Sold)
+  // 3. Mandatory Field: Items (Drinks Sold) or Labor Value
   const rawItems = draft.items || [];
-  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+  const hasLabor = normalizeCurrency(draft.labor_value) > 0;
+  if ((!Array.isArray(rawItems) || rawItems.length === 0) && !hasLabor) {
     missingFields.push("items");
   }
 
@@ -387,7 +504,7 @@ export function validateSalesSessionDraft(
     }
   }
 
-  if (normalizedItems.length === 0 && !missingFields.includes("items")) {
+  if (normalizedItems.length === 0 && !missingFields.includes("items") && !hasLabor) {
     missingFields.push("items");
   }
 
@@ -512,7 +629,8 @@ export function formatSalesSessionWhatsAppPreview(
   }
 
   if (session.labor_value > 0) {
-    lines.push(`• *Mão de Obra:* ${formatBRL(session.labor_value)}${session.labor_names ? ` (${session.labor_names})` : ""}`);
+    const laborLabel = isSteak ? "Mão de Obra Semanal" : "Mão de Obra";
+    lines.push(`• *${laborLabel}:* ${formatBRL(session.labor_value)}${session.labor_names ? ` (${session.labor_names})` : ""}`);
   }
 
   if (session.reposicao_restaurante > 0) {
