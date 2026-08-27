@@ -37,11 +37,13 @@ import {
   toCanonicalBusinessUnitId,
 } from "../matchers/drink-matcher.ts";
 import { AIRouter } from "../router/ai-router.ts";
-import {
-  NormalizedAIRequest,
-  NormalizedMessage,
-} from "../router/types.ts";
+import { NormalizedAIRequest, NormalizedMessage } from "../router/types.ts";
 import { CircuitBreakerManager } from "../router/circuit-breaker.ts";
+import {
+  formatConfirmedEventsReply,
+  resolveExplicitConfirmedEventsIntent,
+  toContextualEvent,
+} from "../events/confirmed-events.ts";
 
 const MAX_TOOL_CALLS_PER_TURN = 8;
 
@@ -89,10 +91,13 @@ export class GoatAIGeminiAgent {
     apiKey?: string,
     toolRegistry: GoatAIToolRegistry = defaultToolRegistry,
     model?: string,
-    router?: AIRouter
+    router?: AIRouter,
   ) {
     this.supabaseAdmin = supabaseAdmin;
-    this.apiKey = apiKey !== undefined ? apiKey : (getEnv("GEMINI_API_KEY") || getEnv("GOOGLE_AI_API_KEY") || getEnv("GOOGLE_API_KEY"));
+    this.apiKey =
+      apiKey !== undefined
+        ? apiKey
+        : getEnv("GEMINI_API_KEY") || getEnv("GOOGLE_AI_API_KEY") || getEnv("GOOGLE_API_KEY");
     this.model = model || getGeminiModel();
     this.toolRegistry = toolRegistry;
     this.conversationManager = new ConversationManager(supabaseAdmin, toolRegistry);
@@ -117,7 +122,8 @@ export class GoatAIGeminiAgent {
   }
 
   public async processTurn(input: AgentInput): Promise<AgentTurnResponse> {
-    const correlationId = input.correlationId || `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const correlationId =
+      input.correlationId || `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const turnStartTime = Date.now();
 
     const externalConvIdentifier =
@@ -129,7 +135,7 @@ export class GoatAIGeminiAgent {
       input.channel,
       input.userId,
       externalConvIdentifier,
-      input.message.slice(0, 40) || "Conversa com a GIA"
+      input.message.slice(0, 40) || "Conversa com a GIA",
     );
 
     const context: ToolContext = {
@@ -158,21 +164,72 @@ export class GoatAIGeminiAgent {
       messageType,
       input.attachments?.[0]?.url,
       input.externalMessageId,
-      input.userName
+      input.userName,
     );
 
-    console.log(`[GOAT-AI][CONVERSATION] correlationId=${correlationId} conversationId=${conversation.id} userMessageId=${userMessage.id} messageType=${messageType}`);
+    console.log(
+      `[GOAT-AI][CONVERSATION] correlationId=${correlationId} conversationId=${conversation.id} userMessageId=${userMessage.id} messageType=${messageType}`,
+    );
+
+    // Current-turn deterministic read intent. This deliberately runs before
+    // provider/history processing so Gemini cannot inherit a previous query,
+    // reinterpret "confirmados", or inject a silent result limit.
+    const confirmedIntent = resolveExplicitConfirmedEventsIntent(input.message);
+    if (confirmedIntent.matched) {
+      const args = {
+        status: "confirmed",
+        query: "confirmados",
+        ...(confirmedIntent.limit ? { limit: confirmedIntent.limit } : {}),
+      };
+      const result = await this.toolRegistry.executeTool("search_events", args, {
+        ...context,
+        toolCallId: `${correlationId}_confirmed_events`,
+      });
+      const events = result.success && Array.isArray(result.data?.events) ? result.data.events : [];
+      if (events.length > 0) {
+        await this.conversationManager.saveRecentEvents(
+          conversation.id,
+          events.map(toContextualEvent),
+          events.map((event: any) => event.id),
+        );
+      }
+      const reply = result.success
+        ? formatConfirmedEventsReply(events)
+        : `Não foi possível consultar os eventos confirmados: ${result.error || "erro desconhecido"}.`;
+      const assistantMsg = await this.conversationManager.saveMessage(
+        conversation.id,
+        "assistant",
+        reply,
+        "text",
+      );
+      return {
+        conversationId: conversation.id,
+        messageId: assistantMsg.id,
+        reply,
+        toolCallsExecuted: [
+          {
+            toolName: "search_events",
+            arguments: args,
+            result: result.data,
+            status: result.success ? "success" : "error",
+          },
+        ],
+        pendingAction: null,
+      };
+    }
 
     // Check for missing API Key if no providers are available
     const availableProviders = this.router.getProviders().filter((p) => p.isAvailable().available);
     if (availableProviders.length === 0 && !this.apiKey) {
-      console.error(`[GOAT-AI][PROVIDER][ERROR] correlationId=${correlationId} provider=gemini model=${this.model} error="GEMINI_API_KEY ausente ou não configurada no runtime" geminiApiKeyConfigured=false`);
+      console.error(
+        `[GOAT-AI][PROVIDER][ERROR] correlationId=${correlationId} provider=gemini model=${this.model} error="GEMINI_API_KEY ausente ou não configurada no runtime" geminiApiKeyConfigured=false`,
+      );
       const unavailReply = "Integração Gemini não configurada (chave GEMINI_API_KEY ausente).";
       const assistantMsg = await this.conversationManager.saveMessage(
         conversation.id,
         "assistant",
         unavailReply,
-        "text"
+        "text",
       );
       return {
         conversationId: conversation.id,
@@ -189,21 +246,26 @@ export class GoatAIGeminiAgent {
     if (activePending && activePending.status === "ready_for_confirmation") {
       if (this.conversationManager.isConfirmationIntent(input.message)) {
         console.log(
-          `[GOAT-AI][CONFIRMATION_RESOLVER] correlationId=${correlationId} conversationId=${conversation.id} phone=${maskedSender} pendingAction=${activePending.tool_name} pendingStatus=${activePending.status} decision=CONFIRM`
+          `[GOAT-AI][CONFIRMATION_RESOLVER] correlationId=${correlationId} conversationId=${conversation.id} phone=${maskedSender} pendingAction=${activePending.tool_name} pendingStatus=${activePending.status} decision=CONFIRM`,
         );
 
         // Execute deterministic tool using EXCLUSIVELY the approved structured arguments
-        const execResult = await this.conversationManager.executePendingAction(activePending, context);
+        const execResult = await this.conversationManager.executePendingAction(
+          activePending,
+          context,
+        );
         let confirmationReply = "";
 
         if (execResult.success) {
           console.log(
-            `[GOAT-AI][CONFIRMATION_EXECUTION] correlationId=${correlationId} conversationId=${conversation.id} phone=${maskedSender} toolName=${activePending.tool_name} success=true`
+            `[GOAT-AI][CONFIRMATION_EXECUTION] correlationId=${correlationId} conversationId=${conversation.id} phone=${maskedSender} toolName=${activePending.tool_name} success=true`,
           );
-          confirmationReply = execResult.message || `Operação '${activePending.tool_name}' confirmada e executada com sucesso no sistema.`;
+          confirmationReply =
+            execResult.message ||
+            `Operação '${activePending.tool_name}' confirmada e executada com sucesso no sistema.`;
         } else {
           console.error(
-            `[GOAT-AI][CONFIRMATION_EXECUTION] correlationId=${correlationId} conversationId=${conversation.id} phone=${maskedSender} toolName=${activePending.tool_name} success=false error="${execResult.error || "unknown"}"`
+            `[GOAT-AI][CONFIRMATION_EXECUTION] correlationId=${correlationId} conversationId=${conversation.id} phone=${maskedSender} toolName=${activePending.tool_name} success=false error="${execResult.error || "unknown"}"`,
           );
           confirmationReply = `Não foi possível concluir a operação: ${execResult.error || "Erro desconhecido"}. Os dados continuam salvos para nova tentativa.`;
         }
@@ -212,7 +274,7 @@ export class GoatAIGeminiAgent {
           conversation.id,
           "assistant",
           confirmationReply,
-          "action_result"
+          "action_result",
         );
 
         return {
@@ -239,7 +301,7 @@ export class GoatAIGeminiAgent {
         };
       } else if (this.conversationManager.isRejectionIntent(input.message)) {
         console.log(
-          `[GOAT-AI][CONFIRMATION_RESOLVER] correlationId=${correlationId} conversationId=${conversation.id} phone=${maskedSender} pendingAction=${activePending.tool_name} pendingStatus=${activePending.status} decision=REJECT`
+          `[GOAT-AI][CONFIRMATION_RESOLVER] correlationId=${correlationId} conversationId=${conversation.id} phone=${maskedSender} pendingAction=${activePending.tool_name} pendingStatus=${activePending.status} decision=REJECT`,
         );
 
         await this.supabaseAdmin
@@ -252,7 +314,7 @@ export class GoatAIGeminiAgent {
           conversation.id,
           "assistant",
           cancelReply,
-          "text"
+          "text",
         );
 
         return {
@@ -264,7 +326,7 @@ export class GoatAIGeminiAgent {
         };
       } else {
         console.log(
-          `[GOAT-AI][CONFIRMATION_RESOLVER] correlationId=${correlationId} conversationId=${conversation.id} phone=${maskedSender} pendingAction=${activePending.tool_name} pendingStatus=${activePending.status} decision=INTERMEDIATE_OR_MODIFICATION`
+          `[GOAT-AI][CONFIRMATION_RESOLVER] correlationId=${correlationId} conversationId=${conversation.id} phone=${maskedSender} pendingAction=${activePending.tool_name} pendingStatus=${activePending.status} decision=INTERMEDIATE_OR_MODIFICATION`,
         );
       }
     }
@@ -272,7 +334,10 @@ export class GoatAIGeminiAgent {
     // 2.1 Check for Sales Session Direct Modifications (e.g. updating labor_value / Mão de Obra Semanal / Por Dia)
     if (activePending && activePending.tool_name === "create_sales_session") {
       const draftArgs = { ...(activePending.arguments || {}) };
-      const laborIntent = extractLaborIntent(input.message, draftArgs.unit_name || draftArgs.modality);
+      const laborIntent = extractLaborIntent(
+        input.message,
+        draftArgs.unit_name || draftArgs.modality,
+      );
       if (laborIntent.isLabor && laborIntent.amount) {
         if (laborIntent.isDaily) {
           const existingDetails = Array.isArray(draftArgs.labor_details)
@@ -282,17 +347,24 @@ export class GoatAIGeminiAgent {
           for (const newDay of laborIntent.dailyDetails) {
             const normNewDay = normalizeDayKey(newDay.dia) || newDay.dia;
             const idx = existingDetails.findIndex(
-              (d: any) => (normalizeDayKey(d.dia) || d.dia) === normNewDay
+              (d: any) => (normalizeDayKey(d.dia) || d.dia) === normNewDay,
             );
             if (idx >= 0) {
-              existingDetails[idx] = { ...existingDetails[idx], dia: normNewDay, valor: newDay.valor };
+              existingDetails[idx] = {
+                ...existingDetails[idx],
+                dia: normNewDay,
+                valor: newDay.valor,
+              };
             } else {
               existingDetails.push({ dia: normNewDay, valor: newDay.valor });
             }
           }
 
           draftArgs.labor_details = existingDetails;
-          draftArgs.labor_value = existingDetails.reduce((acc: number, d: any) => acc + (Number(d.valor) || 0), 0);
+          draftArgs.labor_value = existingDetails.reduce(
+            (acc: number, d: any) => acc + (Number(d.valor) || 0),
+            0,
+          );
         } else {
           draftArgs.labor_value = laborIntent.amount;
           draftArgs.labor_details = [];
@@ -315,13 +387,13 @@ export class GoatAIGeminiAgent {
           const duplicateCheck = await checkDuplicateSalesSession(
             this.supabaseAdmin,
             validation.normalized.modality,
-            validation.normalized.start_date
+            validation.normalized.start_date,
           );
 
           const preview = formatSalesSessionWhatsAppPreview(
             validation.normalized,
             validation.warnings,
-            duplicateCheck.isDuplicate
+            duplicateCheck.isDuplicate,
           );
 
           const finalPending = await this.conversationManager.savePendingAction(
@@ -330,14 +402,14 @@ export class GoatAIGeminiAgent {
             validation.normalized,
             [],
             preview,
-            "ready_for_confirmation"
+            "ready_for_confirmation",
           );
 
           const assistantMsg = await this.conversationManager.saveMessage(
             conversation.id,
             "assistant",
             preview,
-            "text"
+            "text",
           );
 
           return {
@@ -358,7 +430,11 @@ export class GoatAIGeminiAgent {
     }
 
     // 2.2 Check for Controladoria Direct Modifications (unit selection or amount correction on active pending action)
-    if (activePending && (activePending.tool_name === "create_controladoria_expense" || activePending.tool_name === "create_controller_entry")) {
+    if (
+      activePending &&
+      (activePending.tool_name === "create_controladoria_expense" ||
+        activePending.tool_name === "create_controller_entry")
+    ) {
       const draftArgs = { ...(activePending.arguments || {}) };
       let draftModified = false;
 
@@ -380,14 +456,20 @@ export class GoatAIGeminiAgent {
       if (laborIntent.isLabor && laborIntent.amount) {
         draftArgs.amount = laborIntent.amount;
         draftArgs.category = "Equipe";
-        if (laborIntent.isSteakhouse || draftArgs.modality === "Steakhouse" || draftArgs.modality === "7 Steakhouse") {
+        if (
+          laborIntent.isSteakhouse ||
+          draftArgs.modality === "Steakhouse" ||
+          draftArgs.modality === "7 Steakhouse"
+        ) {
           draftArgs.description = "Mão de Obra Semanal";
         }
         draftModified = true;
       }
 
       // Check if user is supplying/correcting amount
-      const amountMatch = normalizedInput.match(/(?:o\s+)?valor(?:\s+correto)?(?:\s+e|\s+foi|\s*=\s*)?\s*(?:r\$)?\s*(\d+[\.,]\d{2})/i);
+      const amountMatch = normalizedInput.match(
+        /(?:o\s+)?valor(?:\s+correto)?(?:\s+e|\s+foi|\s*=\s*)?\s*(?:r\$)?\s*(\d+[\.,]\d{2})/i,
+      );
       if (amountMatch) {
         draftArgs.amount = normalizeCurrencyBRL(amountMatch[1]);
         draftModified = true;
@@ -407,7 +489,7 @@ export class GoatAIGeminiAgent {
         if (validation.isValid && validation.normalized) {
           const preview = formatControladoriaExpenseWhatsAppPreview(
             validation.normalized,
-            validation.warnings
+            validation.warnings,
           );
 
           const finalPending = await this.conversationManager.savePendingAction(
@@ -416,14 +498,14 @@ export class GoatAIGeminiAgent {
             validation.normalized,
             [],
             preview,
-            "ready_for_confirmation"
+            "ready_for_confirmation",
           );
 
           const assistantMsg = await this.conversationManager.saveMessage(
             conversation.id,
             "assistant",
             preview,
-            "text"
+            "text",
           );
 
           return {
@@ -446,7 +528,7 @@ export class GoatAIGeminiAgent {
             draftArgs,
             validation.missingFields,
             `Coletando campos faltantes: ${validation.missingFields.join(", ")}`,
-            "collecting"
+            "collecting",
           );
 
           let reply = "";
@@ -462,7 +544,7 @@ export class GoatAIGeminiAgent {
             conversation.id,
             "assistant",
             reply,
-            "text"
+            "text",
           );
 
           return {
@@ -506,11 +588,19 @@ export class GoatAIGeminiAgent {
           source: "chat",
         });
 
-        if (learnResult.status === "CREATED" || learnResult.status === "UPDATED" || learnResult.status === "IDEMPOTENT") {
+        if (
+          learnResult.status === "CREATED" ||
+          learnResult.status === "UPDATED" ||
+          learnResult.status === "IDEMPOTENT"
+        ) {
           applied.push(learnResult);
           toolCallsExecuted.push({
             toolName: "upsert_drink_alias",
-            arguments: { alias: m.alias, target_drink: m.targetDrinkName, business_unit: targetUnitId },
+            arguments: {
+              alias: m.alias,
+              target_drink: m.targetDrinkName,
+              business_unit: targetUnitId,
+            },
             result: learnResult,
             status: "success",
           });
@@ -525,7 +615,10 @@ export class GoatAIGeminiAgent {
 
       // If we have an active pending draft for create_sales_session, reprocess it immediately
       if (activePending && activePending.tool_name === "create_sales_session") {
-        const { catalog, aliases } = await loadDrinkCatalogAndAliases(this.supabaseAdmin, targetUnitId);
+        const { catalog, aliases } = await loadDrinkCatalogAndAliases(
+          this.supabaseAdmin,
+          targetUnitId,
+        );
         const draftArgs = { ...(activePending.arguments || {}) };
         const rawItems = draftArgs.items || [];
 
@@ -540,10 +633,22 @@ export class GoatAIGeminiAgent {
           });
 
           if (match.matched && match.drink) {
-            const comm = resolveDrinkCommercialData(match.drink, draftArgs.modality || draftArgs.unit_name || targetUnitId);
-            const unitPrice = it.unit_price != null && it.unit_price > 0 && !it.isUnknown ? it.unit_price : comm.unitPrice;
-            const unitCost = it.unit_cost != null && it.unit_cost > 0 && !it.isUnknown ? it.unit_cost : comm.unitCost;
-            const ingredientCost = it.ingredient_cost != null && it.ingredient_cost > 0 && !it.isUnknown ? it.ingredient_cost : comm.ingredientCost;
+            const comm = resolveDrinkCommercialData(
+              match.drink,
+              draftArgs.modality || draftArgs.unit_name || targetUnitId,
+            );
+            const unitPrice =
+              it.unit_price != null && it.unit_price > 0 && !it.isUnknown
+                ? it.unit_price
+                : comm.unitPrice;
+            const unitCost =
+              it.unit_cost != null && it.unit_cost > 0 && !it.isUnknown
+                ? it.unit_cost
+                : comm.unitCost;
+            const ingredientCost =
+              it.ingredient_cost != null && it.ingredient_cost > 0 && !it.isUnknown
+                ? it.ingredient_cost
+                : comm.ingredientCost;
             return {
               rawName,
               name: match.canonicalDrinkName || it.name,
@@ -571,20 +676,20 @@ export class GoatAIGeminiAgent {
           const duplicateCheck = await checkDuplicateSalesSession(
             this.supabaseAdmin,
             validation.normalized.modality,
-            validation.normalized.start_date
+            validation.normalized.start_date,
           );
 
           preview = formatSalesSessionWhatsAppPreview(
             validation.normalized,
             validation.warnings,
-            duplicateCheck.isDuplicate
+            duplicateCheck.isDuplicate,
           );
 
           finalPendingAction = await this.conversationManager.updatePendingActionArgs(
             activePending.id,
             validation.normalized,
             [],
-            preview
+            preview,
           );
         }
 
@@ -597,18 +702,26 @@ export class GoatAIGeminiAgent {
           replyLines.push(``);
           replyLines.push(`⚠️ *Conflito de mapeamento:*`);
           conflicts.forEach((c) =>
-            replyLines.push(`• *${c.alias}* já aponta para '${c.currentTarget}'. Para alterar para '${c.requestedTarget}', confirme a substituição.`)
+            replyLines.push(
+              `• *${c.alias}* já aponta para '${c.currentTarget}'. Para alterar para '${c.requestedTarget}', confirme a substituição.`,
+            ),
           );
         }
         if (failed.length > 0) {
           replyLines.push(``);
           replyLines.push(`⚠️ *Drinks não localizados no catálogo:*`);
-          failed.forEach((f) => replyLines.push(`• *${f.alias}*: drink '${f.targetDrinkName}' não existe no catálogo oficial.`));
+          failed.forEach((f) =>
+            replyLines.push(
+              `• *${f.alias}*: drink '${f.targetDrinkName}' não existe no catálogo oficial.`,
+            ),
+          );
         }
         if (ambiguous.length > 0) {
           replyLines.push(``);
           replyLines.push(`⚠️ *Múltiplos drinks compatíveis:*`);
-          ambiguous.forEach((amb) => replyLines.push(`• *${amb.alias}*: compatível com [${amb.candidates?.join(", ")}].`));
+          ambiguous.forEach((amb) =>
+            replyLines.push(`• *${amb.alias}*: compatível com [${amb.candidates?.join(", ")}].`),
+          );
         }
 
         if (preview) {
@@ -621,7 +734,7 @@ export class GoatAIGeminiAgent {
           conversation.id,
           "assistant",
           finalReply,
-          "text"
+          "text",
         );
 
         return {
@@ -634,7 +747,10 @@ export class GoatAIGeminiAgent {
                 id: finalPendingAction.id,
                 toolName: finalPendingAction.tool_name || (finalPendingAction as any).toolName,
                 status: finalPendingAction.status,
-                missingFields: finalPendingAction.missing_fields || (finalPendingAction as any).missingFields || [],
+                missingFields:
+                  finalPendingAction.missing_fields ||
+                  (finalPendingAction as any).missingFields ||
+                  [],
                 summary: finalPendingAction.summary,
               }
             : null,
@@ -650,18 +766,26 @@ export class GoatAIGeminiAgent {
           replyLines.push(``);
           replyLines.push(`⚠️ *Conflito de mapeamento:*`);
           conflicts.forEach((c) =>
-            replyLines.push(`• *${c.alias}* já aponta para '${c.currentTarget}'. Para alterar para '${c.requestedTarget}', confirme a substituição.`)
+            replyLines.push(
+              `• *${c.alias}* já aponta para '${c.currentTarget}'. Para alterar para '${c.requestedTarget}', confirme a substituição.`,
+            ),
           );
         }
         if (failed.length > 0) {
           replyLines.push(``);
           replyLines.push(`⚠️ *Drinks não localizados no catálogo:*`);
-          failed.forEach((f) => replyLines.push(`• *${f.alias}*: drink '${f.targetDrinkName}' não existe no catálogo oficial.`));
+          failed.forEach((f) =>
+            replyLines.push(
+              `• *${f.alias}*: drink '${f.targetDrinkName}' não existe no catálogo oficial.`,
+            ),
+          );
         }
         if (ambiguous.length > 0) {
           replyLines.push(``);
           replyLines.push(`⚠️ *Múltiplos drinks compatíveis:*`);
-          ambiguous.forEach((amb) => replyLines.push(`• *${amb.alias}*: compatível com [${amb.candidates?.join(", ")}].`));
+          ambiguous.forEach((amb) =>
+            replyLines.push(`• *${amb.alias}*: compatível com [${amb.candidates?.join(", ")}].`),
+          );
         }
 
         const finalReply = replyLines.join("\n") || "Nenhum vínculo pôde ser processado.";
@@ -669,7 +793,7 @@ export class GoatAIGeminiAgent {
           conversation.id,
           "assistant",
           finalReply,
-          "text"
+          "text",
         );
 
         return {
@@ -707,7 +831,10 @@ export class GoatAIGeminiAgent {
     const contextualEventMatch = matchContextualEventReference(input.message, recentEntities);
 
     if (contextualEventMatch.matched && contextualEventMatch.eventId) {
-      await this.conversationManager.setLastFocusedEvent(conversation.id, contextualEventMatch.eventId);
+      await this.conversationManager.setLastFocusedEvent(
+        conversation.id,
+        contextualEventMatch.eventId,
+      );
     }
 
     // Helper to extract recent unit from conversation history
@@ -730,10 +857,16 @@ export class GoatAIGeminiAgent {
     const laborIntent = extractLaborIntent(input.message, inheritedUnit);
     const isExplicitControladoria = input.message.toLowerCase().includes("controladoria");
 
-    if (laborIntent.isLabor && laborIntent.isSteakhouse && laborIntent.amount && !isExplicitControladoria) {
+    if (
+      laborIntent.isLabor &&
+      laborIntent.isSteakhouse &&
+      laborIntent.amount &&
+      !isExplicitControladoria
+    ) {
       const today = new Date().toISOString().split("T")[0];
       // Try to extract a date from the message; fall back to today
-      const dateFromMsg = (input.message.match(/\b(\d{1,2}[\\/\-]\d{1,2}(?:[\\/\-]\d{2,4})?)\b/) || [])[1];
+      const dateFromMsg = (input.message.match(/\b(\d{1,2}[\\/\-]\d{1,2}(?:[\\/\-]\d{2,4})?)\b/) ||
+        [])[1];
       const startDate = (dateFromMsg ? normalizeDate(dateFromMsg) : null) || today;
       const draftArgs: SalesSessionDraft = {
         unit_name: "7 Steak House",
@@ -749,13 +882,13 @@ export class GoatAIGeminiAgent {
         const duplicateCheck = await checkDuplicateSalesSession(
           this.supabaseAdmin,
           validation.normalized.modality,
-          validation.normalized.start_date
+          validation.normalized.start_date,
         );
 
         const preview = formatSalesSessionWhatsAppPreview(
           validation.normalized,
           validation.warnings,
-          duplicateCheck.isDuplicate
+          duplicateCheck.isDuplicate,
         );
 
         const pending = await this.conversationManager.savePendingAction(
@@ -764,14 +897,14 @@ export class GoatAIGeminiAgent {
           validation.normalized,
           [],
           preview,
-          "ready_for_confirmation"
+          "ready_for_confirmation",
         );
 
         const assistantMsg = await this.conversationManager.saveMessage(
           conversation.id,
           "assistant",
           preview,
-          "text"
+          "text",
         );
 
         return {
@@ -794,9 +927,13 @@ export class GoatAIGeminiAgent {
     let userPromptText = input.message;
 
     if (recentEntities.events && recentEntities.events.length > 0) {
-      const formattedRecent = recentEntities.events.slice(0, 8).map((ev, i) =>
-        `${i + 1}. ID: '${ev.eventId}' | Cliente: '${ev.clientName || "N/A"}' | Evento: '${ev.eventName || ev.clientName || "N/A"}' | Data: '${ev.date || "N/A"}' | Local/Cidade: '${ev.city || ev.location || "N/A"}' | Status: '${ev.status || "N/A"}'`
-      ).join("\n");
+      const formattedRecent = recentEntities.events
+        .slice(0, 8)
+        .map(
+          (ev, i) =>
+            `${i + 1}. ID: '${ev.eventId}' | Cliente: '${ev.clientName || "N/A"}' | Evento: '${ev.eventName || ev.clientName || "N/A"}' | Data: '${ev.date || "N/A"}' | Local/Cidade: '${ev.city || ev.location || "N/A"}' | Status: '${ev.status || "N/A"}'`,
+        )
+        .join("\n");
 
       userPromptText += `\n\n[CONTEXTO OPERACIONAL - EVENTOS RECENTEMENTE APRESENTADOS NA CONVERSA:\n${formattedRecent}\n]`;
     }
@@ -811,7 +948,11 @@ export class GoatAIGeminiAgent {
 • Local: '${fEv.city || fEv.location || ""}'
 • Status: '${fEv.status || ""}'
 INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados gerais, local ou convidados deste evento, chame a ferramenta 'get_event_details' passando event_id: '${contextualEventMatch.eventId}'. NUNCA faça nova busca textual genérica por nome no banco de dados.`;
-    } else if (contextualEventMatch.ambiguous && contextualEventMatch.candidates && contextualEventMatch.candidates.length > 1) {
+    } else if (
+      contextualEventMatch.ambiguous &&
+      contextualEventMatch.candidates &&
+      contextualEventMatch.candidates.length > 1
+    ) {
       userPromptText += `\n\n[CONTEXTO OPERACIONAL - AMBIGUIDADE DE EVENTOS]:\n${contextualEventMatch.disambiguationMessage}\nPeça a confirmação do usuário apresentando educadamente as opções identificadas.`;
     }
 
@@ -819,7 +960,11 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
       userPromptText += `\n[CONTEXTO OPERACIONAL: Há uma ação em andamento '${activePending.tool_name}' com dados já preenchidos: ${JSON.stringify(activePending.arguments)}. Campos pendentes necessários: [${activePending.missing_fields.join(", ")}]. Use os novos dados da mensagem para preencher os campos e acionar a ferramenta correspondente.]`;
     } else if (activePending && activePending.status === "ready_for_confirmation") {
       userPromptText += `\n[CONTEXTO OPERACIONAL: Há uma ação '${activePending.tool_name}' aguardando confirmação do usuário com os dados: ${JSON.stringify(activePending.arguments)}. Se o usuário estiver fazendo uma pergunta ou pedindo um detalhe, responda mantendo a confirmação pendente. Se o usuário estiver corrigindo, alterando ou adicionando dados (ex: quantidade de drinks, datas, valores), chame a ferramenta '${activePending.tool_name}' com os dados completos atualizados/mesclados para gerar um novo preview atualizado.]`;
-    } else if (inheritedUnit && !input.message.toLowerCase().includes("steak") && !input.message.toLowerCase().includes("botequim")) {
+    } else if (
+      inheritedUnit &&
+      !input.message.toLowerCase().includes("steak") &&
+      !input.message.toLowerCase().includes("botequim")
+    ) {
       userPromptText += `\n[CONTEXTO OPERACIONAL: A unidade já identificada na conversa é '${inheritedUnit}'. Utilize esta unidade ao registrar a sessão de vendas.]`;
     }
 
@@ -868,7 +1013,7 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
       // Detect mid-turn provider switch
       if (lastActiveProvider && lastActiveProvider !== response.providerId) {
         console.log(
-          `[GOAT-AI][ROUTER][PROVIDER_SWITCH] correlationId=${correlationId} fromProvider=${lastActiveProvider} toProvider=${response.providerId} reason="mid_turn_switch" toolsAlreadyExecuted=${Array.from(executedToolNamesSet).join(",")} turnStep=${turnCount}`
+          `[GOAT-AI][ROUTER][PROVIDER_SWITCH] correlationId=${correlationId} fromProvider=${lastActiveProvider} toProvider=${response.providerId} reason="mid_turn_switch" toolsAlreadyExecuted=${Array.from(executedToolNamesSet).join(",")} turnStep=${turnCount}`,
         );
       }
       lastActiveProvider = response.providerId;
@@ -892,9 +1037,12 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
           // Check if tool requires user confirmation / validation before mutation
           if (toolDef?.requiresConfirmation) {
             if (toolName === "create_sales_session") {
-              const priorArgs = (activePending && (activePending.status === "collecting" || activePending.status === "ready_for_confirmation"))
-                ? (activePending.arguments || {})
-                : {};
+              const priorArgs =
+                activePending &&
+                (activePending.status === "collecting" ||
+                  activePending.status === "ready_for_confirmation")
+                  ? activePending.arguments || {}
+                  : {};
               const mergedArgs = { ...priorArgs, ...args };
 
               if (!mergedArgs.unit_name && inheritedUnit) {
@@ -905,7 +1053,10 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
               let catalog: any[] = [];
               let aliases: any[] = [];
               try {
-                const loaded = await loadDrinkCatalogAndAliases(this.supabaseAdmin, mergedArgs.unit_name);
+                const loaded = await loadDrinkCatalogAndAliases(
+                  this.supabaseAdmin,
+                  mergedArgs.unit_name,
+                );
                 catalog = loaded.catalog;
                 aliases = loaded.aliases;
               } catch {
@@ -915,20 +1066,20 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
               const validation = validateSalesSessionDraft(mergedArgs, catalog, aliases);
 
               console.log(
-                `[GOAT-AI][SALES_DRAFT][EXTRACTED] correlationId=${correlationId} unit="${validation.normalized?.unit_name || mergedArgs.unit_name || "none"}" date="${validation.normalized?.start_date || mergedArgs.start_date || "none"}" itemsCount=${validation.normalized?.items?.length || mergedArgs.items?.length || 0} unknownDrinksCount=${validation.normalized?.unknown_drinks?.length || 0} isValid=${validation.isValid}`
+                `[GOAT-AI][SALES_DRAFT][EXTRACTED] correlationId=${correlationId} unit="${validation.normalized?.unit_name || mergedArgs.unit_name || "none"}" date="${validation.normalized?.start_date || mergedArgs.start_date || "none"}" itemsCount=${validation.normalized?.items?.length || mergedArgs.items?.length || 0} unknownDrinksCount=${validation.normalized?.unknown_drinks?.length || 0} isValid=${validation.isValid}`,
               );
 
               if (validation.isValid && validation.normalized) {
                 const duplicateCheck = await checkDuplicateSalesSession(
                   this.supabaseAdmin,
                   validation.normalized.modality,
-                  validation.normalized.start_date
+                  validation.normalized.start_date,
                 );
 
                 const preview = formatSalesSessionWhatsAppPreview(
                   validation.normalized,
                   validation.warnings,
-                  duplicateCheck.isDuplicate
+                  duplicateCheck.isDuplicate,
                 );
 
                 const pending = await this.conversationManager.savePendingAction(
@@ -937,7 +1088,7 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                   validation.normalized,
                   [],
                   preview,
-                  "ready_for_confirmation"
+                  "ready_for_confirmation",
                 );
 
                 finalPendingAction = pending;
@@ -951,29 +1102,41 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                   mergedArgs,
                   validation.missingFields,
                   `Coletando campos faltantes: ${validation.missingFields.join(", ")}`,
-                  "collecting"
+                  "collecting",
                 );
                 finalPendingAction = pending;
 
                 const missingDescriptions: string[] = [];
-                if (validation.missingFields.includes("unit_name")) missingDescriptions.push("a unidade ('7 Steak House' ou 'Goat Botequim')");
-                if (validation.missingFields.includes("start_date")) missingDescriptions.push("a data da operação");
-                if (validation.missingFields.includes("items")) missingDescriptions.push("a lista ou foto dos drinks vendidos");
+                if (validation.missingFields.includes("unit_name"))
+                  missingDescriptions.push("a unidade ('7 Steak House' ou 'Goat Botequim')");
+                if (validation.missingFields.includes("start_date"))
+                  missingDescriptions.push("a data da operação");
+                if (validation.missingFields.includes("items"))
+                  missingDescriptions.push("a lista ou foto dos drinks vendidos");
 
                 finalReply = `Identifiquei os dados da sessão, mas ainda preciso de: ${missingDescriptions.join(" e ")}. Pode informar?`;
                 hasPendingOrBreak = true;
                 break;
               } else {
-                finalReply = validation.errors.join("\n") || "Dados da sessão inconsistentes. Por favor, revise as informações.";
+                finalReply =
+                  validation.errors.join("\n") ||
+                  "Dados da sessão inconsistentes. Por favor, revise as informações.";
                 hasPendingOrBreak = true;
                 break;
               }
             }
 
-            if (toolName === "create_controladoria_expense" || toolName === "create_controller_entry") {
-              const priorArgs = (activePending && (activePending.status === "collecting" || activePending.status === "ready_for_confirmation" || activePending.status === "awaiting_confirmation"))
-                ? (activePending.arguments || {})
-                : {};
+            if (
+              toolName === "create_controladoria_expense" ||
+              toolName === "create_controller_entry"
+            ) {
+              const priorArgs =
+                activePending &&
+                (activePending.status === "collecting" ||
+                  activePending.status === "ready_for_confirmation" ||
+                  activePending.status === "awaiting_confirmation")
+                  ? activePending.arguments || {}
+                  : {};
               const mergedArgs: ControladoriaExpenseDraft = { ...priorArgs, ...args };
 
               if (!mergedArgs.modality && inheritedUnit) {
@@ -989,13 +1152,13 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
               });
 
               console.log(
-                `[GOAT-AI][CONTROLADORIA_DRAFT][EXTRACTED] correlationId=${correlationId} supplier="${validation.normalized?.supplier_name || mergedArgs.supplier_name || "none"}" amount=${validation.normalized?.amount || mergedArgs.amount || 0} date="${validation.normalized?.date || mergedArgs.date || "none"}" modality="${validation.normalized?.modality || mergedArgs.modality || "none"}" isValid=${validation.isValid} missing=[${validation.missingFields.join(",")}]`
+                `[GOAT-AI][CONTROLADORIA_DRAFT][EXTRACTED] correlationId=${correlationId} supplier="${validation.normalized?.supplier_name || mergedArgs.supplier_name || "none"}" amount=${validation.normalized?.amount || mergedArgs.amount || 0} date="${validation.normalized?.date || mergedArgs.date || "none"}" modality="${validation.normalized?.modality || mergedArgs.modality || "none"}" isValid=${validation.isValid} missing=[${validation.missingFields.join(",")}]`,
               );
 
               if (validation.isValid && validation.normalized) {
                 const preview = formatControladoriaExpenseWhatsAppPreview(
                   validation.normalized,
-                  validation.warnings
+                  validation.warnings,
                 );
 
                 const pending = await this.conversationManager.savePendingAction(
@@ -1004,7 +1167,7 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                   validation.normalized,
                   [],
                   preview,
-                  "ready_for_confirmation"
+                  "ready_for_confirmation",
                 );
 
                 finalPendingAction = pending;
@@ -1018,16 +1181,23 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                   mergedArgs,
                   validation.missingFields,
                   `Coletando campos faltantes: ${validation.missingFields.join(", ")}`,
-                  "collecting"
+                  "collecting",
                 );
                 finalPendingAction = pending;
 
-                const supplierName = mergedArgs.supplier_name ? `🏪 *Fornecedor:* ${mergedArgs.supplier_name}\n` : "";
+                const supplierName = mergedArgs.supplier_name
+                  ? `🏪 *Fornecedor:* ${mergedArgs.supplier_name}\n`
+                  : "";
                 const dateStr = mergedArgs.date ? `📅 *Data:* ${mergedArgs.date}\n` : "";
-                const amountStr = mergedArgs.amount ? `💰 *Valor:* R$ ${normalizeCurrencyBRL(mergedArgs.amount).toFixed(2).replace(".", ",")}\n` : "";
+                const amountStr = mergedArgs.amount
+                  ? `💰 *Valor:* R$ ${normalizeCurrencyBRL(mergedArgs.amount).toFixed(2).replace(".", ",")}\n`
+                  : "";
 
                 let missingQuestion = "";
-                if (validation.missingFields.includes("modality") && !validation.missingFields.includes("amount")) {
+                if (
+                  validation.missingFields.includes("modality") &&
+                  !validation.missingFields.includes("amount")
+                ) {
                   missingQuestion = `Li a nota:\n${supplierName}${dateStr}${amountStr}\nEm qual unidade devo lançar esse gasto? ('7 Steakhouse', 'Goat Botequim', 'Evento' ou 'Geral')`;
                 } else if (validation.missingFields.includes("amount")) {
                   missingQuestion = `Consegui receber a foto${mergedArgs.supplier_name ? ` de ${mergedArgs.supplier_name}` : ""}, mas não consegui identificar o valor da nota com segurança. Pode enviar uma foto mais próxima ou me informar o valor?`;
@@ -1039,7 +1209,9 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                 hasPendingOrBreak = true;
                 break;
               } else {
-                finalReply = validation.errors.join("\n") || "Não consegui extrair os dados da nota com clareza. Pode me informar o valor e a unidade?";
+                finalReply =
+                  validation.errors.join("\n") ||
+                  "Não consegui extrair os dados da nota com clareza. Pode me informar o valor e a unidade?";
                 hasPendingOrBreak = true;
                 break;
               }
@@ -1056,7 +1228,7 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                 args,
                 [],
                 summary,
-                "ready_for_confirmation"
+                "ready_for_confirmation",
               );
 
               finalPendingAction = pending;
@@ -1070,10 +1242,12 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                 args,
                 missing,
                 `Coletando campos faltantes: ${missing.join(", ")}`,
-                "collecting"
+                "collecting",
               );
               finalPendingAction = pending;
-              finalReply = response.text || `Identifiquei os dados da operação, mas ainda preciso de: ${missing.join(", ")}. Pode informar?`;
+              finalReply =
+                response.text ||
+                `Identifiquei os dados da operação, mas ainda preciso de: ${missing.join(", ")}. Pode informar?`;
               hasPendingOrBreak = true;
               break;
             }
@@ -1113,7 +1287,11 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                     currentBudgetValue: ev.current_budget_value || ev.currentBudgetValue,
                   }));
                   const presentedIds = contextualList.map((e) => e.eventId);
-                  await this.conversationManager.saveRecentEvents(conversation.id, contextualList, presentedIds);
+                  await this.conversationManager.saveRecentEvents(
+                    conversation.id,
+                    contextualList,
+                    presentedIds,
+                  );
                 }
               } else if (toolName === "get_event_details") {
                 const ev = toolResult.data.event;
@@ -1131,8 +1309,13 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                     status: ev.status,
                     currentBudgetValue: ev.current_budget_value || ev.currentBudgetValue,
                   };
-                  await this.conversationManager.saveRecentEvents(conversation.id, [contextualEvent]);
-                  await this.conversationManager.setLastFocusedEvent(conversation.id, contextualEvent.eventId);
+                  await this.conversationManager.saveRecentEvents(conversation.id, [
+                    contextualEvent,
+                  ]);
+                  await this.conversationManager.setLastFocusedEvent(
+                    conversation.id,
+                    contextualEvent.eventId,
+                  );
                 }
               }
             } catch (saveErr) {
@@ -1151,7 +1334,9 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
             role: "tool",
             toolCallId: toolCall.id,
             toolName,
-            toolResult: toolResult.success ? (toolResult.data ?? {}) : { error: toolResult.error || "Erro na ferramenta" },
+            toolResult: toolResult.success
+              ? (toolResult.data ?? {})
+              : { error: toolResult.error || "Erro na ferramenta" },
           });
         }
 
@@ -1174,7 +1359,7 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
       conversation.id,
       "assistant",
       finalReply,
-      "text"
+      "text",
     );
 
     return {
@@ -1187,18 +1372,21 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
             id: finalPendingAction.id,
             toolName: finalPendingAction.tool_name || (finalPendingAction as any).toolName,
             status: finalPendingAction.status,
-            missingFields: finalPendingAction.missing_fields || (finalPendingAction as any).missingFields || [],
+            missingFields:
+              finalPendingAction.missing_fields || (finalPendingAction as any).missingFields || [],
             summary: finalPendingAction.summary,
           }
-        : activePending && (activePending.status === "ready_for_confirmation" || activePending.status === "collecting")
-        ? {
-            id: activePending.id,
-            toolName: activePending.tool_name,
-            status: activePending.status,
-            missingFields: activePending.missing_fields || [],
-            summary: activePending.summary,
-          }
-        : null,
+        : activePending &&
+            (activePending.status === "ready_for_confirmation" ||
+              activePending.status === "collecting")
+          ? {
+              id: activePending.id,
+              toolName: activePending.tool_name,
+              status: activePending.status,
+              missingFields: activePending.missing_fields || [],
+              summary: activePending.summary,
+            }
+          : null,
     };
   }
 }

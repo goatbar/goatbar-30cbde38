@@ -6,18 +6,21 @@ import {
   normalizeStr,
   DatabaseEvent,
 } from "../../matchers/event-matcher.ts";
+import { PIPELINE_CONFIRMED_STATUS } from "../../events/confirmed-events.ts";
 
 export const searchEventsTool: GoatAIToolDefinition = {
   name: "search_events",
   domain: "EVENTS",
   sourceTable: "events",
-  description: "Busca eventos cadastrados no sistema Goat Bar por nome do cliente, noivos, título, status, local ou ID do evento.",
+  description:
+    "Busca eventos cadastrados no sistema Goat Bar por nome do cliente, noivos, título, status, local ou ID do evento.",
   parameters: {
     type: "object",
     properties: {
       query: {
         type: "string",
-        description: "Termo de busca (nome do cliente, noivos, título do evento, cidade ou 'confirmados').",
+        description:
+          "Termo de busca (nome do cliente, noivos, título do evento, cidade ou 'confirmados').",
       },
       event_id: {
         type: "string",
@@ -25,11 +28,13 @@ export const searchEventsTool: GoatAIToolDefinition = {
       },
       status: {
         type: "string",
-        description: "Filtro opcional de status (ex: 'confirmado', 'finalizado', 'cancelado', 'em_negociacao').",
+        description:
+          "Filtro opcional de status (ex: 'confirmado', 'finalizado', 'cancelado', 'em_negociacao').",
       },
       limit: {
         type: "number",
-        description: "Limite de resultados (padrão 10).",
+        description:
+          "Limite explícito de resultados. Quando omitido, listas por status retornam todos os registros.",
       },
     },
     required: [],
@@ -37,18 +42,25 @@ export const searchEventsTool: GoatAIToolDefinition = {
   requiresConfirmation: false,
   execute: async (
     ctx: ToolContext,
-    args: { query?: string; event_id?: string; status?: string; limit?: number }
+    args: { query?: string; event_id?: string; status?: string; limit?: number },
   ): Promise<ToolExecutionResult> => {
     const rawQuery = (args.query || "").trim();
-    const limit = args.limit || 15;
+    const explicitLimit =
+      Number.isFinite(args.limit) && Number(args.limit) > 0
+        ? Math.floor(Number(args.limit))
+        : undefined;
 
     // 1. Direct ID lookup if event_id is provided or query is UUID
-    const uuidMatch = (args.event_id || rawQuery).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    const uuidMatch = (args.event_id || rawQuery).match(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+    );
     if (uuidMatch) {
       const targetId = uuidMatch[0];
       const { data: eventById, error: idErr } = await ctx.supabaseAdmin
         .from("events")
-        .select("id, client_name, groom_name, bride_name, event_name, date, event_time, event_location, city, event_type, guests, status, current_budget_value, drinks")
+        .select(
+          "id, client_name, groom_name, bride_name, event_name, date, event_time, event_location, city, event_type, guests, status, current_budget_value, drinks",
+        )
         .eq("id", targetId)
         .maybeSingle();
 
@@ -68,7 +80,12 @@ export const searchEventsTool: GoatAIToolDefinition = {
           }
         }
 
-        const enrichedEvent = { ...eventById, drinks: drinksList, match_confidence: 1.0, match_reason: "Busca por ID direto" };
+        const enrichedEvent = {
+          ...eventById,
+          drinks: drinksList,
+          match_confidence: 1.0,
+          match_reason: "Busca por ID direto",
+        };
         return {
           success: true,
           data: {
@@ -83,9 +100,10 @@ export const searchEventsTool: GoatAIToolDefinition = {
     // 2. Build Database Query
     let queryBuilder = ctx.supabaseAdmin
       .from("events")
-      .select("id, client_name, groom_name, bride_name, event_name, date, event_time, event_location, city, event_type, guests, status, current_budget_value, drinks")
-      .order("date", { ascending: false })
-      .limit(40);
+      .select(
+        "id, client_name, groom_name, bride_name, event_name, date, event_time, event_location, city, event_type, guests, status, current_budget_value, drinks",
+      )
+      .order("date", { ascending: true });
 
     const isStatusOnlyQuery =
       rawQuery.toLowerCase() === "confirmado" ||
@@ -96,10 +114,20 @@ export const searchEventsTool: GoatAIToolDefinition = {
       rawQuery.toLowerCase() === "todos" ||
       rawQuery === "";
 
-    if (args.status) {
-      queryBuilder = queryBuilder.ilike("status", `%${args.status}%`);
-    } else if (isStatusOnlyQuery && (rawQuery.toLowerCase().includes("confirmad") || rawQuery === "confirmados")) {
-      queryBuilder = queryBuilder.ilike("status", "%confirmado%");
+    const requestedStatus = (args.status || "").trim().toLowerCase();
+    const isConfirmedStatus =
+      requestedStatus === "confirmed" || requestedStatus.startsWith("confirmad");
+    if (isConfirmedStatus) {
+      // Same canonical predicate as Pipeline -> Confirmados. Do not use a
+      // substring match (which can include non-canonical/legacy statuses).
+      queryBuilder = queryBuilder.ilike("status", PIPELINE_CONFIRMED_STATUS);
+    } else if (args.status) {
+      queryBuilder = queryBuilder.ilike("status", args.status.trim());
+    } else if (
+      isStatusOnlyQuery &&
+      (rawQuery.toLowerCase().includes("confirmad") || rawQuery === "confirmados")
+    ) {
+      queryBuilder = queryBuilder.ilike("status", PIPELINE_CONFIRMED_STATUS);
     }
 
     const meaningfulWords = extractMeaningfulWords(rawQuery);
@@ -128,12 +156,16 @@ export const searchEventsTool: GoatAIToolDefinition = {
     const eventList = (dbEvents || []) as DatabaseEvent[];
 
     if (eventList.length === 0) {
-      return { success: true, data: { count: 0, events: [] }, message: "Nenhum evento encontrado." };
+      return {
+        success: true,
+        data: { count: 0, events: [] },
+        message: "Nenhum evento encontrado.",
+      };
     }
 
     // If query was just a list/status request (e.g. "quantos eventos temos confirmados"), return list directly
     if (isStatusOnlyQuery) {
-      const limited = eventList.slice(0, limit);
+      const limited = explicitLimit ? eventList.slice(0, explicitLimit) : eventList;
       return {
         success: true,
         data: {
@@ -159,7 +191,7 @@ export const searchEventsTool: GoatAIToolDefinition = {
       };
     }
 
-    const matchedList = candidates.slice(0, limit).map((c) => {
+    const matchedList = candidates.slice(0, explicitLimit || 15).map((c) => {
       const raw = eventList.find((e) => e.id === c.eventId) || {};
       return {
         ...raw,
@@ -184,7 +216,8 @@ export const getEventDetailsTool: GoatAIToolDefinition = {
   name: "get_event_details",
   domain: "EVENTS",
   sourceTable: "events, event_budget_versions",
-  description: "Obtém detalhes completos de um evento específico pelo ID (UUID), incluindo convidados, cardápio de drinks, local e orçamento.",
+  description:
+    "Obtém detalhes completos de um evento específico pelo ID (UUID), incluindo convidados, cardápio de drinks, local e orçamento.",
   parameters: {
     type: "object",
     properties: {
@@ -248,7 +281,8 @@ export const searchEventsByGuestCountTool: GoatAIToolDefinition = {
   name: "search_events_by_guest_count",
   domain: "EVENTS",
   sourceTable: "events",
-  description: "Filtra eventos com base na quantidade de convidados (ex: eventos de aproximadamente 100 pessoas).",
+  description:
+    "Filtra eventos com base na quantidade de convidados (ex: eventos de aproximadamente 100 pessoas).",
   parameters: {
     type: "object",
     properties: {
@@ -272,7 +306,10 @@ export const searchEventsByGuestCountTool: GoatAIToolDefinition = {
     required: [],
   },
   requiresConfirmation: false,
-  execute: async (ctx: ToolContext, args: { target_guests?: number; min_guests?: number; max_guests?: number; limit?: number }): Promise<ToolExecutionResult> => {
+  execute: async (
+    ctx: ToolContext,
+    args: { target_guests?: number; min_guests?: number; max_guests?: number; limit?: number },
+  ): Promise<ToolExecutionResult> => {
     let min = args.min_guests;
     let max = args.max_guests;
 
@@ -295,7 +332,10 @@ export const searchEventsByGuestCountTool: GoatAIToolDefinition = {
       .limit(args.limit || 20);
 
     if (error) {
-      return { success: false, error: `Erro ao consultar eventos por convidados: ${error.message}` };
+      return {
+        success: false,
+        error: `Erro ao consultar eventos por convidados: ${error.message}`,
+      };
     }
 
     return {
@@ -313,7 +353,8 @@ export const aggregateEventConsumptionTool: GoatAIToolDefinition = {
   name: "aggregate_event_consumption",
   domain: "ANALYTICS",
   sourceTable: "events, event_budget_versions",
-  description: "Calcula estatísticas reais de consumo (gelo, insumos, bebidas) para um grupo de eventos (médias, medianas, totais).",
+  description:
+    "Calcula estatísticas reais de consumo (gelo, insumos, bebidas) para um grupo de eventos (médias, medianas, totais).",
   parameters: {
     type: "object",
     properties: {
@@ -337,7 +378,10 @@ export const aggregateEventConsumptionTool: GoatAIToolDefinition = {
     required: [],
   },
   requiresConfirmation: false,
-  execute: async (ctx: ToolContext, args: { target_guests?: number; min_guests?: number; max_guests?: number; item_type?: string }): Promise<ToolExecutionResult> => {
+  execute: async (
+    ctx: ToolContext,
+    args: { target_guests?: number; min_guests?: number; max_guests?: number; item_type?: string },
+  ): Promise<ToolExecutionResult> => {
     let min = args.min_guests;
     let max = args.max_guests;
 
@@ -371,7 +415,9 @@ export const aggregateEventConsumptionTool: GoatAIToolDefinition = {
     const eventIds = events.map((e) => e.id);
     const { data: budgets } = await ctx.supabaseAdmin
       .from("event_budget_versions")
-      .select("event_id, ice_packages_quantity, ice_package_unit_value, bartender_quantity, drinks_per_person")
+      .select(
+        "event_id, ice_packages_quantity, ice_package_unit_value, bartender_quantity, drinks_per_person",
+      )
       .in("event_id", eventIds)
       .eq("is_current", true);
 
@@ -403,7 +449,8 @@ export const aggregateEventConsumptionTool: GoatAIToolDefinition = {
       }
     }
 
-    const avg = (arr: number[]) => (arr.length ? Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10) / 10 : 0);
+    const avg = (arr: number[]) =>
+      arr.length ? Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10) / 10 : 0;
     const median = (arr: number[]) => {
       if (!arr.length) return 0;
       const s = [...arr].sort((a, b) => a - b);
