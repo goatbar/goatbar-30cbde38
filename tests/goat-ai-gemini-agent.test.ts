@@ -110,33 +110,34 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
         }
 
         if (table === "events") {
-          return {
-            select: () => ({
-              order: () => ({
-                limit: async () => ({
-                  data: [
-                    {
-                      id: "ev-1",
-                      client_name: "Fernanda",
-                      event_name: "Casamento da Fernanda",
-                      date: "2026-10-15",
-                      guests: 150,
-                      status: "confirmado",
-                    },
-                    {
-                      id: "ev-2",
-                      client_name: "Mariana",
-                      event_name: "Casamento da Mariana",
-                      date: "2026-11-20",
-                      guests: 200,
-                      status: "confirmado",
-                    },
-                  ],
-                  error: null,
-                }),
-              }),
-            }),
+          const data = [
+            {
+              id: "ev-1",
+              client_name: "Fernanda",
+              event_name: "Casamento da Fernanda",
+              date: "2026-10-15",
+              guests: 150,
+              status: "confirmado",
+            },
+            {
+              id: "ev-2",
+              client_name: "Mariana",
+              event_name: "Casamento da Mariana",
+              date: "2026-11-20",
+              guests: 200,
+              status: "confirmado",
+            },
+          ];
+          const builder: any = {
+            select: () => builder,
+            order: () => builder,
+            limit: () => builder,
+            ilike: () => builder,
+            or: () => builder,
+            then: (resolve: (value: unknown) => unknown) =>
+              Promise.resolve(resolve({ data, error: null })),
           };
+          return builder;
         }
 
         return {};
@@ -146,6 +147,33 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
 
   const mockPendingAction = null;
 
+  it("consulta somente confirmados da mensagem atual, sem chamar Gemini nem limitar silenciosamente", async () => {
+    globalThis.fetch = vi.fn();
+    const agent = new GoatAIGeminiAgent(
+      mockSupabase,
+      "mock-gemini-key",
+      toolRegistry,
+      "gemini-3.6-flash",
+    );
+
+    const result = await agent.processTurn({
+      channel: "whatsapp",
+      message: "Me mande os eventos confirmados",
+      userId: "user-123",
+      userName: "Romulo Chaves",
+    });
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(result.toolCallsExecuted).toHaveLength(1);
+    expect(result.toolCallsExecuted[0].toolName).toBe("search_events");
+    expect(result.toolCallsExecuted[0].arguments).toEqual({
+      query: "confirmados",
+      status: "confirmed",
+    });
+    expect(result.reply).toContain("Encontrei 2 evento(s) confirmado(s) no Pipeline");
+    expect(result.reply).not.toContain("próximo evento");
+  });
+
   it("5. Gemini responde normalmente gerando resposta conversacional", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -154,7 +182,11 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
         candidates: [
           {
             content: {
-              parts: [{ text: "Olá! Eu sou a GIA. Como posso ajudar com os eventos ou vendas do Goat Bar?" }],
+              parts: [
+                {
+                  text: "Olá! Eu sou a GIA. Como posso ajudar com os eventos ou vendas do Goat Bar?",
+                },
+              ],
             },
             finishReason: "STOP",
           },
@@ -166,7 +198,12 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
       }),
     } as any);
 
-    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-gemini-key", toolRegistry, "gemini-3.6-flash");
+    const agent = new GoatAIGeminiAgent(
+      mockSupabase,
+      "mock-gemini-key",
+      toolRegistry,
+      "gemini-3.6-flash",
+    );
     const result = await agent.processTurn({
       channel: "whatsapp",
       message: "Oi",
@@ -196,9 +233,11 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
       userName: "Romulo Chaves",
     });
 
-    expect(result.reply).toBe("Não consegui processar a resposta com a IA no momento. Sua mensagem foi salva no histórico.");
+    expect(result.reply).toBe(
+      "Não consegui processar a resposta com a IA no momento. Sua mensagem foi salva no histórico.",
+    );
     expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/\[GOAT-AI\]\[PROVIDER\]\[ERROR\].*status=400/)
+      expect.stringMatching(/\[GOAT-AI\]\[PROVIDER\]\[ERROR\].*status=400/),
     );
   });
 
@@ -208,7 +247,8 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 403,
-      text: async () => JSON.stringify({ error: { message: "API key not valid. Please pass a valid API key." } }),
+      text: async () =>
+        JSON.stringify({ error: { message: "API key not valid. Please pass a valid API key." } }),
     } as any);
 
     const agent = new GoatAIGeminiAgent(mockSupabase, "invalid-key", toolRegistry);
@@ -220,7 +260,7 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
 
     expect(result.reply).toContain("Não consegui processar");
     expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/\[GOAT-AI\]\[PROVIDER\]\[ERROR\].*status=403/)
+      expect.stringMatching(/\[GOAT-AI\]\[PROVIDER\]\[ERROR\].*status=403/),
     );
   });
 
@@ -230,7 +270,8 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 429,
-      text: async () => JSON.stringify({ error: { message: "Resource has been exhausted (e.g. check quota)." } }),
+      text: async () =>
+        JSON.stringify({ error: { message: "Resource has been exhausted (e.g. check quota)." } }),
     } as any);
 
     const agent = new GoatAIGeminiAgent(mockSupabase, "mock-gemini-key", toolRegistry);
@@ -242,7 +283,7 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
 
     expect(result.reply).toContain("Não consegui processar");
     expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/\[GOAT-AI\]\[PROVIDER\]\[ERROR\].*status=429/)
+      expect.stringMatching(/\[GOAT-AI\]\[PROVIDER\]\[ERROR\].*status=429/),
     );
   });
 
@@ -264,7 +305,7 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
 
     expect(result.reply).toContain("Não consegui processar");
     expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/\[GOAT-AI\]\[PROVIDER\]\[ERROR\].*status=500/)
+      expect.stringMatching(/\[GOAT-AI\]\[PROVIDER\]\[ERROR\].*status=500/),
     );
   });
 
@@ -284,7 +325,7 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
 
     expect(result.reply).toContain("Não consegui processar");
     expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/\[GOAT-AI\]\[PROVIDER\]\[ERROR\].*Timeout/)
+      expect.stringMatching(/\[GOAT-AI\]\[PROVIDER\]\[ERROR\].*Timeout/),
     );
   });
 
@@ -318,9 +359,7 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
     });
 
     expect(result.reply).toContain("chave GEMINI_API_KEY ausente");
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("geminiApiKeyConfigured=false")
-    );
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("geminiApiKeyConfigured=false"));
   });
 
   it("13. Round-trip de Tool Calling: envia functionCall como model e functionResponse como user, NUNCA usando role 'function' ou 'tool'", async () => {
@@ -334,7 +373,7 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
               {
                 functionCall: {
                   name: "search_events",
-                  args: { query: "confirmados" },
+                  args: { query: "Fernanda" },
                 },
               },
             ],
@@ -380,10 +419,15 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
       };
     });
 
-    const agent = new GoatAIGeminiAgent(mockSupabase, "mock-gemini-key", toolRegistry, "gemini-3.6-flash");
+    const agent = new GoatAIGeminiAgent(
+      mockSupabase,
+      "mock-gemini-key",
+      toolRegistry,
+      "gemini-3.6-flash",
+    );
     const result = await agent.processTurn({
       channel: "web",
-      message: "Buscar eventos confirmados para os próximos meses",
+      message: "Buscar o evento da Fernanda",
       userId: "user-123",
       userName: "Romulo Chaves",
     });
@@ -409,7 +453,7 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
     expect(contents).toHaveLength(3);
 
     expect(contents[0].role).toBe("user");
-    expect(contents[0].parts[0].text).toContain("Buscar eventos confirmados");
+    expect(contents[0].parts[0].text).toContain("Buscar o evento da Fernanda");
 
     expect(contents[1].role).toBe("model");
     expect(contents[1].parts[0].functionCall.name).toBe("search_events");
