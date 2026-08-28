@@ -6,8 +6,11 @@ import { createBudgetRequestLink } from "../_shared/budget-request-link.ts";
 
 import {
   getLinkState,
+  normalizeBrazilianPhone,
   sanitizePublicDrinks,
   validatePublicBudgetPayload,
+  validatePublicLeadContact,
+  validatePublicLeadContext,
 } from "./logic.ts";
 
 import { notifyNewBudgetRequest } from "./notifier.ts";
@@ -223,6 +226,344 @@ serve(async (req) => {
 
       return json({
         notification_status: await notify(body.event_id, true),
+      });
+    }
+
+    if (action === "start_public_journey") {
+      const context = validatePublicLeadContext(body.context);
+
+      await supabase
+        .from("lead_journeys")
+        .upsert(
+          {
+            session_id: context.session_id,
+            visitor_id: context.visitor_id,
+            source: context.source || null,
+            utm_source: context.utm_source || null,
+            utm_medium: context.utm_medium || null,
+            utm_campaign: context.utm_campaign || null,
+            utm_content: context.utm_content || null,
+            utm_term: context.utm_term || null,
+            referrer: context.referrer || null,
+            landing_page: context.landing_page || null,
+            last_activity_at: new Date().toISOString(),
+          },
+          { onConflict: "session_id" },
+        );
+
+      const { data: drinks, error: drinksError } = await supabase
+        .from("drinks")
+        .select(
+          "id,nome,descricao,imagem,insumos,modality_config,show_in_public_menu",
+        )
+        .eq("show_in_public_menu", true);
+
+      if (drinksError) {
+        throw drinksError;
+      }
+
+      return json({
+        state: "ACTIVE",
+        public_drinks: sanitizePublicDrinks(drinks || []),
+      });
+    }
+
+    if (action === "capture_public_lead") {
+      const context = validatePublicLeadContext(body.context);
+      const contact = validatePublicLeadContact(body.contact);
+      const normalizedPhone = normalizeBrazilianPhone(contact.phone);
+
+      const { data: existingLead } = await supabase
+        .from("leads")
+        .select("id, stage")
+        .eq("whatsapp_normalized", normalizedPhone)
+        .maybeSingle();
+
+      let leadId = existingLead?.id;
+
+      if (existingLead) {
+        const updateData: Record<string, unknown> = {
+          name: contact.client_name,
+          whatsapp: contact.phone,
+          last_activity_at: new Date().toISOString(),
+        };
+        if (contact.email) updateData.email = contact.email;
+        if (
+          !["SUBMITTED", "PROPOSAL_CREATED", "CONVERTED"].includes(
+            existingLead.stage,
+          )
+        ) {
+          updateData.stage = "CONTACT_CAPTURED";
+        }
+        await supabase.from("leads").update(updateData).eq("id", existingLead.id);
+      } else {
+        const { data: newLead, error: insertError } = await supabase
+          .from("leads")
+          .insert({
+            name: contact.client_name,
+            whatsapp: contact.phone,
+            whatsapp_normalized: normalizedPhone,
+            email: contact.email || null,
+            stage: "CONTACT_CAPTURED",
+            source: context.source || "Site",
+            last_activity_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+
+        if (insertError) {
+          throw insertError;
+        }
+        leadId = newLead.id;
+      }
+
+      const { data: journey } = await supabase
+        .from("lead_journeys")
+        .upsert(
+          {
+            session_id: context.session_id,
+            visitor_id: context.visitor_id,
+            lead_id: leadId,
+            source: context.source || null,
+            utm_source: context.utm_source || null,
+            utm_medium: context.utm_medium || null,
+            utm_campaign: context.utm_campaign || null,
+            utm_content: context.utm_content || null,
+            utm_term: context.utm_term || null,
+            referrer: context.referrer || null,
+            landing_page: context.landing_page || null,
+            last_activity_at: new Date().toISOString(),
+          },
+          { onConflict: "session_id" },
+        )
+        .select("id")
+        .single();
+
+      if (journey?.id && leadId) {
+        await supabase
+          .from("lead_funnel_events")
+          .upsert(
+            {
+              journey_id: journey.id,
+              lead_id: leadId,
+              event_name: "lead_captured",
+              event_key: `lead_captured:${context.session_id}`,
+              metadata: {
+                client_name: contact.client_name,
+                phone: contact.phone,
+                email: contact.email,
+              },
+              created_at: new Date().toISOString(),
+            },
+            { onConflict: "journey_id,event_key", ignoreDuplicates: true },
+          );
+      }
+
+      return json({
+        lead_id: leadId,
+        state: "CONTACT_CAPTURED",
+      });
+    }
+
+    if (action === "submit_public_lead_request") {
+      const context = validatePublicLeadContext(body.context);
+      const payload = validatePublicBudgetPayload(body.payload);
+      const normalizedPhone = normalizeBrazilianPhone(payload.phone);
+
+      const { data: existingJourney } = await supabase
+        .from("lead_journeys")
+        .select("id, lead_id")
+        .eq("session_id", context.session_id)
+        .maybeSingle();
+
+      let journeyId = existingJourney?.id;
+      let leadId = existingJourney?.lead_id;
+
+      if (!journeyId) {
+        const { data: newJourney } = await supabase
+          .from("lead_journeys")
+          .insert({
+            session_id: context.session_id,
+            visitor_id: context.visitor_id,
+            source: context.source || null,
+            utm_source: context.utm_source || null,
+            utm_medium: context.utm_medium || null,
+            utm_campaign: context.utm_campaign || null,
+            utm_content: context.utm_content || null,
+            utm_term: context.utm_term || null,
+            referrer: context.referrer || null,
+            landing_page: context.landing_page || null,
+            last_activity_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+        journeyId = newJourney?.id;
+      }
+
+      if (journeyId) {
+        const { data: existingSubmitEvent } = await supabase
+          .from("lead_funnel_events")
+          .select("event_id")
+          .eq("journey_id", journeyId)
+          .eq("event_key", `public_request_submitted:${context.session_id}`)
+          .maybeSingle();
+
+        if (existingSubmitEvent?.event_id) {
+          return json({
+            state: "USED",
+            idempotent: true,
+            event_id: existingSubmitEvent.event_id,
+          });
+        }
+      }
+
+      const requestedDrinkIds = payload.requested_drink_ids || [];
+      if (requestedDrinkIds.length > 0) {
+        const { data: validDrinks, error: drinksCheckError } = await supabase
+          .from("drinks")
+          .select("id")
+          .in("id", requestedDrinkIds)
+          .eq("show_in_public_menu", true);
+
+        if (drinksCheckError) {
+          throw drinksCheckError;
+        }
+
+        const validIds = new Set((validDrinks || []).map((d) => d.id));
+        const invalid = requestedDrinkIds.filter((id) => !validIds.has(id));
+        if (invalid.length > 0) {
+          throw new Error(
+            "Um ou mais drinks selecionados não estão disponíveis na carta pública.",
+          );
+        }
+      }
+
+      const { data: event, error: eventError } = await supabase
+        .from("events")
+        .insert({
+          client_name: payload.client_name,
+          event_name: payload.event_name || null,
+          phone: payload.phone || null,
+          email: payload.email || null,
+          date: payload.date,
+          event_time: payload.event_time || null,
+          duration_hours: payload.duration_hours,
+          event_location: payload.event_location || null,
+          city: payload.city || null,
+          event_type: payload.event_type,
+          guests: payload.guests,
+          lead_source: payload.lead_source || "Formulário público",
+          referral_name: payload.referral_name || null,
+          notes: payload.notes || null,
+          groom_name: payload.groom_name || null,
+          bride_name: payload.bride_name || null,
+          status: "novo_orcamento",
+        })
+        .select("id")
+        .single();
+
+      if (eventError) {
+        throw eventError;
+      }
+      const eventId = event.id;
+
+      if (requestedDrinkIds.length > 0) {
+        const drinkRows = requestedDrinkIds.map((drinkId) => ({
+          event_id: eventId,
+          drink_id: drinkId,
+        }));
+        const { error: reqDrinksError } = await supabase
+          .from("event_requested_drinks")
+          .insert(drinkRows);
+
+        if (reqDrinksError) {
+          console.error(
+            "[budget-request] error saving requested drinks:",
+            reqDrinksError,
+          );
+        }
+      }
+
+      const { data: existingLead } = await supabase
+        .from("leads")
+        .select("id")
+        .eq("whatsapp_normalized", normalizedPhone)
+        .maybeSingle();
+
+      if (existingLead) {
+        leadId = existingLead.id;
+        await supabase
+          .from("leads")
+          .update({
+            name: payload.client_name,
+            whatsapp: payload.phone,
+            email: payload.email || null,
+            event_type: payload.event_type,
+            event_date: payload.date,
+            guest_count: payload.guests,
+            event_id: eventId,
+            stage: "SUBMITTED",
+            last_activity_at: new Date().toISOString(),
+          })
+          .eq("id", existingLead.id);
+      } else {
+        const { data: newLead } = await supabase
+          .from("leads")
+          .insert({
+            name: payload.client_name,
+            whatsapp: payload.phone,
+            whatsapp_normalized: normalizedPhone,
+            email: payload.email || null,
+            event_type: payload.event_type,
+            event_date: payload.date,
+            guest_count: payload.guests,
+            event_id: eventId,
+            stage: "SUBMITTED",
+            source: payload.lead_source || context.source || "Site",
+            last_activity_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+
+        if (newLead) leadId = newLead.id;
+      }
+
+      if (journeyId) {
+        await supabase
+          .from("lead_journeys")
+          .update({
+            lead_id: leadId,
+            last_activity_at: new Date().toISOString(),
+          })
+          .eq("id", journeyId);
+
+        await supabase.from("lead_funnel_events").insert({
+          journey_id: journeyId,
+          lead_id: leadId,
+          event_id: eventId,
+          event_name: "public_request_submitted",
+          event_key: `public_request_submitted:${context.session_id}`,
+          metadata: {
+            client_name: payload.client_name,
+            phone: payload.phone,
+            guests: payload.guests,
+            date: payload.date,
+            event_type: payload.event_type,
+          },
+          created_at: new Date().toISOString(),
+        });
+      }
+
+      console.log(
+        `[budget-request] public event created event_id=${eventId}`,
+      );
+
+      await notify(eventId);
+
+      return json({
+        state: "USED",
+        idempotent: false,
+        event_id: eventId,
       });
     }
 

@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   generateSecureToken,
   getLinkState,
+  isValidUuid,
+  normalizeBrazilianPhone,
   parseWeddingCoupleName,
   sanitizePublicDrinks,
   validatePublicBudgetPayload,
+  validatePublicLeadContact,
+  validatePublicLeadContext,
 } from "./logic.ts";
 
 const valid = {
@@ -161,5 +165,61 @@ describe("budget request backend", () => {
     ]);
     expect(result[0]).not.toHaveProperty("custo_unitario");
     expect(JSON.stringify(result)).not.toContain("12");
+  });
+
+  describe("public lead funnel logic", () => {
+    it("normaliza telefones brasileiros", () => {
+      expect(normalizeBrazilianPhone("11999998888")).toBe("5511999998888");
+      expect(normalizeBrazilianPhone("(11) 99999-8888")).toBe("5511999998888");
+      expect(normalizeBrazilianPhone("+55 11 99999-8888")).toBe("5511999998888");
+      expect(normalizeBrazilianPhone("5511999998888")).toBe("5511999998888");
+    });
+
+    it("valida UUIDs v4 corretamente", () => {
+      expect(isValidUuid("123e4567-e89b-12d3-a456-426614174000")).toBe(true);
+      expect(isValidUuid("c73bcdcc-2669-4bf6-81d3-e4ae73fb11be")).toBe(true);
+      expect(isValidUuid("invalid-uuid")).toBe(false);
+      expect(isValidUuid("")).toBe(false);
+      expect(isValidUuid(null)).toBe(false);
+    });
+
+    it("valida contexto do lead público", () => {
+      const validContext = {
+        visitor_id: "c73bcdcc-2669-4bf6-81d3-e4ae73fb11be",
+        session_id: "123e4567-e89b-12d3-a456-426614174000",
+        utm_source: "instagram",
+        landing_page: "/orcamento",
+      };
+      const validated = validatePublicLeadContext(validContext);
+      expect(validated.visitor_id).toBe("c73bcdcc-2669-4bf6-81d3-e4ae73fb11be");
+      expect(validated.session_id).toBe("123e4567-e89b-12d3-a456-426614174000");
+      expect(validated.utm_source).toBe("instagram");
+
+      expect(() =>
+        validatePublicLeadContext({ ...validContext, visitor_id: "invalid" }),
+      ).toThrow(/Identificadores/);
+    });
+
+    it("valida contato do lead público para captura em background", () => {
+      const validContact = {
+        client_name: "Mariana Silva",
+        phone: "(11) 98888-7777",
+        email: "mariana@example.com",
+      };
+      const validated = validatePublicLeadContact(validContact);
+      expect(validated.client_name).toBe("Mariana Silva");
+      expect(validated.phone).toBe("(11) 98888-7777");
+      expect(validated.email).toBe("mariana@example.com");
+
+      expect(() =>
+        validatePublicLeadContact({ ...validContact, client_name: "M" }),
+      ).toThrow(/Nome/);
+      expect(() =>
+        validatePublicLeadContact({ ...validContact, phone: "123" }),
+      ).toThrow(/WhatsApp/);
+      expect(() =>
+        validatePublicLeadContact({ ...validContact, email: "invalid-email" }),
+      ).toThrow(/E-mail/);
+    });
   });
 });

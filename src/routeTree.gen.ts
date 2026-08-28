@@ -23,10 +23,12 @@ import { Route as ControladoriaRouteImport } from './routes/controladoria'
 import { Route as ContratosRouteImport } from './routes/contratos'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as OrcamentoIndexRouteImport } from './routes/orcamento.index'
 import { Route as EventosIndexRouteImport } from './routes/eventos.index'
 import { Route as PosEventoEventoIdRouteImport } from './routes/pos-evento.$eventoId'
 import { Route as OrcamentoSolicitarRouteImport } from './routes/orcamento.solicitar'
 import { Route as EventosEventoIdRouteImport } from './routes/eventos.$eventoId'
+import { Route as OrcamentoSolicitarIndexRouteImport } from './routes/orcamento.solicitar.index'
 import { Route as OrcamentoSolicitarTokenRouteImport } from './routes/orcamento.solicitar.$token'
 import { Route as ContratoFormEventoIdRouteImport } from './routes/contrato.form.$eventoId'
 import { Route as ContratoDadosTokenRouteImport } from './routes/contrato.dados.$token'
@@ -101,6 +103,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OrcamentoIndexRoute = OrcamentoIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => OrcamentoRoute,
+} as any)
 const EventosIndexRoute = EventosIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -120,6 +127,11 @@ const EventosEventoIdRoute = EventosEventoIdRouteImport.update({
   id: '/$eventoId',
   path: '/$eventoId',
   getParentRoute: () => EventosRoute,
+} as any)
+const OrcamentoSolicitarIndexRoute = OrcamentoSolicitarIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => OrcamentoSolicitarRoute,
 } as any)
 const OrcamentoSolicitarTokenRoute = OrcamentoSolicitarTokenRouteImport.update({
   id: '/$token',
@@ -156,9 +168,11 @@ export interface FileRoutesByFullPath {
   '/orcamento/solicitar': typeof OrcamentoSolicitarRouteWithChildren
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
   '/eventos/': typeof EventosIndexRoute
+  '/orcamento/': typeof OrcamentoIndexRoute
   '/contrato/dados/$token': typeof ContratoDadosTokenRoute
   '/contrato/form/$eventoId': typeof ContratoFormEventoIdRoute
   '/orcamento/solicitar/$token': typeof OrcamentoSolicitarTokenRoute
+  '/orcamento/solicitar/': typeof OrcamentoSolicitarIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -172,15 +186,16 @@ export interface FileRoutesByTo {
   '/inventario': typeof InventarioRoute
   '/login': typeof LoginRoute
   '/modelos': typeof ModelosRoute
-  '/orcamento': typeof OrcamentoRouteWithChildren
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
   '/orcamento/solicitar': typeof OrcamentoSolicitarRouteWithChildren
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
   '/eventos': typeof EventosIndexRoute
+  '/orcamento': typeof OrcamentoIndexRoute
   '/contrato/dados/$token': typeof ContratoDadosTokenRoute
   '/contrato/form/$eventoId': typeof ContratoFormEventoIdRoute
   '/orcamento/solicitar/$token': typeof OrcamentoSolicitarTokenRoute
+  '/orcamento/solicitar': typeof OrcamentoSolicitarIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -202,9 +217,11 @@ export interface FileRoutesById {
   '/orcamento/solicitar': typeof OrcamentoSolicitarRouteWithChildren
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
   '/eventos/': typeof EventosIndexRoute
+  '/orcamento/': typeof OrcamentoIndexRoute
   '/contrato/dados/$token': typeof ContratoDadosTokenRoute
   '/contrato/form/$eventoId': typeof ContratoFormEventoIdRoute
   '/orcamento/solicitar/$token': typeof OrcamentoSolicitarTokenRoute
+  '/orcamento/solicitar/': typeof OrcamentoSolicitarIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -227,9 +244,11 @@ export interface FileRouteTypes {
     | '/orcamento/solicitar'
     | '/pos-evento/$eventoId'
     | '/eventos/'
+    | '/orcamento/'
     | '/contrato/dados/$token'
     | '/contrato/form/$eventoId'
     | '/orcamento/solicitar/$token'
+    | '/orcamento/solicitar/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -243,15 +262,16 @@ export interface FileRouteTypes {
     | '/inventario'
     | '/login'
     | '/modelos'
-    | '/orcamento'
     | '/vendas'
     | '/eventos/$eventoId'
     | '/orcamento/solicitar'
     | '/pos-evento/$eventoId'
     | '/eventos'
+    | '/orcamento'
     | '/contrato/dados/$token'
     | '/contrato/form/$eventoId'
     | '/orcamento/solicitar/$token'
+    | '/orcamento/solicitar'
   id:
     | '__root__'
     | '/'
@@ -272,9 +292,11 @@ export interface FileRouteTypes {
     | '/orcamento/solicitar'
     | '/pos-evento/$eventoId'
     | '/eventos/'
+    | '/orcamento/'
     | '/contrato/dados/$token'
     | '/contrato/form/$eventoId'
     | '/orcamento/solicitar/$token'
+    | '/orcamento/solicitar/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -397,6 +419,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/orcamento/': {
+      id: '/orcamento/'
+      path: '/'
+      fullPath: '/orcamento/'
+      preLoaderRoute: typeof OrcamentoIndexRouteImport
+      parentRoute: typeof OrcamentoRoute
+    }
     '/eventos/': {
       id: '/eventos/'
       path: '/'
@@ -424,6 +453,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/eventos/$eventoId'
       preLoaderRoute: typeof EventosEventoIdRouteImport
       parentRoute: typeof EventosRoute
+    }
+    '/orcamento/solicitar/': {
+      id: '/orcamento/solicitar/'
+      path: '/'
+      fullPath: '/orcamento/solicitar/'
+      preLoaderRoute: typeof OrcamentoSolicitarIndexRouteImport
+      parentRoute: typeof OrcamentoSolicitarRoute
     }
     '/orcamento/solicitar/$token': {
       id: '/orcamento/solicitar/$token'
@@ -464,10 +500,25 @@ const EventosRouteWithChildren =
 
 interface OrcamentoSolicitarRouteChildren {
   OrcamentoSolicitarTokenRoute: typeof OrcamentoSolicitarTokenRoute
+  OrcamentoSolicitarIndexRoute: typeof OrcamentoSolicitarIndexRoute
 }
 
 const OrcamentoSolicitarRouteChildren: OrcamentoSolicitarRouteChildren = {
   OrcamentoSolicitarTokenRoute: OrcamentoSolicitarTokenRoute,
+  OrcamentoSolicitarIndexRoute: OrcamentoSolicitarIndexRoute,
+}
+
+const OrcamentoSolicitarRouteWithChildren =
+  OrcamentoSolicitarRoute._addFileChildren(OrcamentoSolicitarRouteChildren)
+
+interface OrcamentoRouteChildren {
+  OrcamentoSolicitarRoute: typeof OrcamentoSolicitarRouteWithChildren
+  OrcamentoIndexRoute: typeof OrcamentoIndexRoute
+}
+
+const OrcamentoRouteChildren: OrcamentoRouteChildren = {
+  OrcamentoSolicitarRoute: OrcamentoSolicitarRouteWithChildren,
+  OrcamentoIndexRoute: OrcamentoIndexRoute,
 }
 
 const OrcamentoSolicitarRouteWithChildren =
