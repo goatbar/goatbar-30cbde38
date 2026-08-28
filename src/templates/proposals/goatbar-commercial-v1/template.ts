@@ -1,31 +1,10 @@
 import type { ProposalTemplateDefinition } from "@/lib/pdf-engine/types";
-import fs from "fs";
-import path from "path";
-
-/**
- * Carrega os bytes do PDF limpo corrigido de referência (P4 e P8 substituídas pelas versões institucionais corretas).
- */
-function loadCleanBasePdf(): Uint8Array | undefined {
-  try {
-    const candidates = [
-      path.resolve("src/templates/proposals/goatbar-commercial-v1/clean-template.pdf"),
-      path.resolve("Proposta limpa/Cópia de Proposta Comercial - Sidney & Lúcia.pdf"),
-    ];
-    for (const candidate of candidates) {
-      if (fs.existsSync(candidate)) {
-        return new Uint8Array(fs.readFileSync(candidate));
-      }
-    }
-  } catch (err) {
-    console.warn("[goatbar-commercial-v1] Não foi possível carregar base limpa local:", err);
-  }
-  return undefined;
-}
+import cleanTemplateUrl from "./clean-template.pdf?url";
 
 /**
  * TEMPLATE OFICIAL: Proposta Comercial Goat Bar (16:9 Widescreen)
  * Calibrado pixel a pixel a partir dos PDFs reais do Canva.
- * 
+ *
  * NOTA TIPOGRÁFICA:
  * Utiliza Helvetica / Helvetica-Bold como fallback tipográfico padrão do PDF.
  * Para fidelidade visual estrita (0% diff nas páginas de texto), suporta a futura
@@ -39,7 +18,10 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
   name: "Proposta Comercial Goat Bar",
   description: "Modelo oficial 16:9 (1440x810) - Base vetorial corrigida com fallback Helvetica",
   isDevelopment: false,
-  basePdfBytes: loadCleanBasePdf(),
+  // URL processada pelo Vite. O gerador roda no browser; usar `fs` aqui fazia o
+  // template desaparecer silenciosamente no bundle e deixava texto branco sobre
+  // páginas brancas, embora o texto ainda fosse extraível do PDF.
+  basePdfPath: cleanTemplateUrl,
   pageSize: {
     width: 1440.0,
     height: 810.0,
@@ -205,15 +187,15 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
           id: "drinks-list",
           fieldKey: "drinks",
           type: "bullet_list",
-          x: 81.0,
-          y: 301.3,
+          x: 124.1,
+          y: 316.0,
           width: 600,
           height: 280,
           style: {
             font: "Helvetica",
-            fontSize: 22,
-            lineHeight: 30.7,
-            color: "#FFFFFF",
+            fontSize: 25.4,
+            lineHeight: 35.2,
+            color: "#7D1018",
             align: "left",
           },
         },
@@ -229,7 +211,7 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
             font: "Helvetica",
             fontSize: 20,
             lineHeight: 27.7,
-            color: "#FFFFFF",
+            color: "#7D1018",
             align: "left",
           },
         },

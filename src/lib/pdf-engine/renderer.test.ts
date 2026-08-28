@@ -1,7 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { ProposalPdfRenderer, measureBulletList, sanitizePdfText, wrapTextLines } from "./renderer";
 import { ProposalTemplateRegistry, DEV_DEBUG_TEMPLATE } from "./registry";
-import { resolveCanonicalProposalData, type CanonicalProposalData } from "@/lib/proposal-field-resolver";
+import {
+  resolveCanonicalProposalData,
+  type CanonicalProposalData,
+} from "@/lib/proposal-field-resolver";
 import { PDFDocument } from "pdf-lib";
 
 const mockContext = {
@@ -69,13 +72,18 @@ describe("ProposalPdfRenderer & Engine", () => {
 
   it("sanitiza caracteres acentuados e bullets sem quebrar fontes padrão", () => {
     expect(sanitizePdfText("Água com gás • Limão & Açúcar")).toBe("Água com gás • Limão & Açúcar");
-    expect(sanitizePdfText("Aspas “especiais” e travessão — teste")).toBe('Aspas "especiais" e travessão - teste');
+    expect(sanitizePdfText("Aspas “especiais” e travessão — teste")).toBe(
+      'Aspas "especiais" e travessão - teste',
+    );
   });
 
   it("calcula overflow dinâmico de cardápio e cria automaticamente página de continuação", async () => {
     // 25 drinks forçam overflow na área segura do cardápio
-    const manyDrinks = Array.from({ length: 25 }, (_, i) => `Drink Especial Goat Bar Nº ${i + 1} com Infusão Artesanal e Frutas Vermelhas`);
-    
+    const manyDrinks = Array.from(
+      { length: 25 },
+      (_, i) => `Drink Especial Goat Bar Nº ${i + 1} com Infusão Artesanal e Frutas Vermelhas`,
+    );
+
     const contextWithOverflow = {
       ...mockContext,
       hydratedData: {
@@ -108,6 +116,50 @@ describe("ProposalPdfRenderer & Engine", () => {
 
     const parsedDoc = await PDFDocument.load(result.pdfBytes);
     expect(parsedDoc.getPageCount()).toBe(3);
+  });
+
+  it("carrega a arte base por URL e desenha os campos dinâmicos acima dela", async () => {
+    const baseDoc = await PDFDocument.create();
+    const basePage = baseDoc.addPage([595.28, 841.89]);
+    basePage.drawRectangle({ x: 0, y: 0, width: 595.28, height: 841.89 });
+    const baseBytes = await baseDoc.save();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(baseBytes.buffer as ArrayBuffer, {
+        status: 200,
+        headers: { "content-type": "application/pdf" },
+      }),
+    );
+    const canonicalData = resolveCanonicalProposalData(mockContext);
+    const template = {
+      ...DEV_DEBUG_TEMPLATE,
+      basePdfPath: "/assets/proposta-goatbar.pdf",
+      basePdfBytes: undefined,
+      overflow: { ...DEV_DEBUG_TEMPLATE.overflow!, enabled: false },
+      pages: [DEV_DEBUG_TEMPLATE.pages[0]],
+    };
+
+    const result = await ProposalPdfRenderer.render(template, canonicalData);
+    const parsedDoc = await PDFDocument.load(result.pdfBytes);
+
+    expect(fetchSpy).toHaveBeenCalledWith("/assets/proposta-goatbar.pdf");
+    expect(parsedDoc.getPageCount()).toBe(1);
+    expect(result.pdfBytes.length).toBeGreaterThan(baseBytes.length);
+    fetchSpy.mockRestore();
+  });
+
+  it("interrompe a geração em vez de produzir páginas brancas quando a arte base falha", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 404 }));
+    const canonicalData = resolveCanonicalProposalData(mockContext);
+    const template = {
+      ...DEV_DEBUG_TEMPLATE,
+      basePdfPath: "/assets/ausente.pdf",
+      basePdfBytes: undefined,
+    };
+
+    await expect(ProposalPdfRenderer.render(template, canonicalData)).rejects.toThrow("HTTP 404");
+    fetchSpy.mockRestore();
   });
 
   it("gerencia busca e registro no ProposalTemplateRegistry", () => {
