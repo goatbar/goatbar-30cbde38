@@ -50,6 +50,8 @@ import {
   getTemplateContent,
   getTemplateMapping,
   type ContractTemplate,
+  type ContractSigner,
+  type Glassware,
 } from "@/services/contract-service";
 import { ContractEditorModal } from "@/components/contract-editor/ContractEditorModal";
 import { supabase } from "@/integrations/supabase/client";
@@ -186,9 +188,7 @@ function ContratosPage() {
 
   // Estados Reais
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
-  // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
   const [signers, setSigners] = useState<ContractSigner[]>([]);
-  // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
   const [glasswareList, setGlasswareList] = useState<Glassware[]>([]);
   const [contracts, setContracts] = useState<any[]>([]);
 
@@ -196,7 +196,6 @@ function ContratosPage() {
   const [showEditorModal, setShowEditorModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ContractTemplate | null>(null);
   const [showSignerModal, setShowSignerModal] = useState(false);
-  // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
   const [editingSigner, setEditingSigner] = useState<ContractSigner | null>(null);
   const [showGlasswareModal, setShowGlasswareModal] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<ContractTemplate | null>(null);
@@ -241,11 +240,8 @@ function ContratosPage() {
             .maybeSingle();
           return {
             ...c,
-            // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
             client_name: clientData?.client_name || ev?.client_name || "Cliente Desconhecido",
-            // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
             event_name: ev?.event_name || ev?.client_name || "Evento",
-            // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
             event_date: ev?.date,
           };
         })
@@ -379,8 +375,6 @@ function ContratosPage() {
     });
     setShowSignerModal(true);
   };
-
-  // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
   const openEditSignerModal = (s: ContractSigner) => {
     setEditingSigner(s);
     setNewSigner({
@@ -404,8 +398,6 @@ function ContratosPage() {
       alert(`Erro ao excluir sócio: ${e.message}`);
     }
   };
-
-  // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
   const handleToggleSignerActive = async (signer: ContractSigner) => {
     try {
       await contractSignersService.updateSigner(signer.id, { is_active: !signer.is_active });

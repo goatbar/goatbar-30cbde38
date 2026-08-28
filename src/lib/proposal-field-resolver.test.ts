@@ -478,3 +478,39 @@ describe("Testes Obrigatórios de Auditoria da Proposta Comercial", () => {
     expect(formatCanvaProposalField("BEBIDAS", null)).toBe("");
   });
 });
+
+describe("resolveCanonicalProposalData", () => {
+  it("resolve todos os 15 campos canônicos oficiais e o dicionário de valores Canva", async () => {
+    const { resolveCanonicalProposalData } = await import("./proposal-field-resolver");
+    const canonical = resolveCanonicalProposalData(context);
+
+    expect(canonical.nomeEvento).toBe("Casamento");
+    expect(canonical.dataOrcamento).toBe("18.08.2026");
+    expect(canonical.dataEvento).toBe("20.10.2026");
+    expect(canonical.inicialNoivo).toBe("P");
+    expect(canonical.inicialNoiva).toBe("R");
+    expect(canonical.quantidadePessoas).toBe(150);
+    expect(canonical.quantidadePessoasFormatted).toBe("150");
+    expect(canonical.drinks).toEqual(["Moscow Mule"]);
+    expect(canonical.drinksFormatted).toBe("• Moscow Mule");
+    expect(canonical.bebidas).toEqual(["Água com gás", "Refrigerante zero", "Vinho branco"]);
+    expect(canonical.bebidasFormatted).toBe("• Água com gás\n• Refrigerante zero\n• Vinho branco");
+    expect(canonical.qtdBartenders).toBe(3);
+    expect(canonical.qtdBartendersFormatted).toBe("3 Bartenders");
+    expect(canonical.qtdCopeiras).toBe(1);
+    expect(canonical.qtdCopeirasFormatted).toBe("1 Copeira");
+    expect(canonical.qtdBarKeepers).toBe(2);
+    expect(canonical.qtdBarKeepersFormatted).toBe("2 Bar Keepers");
+    expect(canonical.quantidadeVariedadesDrinks).toBe(1);
+    expect(canonical.quantidadeVariedadesDrinksFormatted).toBe("1");
+    expect(canonical.valorInvestimento).toBe(6850);
+    expect(canonical.valorInvestimentoFormatted).toMatch(/R\$\s*6\.850,00/);
+    expect(canonical.dataFinalPagamento).toBe("13.10.2026");
+
+    // Verifica que o dicionário officialCanvaValues contém as 15 chaves exatamente
+    expect(Object.keys(canonical.officialCanvaValues)).toHaveLength(15);
+    expect(canonical.officialCanvaValues.VALOR_INVESTIMENTO).toMatch(/R\$\s*6\.850,00/);
+    expect(canonical.officialCanvaValues.DATA_FINAL_PAGAMENTO).toBe("13.10.2026");
+  });
+});
+

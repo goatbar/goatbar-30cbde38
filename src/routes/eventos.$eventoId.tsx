@@ -61,6 +61,7 @@ import {
   validateContractPlaceholders,
   DEFAULT_CONTRACT_BODY,
   type ContractTemplate,
+  type ContractSigner,
 } from "@/services/contract-service";
 import { convertHtmlToPdf } from "@/services/pdf-service";
 import {
@@ -109,6 +110,8 @@ import {
 } from "@/lib/proposal-generation";
 import { formatDateDot } from "@/lib/proposal-field-resolver";
 import { buildProposalFilename } from "@/lib/proposal-filename";
+import { InternalProposalPreviewModal } from "@/components/InternalProposalPreviewModal";
+import { Eye } from "lucide-react";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
   component: EventoInterna,
@@ -205,7 +208,7 @@ function EventoInterna() {
   const [requestedDrinks, setRequestedDrinks] = useState<{ id: string; nome: string }[]>([]);
 
   const [realTemplates, setRealTemplates] = useState<ContractTemplate[]>([]);
-  // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+  
   const [realSigners, setRealSigners] = useState<ContractSigner[]>([]);
   const [realClientData, setRealClientData] = useState<any>(null);
   const [realContract, setRealContract] = useState<any>(null);
@@ -234,6 +237,7 @@ function EventoInterna() {
   const [showProposalModal, setShowProposalModal] = useState(false);
   const [existingProposal, setExistingProposal] = useState<GeneratedProposal | null>(null);
   const [proposalTemplate, setProposalTemplate] = useState<ProposalTemplate | null>(null);
+  const [showInternalPreviewModal, setShowInternalPreviewModal] = useState(false);
   const [showDeleteProposalDialog, setShowDeleteProposalDialog] = useState(false);
   const [isDeletingProposal, setIsDeletingProposal] = useState(false);
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
@@ -340,8 +344,8 @@ function EventoInterna() {
 
     if (contract?.id) {
       try {
-        // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-        const provider = getSignatureProvider(contract.signature_provider || contract.provider);
+        
+        const provider = getSignatureProvider(contract.provider || undefined);
         const sigData = await provider.syncStatus(contract.id);
         setProviderDetails(sigData);
       } catch (e) {
@@ -442,7 +446,7 @@ function EventoInterna() {
   const mapEventToDraft = (ev: RealEvent): Evento => ({
     id: ev.id,
     nome: ev.event_name || ev.client_name,
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+    
     evento_nome: ev.event_name || "",
     cliente: ev.client_name,
     nomeNoivo: ev.groom_name || "",
@@ -451,7 +455,7 @@ function EventoInterna() {
     email: ev.email || "",
     data: ev.date,
     horario: ev.event_time || "",
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+    
     duracao: ev.duration_hours || "",
     local: ev.event_location || "",
     cidade: ev.city || "",
@@ -481,7 +485,7 @@ function EventoInterna() {
     gastosDiversos: [],
     lucroDesejado: 0,
     pagamento: {
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+      
       formaPagamento: ev.payment_method || "",
       percentualPago: ev.payment_percent_received || 0,
       dataPagamento: ev.payment_due_date,
@@ -504,7 +508,7 @@ function EventoInterna() {
     return ({
     id: ev.id,
     nome: historicalEvent.event_name || historicalEvent.client_name,
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+    
     evento_nome: historicalEvent.event_name || "",
     cliente: historicalEvent.client_name,
     nomeNoivo: historicalEvent.groom_name || "",
@@ -544,7 +548,7 @@ function EventoInterna() {
     gastosDiversos: Array.isArray(b.miscellaneous_items) ? b.miscellaneous_items : [],
     lucroDesejado: b.profit_value,
     pagamento: {
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+      
       formaPagamento: b.payment_method || ev.payment_method || "",
       percentualPago: b.paid_percentage || ev.payment_percent_received || 0,
       dataPagamento: b.pending_payment_date || ev.payment_due_date,
@@ -644,18 +648,19 @@ function EventoInterna() {
       };
 
       // Atualiza evento base com totais financeiros para integração com dashboard/financeiro
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+      
+      if (!evento) throw new Error("Evento não carregado.");
       await eventBudgetService.updateEvent(evento.id, {
         client_name: draft.cliente,
         groom_name: draft.nomeNoivo || null,
         bride_name: draft.nomeNoiva || null,
-        // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+        
         event_name: draft.evento_nome,
         phone: draft.telefone,
         email: draft.email,
         date: draft.data,
         event_time: draft.horario,
-        // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+        
         duration_hours: draft.duracao ? Number(draft.duracao) : null,
         event_location: draft.local,
         city: draft.cidade,
@@ -976,7 +981,7 @@ function EventoInterna() {
 
       if (result.success && result.externalDocumentId) {
         await handleStatusChange(
-          // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+          
           "em_assinatura",
           `Contrato enviado para assinatura digital via ${provider.name}.`,
         );
@@ -1024,7 +1029,7 @@ function EventoInterna() {
     try {
       if (!draft) return;
       await eventContractsService.createContractForEvent(draft.id, tId, sId);
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+      
       await handleStatusChange("em_assinatura", "Contrato gerado automaticamente no sistema.");
       alert(
         "Contrato gerado com sucesso! Todas as variáveis do cliente e orçamento foram preenchidas automaticamente.",
@@ -1188,7 +1193,7 @@ function EventoInterna() {
       const data = await clientContractFormService.createPublicFormToken(draft.id);
       const link = `${window.location.origin}/contrato/dados/${data.public_token}`;
       navigator.clipboard.writeText(link);
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+      
       handleStatusChange("dados_solicitados", "Link de coleta de dados gerado.");
       alert("Link seguro copiado para a área de transferência!");
       loadContractModule();
@@ -1258,7 +1263,7 @@ function EventoInterna() {
             <ArrowLeft className="h-3 w-3" /> Voltar
           </Link>
         }
-        // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+        
         title={draft.evento_nome || draft.cliente || draft.nome}
         subtitle={`${draft.tipo} · Versão ${currentBudget?.version_number || 1}`}
         action={
@@ -1338,7 +1343,7 @@ function EventoInterna() {
                   <h2 className="text-2xl font-display font-bold tracking-tight">
                     {isEditingHeader
                       ? "Editando Cabeçalho"
-                      : // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
+                      : 
                         draft.evento_nome || draft.cliente || draft.nome}
                   </h2>
                   <button
@@ -1492,8 +1497,8 @@ function EventoInterna() {
               />
               <HeaderField
                 label="Nome do Evento / Casal"
-                // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-                value={draft.evento_nome}
+                
+                value={draft.evento_nome || ""}
                 isEditing={isEditingHeader}
                 onChange={(v) => setDraft((p) => (p ? { ...p, evento_nome: v } : null))}
                 icon={<Users className="h-3 w-3 text-primary/60" />}
@@ -2844,7 +2849,7 @@ function EventoInterna() {
                       </p>
 
                       <div className="flex gap-2 flex-wrap items-center">
-                        {/* Botão de Geração / Regeneração */}
+                        {/* Botão de Geração Canva (Mantido) */}
                         <PrimaryButton
                           className="h-10 text-[11px] font-bold flex-1"
                           onClick={handleGenerateProposal}
@@ -2856,11 +2861,28 @@ function EventoInterna() {
                             <FileTextIcon className="h-4 w-4" />
                           )}
                           {!existingProposal
-                            ? "GERAR PROPOSTA COMERCIAL"
+                            ? "GERAR PELO CANVA"
                             : isProposalOutdated
-                              ? "GERAR PROPOSTA ATUALIZADA"
-                              : "GERAR NOVAMENTE"}
+                              ? "ATUALIZAR CANVA"
+                              : "GERAR NO CANVA"}
                         </PrimaryButton>
+
+                        {/* Botão Visualizar PDF (Goat Bar Engine) */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!currentBudget?.id) {
+                              toast.error("Salve uma versão do orçamento antes de visualizar a proposta.");
+                              return;
+                            }
+                            setShowInternalPreviewModal(true);
+                          }}
+                          className="flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-xl border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all cursor-pointer"
+                          title="Visualizar proposta comercial em PDF (gerador próprio)"
+                        >
+                          <Eye className="h-4 w-4" />
+                          Visualizar PDF (Goat Bar)
+                        </button>
 
                         {/* Visualizar / Baixar PDF */}
                         {existingProposal?.final_pdf_url && (
@@ -4079,6 +4101,18 @@ function EventoInterna() {
           onClose={() => setCanvaGeneration((value) => ({ ...value, open: false }))}
         />
       )}
+      {showInternalPreviewModal && currentBudget?.id && (
+        <InternalProposalPreviewModal
+          isOpen={showInternalPreviewModal}
+          onClose={() => setShowInternalPreviewModal(false)}
+          eventId={eventoId}
+          budgetVersionId={currentBudget.id}
+          eventName={evento?.event_name || evento?.client_name || "Evento"}
+          onProposalSaved={(proposal) => {
+            setExistingProposal(proposal);
+          }}
+        />
+      )}
 
       {/* CONTRACT REVISION & VALIDATION MODAL */}
       <ContractReviewModal
@@ -4095,8 +4129,8 @@ function EventoInterna() {
           realSigners.find((s) => s.is_active) ||
           null
         }
-        // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-        eventName={evento.event_name || evento.client_name || "Evento"}
+        
+        eventName={evento?.event_name || evento?.client_name || "Evento"}
         compiledHtml={compiledContractText}
         rawTemplateContent={getTemplateContent(
           realTemplates.find((t) => t.id === selectedTemplate) ||
@@ -4389,8 +4423,8 @@ function ProposalModal({
         formData,
         mappedEventType,
       );
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      
+      const blob = new Blob([new Uint8Array(pdfBytes).buffer], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(url);
@@ -4440,8 +4474,8 @@ function ProposalModal({
         status: "downloaded",
       });
       // Download
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      
+      const blob = new Blob([new Uint8Array(pdfBytes).buffer], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

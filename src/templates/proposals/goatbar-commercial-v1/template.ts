@@ -1,0 +1,334 @@
+import type { ProposalTemplateDefinition } from "@/lib/pdf-engine/types";
+import fs from "fs";
+import path from "path";
+
+/**
+ * Carrega os bytes do PDF limpo de referência caso disponível no filesystem local.
+ */
+function loadCleanBasePdf(): Uint8Array | undefined {
+  try {
+    const candidates = [
+      path.resolve("Proposta limpa/Cópia de Proposta Comercial - Sidney & Lúcia.pdf"),
+      path.resolve("src/templates/proposals/goatbar-commercial-v1/clean-template.pdf"),
+    ];
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        return new Uint8Array(fs.readFileSync(candidate));
+      }
+    }
+  } catch (err) {
+    console.warn("[goatbar-commercial-v1] Não foi possível carregar base limpa local:", err);
+  }
+  return undefined;
+}
+
+/**
+ * TEMPLATE OFICIAL: Proposta Comercial Goat Bar (16:9 Widescreen)
+ * Calibrado pixel a pixel a partir dos PDFs reais do Canva.
+ */
+export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
+  id: "goatbar-commercial",
+  version: "1.0.0",
+  name: "Proposta Comercial Goat Bar",
+  description: "Modelo oficial 16:9 (1440x810) com máxima fidelidade ao design Canva",
+  isDevelopment: false,
+  basePdfBytes: loadCleanBasePdf(),
+  pageSize: {
+    width: 1440.0,
+    height: 810.0,
+  },
+  overflow: {
+    enabled: true,
+    maxMenuHeight: 280,
+    continuationPageTitle: "CARDÁPIO DE DRINKS (CONTINUAÇÃO)",
+  },
+  pages: [
+    // --- PÁGINA 1: CAPA ---
+    {
+      pageNumber: 1,
+      title: "Capa",
+      slots: [
+        {
+          id: "capa-data-orcamento",
+          fieldKey: "dataOrcamento",
+          type: "date",
+          x: 66.8,
+          y: 755.4,
+          width: 200,
+          height: 30,
+          style: {
+            font: "Helvetica",
+            fontSize: 20,
+            lineHeight: 24,
+            color: "#FFFFFF",
+            align: "left",
+          },
+        },
+        {
+          id: "capa-inicial-noivo",
+          fieldKey: "inicialNoivo",
+          type: "text",
+          x: 204.5,
+          y: 393.6,
+          width: 70,
+          height: 100,
+          style: {
+            font: "Helvetica-Bold",
+            fontSize: 93,
+            lineHeight: 95,
+            color: "#FFFFFF",
+            align: "center",
+          },
+        },
+        {
+          id: "capa-inicial-noiva",
+          fieldKey: "inicialNoiva",
+          type: "text",
+          x: 306.4,
+          y: 393.6,
+          width: 70,
+          height: 100,
+          style: {
+            font: "Helvetica-Bold",
+            fontSize: 93,
+            lineHeight: 95,
+            color: "#FFFFFF",
+            align: "center",
+          },
+        },
+        {
+          id: "capa-nome-casal",
+          fieldKey: "nomeEvento",
+          type: "text",
+          x: 170.0,
+          y: 315.0,
+          width: 240,
+          height: 30,
+          style: {
+            font: "Helvetica-Bold",
+            fontSize: 20,
+            lineHeight: 24,
+            color: "#FFFFFF",
+            align: "center",
+          },
+          transform: (val, canonical) => {
+            if (canonical.inicialNoivo && canonical.inicialNoiva) {
+              const groom = canonical.inicialNoivo;
+              const bride = canonical.inicialNoiva;
+              return `${groom} & ${bride}`;
+            }
+            return String(val || "");
+          },
+        },
+        {
+          id: "capa-data-evento",
+          fieldKey: "dataEvento",
+          type: "date",
+          x: 170.0,
+          y: 535.0,
+          width: 240,
+          height: 30,
+          style: {
+            font: "Helvetica",
+            fontSize: 20,
+            lineHeight: 24,
+            color: "#FFFFFF",
+            align: "center",
+          },
+        },
+      ],
+    },
+
+    // --- PÁGINAS 2 A 5: ESTÁTICAS ---
+    { pageNumber: 2, title: "Sobre a Goat Bar", slots: [] },
+    { pageNumber: 3, title: "Nosso propósito", slots: [] },
+    { pageNumber: 4, title: "O Bar dos Sonhos de Vocês", slots: [] },
+    { pageNumber: 5, title: "Por que escolher a Goat Bar?", slots: [] },
+
+    // --- PÁGINA 6: DRINKS & EXPERIÊNCIAS ---
+    {
+      pageNumber: 6,
+      title: "Drinks & Experiências",
+      isMenuPage: true,
+      menuSafeArea: {
+        drinksStartY: 301.3,
+        drinksMaxHeight: 280,
+        bebidasStartY: 591.7,
+        bebidasMaxHeight: 180,
+      },
+      slots: [
+        {
+          id: "drinks-list",
+          fieldKey: "drinks",
+          type: "bullet_list",
+          x: 81.0,
+          y: 301.3,
+          width: 600,
+          height: 280,
+          style: {
+            font: "Helvetica",
+            fontSize: 22,
+            lineHeight: 30.7,
+            color: "#FFFFFF",
+            align: "left",
+          },
+        },
+        {
+          id: "bebidas-list",
+          fieldKey: "bebidas",
+          type: "bullet_list",
+          x: 81.0,
+          y: 591.7,
+          width: 600,
+          height: 180,
+          style: {
+            font: "Helvetica",
+            fontSize: 20,
+            lineHeight: 27.7,
+            color: "#FFFFFF",
+            align: "left",
+          },
+        },
+      ],
+    },
+
+    // --- PÁGINA 7: VALORES E CONDIÇÕES ---
+    {
+      pageNumber: 7,
+      title: "Valores e condições",
+      slots: [
+        {
+          id: "resumo-convidados",
+          fieldKey: "quantidadePessoasFormatted",
+          type: "text",
+          x: 308.7,
+          y: 145.9,
+          width: 40,
+          height: 30,
+          style: {
+            font: "Helvetica",
+            fontSize: 22,
+            lineHeight: 24,
+            color: "#FFFFFF",
+            align: "left",
+          },
+        },
+        {
+          id: "resumo-duracao-horas",
+          fieldKey: "quantidadeHorasEventoFormatted",
+          type: "text",
+          x: 443.3,
+          y: 216.0,
+          width: 30,
+          height: 35,
+          style: {
+            font: "Helvetica",
+            fontSize: 29,
+            lineHeight: 30,
+            color: "#FFFFFF",
+            align: "left",
+          },
+        },
+        {
+          id: "resumo-equipe-bartenders",
+          fieldKey: "qtdBartendersFormatted",
+          type: "text",
+          x: 901.2,
+          y: 284.2,
+          width: 300,
+          height: 30,
+          style: {
+            font: "Helvetica",
+            fontSize: 22,
+            lineHeight: 24,
+            color: "#FFFFFF",
+            align: "left",
+          },
+        },
+        {
+          id: "resumo-equipe-keepers",
+          fieldKey: "qtdBarKeepersFormatted",
+          type: "text",
+          x: 901.2,
+          y: 316.9,
+          width: 300,
+          height: 30,
+          style: {
+            font: "Helvetica",
+            fontSize: 22,
+            lineHeight: 24,
+            color: "#FFFFFF",
+            align: "left",
+          },
+        },
+        {
+          id: "resumo-equipe-copeiras",
+          fieldKey: "qtdCopeirasFormatted",
+          type: "text",
+          x: 901.2,
+          y: 349.5,
+          width: 300,
+          height: 30,
+          style: {
+            font: "Helvetica",
+            fontSize: 22,
+            lineHeight: 24,
+            color: "#FFFFFF",
+            align: "left",
+          },
+        },
+        {
+          id: "resumo-variedades-drinks",
+          fieldKey: "quantidadeVariedadesDrinksFormatted",
+          type: "text",
+          x: 381.7,
+          y: 459.6,
+          width: 30,
+          height: 30,
+          style: {
+            font: "Helvetica",
+            fontSize: 22,
+            lineHeight: 24,
+            color: "#FFFFFF",
+            align: "left",
+          },
+        },
+        {
+          id: "resumo-investimento-total",
+          fieldKey: "valorInvestimentoFormatted",
+          type: "currency",
+          x: 130.8,
+          y: 648.0,
+          width: 400,
+          height: 40,
+          style: {
+            font: "Helvetica-Bold",
+            fontSize: 30,
+            lineHeight: 34,
+            color: "#FFFFFF",
+            align: "left",
+          },
+        },
+        {
+          id: "resumo-data-pagamento",
+          fieldKey: "dataFinalPagamento",
+          type: "date",
+          x: 928.1,
+          y: 657.7,
+          width: 200,
+          height: 30,
+          style: {
+            font: "Helvetica",
+            fontSize: 25,
+            lineHeight: 28,
+            color: "#FFFFFF",
+            align: "left",
+          },
+        },
+      ],
+    },
+
+    // --- PÁGINA 8: ESTÁTICA ---
+    { pageNumber: 8, title: "Vamos brindar juntos?", slots: [] },
+  ],
+};

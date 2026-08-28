@@ -10,8 +10,6 @@ import { numberToWordsBRL } from "@/lib/number-to-words-brl";
 import {
   onlyDigits,
   formatBrazilianDocument,
-  // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-  formatBrazilianDocumentWithLabel,
   getBrazilianDocumentType,
   getBrazilianDocumentLabel,
   validateBrazilianDocument,
@@ -715,8 +713,7 @@ export const eventContractsService = {
 
     // 7. Cálculos Financeiros
     const totalVal = currentBudget?.final_budget_value || evento.current_budget_value || 0;
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-    const entryVal = currentBudget?.paid_value || currentBudget?.deposit_value || totalVal * 0.5;
+    const entryVal = currentBudget?.paid_value || totalVal * 0.5;
     const remainingVal = Math.max(0, totalVal - entryVal);
     const numGuests = Number(evento.guests) || 1;
     const valPerPerson =
@@ -730,8 +727,7 @@ export const eventContractsService = {
     const clientNotes = (
       clientData?.notes && typeof clientData.notes === "object" ? clientData.notes : {}
     ) as any;
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-    const rawDocument = clientData?.cpf_cnpj || clientNotes?.cpf_cnpj || evento.client_cpf_cnpj;
+    const rawDocument = clientData?.cpf_cnpj || clientNotes?.cpf_cnpj || "";
     const documentValidation = validateBrazilianDocument(rawDocument);
     const documentType = getBrazilianDocumentType(rawDocument);
     const formattedDocument = documentValidation.digits
@@ -740,17 +736,11 @@ export const eventContractsService = {
     const documentWithType = documentValidation.digits
       ? `${getBrazilianDocumentLabel(rawDocument)}: ${formattedDocument}`
       : "";
-
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-    const rgClient = clientData?.rg || clientNotes?.rg || "";
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-    const whatsappClient = clientData?.whatsapp || clientData?.phone || evento.phone || "";
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-    const cepClient = clientData?.cep || clientNotes?.cep || "";
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-    const cityClient = clientData?.city || clientNotes?.city || evento.city || "";
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-    const stateClient = clientData?.state || clientNotes?.state || "";
+    const rgClient = clientNotes?.rg || "";
+    const whatsappClient = clientNotes?.whatsapp || clientData?.phone || evento.phone || "";
+    const cepClient = clientNotes?.cep || "";
+    const cityClient = clientNotes?.city || evento.city || "";
+    const stateClient = clientNotes?.state || "";
 
     // Local do Evento Atualizado pelo Formulário
     const venueName = clientNotes?.venue_name || evento.event_location || "";
@@ -761,8 +751,7 @@ export const eventContractsService = {
     const venueComplement = clientNotes?.venue_complement || "";
 
     // 10. Cálculos de Condição, Meio de Pagamento e Cláusula Completa
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-    const meioPagamentoStr = currentBudget?.payment_channel || clientNotes?.payment_channel || "";
+    const meioPagamentoStr = currentBudget?.payment_method || clientNotes?.payment_channel || "";
     const percentualNum = totalVal > 0 ? Math.round((entryVal / totalVal) * 100) : 50;
     const percentualText = `${percentualNum}%`;
     const percentualExtenso =
@@ -797,7 +786,6 @@ export const eventContractsService = {
     // Monta o dicionário completo de variáveis
     const variables: Record<string, string> = {
       // 🥂 Evento
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       "evento.nome": evento.event_name || evento.client_name || "",
       "evento.tipo": evento.event_type || "",
       "evento.data": evento.date
@@ -875,7 +863,6 @@ export const eventContractsService = {
       cliente_endereco: clientData?.address || evento.event_location || "",
       cliente_email: clientData?.email || evento.email || "",
       cliente_telefone: clientData?.phone || evento.phone || "",
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       evento_nome: evento.event_name || evento.client_name || "",
       evento_tipo: evento.event_type || "",
       evento_data: evento.date
