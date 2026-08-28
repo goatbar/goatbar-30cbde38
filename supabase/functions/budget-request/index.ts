@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "@Supabase/supabase-js";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 import { WhatsAppChannelAdapter } from "../_shared/goat-ai/channel/whatsapp-adapter.ts";
 import { createBudgetRequestLink } from "../_shared/budget-request-link.ts";
