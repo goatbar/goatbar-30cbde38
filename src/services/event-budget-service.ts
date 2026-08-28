@@ -20,6 +20,7 @@ export interface Event {
   drinks?: string[];
   notes?: string;
   status: string;
+  origin?: "manual" | "public_budget_form";
   lead_source?: string;
   referral_name?: string;
   is_paid_full: boolean;
@@ -176,6 +177,12 @@ export interface EventClosing {
 }
 
 export const eventBudgetService = {
+  subscribeToEventChanges(onChange: () => void) {
+    return supabase
+      .channel("event-list-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, onChange)
+      .subscribe();
+  },
   // --- Events ---
   async listEvents() {
     const { data, error } = await supabase

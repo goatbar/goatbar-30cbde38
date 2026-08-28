@@ -176,14 +176,21 @@ export function sanitizePublicDrinks(rows: any[]): PublicDrink[] {
 
 export function buildNotificationMessage(payload: PublicBudgetPayload, eventUrl?: string): string {
   const date = payload.date.split("-").reverse().join("/");
+  const optional = (label: string, value?: string | number) =>
+    value === undefined || value === null || String(value).trim() === ""
+      ? []
+      : [`${label}: ${value}`];
   return [
     "🐐 *Novo orçamento solicitado*",
     "",
     `Cliente: ${payload.client_name}`,
-    `Evento: ${payload.event_type}`,
+    ...optional("Evento", payload.event_name),
+    ...optional("Tipo", payload.event_type),
     `Data: ${date}`,
+    ...optional("Horário", payload.event_time),
     `Convidados: ${payload.guests}`,
-    `Local: ${payload.event_location || "A definir"}`,
+    ...optional("Local", payload.event_location),
+    ...optional("Cidade", payload.city),
     "",
     "O orçamento já foi criado no sistema.",
     ...(eventUrl ? ["", "Abrir orçamento:", eventUrl] : []),

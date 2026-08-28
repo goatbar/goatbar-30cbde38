@@ -35,6 +35,10 @@ import { migrateLegacyStoreToSupabase } from "@/lib/migration";
 import { EventKanban } from "@/components/kanban/EventKanban";
 import { type KanbanColumnId } from "@/lib/kanban-pipeline";
 import { budgetRequestService } from "@/services/budget-request-service";
+import {
+  getPendingPublicBudgetRequests,
+  isPendingPublicBudgetRequest,
+} from "@/lib/public-budget-requests";
 
 const VIEW_STORAGE_KEY = "goatbar:eventos:view";
 
@@ -101,6 +105,11 @@ function EventosIndex() {
       .finally(loadEvents);
   }, []);
 
+  useEffect(() => {
+    const channel = eventBudgetService.subscribeToEventChanges(loadEvents);
+    return () => void channel.unsubscribe();
+  }, []);
+
   const loadEvents = async () => {
     setLoading(true);
     try {
@@ -117,6 +126,7 @@ function EventosIndex() {
     const s = e.status?.toUpperCase();
     return !["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
   });
+  const novosOrcamentosPublicos = getPendingPublicBudgetRequests(eventos);
 
   const STATUS_ORDER: Record<string, number> = {
     NOVO_ORCAMENTO: 0,
@@ -136,6 +146,7 @@ function EventosIndex() {
   const filteredEventos = (() => {
     const filtered = eventos.filter((e) => {
       const s = e.status?.toUpperCase() || "";
+      if (statusFilter === "public_budget_requests") return isPendingPublicBudgetRequest(e);
       if (statusFilter === "pipeline") {
         // Pipeline principal: exclui finalizados e cancelados
         return !["FINALIZADO", "REALIZADO", "CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
@@ -166,6 +177,7 @@ function EventosIndex() {
       return true; // "todos"
     });
 
+    if (statusFilter === "public_budget_requests") return getPendingPublicBudgetRequests(filtered);
     return [...filtered].sort((a, b) => {
       if (sortOrder === "data") {
         const da = a.date || "";
@@ -383,6 +395,9 @@ function EventosIndex() {
                     aria-label="Filtrar eventos por status"
                   >
                     <option value="pipeline">Pipeline (ativos)</option>
+                    <option value="public_budget_requests">
+                      Novos orçamentos solicitados ({novosOrcamentosPublicos.length})
+                    </option>
                     <option value="todos">Todos os registros</option>
                     <option value="negociacao">Em Negociação</option>
                     <option value="confirmados">Confirmados</option>
@@ -463,6 +478,11 @@ function EventosIndex() {
                     <div className="font-bold text-sm truncate group-hover:text-primary transition-colors">
                       {e.event_name || e.client_name}
                     </div>
+                    {e.origin === "public_budget_form" && (
+                      <span className="mt-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                        Solicitado pelo site
+                      </span>
+                    )}
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[10px] text-muted-foreground uppercase tracking-wider font-bold">
                       <span className="flex items-center gap-1">
                         <Users className="h-3 w-3" /> {e.guests} pax
