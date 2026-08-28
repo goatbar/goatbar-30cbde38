@@ -60,6 +60,23 @@ describe("Proposta Comercial Goat Bar - regressão visual", () => {
     expect(canonical.valorInvestimentoFormatted).toMatch(/2\.350,30/);
     expect(canonical.dataFinalPagamento).toBe("07.11.2026");
     expect(template.pages[5].slots.every((slot) => slot.style.color !== "#FFFFFF")).toBe(true);
+    const coverName = template.pages[0].slots.find((slot) => slot.id === "capa-nome-evento-topo")!;
+    const coverDate = template.pages[0].slots.find((slot) => slot.id === "capa-data-evento")!;
+    expect(coverName.type).toBe("arc");
+    expect(coverName.arcConfig).toMatchObject({ radius: 122, startDeg: 160, endDeg: 20 });
+    expect(coverDate.arcConfig).toMatchObject({ radius: 122, startDeg: 200, endDeg: 340 });
+
+    const drinks = template.pages[5].slots.find((slot) => slot.id === "drinks-list")!;
+    const beverages = template.pages[5].slots.find((slot) => slot.id === "bebidas-list")!;
+    expect(drinks).toMatchObject({ x: 81, y: 311, width: 600 });
+    expect(drinks.style).toMatchObject({ font: "Helvetica", fontSize: 20, lineHeight: 31 });
+    expect(beverages).toMatchObject({ x: 81, y: 600, width: 600 });
+    expect(beverages.style).toMatchObject({ fontSize: 20, lineHeight: 27.5 });
+
+    const investment = template.pages[6].slots.find(
+      (slot) => slot.id === "resumo-investimento-total",
+    )!;
+    expect(investment.style.font).toBe("Helvetica");
 
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber++) {
       const page = await document.getPage(pageNumber);
