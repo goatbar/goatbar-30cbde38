@@ -249,17 +249,45 @@ export class ProposalPdfRenderer {
     const safeDrinksHeight =
       pageDef.menuSafeArea?.drinksMaxHeight || drinksSlot?.height || 280;
 
-    // Determina se cabe na primeira página
+    // Determina se os drinks cabem na primeira página
     let page1Drinks: string[] = [];
     let overflowDrinks: string[] = [];
 
-    let accumulatedHeight = 0;
+    let accumulatedDrinksHeight = 0;
     for (const item of measuredDrinks.items) {
-      if (accumulatedHeight + item.height <= safeDrinksHeight) {
-        accumulatedHeight += item.height;
+      if (accumulatedDrinksHeight + item.height <= safeDrinksHeight) {
+        accumulatedDrinksHeight += item.height;
         page1Drinks.push(item.raw);
       } else {
         overflowDrinks.push(item.raw);
+      }
+    }
+
+    // Mede todas as bebidas
+    const bebidasSlot = pageDef.slots.find((s) => s.fieldKey === "bebidas" || s.id.includes("bebidas"));
+    const bebidasFont = getFont(bebidasSlot?.style.font);
+    const bebidasFontSize = bebidasSlot?.style.fontSize || 20;
+    const bebidasLineHeight = bebidasSlot?.style.lineHeight || 27.7;
+    const safeBebidasHeight = pageDef.menuSafeArea?.bebidasMaxHeight || bebidasSlot?.height || 180;
+
+    const measuredBebidas = measureBulletList(
+      canonicalData.bebidas,
+      availableWidth,
+      bebidasFontSize,
+      bebidasLineHeight,
+      bebidasFont,
+    );
+
+    let page1Bebidas: string[] = [];
+    let overflowBebidas: string[] = [];
+
+    let accumulatedBebidasHeight = 0;
+    for (const item of measuredBebidas.items) {
+      if (accumulatedBebidasHeight + item.height <= safeBebidasHeight) {
+        accumulatedBebidasHeight += item.height;
+        page1Bebidas.push(item.raw);
+      } else {
+        overflowBebidas.push(item.raw);
       }
     }
 
@@ -268,6 +296,8 @@ export class ProposalPdfRenderer {
       ...canonicalData,
       drinks: page1Drinks,
       drinksFormatted: page1Drinks.map((d) => (d.startsWith("•") ? d : `• ${d}`)).join("\n"),
+      bebidas: page1Bebidas,
+      bebidasFormatted: page1Bebidas.map((b) => (b.startsWith("•") ? b : `• ${b}`)).join("\n"),
     };
 
     const page1 = doc.addPage([pageWidth, pageHeight]);
@@ -283,8 +313,8 @@ export class ProposalPdfRenderer {
       this.drawSlot(page1, slot, page1Data, pageHeight, getFont);
     }
 
-    // Se houve overflow, cria páginas de continuação em loop até renderizar TODOS os itens
-    if (overflowDrinks.length > 0) {
+    // Se houve overflow de drinks ou bebidas, cria páginas de continuação em loop até renderizar TODOS os itens
+    if (overflowDrinks.length > 0 || overflowBebidas.length > 0) {
       const continuationTitle =
         template.overflow?.continuationPageTitle || "Drinks & Experiências";
       const headerFont = getFont("Helvetica-Bold", true);
@@ -293,8 +323,9 @@ export class ProposalPdfRenderer {
       const continuationMaxHeight = 520.0; // Espaço vertical seguro na página de continuação
 
       let remainingDrinks = [...overflowDrinks];
+      let remainingBebidas = [...overflowBebidas];
 
-      while (remainingDrinks.length > 0) {
+      while (remainingDrinks.length > 0 || remainingBebidas.length > 0) {
         const continuationPage = doc.addPage([pageWidth, pageHeight]);
 
         // Usa o mesmo background da página de cardápio limpa
@@ -315,40 +346,82 @@ export class ProposalPdfRenderer {
           color: hexToRgb("#FFFFFF"),
         });
 
-        continuationPage.drawText(sanitizePdfText("Drinks (continuação)"), {
-          x: drinksSlot?.x || 81,
-          y: pageHeight - 180.0,
-          size: 24,
-          font: headerFont,
-          color: hexToRgb("#D4AF37"),
-        });
-
         let currentY = pageHeight - continuationStartY - fontSize;
         let pageAccumHeight = 0;
-        const currentBatch: string[] = [];
 
-        while (remainingDrinks.length > 0) {
-          const drink = remainingDrinks[0];
-          const bulletText = drink.startsWith("•") ? drink : `• ${drink}`;
-          const lines = wrapTextLines(bulletText, availableWidth, fontSize, itemFont);
-          const itemH = Math.max(1, lines.length) * lineHeight;
+        // Se ainda há drinks, desenha subtítulo de Drinks
+        if (remainingDrinks.length > 0) {
+          continuationPage.drawText(sanitizePdfText("Drinks (continuação)"), {
+            x: drinksSlot?.x || 81,
+            y: pageHeight - 180.0,
+            size: 24,
+            font: headerFont,
+            color: hexToRgb("#D4AF37"),
+          });
 
-          if (pageAccumHeight + itemH > continuationMaxHeight && currentBatch.length > 0) {
-            break; // Cria próxima página
+          while (remainingDrinks.length > 0) {
+            const drink = remainingDrinks[0];
+            const bulletText = drink.startsWith("•") ? drink : `• ${drink}`;
+            const lines = wrapTextLines(bulletText, availableWidth, fontSize, itemFont);
+            const itemH = Math.max(1, lines.length) * lineHeight;
+
+            if (pageAccumHeight + itemH > continuationMaxHeight) {
+              break; // Próxima página de continuação
+            }
+
+            pageAccumHeight += itemH;
+            remainingDrinks.shift();
+
+            for (const line of lines) {
+              continuationPage.drawText(sanitizePdfText(line), {
+                x: drinksSlot?.x || 81,
+                y: currentY,
+                size: fontSize,
+                font: itemFont,
+                color: hexToRgb(drinksSlot?.style.color || "#FFFFFF"),
+              });
+              currentY -= lineHeight;
+            }
           }
+        }
 
-          pageAccumHeight += itemH;
-          currentBatch.push(remainingDrinks.shift()!);
+        // Se ainda há bebidas e sobrou espaço, ou começa bebidas
+        if (remainingBebidas.length > 0 && pageAccumHeight + 80 <= continuationMaxHeight) {
+          // Subtítulo de Bebidas
+          currentY -= 20;
+          continuationPage.drawText(sanitizePdfText("Bebidas (continuação)"), {
+            x: bebidasSlot?.x || 81,
+            y: currentY,
+            size: 24,
+            font: headerFont,
+            color: hexToRgb("#D4AF37"),
+          });
+          currentY -= 35;
+          pageAccumHeight += 55;
 
-          for (const line of lines) {
-            continuationPage.drawText(sanitizePdfText(line), {
-              x: drinksSlot?.x || 81,
-              y: currentY,
-              size: fontSize,
-              font: itemFont,
-              color: hexToRgb(drinksSlot?.style.color || "#FFFFFF"),
-            });
-            currentY -= lineHeight;
+          while (remainingBebidas.length > 0) {
+            const bebida = remainingBebidas[0];
+            const bulletText = bebida.startsWith("•") ? bebida : `• ${bebida}`;
+            const lines = wrapTextLines(bulletText, availableWidth, bebidasFontSize, bebidasFont);
+            const itemH = Math.max(1, lines.length) * bebidasLineHeight;
+
+            if (pageAccumHeight + itemH > continuationMaxHeight) {
+              break; // Próxima página de continuação
+            }
+
+            pageAccumHeight += itemH;
+            remainingBebidas.shift();
+
+            for (const line of lines) {
+              continuationPage.drawText(sanitizePdfText(line), {
+                x: bebidasSlot?.x || 81,
+                y: currentY,
+                size: bebidasFontSize,
+                font: bebidasFont,
+                color: hexToRgb(bebidasSlot?.style.color || "#FFFFFF"),
+              });
+              currentY -= bebidasLineHeight;
+            }
           }
         }
       }

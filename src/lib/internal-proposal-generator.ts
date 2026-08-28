@@ -71,8 +71,31 @@ export async function loadProposalContext(
 }
 
 /**
- * Gera a prévia (preview) da proposta em memória.
- * NÃO salva no banco de dados e NÃO faz upload para o Storage.
+ * Seleciona deterministicamente o template correto a partir do tipo de evento ou ID explícito.
+ */
+export function selectProposalTemplateForEvent(
+  eventType?: string | null,
+  explicitTemplateId?: string,
+): ProposalTemplateDefinition {
+  if (explicitTemplateId) {
+    const found = ProposalTemplateRegistry.getTemplate(explicitTemplateId);
+    if (found) return found;
+  }
+  const typeClean = (eventType || "").toLowerCase().trim();
+  if (typeClean === "despedida" || typeClean === "despedida_solteira" || typeClean.includes("despedida")) {
+    const despedida = ProposalTemplateRegistry.getTemplate("goatbar-despedida");
+    if (despedida) return despedida;
+  }
+  const standard = ProposalTemplateRegistry.getTemplate("goatbar-commercial");
+  if (!standard) {
+    throw new Error('Template padrão "goatbar-commercial" não encontrado.');
+  }
+  return standard;
+}
+
+/**
+ * Gera o preview da proposta comercial em PDF em memória (Blob URL).
+ * NÃO grava nada em generated_proposals e NÃO faz upload no Supabase Storage.
  */
 export async function generateProposalPreview(params: {
   eventId: string;
@@ -95,12 +118,10 @@ export async function generateProposalPreview(params: {
     hydratedData: { selectedDrinkNames: context.resolvedDrinkNames },
   });
 
-  const templateId = params.templateId || "goatbar-commercial";
-  const template = ProposalTemplateRegistry.getTemplate(templateId);
-
-  if (!template) {
-    throw new Error(`Template com ID "${templateId}" não encontrado no registro.`);
-  }
+  const template = selectProposalTemplateForEvent(
+    canonicalData.tipoEvento || (context.event as any)?.event_type,
+    params.templateId,
+  );
 
   const renderResult = await ProposalPdfRenderer.render(template, canonicalData);
   const blob = new Blob([renderResult.pdfBytes as any], { type: "application/pdf" });
@@ -137,12 +158,10 @@ export async function generateAndPersistProposal(params: {
     hydratedData: { selectedDrinkNames: context.resolvedDrinkNames },
   });
 
-  const templateId = params.templateId || "goatbar-commercial";
-  const template = ProposalTemplateRegistry.getTemplate(templateId);
-
-  if (!template) {
-    throw new Error(`Template com ID "${templateId}" não encontrado no registro.`);
-  }
+  const template = selectProposalTemplateForEvent(
+    canonicalData.tipoEvento || (context.event as any)?.event_type,
+    params.templateId,
+  );
 
   const renderResult = await ProposalPdfRenderer.render(template, canonicalData);
   const filename = buildProposalFilename(context.event.event_name);
@@ -171,7 +190,14 @@ export async function generateAndPersistProposal(params: {
     event_id: params.eventId,
     budget_id: params.budgetVersionId,
     template_id: null, // Mantém null se for template de arquivo local ou UUID de template DB
-    proposal_data: canonicalData as any,
+    proposal_data: {
+      ...canonicalData,
+      template_id: template.id,
+      template_version: template.version,
+      generation_engine: "internal_pdf",
+      storage_path: storagePath,
+      generated_at: renderResult.generatedAt,
+    } as any,
     final_pdf_url: publicData.publicUrl,
     status: "ready",
     storage_path: storagePath,

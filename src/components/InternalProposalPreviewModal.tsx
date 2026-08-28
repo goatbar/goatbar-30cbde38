@@ -32,6 +32,7 @@ export function InternalProposalPreviewModal({
   const [pageCount, setPageCount] = useState<number>(1);
   const [templateName, setTemplateName] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const activeBlobUrlRef = React.useRef<string | null>(null);
 
   const loadPreview = async () => {
     if (!eventId || !budgetVersionId) return;
@@ -42,9 +43,10 @@ export function InternalProposalPreviewModal({
         eventId,
         budgetVersionId,
       });
-      if (blobUrl) {
-        URL.revokeObjectURL(blobUrl);
+      if (activeBlobUrlRef.current) {
+        URL.revokeObjectURL(activeBlobUrlRef.current);
       }
+      activeBlobUrlRef.current = res.blobUrl;
       setBlobUrl(res.blobUrl);
       setPageCount(res.renderResult.pageCount);
       setTemplateName(res.template.name);
@@ -61,8 +63,9 @@ export function InternalProposalPreviewModal({
       loadPreview();
     }
     return () => {
-      if (blobUrl) {
-        URL.revokeObjectURL(blobUrl);
+      if (activeBlobUrlRef.current) {
+        URL.revokeObjectURL(activeBlobUrlRef.current);
+        activeBlobUrlRef.current = null;
       }
     };
   }, [isOpen, eventId, budgetVersionId]);
