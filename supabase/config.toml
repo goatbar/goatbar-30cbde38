@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.goat-ai-status]
 verify_jwt = false
+
+[functions.budget-request]
+verify_jwt = false

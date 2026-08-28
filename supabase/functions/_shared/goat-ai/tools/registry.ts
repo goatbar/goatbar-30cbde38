@@ -17,6 +17,7 @@ import {
 } from "./definitions/financial.ts";
 import { upsertDrinkAliasTool } from "./definitions/drink-aliases.ts";
 import { getDrinksCatalogTool } from "./definitions/drinks.ts";
+import { createBudgetRequestLinkTool } from "./definitions/budget-request.ts";
 
 function sanitizeToolArguments(args: any): string {
   if (!args || typeof args !== "object") return String(args ?? "");
@@ -56,6 +57,7 @@ export class GoatAIToolRegistry {
     this.register(getFinancialSummaryTool);
     this.register(upsertDrinkAliasTool);
     this.register(getDrinksCatalogTool);
+    this.register(createBudgetRequestLinkTool);
   }
 
   public register(tool: GoatAIToolDefinition) {
@@ -85,7 +87,7 @@ export class GoatAIToolRegistry {
   public async executeTool(
     toolName: string,
     args: any,
-    context: ToolContext
+    context: ToolContext,
   ): Promise<ToolExecutionResult> {
     const tool = this.getTool(toolName);
     const correlationId = context.correlationId || "none";
@@ -93,7 +95,7 @@ export class GoatAIToolRegistry {
 
     if (!tool) {
       console.error(
-        `[GOAT-AI][TOOL][ERROR] correlationId=${correlationId} toolName=${toolName} toolCallId=${toolCallId} errorType="ToolNotFound" message="Ferramenta '${toolName}' não existe ou não está registrada."`
+        `[GOAT-AI][TOOL][ERROR] correlationId=${correlationId} toolName=${toolName} toolCallId=${toolCallId} errorType="ToolNotFound" message="Ferramenta '${toolName}' não existe ou não está registrada."`,
       );
       return {
         success: false,
@@ -108,7 +110,7 @@ export class GoatAIToolRegistry {
     const sanitizedArgs = sanitizeToolArguments(args || {});
 
     console.log(
-      `[GOAT-AI][TOOL][CALL] correlationId=${correlationId} toolName=${toolName} toolCallId=${toolCallId} businessUnit="${businessUnit}" canonicalBusinessUnit="${canonicalBusinessUnit}" argumentsSanitized=${sanitizedArgs}`
+      `[GOAT-AI][TOOL][CALL] correlationId=${correlationId} toolName=${toolName} toolCallId=${toolCallId} businessUnit="${businessUnit}" canonicalBusinessUnit="${canonicalBusinessUnit}" argumentsSanitized=${sanitizedArgs}`,
     );
 
     const startTime = Date.now();
@@ -116,10 +118,12 @@ export class GoatAIToolRegistry {
       const result = await tool.execute(context, args || {});
       const duration = Date.now() - startTime;
       const resultCount = extractResultCount(result.data);
-      const resultSummary = (result.message || (result.success ? "Execução com sucesso" : result.error || "Erro")).slice(0, 150);
+      const resultSummary = (
+        result.message || (result.success ? "Execução com sucesso" : result.error || "Erro")
+      ).slice(0, 150);
 
       console.log(
-        `[GOAT-AI][TOOL][RESULT] correlationId=${correlationId} toolName=${toolName} toolCallId=${toolCallId} source="${tool.sourceTable || "supabase"}" success=${result.success} resultCount=${resultCount} durationMs=${duration} resultSummary="${resultSummary}"`
+        `[GOAT-AI][TOOL][RESULT] correlationId=${correlationId} toolName=${toolName} toolCallId=${toolCallId} source="${tool.sourceTable || "supabase"}" success=${result.success} resultCount=${resultCount} durationMs=${duration} resultSummary="${resultSummary}"`,
       );
 
       // Audit log in ai_tool_calls
@@ -152,7 +156,7 @@ export class GoatAIToolRegistry {
       const errType = err?.name || "ExecutionError";
 
       console.error(
-        `[GOAT-AI][TOOL][ERROR] correlationId=${correlationId} toolName=${toolName} toolCallId=${toolCallId} errorType="${errType}" message="${errMsg}"`
+        `[GOAT-AI][TOOL][ERROR] correlationId=${correlationId} toolName=${toolName} toolCallId=${toolCallId} errorType="${errType}" message="${errMsg}"`,
       );
 
       if (context.supabaseAdmin?.from && context.conversationId) {
@@ -177,4 +181,3 @@ export class GoatAIToolRegistry {
 }
 
 export const defaultToolRegistry = new GoatAIToolRegistry();
-

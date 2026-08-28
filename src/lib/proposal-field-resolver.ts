@@ -115,7 +115,11 @@ export function countDistinctDrinkVarieties(context: ProposalFieldContext): numb
 
   if (typeof rawList === "object") {
     const obj = rawList as Record<string, unknown>;
-    const candidate = Array.isArray(obj.ids) ? obj.ids : Array.isArray(obj.names) ? obj.names : null;
+    const candidate = Array.isArray(obj.ids)
+      ? obj.ids
+      : Array.isArray(obj.names)
+        ? obj.names
+        : null;
     if (Array.isArray(candidate)) {
       const items = candidate
         .filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
@@ -213,6 +217,27 @@ export function formatDateDot(value: unknown): string {
   return "";
 }
 
+/**
+ * Formats dates inside a value that is semantically known to be a proposal date.
+ *
+ * Unlike a global slash replacement, this only recognizes complete calendar date
+ * tokens and is only called by date formatters/Canva date presenters.
+ */
+export function formatProposalDateText(value: unknown): string {
+  if (value instanceof Date) return formatDateDot(value);
+  if (typeof value !== "string") return "";
+
+  return value
+    .replace(
+      /\b(\d{4})-(\d{2})-(\d{2})(?:T[^\s]*)?\b/g,
+      (_match, year, month, day) => `${day}.${month}.${year}`,
+    )
+    .replace(
+      /\b(\d{2})\/(\d{2})\/(\d{4})\b/g,
+      (_match, day, month, year) => `${day}.${month}.${year}`,
+    );
+}
+
 function cleanLeadingBullet(item: string): string {
   return item.replace(/^[\s•\-\*·\u2022\u25E6\u25AA\u25CF]+/u, "").trim();
 }
@@ -258,14 +283,13 @@ export function formatProposalFieldValue(value: ProposalFieldValue, formatter = 
     return formatBulletList(value);
   }
   if (Array.isArray(value)) return value.join(", ");
-  if (formatter === "currency" && typeof value === "number")
-    return formatCurrency(value);
+  if (formatter === "currency" && typeof value === "number") return formatCurrency(value);
   if (formatter === "integer" && typeof value === "number") return Math.round(value).toString();
   if (
     (formatter === "date_canva" || formatter === "date_dot" || formatter === "date_short") &&
     typeof value === "string"
   ) {
-    return formatDateDot(value);
+    return formatProposalDateText(value);
   }
   if (formatter === "date_long" && typeof value === "string") {
     const [year, month, day] = value.slice(0, 10).split("-");
@@ -288,16 +312,18 @@ export const CANVA_PROPOSAL_PRESENTERS: Record<
   string,
   (value: ProposalFieldValue, formatter?: string) => string
 > = {
-  DATA_ORCAMENTO: (v) => formatDateDot(v),
-  DATA_EVENTO: (v) => formatDateDot(v),
-  DATA_FINAL_PAGAMENTO: (v) => formatDateDot(v),
+  DATA_ORCAMENTO: (v) => formatProposalDateText(v),
+  DATA_EVENTO: (v) => formatProposalDateText(v),
+  DATA_FINAL_PAGAMENTO: (v) => formatProposalDateText(v),
   QUANTIDADE_PESSOAS: (v) => {
     const n = parseNumericValue(v);
     return n === null ? "" : String(n);
   },
   QUANTIDADE_HORAS_EVENTO: (v) => {
     const n = parseNumericValue(v);
-    return n === null ? "" : String(n);
+    // Zero is the database default for an unfilled duration. Sending it created
+    // the isolated "0" below the guest count in the current Canva template.
+    return n === null || n <= 0 ? "" : String(n);
   },
   QTD_BARTENDERS: (v) => {
     const n = parseNumericValue(v);
