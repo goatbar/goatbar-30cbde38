@@ -24,6 +24,44 @@ export class ProposalGenerationError extends Error {
   }
 }
 
+/**
+ * Safe text capacities of the current "Drinks & Experiências" Brand Template.
+ * Canva Autofill accepts only the replacement text; it does not expose the text
+ * box bounds or an overflow mode. Keeping this guard here prevents a generated
+ * design from silently flowing into the footer/logo reservation.
+ */
+export const CANVA_MENU_SAFE_LINES: Record<"DRINKS" | "BEBIDAS", number> = {
+  DRINKS: 8,
+  BEBIDAS: 5,
+};
+
+const CANVA_MENU_CHARS_PER_LINE = 34;
+
+export function estimateCanvaMenuLines(text: string): number {
+  if (!text.trim()) return 0;
+  return text.split("\n").reduce((total, line) => {
+    // Include wrapped lines, not just item count: long labels consume more of
+    // the fixed-height Canva Data Field and can reach the footer sooner.
+    return (
+      total + Math.max(1, Math.ceil(Array.from(line.trim()).length / CANVA_MENU_CHARS_PER_LINE))
+    );
+  }, 0);
+}
+
+export function assertCanvaMenuSafeArea(canvaFieldKey: string, text: string) {
+  if (canvaFieldKey !== "DRINKS" && canvaFieldKey !== "BEBIDAS") return;
+  const capacity = CANVA_MENU_SAFE_LINES[canvaFieldKey];
+  const usedLines = estimateCanvaMenuLines(text);
+  if (usedLines <= capacity) return;
+
+  throw new ProposalGenerationError(
+    "canva_menu_overflow",
+    `A lista ${canvaFieldKey} ocupa aproximadamente ${usedLines} linhas, mas a área segura do template comporta ${capacity}. Reduza a lista antes de gerar a proposta para preservar a logo no rodapé.`,
+    400,
+    { field: canvaFieldKey, used_lines: usedLines, safe_lines: capacity },
+  );
+}
+
 type DrinkRow = { id: string; nome: string };
 type DrinksQueryResult = { data: DrinkRow[] | null; error: any };
 
@@ -600,6 +638,7 @@ export function buildAutofillData(
       mapping.formatter && mapping.formatter !== "raw"
         ? formatProposalFieldValue(raw, mapping.formatter)
         : formatCanvaProposalField(mapping.canva_field_key, raw, mapping.formatter || "raw");
+    assertCanvaMenuSafeArea(mapping.canva_field_key, value);
     data[mapping.canva_field_key] = { type: "text", text: value };
   }
   if (!Object.keys(data).length)

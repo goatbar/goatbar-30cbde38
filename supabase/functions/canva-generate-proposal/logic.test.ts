@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   auditAutofillPayload,
   autofillAndExportPdf,
+  CANVA_MENU_SAFE_LINES,
   buildAutofillData,
   collectDiagnosticFields,
   redactCanvaResponse,
+  estimateCanvaMenuLines,
 } from "./logic";
 
 describe("Canva proposal payload regression", () => {
@@ -44,6 +46,59 @@ describe("Canva proposal payload regression", () => {
       value: "2",
       status: "filled",
     });
+  });
+});
+
+describe("Canva Drinks & Experiências footer safe area", () => {
+  const mappings = [
+    { canva_field_key: "DRINKS", source_type: "field", source_field_key: "package.drinks_list" },
+    { canva_field_key: "BEBIDAS", source_type: "field", source_field_key: "budget.beverages" },
+  ];
+  const keys = mappings.map((item) => item.canva_field_key);
+
+  it.each([
+    ["poucos itens", ["Mojito", "Negroni"], ["Água"]],
+    [
+      "volume atual",
+      Array.from({ length: 6 }, (_, i) => `Drink ${i + 1}`),
+      ["Água", "Refrigerante", "Suco"],
+    ],
+    [
+      "próximo do limite",
+      Array.from({ length: 8 }, (_, i) => `Drink ${i + 1}`),
+      Array.from({ length: 5 }, (_, i) => `Bebida ${i + 1}`),
+    ],
+  ])("preserva o payload e a fonte com %s", (_scenario, drinks, beverages) => {
+    const payload = buildAutofillData(mappings, keys, {}, { selected_drinks: drinks, beverages });
+    expect(estimateCanvaMenuLines(payload.DRINKS.text)).toBeLessThanOrEqual(
+      CANVA_MENU_SAFE_LINES.DRINKS,
+    );
+    expect(estimateCanvaMenuLines(payload.BEBIDAS.text)).toBeLessThanOrEqual(
+      CANVA_MENU_SAFE_LINES.BEBIDAS,
+    );
+  });
+
+  it("interrompe explicitamente uma lista maior que a capacidade física", () => {
+    expect(() =>
+      buildAutofillData(
+        mappings,
+        keys,
+        {},
+        {
+          selected_drinks: ["Mojito"],
+          beverages: Array.from({ length: 6 }, (_, i) => `Bebida ${i + 1}`),
+        },
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        code: "canva_menu_overflow",
+        details: { field: "BEBIDAS", used_lines: 6, safe_lines: 5 },
+      }),
+    );
+  });
+
+  it("contabiliza quebra visual de um item longo", () => {
+    expect(estimateCanvaMenuLines(`• ${"Bebida artesanal ".repeat(4)}`)).toBeGreaterThan(1);
   });
 });
 
