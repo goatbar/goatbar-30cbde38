@@ -37,12 +37,12 @@ export class WhatsAppChannelAdapter {
     const formattedText = formatWhatsAppMessage(text);
 
     if (!this.config.accessToken || !this.config.phoneNumberId) {
-      console.warn(`[GOAT-AI][WHATSAPP][SEND] correlationId=${correlationId || "none"} status=skipped error="WhatsApp credentials not configured" recipient=${maskPhone(cleanTo)}`);
+      console.warn(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_ERROR] correlationId=${correlationId || "none"} status=skipped error="WhatsApp credentials not configured" recipient=${maskPhone(cleanTo)}`);
       return false;
     }
 
     const url = getWhatsAppMessagesUrl(this.config.phoneNumberId);
-    console.log(`[GOAT-AI][WHATSAPP][SEND_STARTED] correlationId=${correlationId || "none"} recipient=${maskPhone(cleanTo)} textLength=${formattedText.length}`);
+    console.log(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_STARTED] correlationId=${correlationId || "none"} recipient=${maskPhone(cleanTo)} textLength=${formattedText.length}`);
 
     try {
       const res = await fetch(url, {
@@ -78,7 +78,7 @@ export class WhatsAppChannelAdapter {
           }
         }
 
-        console.error(`[GOAT-AI][WHATSAPP][SEND] correlationId=${correlationId || "none"} success=false httpStatus=${res.status} metaErrorCode=${metaErrorCode} metaErrorType=${metaErrorType} metaErrorMessage=${metaErrorMessage} recipient=${maskPhone(cleanTo)}`);
+        console.error(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_ERROR] correlationId=${correlationId || "none"} success=false httpStatus=${res.status} metaErrorCode=${metaErrorCode} metaErrorType=${metaErrorType} metaErrorMessage=${metaErrorMessage} recipient=${maskPhone(cleanTo)}`);
 
         return false;
       }
@@ -91,11 +91,11 @@ export class WhatsAppChannelAdapter {
         // ignore json parse error on successful send
       }
 
-      console.log(`[GOAT-AI][WHATSAPP][SEND] correlationId=${correlationId || "none"} success=true metaMessageId=${metaMessageId || "none"} recipient=${maskPhone(cleanTo)}`);
+      console.log(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_SUCCESS] correlationId=${correlationId || "none"} success=true metaMessageId=${metaMessageId || "none"} recipient=${maskPhone(cleanTo)}`);
 
       return true;
     } catch (err: any) {
-      console.error(`[GOAT-AI][WHATSAPP][SEND] correlationId=${correlationId || "none"} success=false error="${err?.message || String(err)}" recipient=${maskPhone(cleanTo)}`);
+      console.error(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_ERROR] correlationId=${correlationId || "none"} success=false error="${err?.message || String(err)}" recipient=${maskPhone(cleanTo)}`);
       return false;
     }
   }
@@ -127,6 +127,9 @@ export class WhatsAppChannelAdapter {
 
   public async processIncomingWebhook(body: any): Promise<{ handled: boolean; reply?: string; reason?: string }> {
     const entry = body?.entry?.[0]?.changes?.[0]?.value;
+    const correlationId = `wa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    console.log(`[GOAT-AI][WHATSAPP][WEBHOOK_RECEIVED] correlationId=${correlationId} entriesCount=${body?.entry?.length || 0}`);
+
     if (!entry || !entry.messages || entry.messages.length === 0) {
       return { handled: false, reason: "No messages in webhook payload" };
     }
@@ -138,11 +141,9 @@ export class WhatsAppChannelAdapter {
     const contact = entry.contacts?.[0];
     const waId = contact?.wa_id || senderPhone;
     const contactName = contact?.profile?.name || "Sócio";
-
-    const correlationId = `wa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const maskedPhone = maskPhone(senderPhone);
 
-    console.log(`[GOAT-AI][WHATSAPP][RECEIVED] correlationId=${correlationId} messageId=${messageId} phone=${maskedPhone} messageType=${messageType}`);
+    console.log(`[GOAT-AI][WHATSAPP][MESSAGE_PARSED] correlationId=${correlationId} messageId=${messageId} phone=${maskedPhone} messageType=${messageType} senderName="${contactName}"`);
 
     // Deduplication check: if this specific messageId was already processed, ignore Meta retry
     if (messageId) {
@@ -160,6 +161,7 @@ export class WhatsAppChannelAdapter {
 
     // 1. Resolve User with wa_id priority
     const convManager = new ConversationManager(this.supabaseAdmin);
+    console.log(`[GOAT-AI][WHATSAPP][PHONE_NORMALIZED] correlationId=${correlationId} rawPhone=${maskedPhone} waId=${maskPhone(waId)}`);
     const resolvedUser = await convManager.resolveUserByWaIdOrPhone(waId, senderPhone);
 
     if (!resolvedUser || !resolvedUser.authorized) {
@@ -169,7 +171,7 @@ export class WhatsAppChannelAdapter {
       return { handled: true, reply: unauthReply, reason: "Unauthorized phone number" };
     }
 
-    console.log(`[GOAT-AI][AUTH][RESOLVED] correlationId=${correlationId} userId=${resolvedUser.userId} userName=${resolvedUser.name} authorized=true externalUserId=${resolvedUser.externalUserId || "none"}`);
+    console.log(`[GOAT-AI][AUTH][USER_RESOLVED] correlationId=${correlationId} userId=${resolvedUser.userId} userName="${resolvedUser.name}" authorized=true externalUserId=${resolvedUser.externalUserId || "none"}`);
 
     // 2. Extract content and media
     let messageText = "";
@@ -265,11 +267,14 @@ export class WhatsAppChannelAdapter {
       attachments,
     });
 
-    console.log(`[GOAT-AI][WHATSAPP][AGENT_FINAL] correlationId=${correlationId} toolsExecuted=${turnResult.toolCallsExecuted?.length || 0} replyLength=${turnResult.reply?.length || 0}`);
+    console.log(`[GOAT-AI][WHATSAPP][AGENT_COMPLETED] correlationId=${correlationId} toolsExecuted=${turnResult.toolCallsExecuted?.length || 0} replyLength=${turnResult.reply?.length || 0}`);
 
     // 4. Send EXACTLY ONE final reply back to WhatsApp
     if (turnResult.reply) {
-      await this.sendTextMessage(senderPhone, turnResult.reply, correlationId);
+      const sendOk = await this.sendTextMessage(senderPhone, turnResult.reply, correlationId);
+      if (!sendOk) {
+        console.error(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_ERROR] correlationId=${correlationId} recipient=${maskedPhone} reason="sendTextMessage returned false"`);
+      }
     }
 
     return { handled: true, reply: turnResult.reply };

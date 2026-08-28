@@ -438,7 +438,7 @@ describe("Goat AI WhatsAppChannelAdapter & Unauthorized User Handling", () => {
     expect(result).toBe(false);
 
     expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/\[GOAT-AI\]\[WHATSAPP\]\[SEND\].*metaErrorCode=131030/)
+      expect.stringMatching(/\[GOAT-AI\]\[WHATSAPP\]\[WHATSAPP_SEND_ERROR\].*metaErrorCode=131030/)
     );
     // Check that access token is NOT in any logged call
     for (const call of errorSpy.mock.calls) {
@@ -609,5 +609,118 @@ describe("Goat AI WhatsAppChannelAdapter & Unauthorized User Handling", () => {
     // 3. MUST NEVER have sent the false fallback message
     expect(sentMessages[0]).not.toContain("Não consegui processar a resposta");
   });
+
+  it("emits complete structured telemetry lifecycle logs for single-message trace", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "user_messaging_accounts") {
+        const createQueryBuilder = () => {
+          const builder: any = {
+            eq: () => builder,
+            or: () => builder,
+            in: () => builder,
+            maybeSingle: async () => ({
+              data: {
+                id: "acc-mariana",
+                user_id: "user-mariana-123",
+                display_name: "Mariana Campos",
+                verified: true,
+                external_user_id: "553799985192",
+                phone_number: "+5537999985192",
+              },
+              error: null,
+            }),
+          };
+          return builder;
+        };
+        return {
+          select: () => createQueryBuilder(),
+        };
+      }
+      if (table === "profiles") {
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { display_name: "Mariana Campos" }, error: null }) }) }) };
+      }
+      if (table === "ai_conversations") {
+        return {
+          select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: { id: "conv-trace-1", status: "active", channel: "whatsapp" }, error: null }) }) }) }) }) }) }),
+          insert: () => ({ select: () => ({ single: async () => ({ data: { id: "conv-trace-1", status: "active", channel: "whatsapp" }, error: null }) }) }),
+          update: () => ({ eq: async () => ({ data: null, error: null }) }),
+        };
+      }
+      if (table === "ai_messages") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: null, error: null }),
+              order: () => ({ limit: async () => ({ data: [], error: null }) }),
+            }),
+          }),
+          insert: () => ({ select: () => ({ single: async () => ({ data: { id: "msg-trace-1" }, error: null }) }) }),
+        };
+      }
+      if (table === "ai_pending_actions") {
+        return { select: () => ({ eq: () => ({ in: () => ({ gt: () => ({ order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) }) }) }) };
+      }
+      return {};
+    });
+
+    globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes("graph.facebook.com")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ messages: [{ id: "wamid.OUT_1" }] }),
+        };
+      }
+      // Gemini API
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: "Olá Mariana! Como posso ajudar?" }] }, finishReason: "STOP" }],
+          usageMetadata: { promptTokenCount: 50, candidatesTokenCount: 15 },
+        }),
+      };
+    });
+
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messaging_product: "whatsapp",
+                contacts: [{ profile: { name: "Mariana Campos" }, wa_id: "553799985192" }],
+                messages: [
+                  {
+                    from: "553799985192",
+                    id: "wamid.TRACE_TEST_1",
+                    text: { body: "Olá GIA" },
+                    type: "text",
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const res = await adapter.processIncomingWebhook(payload);
+    expect(res.handled).toBe(true);
+
+    const loggedMessages = logSpy.mock.calls.map((c) => c.join(" "));
+    expect(loggedMessages.some((m) => m.includes("[WEBHOOK_RECEIVED]"))).toBe(true);
+    expect(loggedMessages.some((m) => m.includes("[MESSAGE_PARSED]"))).toBe(true);
+    expect(loggedMessages.some((m) => m.includes("[PHONE_NORMALIZED]"))).toBe(true);
+    expect(loggedMessages.some((m) => m.includes("[USER_RESOLVED]"))).toBe(true);
+    expect(loggedMessages.some((m) => m.includes("[CONVERSATION_LOADED]"))).toBe(true);
+    expect(loggedMessages.some((m) => m.includes("[AGENT_STARTED]"))).toBe(true);
+    expect(loggedMessages.some((m) => m.includes("[AGENT_COMPLETED]"))).toBe(true);
+    expect(loggedMessages.some((m) => m.includes("[WHATSAPP_SEND_STARTED]"))).toBe(true);
+    expect(loggedMessages.some((m) => m.includes("[WHATSAPP_SEND_SUCCESS]"))).toBe(true);
+  });
 });
+
 

@@ -152,7 +152,7 @@ export class AIRouter {
     // Filter Eligible Providers
     for (const p of this.providers) {
       // 1. Zero-Paid Policy check
-      if (p.freeType === "PAID_NOT_ALLOWED" || ALLOW_PAID_PROVIDERS) {
+      if (p.freeType === "PAID_NOT_ALLOWED" && !ALLOW_PAID_PROVIDERS) {
         skippedProviders.push({ id: p.id, reason: "PAID_NOT_ALLOWED" });
         continue;
       }

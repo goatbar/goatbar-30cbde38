@@ -132,6 +132,8 @@ export class GoatAIGeminiAgent {
       input.message.slice(0, 40) || "Conversa com a GIA"
     );
 
+    console.log(`[GOAT-AI][CONVERSATION][CONVERSATION_LOADED] correlationId=${correlationId} conversationId=${conversation.id} channel=${input.channel} userId=${input.userId || "anonymous"}`);
+
     const context: ToolContext = {
       supabaseAdmin: this.supabaseAdmin,
       userId: input.userId,
