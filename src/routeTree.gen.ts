@@ -25,6 +25,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as EventosIndexRouteImport } from './routes/eventos.index'
 import { Route as PosEventoEventoIdRouteImport } from './routes/pos-evento.$eventoId'
 import { Route as EventosEventoIdRouteImport } from './routes/eventos.$eventoId'
+import { Route as OrcamentoSolicitarTokenRouteImport } from './routes/orcamento.solicitar.$token'
 import { Route as ContratoFormEventoIdRouteImport } from './routes/contrato.form.$eventoId'
 import { Route as ContratoDadosTokenRouteImport } from './routes/contrato.dados.$token'
 
@@ -108,6 +109,11 @@ const EventosEventoIdRoute = EventosEventoIdRouteImport.update({
   path: '/$eventoId',
   getParentRoute: () => EventosRoute,
 } as any)
+const OrcamentoSolicitarTokenRoute = OrcamentoSolicitarTokenRouteImport.update({
+  id: '/orcamento/solicitar/$token',
+  path: '/orcamento/solicitar/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ContratoFormEventoIdRoute = ContratoFormEventoIdRouteImport.update({
   id: '/contrato/form/$eventoId',
   path: '/contrato/form/$eventoId',
@@ -138,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/eventos/': typeof EventosIndexRoute
   '/contrato/dados/$token': typeof ContratoDadosTokenRoute
   '/contrato/form/$eventoId': typeof ContratoFormEventoIdRoute
+  '/orcamento/solicitar/$token': typeof OrcamentoSolicitarTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -157,6 +164,7 @@ export interface FileRoutesByTo {
   '/eventos': typeof EventosIndexRoute
   '/contrato/dados/$token': typeof ContratoDadosTokenRoute
   '/contrato/form/$eventoId': typeof ContratoFormEventoIdRoute
+  '/orcamento/solicitar/$token': typeof OrcamentoSolicitarTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -178,6 +186,7 @@ export interface FileRoutesById {
   '/eventos/': typeof EventosIndexRoute
   '/contrato/dados/$token': typeof ContratoDadosTokenRoute
   '/contrato/form/$eventoId': typeof ContratoFormEventoIdRoute
+  '/orcamento/solicitar/$token': typeof OrcamentoSolicitarTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -200,6 +209,7 @@ export interface FileRouteTypes {
     | '/eventos/'
     | '/contrato/dados/$token'
     | '/contrato/form/$eventoId'
+    | '/orcamento/solicitar/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/eventos'
     | '/contrato/dados/$token'
     | '/contrato/form/$eventoId'
+    | '/orcamento/solicitar/$token'
   id:
     | '__root__'
     | '/'
@@ -239,6 +250,7 @@ export interface FileRouteTypes {
     | '/eventos/'
     | '/contrato/dados/$token'
     | '/contrato/form/$eventoId'
+    | '/orcamento/solicitar/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -258,6 +270,7 @@ export interface RootRouteChildren {
   PosEventoEventoIdRoute: typeof PosEventoEventoIdRoute
   ContratoDadosTokenRoute: typeof ContratoDadosTokenRoute
   ContratoFormEventoIdRoute: typeof ContratoFormEventoIdRoute
+  OrcamentoSolicitarTokenRoute: typeof OrcamentoSolicitarTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -374,6 +387,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EventosEventoIdRouteImport
       parentRoute: typeof EventosRoute
     }
+    '/orcamento/solicitar/$token': {
+      id: '/orcamento/solicitar/$token'
+      path: '/orcamento/solicitar/$token'
+      fullPath: '/orcamento/solicitar/$token'
+      preLoaderRoute: typeof OrcamentoSolicitarTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/contrato/form/$eventoId': {
       id: '/contrato/form/$eventoId'
       path: '/contrato/form/$eventoId'
@@ -421,6 +441,7 @@ const rootRouteChildren: RootRouteChildren = {
   PosEventoEventoIdRoute: PosEventoEventoIdRoute,
   ContratoDadosTokenRoute: ContratoDadosTokenRoute,
   ContratoFormEventoIdRoute: ContratoFormEventoIdRoute,
+  OrcamentoSolicitarTokenRoute: OrcamentoSolicitarTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
