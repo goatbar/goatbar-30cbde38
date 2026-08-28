@@ -79,7 +79,7 @@ function EventosIndex() {
     try {
       localStorage.setItem(VIEW_STORAGE_KEY, mode);
     } catch (_e) {
-      // Ignora erro de acesso a localStorage
+      // Ignora erro de acesso a localStorage em ambientes restritos
     }
   };
   const [form, setForm] = useState({
@@ -122,11 +122,15 @@ function EventosIndex() {
     }
   };
 
-  const eventosAtivos = eventos.filter((e) => {
+  const novosOrcamentosPublicos = getPendingPublicBudgetRequests(eventos);
+  const eventosSemSolicitacoesPublicasPendentes = eventos.filter(
+    (e) => !isPendingPublicBudgetRequest(e),
+  );
+
+  const eventosAtivos = eventosSemSolicitacoesPublicasPendentes.filter((e) => {
     const s = e.status?.toUpperCase();
     return !["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
   });
-  const novosOrcamentosPublicos = getPendingPublicBudgetRequests(eventos);
 
   const STATUS_ORDER: Record<string, number> = {
     NOVO_ORCAMENTO: 0,
@@ -144,11 +148,9 @@ function EventosIndex() {
   };
 
   const filteredEventos = (() => {
-    const filtered = eventos.filter((e) => {
+    const filtered = eventosSemSolicitacoesPublicasPendentes.filter((e) => {
       const s = e.status?.toUpperCase() || "";
-      if (statusFilter === "public_budget_requests") return isPendingPublicBudgetRequest(e);
       if (statusFilter === "pipeline") {
-        // Pipeline principal: exclui finalizados e cancelados
         return !["FINALIZADO", "REALIZADO", "CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
       }
       if (statusFilter === "ativos") {
@@ -165,45 +167,28 @@ function EventosIndex() {
           "EM_ASSINATURA",
         ].includes(s);
       }
-      if (statusFilter === "confirmados") {
-        return s === "CONFIRMADO";
-      }
-      if (statusFilter === "finalizados") {
-        return ["FINALIZADO", "REALIZADO"].includes(s);
-      }
-      if (statusFilter === "cancelados") {
-        return ["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
-      }
-      return true; // "todos"
+      if (statusFilter === "confirmados") return s === "CONFIRMADO";
+      if (statusFilter === "finalizados") return ["FINALIZADO", "REALIZADO"].includes(s);
+      if (statusFilter === "cancelados") return ["CANCELADO", "PROPOSTA_RECUSADA"].includes(s);
+      return true;
     });
 
-    if (statusFilter === "public_budget_requests") return getPendingPublicBudgetRequests(filtered);
     return [...filtered].sort((a, b) => {
       if (sortOrder === "data") {
-        const da = a.date || "";
-        const db = b.date || "";
-        return da.localeCompare(db);
+        return (a.date || "").localeCompare(b.date || "");
       }
-      // sortOrder === "status"
       const sa = STATUS_ORDER[a.status?.toUpperCase() || ""] ?? 99;
       const sb = STATUS_ORDER[b.status?.toUpperCase() || ""] ?? 99;
       if (sa !== sb) return sa - sb;
-      // Desempate por data
       return (a.date || "").localeCompare(b.date || "");
     });
   })();
 
-  const eventosConfirmados = eventosAtivos.filter((e) => {
-    const s = e.status?.toUpperCase();
-    return s === "CONFIRMADO";
-  });
+  const eventosConfirmados = eventosAtivos.filter((e) => e.status?.toUpperCase() === "CONFIRMADO");
+  const eventosFinalizados = eventosSemSolicitacoesPublicasPendentes.filter((e) =>
+    ["FINALIZADO", "REALIZADO"].includes(e.status?.toUpperCase() || ""),
+  );
 
-  const eventosFinalizados = eventos.filter((e) => {
-    const s = e.status?.toUpperCase();
-    return ["FINALIZADO", "REALIZADO"].includes(s);
-  });
-
-  // Valor pago e a receber — apenas eventos confirmados + finalizados
   const { totalPago, totalAReceber } = (() => {
     let pago = 0;
     let aReceber = 0;
@@ -220,23 +205,20 @@ function EventosIndex() {
   })();
 
   const receitaEnviados = eventosAtivos
-    .filter((e) => {
-      const s = e.status?.toUpperCase();
-      return ["ORCAMENTO_ENVIADO", "AGUARDANDO_RESPOSTA", "DADOS_SOLICITADOS"].includes(s);
-    })
+    .filter((e) =>
+      ["ORCAMENTO_ENVIADO", "AGUARDANDO_RESPOSTA", "DADOS_SOLICITADOS"].includes(
+        e.status?.toUpperCase() || "",
+      ),
+    )
     .reduce((a, e) => a + (e.current_budget_value || 0), 0);
 
   const handleStatusChange = async (eventId: string, newStatus: KanbanColumnId) => {
-    // Previne concorrência em requisições simultâneas para o mesmo card
     if (savingEventIds.has(eventId)) return;
-
-    // Atualização otimista imediata na UI
     setPendingOverrides((prev) => ({ ...prev, [eventId]: newStatus }));
     setSavingEventIds((prev) => new Set(prev).add(eventId));
 
     try {
       await eventBudgetService.updateNegotiationStatus(eventId, newStatus);
-      // Sincroniza dados frescos com o Supabase
       const data = await eventBudgetService.listEvents();
       setEventos(data);
     } catch (err: unknown) {
@@ -244,7 +226,6 @@ function EventosIndex() {
       const errMsg = err instanceof Error ? err.message : "Falha na comunicação com o Supabase";
       toast.error(`Erro ao atualizar status: ${errMsg}`);
     } finally {
-      // Limpa override e lock de salvamento daquele card
       setPendingOverrides((prev) => {
         const next = { ...prev };
         delete next[eventId];
@@ -303,6 +284,99 @@ function EventosIndex() {
     }
   };
 
+  const renderEventRow = (e: RealEvent, compactPublic = false) => (
+    <Link
+      key={e.id}
+      to="/eventos/$eventoId"
+      params={{ eventoId: e.id }}
+      className="flex items-start sm:items-center gap-3 sm:gap-4 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-surface transition-all group"
+    >
+      <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+        <Calendar className="h-5 w-5 text-primary" />
+      </div>
+      <div className="flex-1 min-w-0 pr-2 sm:pr-0">
+        <div className="font-bold text-sm truncate group-hover:text-primary transition-colors">
+          {e.event_name || e.client_name}
+        </div>
+        {compactPublic && (
+          <span className="mt-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+            Solicitado pelo site
+          </span>
+        )}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[10px] text-muted-foreground uppercase tracking-wider font-bold">
+          <span className="flex items-center gap-1">
+            <Users className="h-3 w-3" /> {e.guests} pax
+          </span>
+          <span className="flex items-center gap-1">
+            <MapPin className="h-3 w-3" /> {e.event_location || "A definir"}
+          </span>
+          <span className="basis-full sm:basis-auto">
+            {e.date
+              ? new Date(e.date).toLocaleDateString("pt-BR", { timeZone: "UTC" })
+              : "Data a definir"}
+          </span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 sm:gap-4 shrink-0 self-center">
+        {!compactPublic && (
+          <>
+            <div className="hidden sm:block text-right">
+              <div className="text-sm font-bold text-foreground">
+                {e.current_budget_value ? fmtBRL(e.current_budget_value) : "--"}
+              </div>
+              <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">
+                {e.current_budget_value
+                  ? `${fmtBRL(e.current_budget_value / e.guests)}/pessoa`
+                  : "Orçamento em aberto"}
+              </div>
+            </div>
+            <div
+              className="hidden sm:block relative group/status"
+              onClick={(ev) => ev.preventDefault()}
+            >
+              <StatusBadge status={(pendingOverrides[e.id] ?? e.status) as any} />
+              <select
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                value={pendingOverrides[e.id] ?? e.status}
+                disabled={savingEventIds.has(e.id)}
+                onChange={(ev) => {
+                  ev.preventDefault();
+                  ev.stopPropagation();
+                  handleStatusChange(e.id, ev.target.value as KanbanColumnId);
+                }}
+              >
+                <option value="novo_orcamento">Novo orçamento</option>
+                <option value="orcamento_enviado">Orçamento enviado</option>
+                <option value="aguardando_retorno">Aguardando retorno</option>
+                <option value="dados_solicitados">Dados solicitados</option>
+                <option value="em_assinatura">Em assinatura</option>
+                <option value="confirmado">Confirmado</option>
+                <option value="finalizado">Finalizado</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+          </>
+        )}
+        <button
+          className="hidden sm:flex h-8 w-8 rounded-full items-center justify-center bg-background border border-border text-destructive hover:bg-destructive/10 transition-all"
+          onClick={async (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (confirm("Excluir este orçamento definitivamente?")) {
+              await eventBudgetService.deleteEvent(e.id);
+              loadEvents();
+            }
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+        <div className="h-8 w-8 rounded-full flex items-center justify-center bg-background border border-border group-hover:border-primary/30 group-hover:text-primary transition-all">
+          <ChevronRight className="h-4 w-4" />
+        </div>
+      </div>
+    </Link>
+  );
+
   return (
     <>
       <PageHeader
@@ -311,12 +385,7 @@ function EventosIndex() {
         action={
           <div className="flex flex-wrap gap-2">
             <GhostButton onClick={handleCreateLink} disabled={creatingLink}>
-              {creatingLink ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Link2 className="h-4 w-4" />
-              )}{" "}
-              Gerar link de orçamento
+              {creatingLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />} Gerar link de orçamento
             </GhostButton>
             <PrimaryButton onClick={() => setShowModal(true)}>
               <Plus className="h-4 w-4" /> Novo orçamento
@@ -329,9 +398,7 @@ function EventosIndex() {
         {publicLink && (
           <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center">
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-bold uppercase tracking-wide text-primary">
-                Link para o cliente
-              </div>
+              <div className="text-xs font-bold uppercase tracking-wide text-primary">Link para o cliente</div>
               <div className="mt-1 truncate text-sm">{publicLink}</div>
             </div>
             <GhostButton
@@ -344,50 +411,34 @@ function EventosIndex() {
             </GhostButton>
           </div>
         )}
+
+        {novosOrcamentosPublicos.length > 0 && (
+          <SectionCard
+            title={`Novos orçamentos solicitados (${novosOrcamentosPublicos.length})`}
+            subtitle="Solicitações recebidas pelos links públicos. Abra o orçamento e avance o status para movê-lo ao pipeline."
+          >
+            <div className="space-y-2">
+              {novosOrcamentosPublicos.map((e) => renderEventRow(e, true))}
+            </div>
+          </SectionCard>
+        )}
+
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
-          <StatCard
-            label="Total em pipeline"
-            value={String(eventosAtivos.length)}
-            icon={<TrendingUp className="h-4 w-4" />}
-          />
-          <StatCard
-            label="Confirmados"
-            value={String(eventosConfirmados.length)}
-            icon={<CheckCircle2 className="h-4 w-4 text-success" />}
-          />
-          <StatCard
-            label="Finalizados"
-            value={String(eventosFinalizados.length)}
-            icon={<Calendar className="h-4 w-4" />}
-          />
-          <StatCard
-            label="Em negociação (R$)"
-            value={fmtBRL(receitaEnviados)}
-            icon={<Clock className="h-4 w-4 text-amber-400" />}
-          />
-          <StatCard
-            label="Valor já pago"
-            value={fmtBRL(totalPago)}
-            icon={<CheckCircle2 className="h-4 w-4 text-success" />}
-            highlight
-          />
-          <StatCard
-            label="Valor a receber"
-            value={fmtBRL(totalAReceber)}
-            icon={<Clock className="h-4 w-4 text-amber-400" />}
-          />
+          <StatCard label="Total em pipeline" value={String(eventosAtivos.length)} icon={<TrendingUp className="h-4 w-4" />} />
+          <StatCard label="Confirmados" value={String(eventosConfirmados.length)} icon={<CheckCircle2 className="h-4 w-4 text-success" />} />
+          <StatCard label="Finalizados" value={String(eventosFinalizados.length)} icon={<Calendar className="h-4 w-4" />} />
+          <StatCard label="Em negociação (R$)" value={fmtBRL(receitaEnviados)} icon={<Clock className="h-4 w-4 text-amber-400" />} />
+          <StatCard label="Valor já pago" value={fmtBRL(totalPago)} icon={<CheckCircle2 className="h-4 w-4 text-success" />} highlight />
+          <StatCard label="Valor a receber" value={fmtBRL(totalAReceber)} icon={<Clock className="h-4 w-4 text-amber-400" />} />
         </div>
 
         <SectionCard
           title="Pipeline de negociações"
-          subtitle={
-            loading ? "Carregando..." : `${filteredEventos.length} de ${eventos.length} registros`
-          }
+          subtitle={loading ? "Carregando..." : `${filteredEventos.length} de ${eventosSemSolicitacoesPublicasPendentes.length} registros`}
           action={
             <div className="flex flex-wrap items-center gap-3">
               {viewMode !== "calendario" && (
                 <>
-                  {/* Filtro de status compartilhado */}
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
@@ -395,9 +446,6 @@ function EventosIndex() {
                     aria-label="Filtrar eventos por status"
                   >
                     <option value="pipeline">Pipeline (ativos)</option>
-                    <option value="public_budget_requests">
-                      Novos orçamentos solicitados ({novosOrcamentosPublicos.length})
-                    </option>
                     <option value="todos">Todos os registros</option>
                     <option value="negociacao">Em Negociação</option>
                     <option value="confirmados">Confirmados</option>
@@ -405,7 +453,6 @@ function EventosIndex() {
                     <option value="cancelados">Cancelados</option>
                   </select>
 
-                  {/* Ordenação compartilhada */}
                   <div className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-input border border-border text-xs font-medium text-foreground">
                     <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     <select
@@ -421,31 +468,13 @@ function EventosIndex() {
                 </>
               )}
               <div className="flex bg-background border border-border rounded-lg p-0.5">
-                <button
-                  onClick={() => setViewMode("lista")}
-                  aria-pressed={viewMode === "lista"}
-                  aria-label="Visualização em Lista"
-                  title="Visualização em Lista"
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${viewMode === "lista" ? "bg-surface shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                >
+                <button onClick={() => setViewMode("lista")} aria-pressed={viewMode === "lista"} className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${viewMode === "lista" ? "bg-surface shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                   <List className="h-3.5 w-3.5" /> Lista
                 </button>
-                <button
-                  onClick={() => setViewMode("kanban")}
-                  aria-pressed={viewMode === "kanban"}
-                  aria-label="Visualização em Kanban"
-                  title="Visualização em Kanban"
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${viewMode === "kanban" ? "bg-surface shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                >
+                <button onClick={() => setViewMode("kanban")} aria-pressed={viewMode === "kanban"} className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${viewMode === "kanban" ? "bg-surface shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                   <Kanban className="h-3.5 w-3.5" /> Kanban
                 </button>
-                <button
-                  onClick={() => setViewMode("calendario")}
-                  aria-pressed={viewMode === "calendario"}
-                  aria-label="Visualização em Calendário"
-                  title="Visualização em Calendário"
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${viewMode === "calendario" ? "bg-surface shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                >
+                <button onClick={() => setViewMode("calendario")} aria-pressed={viewMode === "calendario"} className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${viewMode === "calendario" ? "bg-surface shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                   <LayoutGrid className="h-3.5 w-3.5" /> Calendário
                 </button>
               </div>
@@ -460,116 +489,9 @@ function EventosIndex() {
           ) : viewMode === "lista" ? (
             <div className="space-y-2">
               {filteredEventos.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  Nenhum evento cadastrado para o filtro selecionado.
-                </p>
+                <p className="text-sm text-muted-foreground text-center py-8">Nenhum evento cadastrado para o filtro selecionado.</p>
               )}
-              {filteredEventos.map((e) => (
-                <Link
-                  key={e.id}
-                  to="/eventos/$eventoId"
-                  params={{ eventoId: e.id }}
-                  className="flex items-start sm:items-center gap-3 sm:gap-4 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-surface transition-all group"
-                >
-                  <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                    <Calendar className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0 pr-2 sm:pr-0">
-                    <div className="font-bold text-sm truncate group-hover:text-primary transition-colors">
-                      {e.event_name || e.client_name}
-                    </div>
-                    {e.origin === "public_budget_form" && (
-                      <span className="mt-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
-                        Solicitado pelo site
-                      </span>
-                    )}
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[10px] text-muted-foreground uppercase tracking-wider font-bold">
-                      <span className="flex items-center gap-1">
-                        <Users className="h-3 w-3" /> {e.guests} pax
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" /> {e.event_location || "A definir"}
-                      </span>
-                      <span className="basis-full sm:basis-auto">
-                        {e.date
-                          ? new Date(e.date).toLocaleDateString("pt-BR", { timeZone: "UTC" })
-                          : "Data a definir"}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 sm:gap-4 shrink-0 self-center">
-                    <button
-                      className="h-8 w-8 rounded-full flex items-center justify-center bg-background border border-border text-destructive hover:bg-destructive/10 transition-all sm:hidden"
-                      aria-label="Excluir evento"
-                      onClick={async (ev) => {
-                        ev.preventDefault();
-                        ev.stopPropagation();
-                        if (confirm("Excluir este orçamento definitivamente?")) {
-                          await eventBudgetService.deleteEvent(e.id);
-                          loadEvents();
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-
-                    <div className="hidden sm:block text-right">
-                      <div className="text-sm font-bold text-foreground">
-                        {e.current_budget_value ? fmtBRL(e.current_budget_value) : "--"}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">
-                        {e.current_budget_value
-                          ? `${fmtBRL(e.current_budget_value / e.guests)}/pessoa`
-                          : "Orçamento em aberto"}
-                      </div>
-                    </div>
-
-                    <div
-                      className="hidden sm:block relative group/status"
-                      onClick={(ev) => ev.preventDefault()}
-                    >
-                      <StatusBadge status={(pendingOverrides[e.id] ?? e.status) as any} />
-                      <select
-                        className="absolute inset-0 opacity-0 cursor-pointer"
-                        value={pendingOverrides[e.id] ?? e.status}
-                        disabled={savingEventIds.has(e.id)}
-                        onChange={(ev) => {
-                          ev.preventDefault();
-                          ev.stopPropagation();
-                          handleStatusChange(e.id, ev.target.value as KanbanColumnId);
-                        }}
-                      >
-                        <option value="novo_orcamento">Novo orçamento</option>
-                        <option value="orcamento_enviado">Orçamento enviado</option>
-                        <option value="aguardando_retorno">Aguardando retorno</option>
-                        <option value="dados_solicitados">Dados solicitados</option>
-                        <option value="em_assinatura">Em assinatura</option>
-                        <option value="confirmado">Confirmado</option>
-                        <option value="finalizado">Finalizado</option>
-                        <option value="cancelado">Cancelado</option>
-                      </select>
-                    </div>
-
-                    <button
-                      className="hidden sm:flex h-8 w-8 rounded-full items-center justify-center bg-background border border-border text-destructive hover:bg-destructive/10 transition-all"
-                      onClick={async (ev) => {
-                        ev.preventDefault();
-                        ev.stopPropagation();
-                        if (confirm("Excluir este orçamento definitivamente?")) {
-                          await eventBudgetService.deleteEvent(e.id);
-                          loadEvents();
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-
-                    <div className="h-8 w-8 rounded-full flex items-center justify-center bg-background border border-border group-hover:border-primary/30 group-hover:text-primary transition-all">
-                      <ChevronRight className="h-4 w-4" />
-                    </div>
-                  </div>
-                </Link>
-              ))}
+              {filteredEventos.map((e) => renderEventRow(e))}
             </div>
           ) : viewMode === "kanban" ? (
             <EventKanban
@@ -590,10 +512,7 @@ function EventosIndex() {
           <div className="w-full max-w-lg bg-surface border border-border rounded-2xl shadow-2xl">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
               <h2 className="font-display text-lg font-semibold">Novo orçamento</h2>
-              <button
-                onClick={() => setShowModal(false)}
-                className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"
-              >
+              <button onClick={() => setShowModal(false)} className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -602,15 +521,10 @@ function EventosIndex() {
                 <div className="p-4 rounded-lg bg-warning/10 border border-warning/20 text-warning flex gap-3 text-sm">
                   <AlertTriangle className="h-5 w-5 shrink-0" />
                   <div>
-                    <div className="font-semibold">
-                      Atenção: já existe outro evento orçado ou confirmado para esta mesma data.
-                    </div>
+                    <div className="font-semibold">Atenção: já existe outro evento orçado ou confirmado para esta mesma data.</div>
                     <ul className="mt-2 list-disc list-inside space-y-1 opacity-80">
                       {mesmoDiaEventos.map((ev) => (
-                        <li key={ev.id}>
-                          {ev.event_name || ev.client_name} ({ev.event_location}) -{" "}
-                          {ev.status.replace("_", " ")}
-                        </li>
+                        <li key={ev.id}>{ev.event_name || ev.client_name} ({ev.event_location}) - {ev.status.replace("_", " ")}</li>
                       ))}
                     </ul>
                   </div>
@@ -618,37 +532,12 @@ function EventosIndex() {
               )}
 
               {[
-                {
-                  label: "Nome do solicitante",
-                  key: "nome",
-                  type: "text",
-                  placeholder: "Ex: João Silva",
-                },
-                {
-                  label: "Nome do Evento / Casal (opcional)",
-                  key: "evento_nome",
-                  type: "text",
-                  placeholder: "Ex: Casamento João & Maria",
-                },
-                {
-                  label: "Contato (Telefone/WhatsApp)",
-                  key: "telefone",
-                  type: "tel",
-                  placeholder: "(11) 99999-9999",
-                },
-                {
-                  label: "E-mail (opcional)",
-                  key: "email",
-                  type: "email",
-                  placeholder: "cliente@email.com",
-                },
+                { label: "Nome do solicitante", key: "nome", type: "text", placeholder: "Ex: João Silva" },
+                { label: "Nome do Evento / Casal (opcional)", key: "evento_nome", type: "text", placeholder: "Ex: Casamento João & Maria" },
+                { label: "Contato (Telefone/WhatsApp)", key: "telefone", type: "tel", placeholder: "(11) 99999-9999" },
+                { label: "E-mail (opcional)", key: "email", type: "email", placeholder: "cliente@email.com" },
                 { label: "Data do evento", key: "data", type: "date", placeholder: "" },
-                {
-                  label: "Local do evento",
-                  key: "local",
-                  type: "text",
-                  placeholder: "Nome do espaço (A definir)",
-                },
+                { label: "Local do evento", key: "local", type: "text", placeholder: "Nome do espaço (A definir)" },
                 { label: "Cidade", key: "cidade", type: "text", placeholder: "São Paulo" },
               ].map(({ label, key, type, placeholder }) => (
                 <div key={key}>
@@ -668,27 +557,14 @@ function EventosIndex() {
                   <input
                     type="number"
                     value={form.convidados || ""}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        convidados: e.target.value === "" ? 0 : Number(e.target.value),
-                      }))
-                    }
+                    onChange={(e) => setForm((p) => ({ ...p, convidados: e.target.value === "" ? 0 : Number(e.target.value) }))}
                     className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
                   />
                 </div>
                 <div>
                   <label className="label-eyebrow block mb-2">Tipo</label>
-                  <select
-                    value={form.tipo}
-                    onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))}
-                    className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
-                  >
-                    {["Casamento", "Corporativo", "Aniversário", "Confraternização"].map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
+                  <select value={form.tipo} onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))} className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors">
+                    {["Casamento", "Corporativo", "Aniversário", "Confraternização"].map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
               </div>
@@ -696,11 +572,7 @@ function EventosIndex() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label-eyebrow block mb-2">Canal de Origem</label>
-                  <select
-                    value={form.lead_source || ""}
-                    onChange={(e) => setForm((p) => ({ ...p, lead_source: e.target.value }))}
-                    className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
-                  >
+                  <select value={form.lead_source || ""} onChange={(e) => setForm((p) => ({ ...p, lead_source: e.target.value }))} className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors">
                     <option value="">A definir</option>
                     <option value="Instagram">Instagram</option>
                     <option value="Google">Google</option>
@@ -712,32 +584,18 @@ function EventosIndex() {
                 {form.lead_source === "Indicação" && (
                   <div>
                     <label className="label-eyebrow block mb-2">Quem indicou?</label>
-                    <input
-                      type="text"
-                      placeholder="Nome da referência"
-                      value={form.referral_name || ""}
-                      onChange={(e) => setForm((p) => ({ ...p, referral_name: e.target.value }))}
-                      className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
-                    />
+                    <input type="text" placeholder="Nome da referência" value={form.referral_name || ""} onChange={(e) => setForm((p) => ({ ...p, referral_name: e.target.value }))} className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors" />
                   </div>
                 )}
               </div>
               <div>
                 <label className="label-eyebrow block mb-2">Observações gerais</label>
-                <textarea
-                  rows={3}
-                  value={form.observacoes}
-                  onChange={(e) => setForm((p) => ({ ...p, observacoes: e.target.value }))}
-                  placeholder="Detalhes iniciais do cliente..."
-                  className="w-full px-4 py-3 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors resize-none"
-                />
+                <textarea rows={3} value={form.observacoes} onChange={(e) => setForm((p) => ({ ...p, observacoes: e.target.value }))} placeholder="Detalhes iniciais do cliente..." className="w-full px-4 py-3 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors resize-none" />
               </div>
             </div>
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
               <GhostButton onClick={() => setShowModal(false)}>Cancelar</GhostButton>
-              <PrimaryButton onClick={handleCreate} disabled={!form.nome || !form.data}>
-                Avançar para orçamento
-              </PrimaryButton>
+              <PrimaryButton onClick={handleCreate} disabled={!form.nome || !form.data}>Avançar para orçamento</PrimaryButton>
             </div>
           </div>
         </div>
@@ -768,50 +626,25 @@ function CalendarView({ eventosAtivos }: { eventosAtivos: RealEvent[] }) {
   return (
     <div>
       <div className="mb-4 text-sm font-medium text-foreground">
-        {new Date(year, month)
-          .toLocaleString("pt-BR", { month: "long", year: "numeric" })
-          .toUpperCase()}
+        {new Date(year, month).toLocaleString("pt-BR", { month: "long", year: "numeric" }).toUpperCase()}
       </div>
       <div className="grid grid-cols-7 gap-px bg-border border border-border rounded-xl overflow-hidden">
         {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => (
-          <div
-            key={d}
-            className="bg-surface py-2 text-center text-xs font-medium text-muted-foreground"
-          >
-            {d}
-          </div>
+          <div key={d} className="bg-surface py-2 text-center text-xs font-medium text-muted-foreground">{d}</div>
         ))}
         {days.map((d, i) => (
-          <div
-            key={i}
-            className={`min-h-[120px] bg-background p-2 ${!d ? "opacity-50 bg-background/50" : ""}`}
-          >
+          <div key={i} className={`min-h-[120px] bg-background p-2 ${!d ? "opacity-50 bg-background/50" : ""}`}>
             {d && (
               <>
-                <div
-                  className={`text-xs font-medium mb-1 ${d.dayNum === today.getDate() ? "text-primary" : "text-muted-foreground"}`}
-                >
-                  {d.dayNum}
-                </div>
+                <div className={`text-xs font-medium mb-1 ${d.dayNum === today.getDate() ? "text-primary" : "text-muted-foreground"}`}>{d.dayNum}</div>
                 <div className="space-y-1.5">
                   {d.events.map((e) => (
-                    <Link
-                      key={e.id}
-                      to="/eventos/$eventoId"
-                      params={{ eventoId: e.id }}
-                      className="block p-2 rounded-xl border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-all hover:scale-[1.02] cursor-pointer space-y-1"
-                    >
-                      <div className="font-bold text-primary text-[11px] truncate leading-tight">
-                        {e.event_name || e.client_name}
-                      </div>
-                      <div className="text-[9.5px] text-foreground font-semibold truncate">
-                        {e.event_type}
-                      </div>
+                    <Link key={e.id} to="/eventos/$eventoId" params={{ eventoId: e.id }} className="block p-2 rounded-xl border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-all hover:scale-[1.02] cursor-pointer space-y-1">
+                      <div className="font-bold text-primary text-[11px] truncate leading-tight">{e.event_name || e.client_name}</div>
+                      <div className="text-[9.5px] text-foreground font-semibold truncate">{e.event_type}</div>
                       <div className="text-[9px] text-muted-foreground flex justify-between items-center gap-1">
                         <span>{e.guests} conv.</span>
-                        <span className="truncate max-w-[55px] text-right">
-                          {e.city || "A definir"}
-                        </span>
+                        <span className="truncate max-w-[55px] text-right">{e.city || "A definir"}</span>
                       </div>
                     </Link>
                   ))}
