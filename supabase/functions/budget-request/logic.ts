@@ -30,6 +30,18 @@ export interface PublicBudgetPayload {
   lead_source?: string;
   referral_name?: string;
   notes?: string;
+  groom_name?: string;
+  bride_name?: string;
+  duration_hours: number;
+  requested_drink_ids?: string[];
+}
+
+export interface PublicDrink {
+  id: string;
+  name: string;
+  description: string | null;
+  image: string | null;
+  ingredients: string[];
 }
 
 const KEYS = new Set([
@@ -46,6 +58,10 @@ const KEYS = new Set([
   "lead_source",
   "referral_name",
   "notes",
+  "groom_name",
+  "bride_name",
+  "duration_hours",
+  "requested_drink_ids",
 ]);
 
 const clean = (value: unknown, max: number) =>
@@ -76,6 +92,12 @@ export function validatePublicBudgetPayload(input: unknown): PublicBudgetPayload
   const raw = input as Record<string, unknown>;
   const extras = Object.keys(raw).filter((key) => !KEYS.has(key));
   if (extras.length) throw new Error(`Campos não permitidos: ${extras.join(", ")}.`);
+  if (
+    raw.requested_drink_ids !== undefined &&
+    (!Array.isArray(raw.requested_drink_ids) ||
+      raw.requested_drink_ids.some((id) => typeof id !== "string" || !id.trim()))
+  )
+    throw new Error("IDs de drinks inválidos.");
 
   const payload: PublicBudgetPayload = {
     client_name: clean(raw.client_name, 120),
@@ -91,6 +113,12 @@ export function validatePublicBudgetPayload(input: unknown): PublicBudgetPayload
     lead_source: clean(raw.lead_source, 40),
     referral_name: clean(raw.referral_name, 120),
     notes: clean(raw.notes, 1500),
+    groom_name: clean(raw.groom_name, 120),
+    bride_name: clean(raw.bride_name, 120),
+    duration_hours: Number(raw.duration_hours),
+    requested_drink_ids: Array.isArray(raw.requested_drink_ids)
+      ? [...new Set(raw.requested_drink_ids.map((id) => clean(id, 120)).filter(Boolean))]
+      : [],
   };
   if (!payload.client_name) throw new Error("Nome do solicitante é obrigatório.");
   if (!/^\+?[0-9 ()-]{8,24}$/.test(payload.phone) || payload.phone.replace(/\D/g, "").length < 10)
@@ -110,7 +138,40 @@ export function validatePublicBudgetPayload(input: unknown): PublicBudgetPayload
     throw new Error("Quantidade de convidados inválida.");
   if (!ALLOWED_LEAD_SOURCES.includes((payload.lead_source || "") as any))
     throw new Error("Canal de origem inválido.");
+  if (
+    !Number.isInteger(payload.duration_hours) ||
+    payload.duration_hours < 1 ||
+    payload.duration_hours > 24
+  )
+    throw new Error("Duração do evento inválida.");
+  if ((payload.requested_drink_ids?.length || 0) > 50)
+    throw new Error("Quantidade de drinks selecionados inválida.");
+  if (payload.event_type === "Casamento") {
+    if (!payload.groom_name || !payload.bride_name)
+      throw new Error("Nome do noivo e nome da noiva são obrigatórios para casamento.");
+    payload.event_name = `${payload.bride_name} & ${payload.groom_name}`;
+  } else {
+    payload.groom_name = "";
+    payload.bride_name = "";
+  }
   return payload;
+}
+
+export function sanitizePublicDrinks(rows: any[]): PublicDrink[] {
+  return rows
+    .filter(
+      (drink) =>
+        drink.show_in_public_menu === true && drink.modality_config?.evento?.active === true,
+    )
+    .map((drink) => ({
+      id: String(drink.id),
+      name: String(drink.nome),
+      description: drink.descricao ? String(drink.descricao) : null,
+      image: drink.imagem ? String(drink.imagem) : null,
+      ingredients: Array.isArray(drink.insumos)
+        ? drink.insumos.map((item: any) => String(item?.nome || "").trim()).filter(Boolean)
+        : [],
+    }));
 }
 
 export function buildNotificationMessage(payload: PublicBudgetPayload, eventUrl?: string): string {

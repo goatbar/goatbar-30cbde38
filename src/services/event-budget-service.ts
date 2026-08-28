@@ -12,6 +12,7 @@ export interface Event {
   email?: string;
   date: string;
   event_time?: string;
+  duration_hours?: number | null;
   event_location?: string;
   city?: string;
   event_type: string;

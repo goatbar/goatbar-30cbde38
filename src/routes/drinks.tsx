@@ -29,6 +29,7 @@ function DrinksPage() {
     nome: "",
     categoria: "Whisky",
     descricao: "",
+    showInPublicMenu: false,
     custoUnitario: 0,
     modalityConfig: {
       evento: { active: true, cost: 0 },
@@ -46,8 +47,10 @@ function DrinksPage() {
       const matchCategoria = categoria === "Todas" || d.categoria === categoria;
       let matchUnidade = true;
       if (unidadeFiltro === "Eventos") matchUnidade = Boolean(d.modalityConfig?.evento?.active);
-      else if (unidadeFiltro === "7 Steak House") matchUnidade = Boolean(d.modalityConfig?.steakhouse?.active);
-      else if (unidadeFiltro === "Goat Botequim") matchUnidade = Boolean(d.modalityConfig?.goatbotequim?.active);
+      else if (unidadeFiltro === "7 Steak House")
+        matchUnidade = Boolean(d.modalityConfig?.steakhouse?.active);
+      else if (unidadeFiltro === "Goat Botequim")
+        matchUnidade = Boolean(d.modalityConfig?.goatbotequim?.active);
       return matchBusca && matchCategoria && matchUnidade;
     })
     .sort((a, b) => a.nome.localeCompare(b.nome));
@@ -226,11 +229,7 @@ function DrinkCard({
         </button>
       </div>
 
-      <DrinkImage
-        src={d.imagem}
-        alt={d.nome}
-        className="w-full h-40 object-cover rounded-t-xl"
-      />
+      <DrinkImage src={d.imagem} alt={d.nome} className="w-full h-40 object-cover rounded-t-xl" />
       <div className="p-4">
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -343,6 +342,7 @@ function EditModal({
   const [categoria, setCategoria] = useState(drink.categoria);
   const [descricao, setDescricao] = useState(drink.descricao || "");
   const [imagem, setImagem] = useState(drink.imagem || "");
+  const [showInPublicMenu, setShowInPublicMenu] = useState(Boolean(drink.showInPublicMenu));
   const [config, setConfig] = useState(() => {
     const base = drink.modalityConfig || {};
     return {
@@ -452,6 +452,21 @@ function EditModal({
               />
             </div>
           </div>
+
+          <label className="flex items-center justify-between gap-4 rounded-xl border border-border bg-background/50 p-4">
+            <span>
+              <span className="block text-sm font-semibold">Exibir na carta de drinks</span>
+              <span className="text-xs text-muted-foreground">
+                Aparece no formulário público somente com a modalidade Evento ativa.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={showInPublicMenu}
+              onChange={(e) => setShowInPublicMenu(e.target.checked)}
+              className="h-5 w-5 accent-primary"
+            />
+          </label>
 
           {/* Configuração por Modalidade */}
           <div className="space-y-4">
@@ -665,6 +680,7 @@ function EditModal({
                 modalityConfig: config,
                 custoUnitario: Number(fallbackCost.toFixed(2)),
                 insumos,
+                showInPublicMenu,
               });
             }}
           >
@@ -675,5 +691,3 @@ function EditModal({
     </div>
   );
 }
-
-

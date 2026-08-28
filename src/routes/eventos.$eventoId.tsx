@@ -202,6 +202,7 @@ function EventoInterna() {
   const [budgetHistory, setBudgetHistory] = useState<BudgetHistory[]>([]);
   const [negotiationHistory, setNegotiationHistory] = useState<NegotiationHistory[]>([]);
   const [sameDateEvents, setSameDateEvents] = useState<RealEvent[]>([]);
+  const [requestedDrinks, setRequestedDrinks] = useState<{ id: string; nome: string }[]>([]);
 
   const [realTemplates, setRealTemplates] = useState<ContractTemplate[]>([]);
   // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
@@ -383,6 +384,16 @@ function EventoInterna() {
       setRealTemplates(tps);
       setRealSigners(sigs);
       setRealContract(contract);
+      const { data: preferences, error: preferencesError } = await (supabase as any)
+        .from("event_requested_drinks")
+        .select("drink_id,drinks(id,nome)")
+        .eq("event_id", eventoId);
+      if (preferencesError) console.warn("Preferências de drinks indisponíveis:", preferencesError);
+      setRequestedDrinks(
+        (preferences || []).flatMap((item: any) =>
+          item.drinks ? [{ id: item.drinks.id, nome: item.drinks.nome }] : [],
+        ),
+      );
       if (contract?.signed_file_url && !contract?.template_id) {
         setContractMode("upload");
       }
@@ -1672,6 +1683,25 @@ function EventoInterna() {
 
         {activeTab === "Visão Geral" && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in duration-300">
+            {requestedDrinks.length > 0 && (
+              <div className="md:col-span-3">
+                <SectionCard
+                  title="Preferências do cliente"
+                  subtitle="Drinks indicados no formulário público; não fazem parte do orçamento até serem adicionados pela equipe."
+                >
+                  <div className="flex flex-wrap gap-2">
+                    {requestedDrinks.map((drink) => (
+                      <span
+                        key={drink.id}
+                        className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm font-medium"
+                      >
+                        {drink.nome}
+                      </span>
+                    ))}
+                  </div>
+                </SectionCard>
+              </div>
+            )}
             <SectionCard title="Status do Evento">
               <div className="space-y-2 text-sm">
                 <div className="flex items-center justify-between">
