@@ -12,6 +12,7 @@ export const ALLOWED_LEAD_SOURCES = [
   "WhatsApp",
   "Indicação",
   "Site",
+  "Formulário público",
 ] as const;
 
 export type LinkState = "ACTIVE" | "INVALID" | "EXPIRED" | "USED" | "CANCELLED";
@@ -42,6 +43,25 @@ export interface PublicDrink {
   description: string | null;
   image: string | null;
   ingredients: string[];
+}
+
+export interface PublicLeadContext {
+  visitor_id: string;
+  session_id: string;
+  source?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
+  referrer?: string;
+  landing_page?: string;
+}
+
+export interface PublicLeadContact {
+  client_name: string;
+  phone: string;
+  email?: string;
 }
 
 const KEYS = new Set([
@@ -77,6 +97,25 @@ export function generateSecureToken(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+export function isValidUuid(id: unknown): boolean {
+  if (typeof id !== "string") return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    id.trim(),
+  );
+}
+
+export function normalizeBrazilianPhone(phone: string): string {
+  const digits = (phone || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
+    return digits;
+  }
+  if (digits.length === 10 || digits.length === 11) {
+    return `55${digits}`;
+  }
+  return digits;
+}
+
 export function getLinkState(link: any, now = new Date()): LinkState {
   if (!link) return "INVALID";
   if (link.status === "USED" || link.used_at || link.event_id) return "USED";
@@ -106,6 +145,59 @@ export function parseWeddingCoupleName(
   }
 
   return null;
+}
+
+export function validatePublicLeadContext(input: unknown): PublicLeadContext {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("Contexto da sessão inválido.");
+  }
+  const raw = input as Record<string, unknown>;
+  const visitor_id = clean(raw.visitor_id, 36);
+  const session_id = clean(raw.session_id, 36);
+
+  if (!isValidUuid(visitor_id) || !isValidUuid(session_id)) {
+    throw new Error("Identificadores de sessão/visitante inválidos.");
+  }
+
+  return {
+    visitor_id,
+    session_id,
+    source: clean(raw.source, 60),
+    utm_source: clean(raw.utm_source, 100),
+    utm_medium: clean(raw.utm_medium, 100),
+    utm_campaign: clean(raw.utm_campaign, 100),
+    utm_content: clean(raw.utm_content, 100),
+    utm_term: clean(raw.utm_term, 100),
+    referrer: clean(raw.referrer, 300),
+    landing_page: clean(raw.landing_page, 200),
+  };
+}
+
+export function validatePublicLeadContact(input: unknown): PublicLeadContact {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("Dados de contato inválidos.");
+  }
+  const raw = input as Record<string, unknown>;
+  const client_name = clean(raw.client_name, 120);
+  const phone = clean(raw.phone, 24);
+  const email = clean(raw.email, 160).toLowerCase();
+
+  if (!client_name || client_name.length < 2) {
+    throw new Error("Nome do solicitante é obrigatório (mínimo 2 caracteres).");
+  }
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 10 || digits.length > 15) {
+    throw new Error("WhatsApp inválido (deve conter DDD + número).");
+  }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("E-mail inválido.");
+  }
+
+  return {
+    client_name,
+    phone,
+    email: email || undefined,
+  };
 }
 
 export function validatePublicBudgetPayload(input: unknown): PublicBudgetPayload {
@@ -170,13 +262,15 @@ export function validatePublicBudgetPayload(input: unknown): PublicBudgetPayload
     throw new Error("Quantidade de drinks selecionados inválida.");
 
   if (payload.event_type === "Casamento") {
-    const couple = parseWeddingCoupleName(payload.event_name);
-    if (couple) {
-      payload.groom_name = couple.groom_name;
-      payload.bride_name = couple.bride_name;
-    } else {
-      payload.groom_name = "";
-      payload.bride_name = "";
+    if (!payload.groom_name && !payload.bride_name) {
+      const couple = parseWeddingCoupleName(payload.event_name);
+      if (couple) {
+        payload.groom_name = couple.groom_name;
+        payload.bride_name = couple.bride_name;
+      }
+    }
+    if (!payload.event_name && (payload.groom_name || payload.bride_name)) {
+      payload.event_name = [payload.groom_name, payload.bride_name].filter(Boolean).join(" e ");
     }
   } else {
     payload.groom_name = "";

@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -62,7 +62,7 @@ describe("Public Budget Request Form & Drink Catalog", () => {
     expect((sanitized[0] as any).custo_unitario).toBeUndefined();
   });
 
-  it("2. O formulário público renderiza APENAS 'Nome do evento / casal' e NÃO renderiza 'Nome do noivo' / 'Nome da noiva'", async () => {
+  it("2. O formulário público renderiza 'Nome do noivo' e 'Nome da noiva' para Casamento e 'Nome do evento' para outros tipos", async () => {
     vi.spyOn(budgetRequestService, "validate").mockResolvedValue({
       state: "ACTIVE",
       public_drinks: sanitizePublicDrinks(mockPublicDrinks),
@@ -76,10 +76,14 @@ describe("Public Budget Request Form & Drink Catalog", () => {
       expect(screen.getByText("Solicite seu orçamento")).toBeInTheDocument();
     });
 
-    // Confirma campo único
-    expect(screen.getByText("Nome do evento / casal")).toBeInTheDocument();
+    // Padrão é Casamento
+    expect(screen.getByText(/Nome do noivo \*/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nome da noiva \*/i)).toBeInTheDocument();
+
+    // Mudar para Corporativo
+    fireEvent.change(screen.getByLabelText(/Tipo de evento/i), { target: { value: "Corporativo" } });
+    expect(screen.getByText(/Nome do evento/i)).toBeInTheDocument();
     expect(screen.queryByText(/Nome do noivo/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Nome da noiva/i)).not.toBeInTheDocument();
   });
 
   it("3. Renderiza os cards de drinks quando public_drinks possui itens e permite seleção múltipla", async () => {
@@ -98,7 +102,7 @@ describe("Public Budget Request Form & Drink Catalog", () => {
     render(<Component />);
 
     await waitFor(() => {
-      expect(screen.getByText("Tem algum drink que não pode faltar?")).toBeInTheDocument();
+      expect(screen.getByText(/Com base na nossa carta de drinks/i)).toBeInTheDocument();
     });
 
     expect(screen.getByText("Moscow Mule")).toBeInTheDocument();
@@ -110,7 +114,8 @@ describe("Public Budget Request Form & Drink Catalog", () => {
 
     fireEvent.change(screen.getByLabelText(/Nome do solicitante/i), { target: { value: "Carlos Eduardo" } });
     fireEvent.change(screen.getByLabelText(/WhatsApp/i), { target: { value: "(11) 98888-7777" } });
-    fireEvent.change(screen.getByLabelText(/Nome do evento \/ casal/i), { target: { value: "Carlos & Juliana" } });
+    fireEvent.change(screen.getByLabelText(/Nome do noivo/i), { target: { value: "Carlos" } });
+    fireEvent.change(screen.getByLabelText(/Nome da noiva/i), { target: { value: "Juliana" } });
     fireEvent.change(screen.getByLabelText(/Data do evento/i), { target: { value: "2026-11-20" } });
 
     fireEvent.click(screen.getByRole("button", { name: /Solicitar orçamento/i }));
@@ -121,9 +126,8 @@ describe("Public Budget Request Form & Drink Catalog", () => {
 
     const submittedPayload = submitSpy.mock.calls[0][1];
     expect(submittedPayload.requested_drink_ids).toEqual(["drink-moscow-mule", "drink-gin-tonica"]);
-    expect(submittedPayload.event_name).toBe("Carlos & Juliana");
-    expect((submittedPayload as any).groom_name).toBeUndefined();
-    expect((submittedPayload as any).bride_name).toBeUndefined();
+    expect(submittedPayload.groom_name).toBe("Carlos");
+    expect(submittedPayload.bride_name).toBe("Juliana");
   });
 
   it("4. No backend, validatePublicBudgetPayload deriva groom_name e bride_name preservando event_name", () => {
@@ -142,5 +146,38 @@ describe("Public Budget Request Form & Drink Catalog", () => {
     expect(backendResult.groom_name).toBe("Carlos");
     expect(backendResult.bride_name).toBe("Juliana");
     expect(backendResult.requested_drink_ids).toEqual(["drink-moscow-mule", "drink-gin-tonica"]);
+  });
+
+  it("5. Modo público sem token inicia jornada, captura lead e submete via submitPublicLeadRequest", async () => {
+    const startSpy = vi.spyOn(budgetRequestService, "startPublicJourney").mockResolvedValue({
+      state: "ACTIVE",
+      public_drinks: sanitizePublicDrinks(mockPublicDrinks),
+    });
+    const submitPublicSpy = vi.spyOn(budgetRequestService, "submitPublicLeadRequest").mockResolvedValue({
+      state: "USED",
+      idempotent: false,
+      event_id: "mock-event-uuid",
+    });
+
+    const { PublicBudgetRequestForm } = await import("@/components/public-budget/PublicBudgetRequestForm");
+    render(<PublicBudgetRequestForm mode="public" />);
+
+    await waitFor(() => {
+      expect(startSpy).toHaveBeenCalledTimes(1);
+      expect(screen.getByText("Solicite seu orçamento")).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/Nome do solicitante/i), { target: { value: "Fernanda Costa" } });
+    fireEvent.change(screen.getByLabelText(/WhatsApp/i), { target: { value: "(11) 97777-6666" } });
+    fireEvent.change(screen.getByLabelText(/Nome do noivo/i), { target: { value: "Lucas" } });
+    fireEvent.change(screen.getByLabelText(/Nome da noiva/i), { target: { value: "Fernanda" } });
+    fireEvent.change(screen.getByLabelText(/Data do evento/i), { target: { value: "2026-12-15" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /Solicitar orçamento/i }));
+
+    await waitFor(() => {
+      expect(submitPublicSpy).toHaveBeenCalledTimes(1);
+      expect(screen.getByText("Solicitação recebida!")).toBeInTheDocument();
+    });
   });
 });
