@@ -24,6 +24,8 @@ import {
   TrendingUp,
   AlertTriangle,
   ArrowUpDown,
+  Link2,
+  Copy,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
@@ -32,6 +34,7 @@ import { PageHeader } from "@/components/AppShell";
 import { migrateLegacyStoreToSupabase } from "@/lib/migration";
 import { EventKanban } from "@/components/kanban/EventKanban";
 import { type KanbanColumnId } from "@/lib/kanban-pipeline";
+import { budgetRequestService } from "@/services/budget-request-service";
 
 const VIEW_STORAGE_KEY = "goatbar:eventos:view";
 
@@ -57,6 +60,8 @@ function EventosIndex() {
   const [eventos, setEventos] = useState<RealEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [publicLink, setPublicLink] = useState("");
+  const [creatingLink, setCreatingLink] = useState(false);
   const [viewMode, setViewModeState] = useState<"lista" | "kanban" | "calendario">(
     getStoredViewMode,
   );
@@ -273,19 +278,60 @@ function EventosIndex() {
     }
   };
 
+  const handleCreateLink = async () => {
+    setCreatingLink(true);
+    try {
+      const result = await budgetRequestService.createBudgetRequestLink();
+      setPublicLink(result.url);
+      toast.success("Link de orçamento criado.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível gerar o link.");
+    } finally {
+      setCreatingLink(false);
+    }
+  };
+
   return (
     <>
       <PageHeader
         title="Eventos e Orçamentos"
         subtitle="Pipeline de operações e orçamentos."
         action={
-          <PrimaryButton onClick={() => setShowModal(true)}>
-            <Plus className="h-4 w-4" /> Novo orçamento
-          </PrimaryButton>
+          <div className="flex flex-wrap gap-2">
+            <GhostButton onClick={handleCreateLink} disabled={creatingLink}>
+              {creatingLink ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Link2 className="h-4 w-4" />
+              )}{" "}
+              Gerar link de orçamento
+            </GhostButton>
+            <PrimaryButton onClick={() => setShowModal(true)}>
+              <Plus className="h-4 w-4" /> Novo orçamento
+            </PrimaryButton>
+          </div>
         }
       />
 
       <div className="page-container space-y-7">
+        {publicLink && (
+          <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center">
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-bold uppercase tracking-wide text-primary">
+                Link para o cliente
+              </div>
+              <div className="mt-1 truncate text-sm">{publicLink}</div>
+            </div>
+            <GhostButton
+              onClick={async () => {
+                await navigator.clipboard.writeText(publicLink);
+                toast.success("Link copiado.");
+              }}
+            >
+              <Copy className="h-4 w-4" /> Copiar link
+            </GhostButton>
+          </div>
+        )}
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
           <StatCard
             label="Total em pipeline"

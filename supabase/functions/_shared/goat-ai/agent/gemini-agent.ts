@@ -44,6 +44,7 @@ import {
   resolveExplicitConfirmedEventsIntent,
   toContextualEvent,
 } from "../events/confirmed-events.ts";
+import { resolveBudgetRequestLinkIntent } from "../events/budget-request-intent.ts";
 
 const MAX_TOOL_CALLS_PER_TURN = 8;
 
@@ -170,6 +171,42 @@ export class GoatAIGeminiAgent {
     console.log(
       `[GOAT-AI][CONVERSATION] correlationId=${correlationId} conversationId=${conversation.id} userMessageId=${userMessage.id} messageType=${messageType}`,
     );
+
+    // A URL real nunca é inventada pelo provider: frases explícitas passam
+    // diretamente pela tool determinística e auditável.
+    const budgetLinkIntent = resolveBudgetRequestLinkIntent(input.message);
+    if (budgetLinkIntent.matched) {
+      const args = budgetLinkIntent.customerNameHint
+        ? { customer_name_hint: budgetLinkIntent.customerNameHint }
+        : {};
+      const result = await this.toolRegistry.executeTool("create_budget_request_link", args, {
+        ...context,
+        toolCallId: `${correlationId}_budget_request_link`,
+      });
+      const reply = result.success
+        ? result.message!
+        : `Não foi possível criar o link: ${result.error || "erro desconhecido"}.`;
+      const assistantMsg = await this.conversationManager.saveMessage(
+        conversation.id,
+        "assistant",
+        reply,
+        result.success ? "action_result" : "text",
+      );
+      return {
+        conversationId: conversation.id,
+        messageId: assistantMsg.id,
+        reply,
+        toolCallsExecuted: [
+          {
+            toolName: "create_budget_request_link",
+            arguments: args,
+            result: result.data,
+            status: result.success ? "success" : "error",
+          },
+        ],
+        pendingAction: null,
+      };
+    }
 
     // Current-turn deterministic read intent. This deliberately runs before
     // provider/history processing so Gemini cannot inherit a previous query,
