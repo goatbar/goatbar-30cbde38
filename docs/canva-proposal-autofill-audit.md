@@ -44,3 +44,19 @@ silenciosamente placeholders incorretos.
 Campos opcionais sem dados são enviados como string vazia, nunca como `null`, `undefined`,
 `NaN` ou objeto serializado. Campos obrigatórios vazios interrompem a geração com
 `required_field_empty`.
+
+## Área segura da página “Drinks & Experiências”
+
+`DRINKS` e `BEBIDAS` são enviados como texto, com uma linha por item. A API de Autofill do
+Canva não permite informar posição, altura, coordenadas, overflow ou redimensionamento da
+caixa de um Data Field: essas propriedades pertencem ao Brand Template. A exportação e o
+preview recebem o design depois dessa composição e, portanto, não originam a colisão.
+
+No template atual, a caixa dinâmica `BEBIDAS` pode continuar verticalmente até a logo
+`GOATBAR` do rodapé. A correção visual definitiva no Canva é limitar a caixa de `BEBIDAS`
+acima da reserva da logo (e manter a mesma reserva na caixa `DRINKS`). Enquanto o template
+não oferece paginação dinâmica, a geração valida o texto antes do Autofill: até 8 linhas
+visuais em `DRINKS` e 5 em `BEBIDAS`, incluindo quebras estimadas para nomes longos. Poucos
+itens mantêm exatamente a tipografia e o layout atuais; excedentes geram
+`canva_menu_overflow` e não produzem um PDF potencialmente sobreposto. A arquitetura atual
+não suporta criar automaticamente uma página adicional no Brand Template durante Autofill.

@@ -18,6 +18,8 @@ export const CANVA_PROPOSAL_ERROR_MESSAGES: Record<string, string> = {
   drinks_query_failed: "Não foi possível carregar os drinks desta versão.",
   drinks_not_found: "Alguns drinks desta versão não foram encontrados no cadastro.",
   selected_drinks_invalid: "Os dados de drinks desta versão estão em um formato inválido.",
+  canva_menu_overflow:
+    "A lista de drinks ou bebidas excede a área segura do modelo. Reduza a lista para preservar a logo no rodapé.",
   canva_field_missing:
     "O Brand Template não possui um dos Data Fields mapeados. Atualize o template no Canva ou sincronize os campos.",
   canva_fields_missing: "Existem campos mapeados que ainda não são Data Fields do Canva.",
