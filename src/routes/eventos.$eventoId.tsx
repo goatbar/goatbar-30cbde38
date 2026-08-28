@@ -2849,39 +2849,39 @@ function EventoInterna() {
                       </p>
 
                       <div className="flex gap-2 flex-wrap items-center">
-                        {/* Botão de Geração Canva (Mantido) */}
+                        {/* Botão Principal: Gerador PDF Goat Bar (Próprio e sem Cota) */}
                         <PrimaryButton
-                          className="h-10 text-[11px] font-bold flex-1"
-                          onClick={handleGenerateProposal}
-                          disabled={canvaGeneration.status === "loading" && canvaGeneration.open}
-                        >
-                          {canvaGeneration.status === "loading" && canvaGeneration.open ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <FileTextIcon className="h-4 w-4" />
-                          )}
-                          {!existingProposal
-                            ? "GERAR PELO CANVA"
-                            : isProposalOutdated
-                              ? "ATUALIZAR CANVA"
-                              : "GERAR NO CANVA"}
-                        </PrimaryButton>
-
-                        {/* Botão Visualizar PDF (Goat Bar Engine) */}
-                        <button
-                          type="button"
+                          className="h-10 text-[11px] font-bold flex-1 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
                           onClick={() => {
                             if (!currentBudget?.id) {
-                              toast.error("Salve uma versão do orçamento antes de visualizar a proposta.");
+                              toast.error("Salve uma versão do orçamento antes de gerar a proposta.");
                               return;
                             }
                             setShowInternalPreviewModal(true);
                           }}
-                          className="flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-xl border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all cursor-pointer"
-                          title="Visualizar proposta comercial em PDF (gerador próprio)"
                         >
-                          <Eye className="h-4 w-4" />
-                          Visualizar PDF (Goat Bar)
+                          <Sparkles className="h-4 w-4 mr-1.5" />
+                          {!existingProposal
+                            ? "GERAR PROPOSTA (PDF GOAT BAR)"
+                            : isProposalOutdated
+                              ? "GERAR PROPOSTA ATUALIZADA (GOAT BAR)"
+                              : "GERAR NOVAMENTE (GOAT BAR)"}
+                        </PrimaryButton>
+
+                        {/* Botão Secundário: Canva (Opção Legada Explícita) */}
+                        <button
+                          type="button"
+                          onClick={handleGenerateProposal}
+                          disabled={canvaGeneration.status === "loading" && canvaGeneration.open}
+                          className="flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-xl border border-[#00C4CC]/40 bg-[#00C4CC]/10 hover:bg-[#00C4CC]/20 text-[#00C4CC] text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                          title="Gerar proposta comercial usando o Canva Brand Template"
+                        >
+                          {canvaGeneration.status === "loading" && canvaGeneration.open ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Layers className="h-4 w-4" />
+                          )}
+                          Gerar via Canva
                         </button>
 
                         {/* Visualizar / Baixar PDF */}
