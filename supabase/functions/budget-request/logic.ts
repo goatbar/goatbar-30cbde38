@@ -291,7 +291,11 @@ export function sanitizePublicDrinks(rows: any[]): PublicDrink[] {
       id: String(drink.id),
       name: String(drink.nome),
       description: drink.descricao ? String(drink.descricao) : null,
-      image: drink.imagem ? String(drink.imagem) : null,
+      // Browser-local references found in legacy rows cannot work for another visitor.
+      image:
+        drink.imagem && !/^(?:blob:|data:|idb:)/i.test(String(drink.imagem).trim())
+          ? String(drink.imagem).trim()
+          : null,
       ingredients: Array.isArray(drink.insumos)
         ? drink.insumos.map((item: any) => String(item?.nome || "").trim()).filter(Boolean)
         : [],

@@ -100,6 +100,44 @@ export class WhatsAppChannelAdapter {
     }
   }
 
+  public async sendTemplateMessage(
+    to: string,
+    templateName: string,
+    languageCode: string,
+    parameters: string[],
+    correlationId?: string,
+  ): Promise<boolean> {
+    const cleanTo = to.replace(/[^0-9]/g, "");
+    if (!this.config.accessToken || !this.config.phoneNumberId) {
+      console.warn(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_ERROR] correlationId=${correlationId || "none"} mechanism=template template=${templateName} status=skipped error="WhatsApp credentials not configured" recipient=${maskPhone(cleanTo)}`);
+      return false;
+    }
+    const res = await fetch(getWhatsAppMessagesUrl(this.config.phoneNumberId), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.config.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: cleanTo,
+        type: "template",
+        template: {
+          name: templateName,
+          language: { code: languageCode },
+          components: [{ type: "body", parameters: parameters.map((text) => ({ type: "text", text })) }],
+        },
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    const metaId = body?.messages?.[0]?.id || null;
+    const metaError = body?.error || {};
+    if (!res.ok) {
+      console.error(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_ERROR] correlationId=${correlationId || "none"} mechanism=template template=${templateName} success=false httpStatus=${res.status} metaErrorCode=${metaError.code ?? "none"} metaErrorMessage=${String(metaError.message || "Unknown error").slice(0, 200)} recipient=${maskPhone(cleanTo)}`);
+      return false;
+    }
+    console.log(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_SUCCESS] correlationId=${correlationId || "none"} mechanism=template template=${templateName} success=true httpStatus=${res.status} metaMessageId=${metaId || "none"} recipient=${maskPhone(cleanTo)}`);
+    return true;
+  }
+
   public async markMessageAsRead(messageId: string): Promise<boolean> {
     if (!this.config.accessToken || !this.config.phoneNumberId || !messageId) {
       return false;

@@ -25,4 +25,19 @@ describe("getPendingPublicBudgetRequests", () => {
     expect(isPendingPublicBudgetRequest({ ...legacyEvent, status: null } as any)).toBe(false);
     expect(isPendingPublicBudgetRequest({ ...legacyEvent, status: undefined } as any)).toBe(false);
   });
+
+  it("reconhece exatamente o formato persistido pela LP e não inclui origem manual", () => {
+    const persistedByLp = event(
+      "123e4567-e89b-42d3-a456-426614174000",
+      "public_budget_form",
+      "2026-08-28T21:31:00Z",
+    );
+    expect(getPendingPublicBudgetRequests([persistedByLp])).toEqual([persistedByLp]);
+    expect(
+      getPendingPublicBudgetRequests([
+        { ...persistedByLp, origin: "manual" },
+        { ...persistedByLp, status: "orcamento_enviado" },
+      ] as any),
+    ).toEqual([]);
+  });
 });

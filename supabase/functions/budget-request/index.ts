@@ -112,26 +112,30 @@ serve(async (req) => {
             return data || [];
           },
 
-          send: (phone, message, correlationId) =>
-            new WhatsAppChannelAdapter(supabase).sendTextMessage(
+          send: (phone, parameters, correlationId) =>
+            new WhatsAppChannelAdapter(supabase).sendTemplateMessage(
               phone,
-              message,
+              Deno.env.get("WHATSAPP_BUDGET_REQUEST_TEMPLATE") || "novo_orcamento_recebido",
+              Deno.env.get("WHATSAPP_BUDGET_REQUEST_TEMPLATE_LANGUAGE") || "pt_BR",
+              parameters,
               correlationId,
             ),
 
           finish: async (linkId, sent, error) => {
             const { error: updateError } = await supabase
-              .from("budget_request_links")
+              .from("budget_request_notifications")
               .update(
                 sent
                   ? {
-                      notification_status: "SENT",
-                      notification_sent_at: new Date().toISOString(),
-                      notification_error: null,
+                      status: "SENT",
+                      sent_at: new Date().toISOString(),
+                      error: null,
+                      updated_at: new Date().toISOString(),
                     }
                   : {
-                      notification_status: "FAILED",
-                      notification_error: error || "Falha desconhecida.",
+                      status: "FAILED",
+                      error: error || "Falha desconhecida.",
+                      updated_at: new Date().toISOString(),
                     },
               )
               .eq("id", linkId);
@@ -458,10 +462,21 @@ serve(async (req) => {
           groom_name: payload.groom_name || null,
           bride_name: payload.bride_name || null,
           status: "novo_orcamento",
+          origin: "public_budget_form",
+          public_request_session_id: context.session_id,
         })
         .select("id")
         .single();
 
+      if (eventError?.code === "23505") {
+        const { data: persisted, error: persistedError } = await supabase
+          .from("events")
+          .select("id")
+          .eq("public_request_session_id", context.session_id)
+          .single();
+        if (persistedError || !persisted?.id) throw eventError;
+        return json({ state: "USED", idempotent: true, event_id: persisted.id });
+      }
       if (eventError) {
         throw eventError;
       }
@@ -679,6 +694,7 @@ serve(async (req) => {
     return json({
       state: result.state === "CREATED" ? "USED" : result.state,
       idempotent: Boolean(result.idempotent),
+      event_id: result.event_id,
     });
   } catch (error) {
     const message =

@@ -48,6 +48,27 @@ async function invoke<T>(body: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
+export interface PersistedBudgetRequestResult {
+  state: "USED";
+  idempotent: boolean;
+  event_id: string;
+}
+
+export function assertPersistedBudgetRequest(value: unknown): PersistedBudgetRequestResult {
+  const result = value as Partial<PersistedBudgetRequestResult> | null;
+  if (
+    !result ||
+    result.state !== "USED" ||
+    typeof result.event_id !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      result.event_id,
+    )
+  ) {
+    throw new Error("A API não confirmou a persistência da solicitação. Tente novamente.");
+  }
+  return result as PersistedBudgetRequestResult;
+}
+
 export const budgetRequestService = {
   createBudgetRequestLink(metadata?: { customer_name_hint?: string }) {
     return invoke<{ url: string; expires_at: string }>({ action: "create", metadata });
@@ -79,13 +100,13 @@ export const budgetRequestService = {
     });
   },
   submitPublicLeadRequest(context: PublicLeadContext, payload: BudgetRequestPayload) {
-    return invoke<{ state: "USED"; idempotent: boolean; event_id?: string }>({
+    return invoke<unknown>({
       action: "submit_public_lead_request",
       context,
       payload,
-    });
+    }).then(assertPersistedBudgetRequest);
   },
   submit(token: string, payload: BudgetRequestPayload) {
-    return invoke<{ state: "USED"; idempotent: boolean }>({ action: "submit", token, payload });
+    return invoke<unknown>({ action: "submit", token, payload }).then(assertPersistedBudgetRequest);
   },
 };

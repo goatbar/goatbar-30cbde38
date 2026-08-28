@@ -99,6 +99,7 @@ describe("Public Budget Request Form & Drink Catalog", () => {
     const submitSpy = vi.spyOn(budgetRequestService, "submit").mockResolvedValue({
       state: "USED",
       idempotent: false,
+      event_id: "123e4567-e89b-42d3-a456-426614174000",
     });
 
     const Component = (Route as any).component;
@@ -158,6 +159,22 @@ describe("Public Budget Request Form & Drink Catalog", () => {
     expect(backendResult.requested_drink_ids).toEqual(["drink-moscow-mule", "drink-gin-tonica"]);
   });
 
+  it("usa fallback controlado quando a imagem está ausente ou falha", async () => {
+    vi.spyOn(budgetRequestService, "validate").mockResolvedValue({ state: "ACTIVE", public_drinks: sanitizePublicDrinks(mockPublicDrinks), metadata: {} });
+    const Component = (Route as any).component;
+    render(<Component />);
+    const valid = await screen.findByAltText("Moscow Mule");
+    expect(valid).toHaveAttribute("src", "https://example.com/moscow-mule.jpg");
+    expect(screen.getByLabelText("Imagem indisponível para Gin Tônica Floral")).toBeInTheDocument();
+    fireEvent.error(valid);
+    expect(screen.getByLabelText("Imagem indisponível para Moscow Mule")).toBeInTheDocument();
+  });
+
+  it("backend não publica blob URL legado persistido", () => {
+    const legacy = sanitizePublicDrinks([{ ...mockPublicDrinks[0], imagem: "blob:https://goatbar.vercel.app/expired" }]);
+    expect(legacy[0].image).toBeNull();
+  });
+
   it("5. Modo público sem token inicia jornada, captura lead e submete via submitPublicLeadRequest", async () => {
     const startSpy = vi.spyOn(budgetRequestService, "startPublicJourney").mockResolvedValue({
       state: "ACTIVE",
@@ -166,7 +183,7 @@ describe("Public Budget Request Form & Drink Catalog", () => {
     const submitPublicSpy = vi.spyOn(budgetRequestService, "submitPublicLeadRequest").mockResolvedValue({
       state: "USED",
       idempotent: false,
-      event_id: "mock-event-uuid",
+      event_id: "123e4567-e89b-42d3-a456-426614174000",
     });
 
     const { PublicBudgetRequestForm } = await import("@/components/public-budget/PublicBudgetRequestForm");
@@ -191,5 +208,26 @@ describe("Public Budget Request Form & Drink Catalog", () => {
 
     const submittedPublicPayload = submitPublicSpy.mock.calls[0][1];
     expect(submittedPublicPayload.event_name).toBe("Lucas e Fernanda");
+  });
+
+  it("não mostra falso sucesso quando a API/RLS rejeita a persistência", async () => {
+    vi.spyOn(budgetRequestService, "startPublicJourney").mockResolvedValue({
+      state: "ACTIVE",
+      public_drinks: [],
+    });
+    vi.spyOn(budgetRequestService, "submitPublicLeadRequest").mockRejectedValue(
+      new Error("new row violates row-level security policy"),
+    );
+    const { PublicBudgetRequestForm } = await import("@/components/public-budget/PublicBudgetRequestForm");
+    render(<PublicBudgetRequestForm mode="public" />);
+    await screen.findByText("Solicite seu orçamento");
+    fireEvent.change(screen.getByLabelText(/Nome do solicitante/i), { target: { value: "Cliente Teste" } });
+    fireEvent.change(screen.getByLabelText(/WhatsApp/i), { target: { value: "(11) 97777-6666" } });
+    fireEvent.change(screen.getByLabelText(/Nome do casal/i), { target: { value: "Ana e Beto" } });
+    fireEvent.change(screen.getByLabelText(/Data do evento/i), { target: { value: "2026-12-15" } });
+    fireEvent.click(screen.getByRole("button", { name: /Solicitar orçamento/i }));
+    expect(await screen.findByText(/row-level security/i)).toBeInTheDocument();
+    expect(screen.queryByText("Solicitação recebida!")).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Nome do solicitante/i)).toHaveValue("Cliente Teste");
   });
 });

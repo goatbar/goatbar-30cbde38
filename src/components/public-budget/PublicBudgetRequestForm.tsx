@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ImageOff, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import logo from "@/assets/goatbar-logo.png";
 import { getPublicLeadContext } from "@/lib/public-lead-session";
 import {
@@ -9,6 +9,7 @@ import {
   type PublicDrink,
   type PublicLeadContext,
 } from "@/services/budget-request-service";
+import { DrinkCardImage } from "./DrinkCardImage";
 
 const EVENT_TYPES = ["Casamento", "Corporativo", "Aniversário", "Confraternização"] as const;
 
@@ -309,17 +310,7 @@ export function PublicBudgetRequestForm({ mode, token }: PublicBudgetRequestForm
                     >
                       <div>
                         <div className="relative flex h-48 w-full items-center justify-center bg-black/40 p-2 overflow-hidden">
-                          {drink.image ? (
-                            <img
-                              src={drink.image}
-                              alt={drink.name}
-                              className="h-full w-full object-contain"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                              <ImageOff className="h-8 w-8 opacity-60" />
-                            </div>
-                          )}
+                          <DrinkCardImage src={drink.image} alt={drink.name} />
                         </div>
                         <div className="space-y-2 p-4">
                           <h3 className="break-words font-display font-bold text-sm text-foreground">
