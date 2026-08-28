@@ -1,5 +1,5 @@
 import { normalizePhoneNumber } from "../_shared/goat-ai/phone-normalizer.ts";
-import { buildNotificationMessage, type PublicBudgetPayload } from "./logic.ts";
+import { type PublicBudgetPayload } from "./logic.ts";
 
 export interface NotificationDependencies {
   claim(eventId: string, retry: boolean): Promise<{ id: string } | null>;
@@ -30,14 +30,12 @@ export async function notifyNewBudgetRequest(
     if (!recipients.length)
       throw new Error("Nenhum destinatário habilitado para novos orçamentos.");
 
-    const message = buildNotificationMessage(event, deps.eventUrl(eventId));
     const parameters = [
       event.client_name,
       event.event_name || event.event_type,
       event.date,
       String(event.guests),
       event.phone,
-      message,
     ];
     for (const recipient of recipients) {
       const phone = normalizePhoneNumber(recipient.phone_number).canonicalPlain;
