@@ -408,6 +408,8 @@ export type Database = {
           insumos: Json | null
           modality_config: Json | null
           nome: string
+          show_in_public_menu?: boolean
+          show_in_public_menu: boolean
         }
         Insert: {
           categoria?: string | null
@@ -430,6 +432,7 @@ export type Database = {
           insumos?: Json | null
           modality_config?: Json | null
           nome?: string
+          show_in_public_menu?: boolean
         }
         Relationships: []
       }

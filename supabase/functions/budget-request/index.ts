@@ -1,7 +1,12 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
 import { WhatsAppChannelAdapter } from "../_shared/goat-ai/channel/whatsapp-adapter.ts";
-import { buildNotificationMessage, getLinkState, validatePublicBudgetPayload } from "./logic.ts";
+import {
+  buildNotificationMessage,
+  getLinkState,
+  sanitizePublicDrinks,
+  validatePublicBudgetPayload,
+} from "./logic.ts";
 import { createBudgetRequestLink } from "../_shared/budget-request-link.ts";
 
 const corsHeaders = {
@@ -63,8 +68,19 @@ serve(async (req) => {
       .eq("token", token)
       .maybeSingle();
     const state = getLinkState(link);
-    if (action === "validate")
-      return json({ state, metadata: state === "ACTIVE" ? link?.metadata : undefined });
+    if (action === "validate") {
+      if (state !== "ACTIVE") return json({ state });
+      const { data: drinks, error: drinksError } = await supabase
+        .from("drinks")
+        .select("id,nome,descricao,imagem,insumos,modality_config,show_in_public_menu")
+        .eq("show_in_public_menu", true);
+      if (drinksError) throw drinksError;
+      return json({
+        state,
+        metadata: link?.metadata,
+        public_drinks: sanitizePublicDrinks(drinks || []),
+      });
+    }
     if (action !== "submit") return json({ error: "Ação inválida." }, 400);
     if (state !== "ACTIVE" && state !== "USED")
       return json({ state }, state === "INVALID" ? 404 : 409);
@@ -85,6 +101,10 @@ serve(async (req) => {
       p_lead_source: payload.lead_source || "",
       p_referral_name: payload.referral_name || "",
       p_notes: payload.notes || "",
+      p_groom_name: payload.groom_name || "",
+      p_bride_name: payload.bride_name || "",
+      p_duration_hours: payload.duration_hours,
+      p_requested_drink_ids: payload.requested_drink_ids || [],
     });
     if (rpcError) throw rpcError;
     if (result.state === "CREATED") {

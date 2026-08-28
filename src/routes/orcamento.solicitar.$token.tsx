@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ImageOff, Loader2 } from "lucide-react";
 import logo from "@/assets/goatbar-logo.png";
 import {
   budgetRequestService,
   type BudgetRequestPayload,
   type BudgetRequestState,
+  type PublicDrink,
 } from "@/services/budget-request-service";
 
 export const Route = createFileRoute("/orcamento/solicitar/$token")({
@@ -18,6 +19,7 @@ function PublicBudgetRequestPage() {
   const [state, setState] = useState<BudgetRequestState | "LOADING" | "SUCCESS">("LOADING");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [publicDrinks, setPublicDrinks] = useState<PublicDrink[]>([]);
   const [form, setForm] = useState<BudgetRequestPayload>({
     client_name: "",
     event_name: "",
@@ -32,6 +34,10 @@ function PublicBudgetRequestPage() {
     lead_source: "",
     referral_name: "",
     notes: "",
+    groom_name: "",
+    bride_name: "",
+    duration_hours: 5,
+    requested_drink_ids: [],
   });
 
   useEffect(() => {
@@ -39,6 +45,7 @@ function PublicBudgetRequestPage() {
       .validate(token)
       .then((result) => {
         setState(result.state);
+        setPublicDrinks(result.public_drinks || []);
         if (result.state === "ACTIVE" && result.metadata?.customer_name_hint)
           setForm((old) => ({ ...old, client_name: result.metadata!.customer_name_hint! }));
       })
@@ -58,6 +65,15 @@ function PublicBudgetRequestPage() {
       setSubmitting(false);
     }
   };
+
+  const isWedding = form.event_type === "Casamento";
+  const toggleDrink = (id: string) =>
+    setForm((old) => ({
+      ...old,
+      requested_drink_ids: old.requested_drink_ids?.includes(id)
+        ? old.requested_drink_ids.filter((drinkId) => drinkId !== id)
+        : [...(old.requested_drink_ids || []), id],
+    }));
 
   if (state === "LOADING")
     return (
@@ -115,7 +131,7 @@ function PublicBudgetRequestPage() {
   );
   return (
     <div className="min-h-screen bg-background px-4 py-10">
-      <main className="mx-auto max-w-2xl rounded-2xl border border-border bg-surface p-6 shadow-xl sm:p-9">
+      <main className="mx-auto max-w-5xl rounded-2xl border border-border bg-surface p-5 shadow-xl sm:p-9">
         <img src={logo} alt="Goat Bar" className="mx-auto mb-7 h-16 object-contain" />
         <h1 className="font-display text-2xl font-bold">Solicite seu orçamento</h1>
         <p className="mb-7 mt-2 text-sm text-muted-foreground">
@@ -124,14 +140,8 @@ function PublicBudgetRequestPage() {
         </p>
         <form onSubmit={submit} className="grid gap-5 sm:grid-cols-2">
           {field("Nome do solicitante *", "client_name", "text", true)}
-          {field("Nome do evento / casal", "event_name")}
           {field("WhatsApp *", "phone", "tel", true)}
           {field("E-mail", "email", "email")}
-          {field("Data do evento *", "date", "date", true)}
-          {field("Horário", "event_time", "time")}
-          {field("Local do evento", "event_location")}
-          {field("Cidade", "city")}
-          {field("Convidados *", "guests", "number", true)}
           <label className="space-y-2 text-sm font-medium">
             Tipo de evento *
             <select
@@ -144,6 +154,30 @@ function PublicBudgetRequestPage() {
               ))}
             </select>
           </label>
+          {isWedding && field("Nome do noivo *", "groom_name", "text", true)}
+          {isWedding && field("Nome da noiva *", "bride_name", "text", true)}
+          {!isWedding && field("Nome do evento", "event_name")}
+          {field("Data do evento *", "date", "date", true)}
+          {field("Horário", "event_time", "time")}
+          <label className="space-y-2 text-sm font-medium">
+            Duração do evento *
+            <select
+              value={form.duration_hours}
+              onChange={(e) =>
+                setForm((old) => ({ ...old, duration_hours: Number(e.target.value) }))
+              }
+              className="mt-2 h-11 w-full rounded-lg border border-border bg-input px-3"
+            >
+              {[3, 4, 5, 6, 7, 8].map((hours) => (
+                <option key={hours} value={hours}>
+                  {hours} horas
+                </option>
+              ))}
+            </select>
+          </label>
+          {field("Local do evento", "event_location")}
+          {field("Cidade", "city")}
+          {field("Convidados *", "guests", "number", true)}
           <label className="space-y-2 text-sm font-medium">
             Como nos conheceu?
             <select
@@ -158,6 +192,59 @@ function PublicBudgetRequestPage() {
             </select>
           </label>
           {form.lead_source === "Indicação" && field("Quem indicou?", "referral_name")}
+          {publicDrinks.length > 0 && (
+            <fieldset className="sm:col-span-2 min-w-0 space-y-4 border-t border-border pt-6">
+              <legend className="font-display text-lg font-bold">
+                Com base na nossa carta de drinks, tem algum drink que não pode faltar no seu
+                evento?
+              </legend>
+              <p className="text-sm text-muted-foreground">
+                Selecione os seus preferidos. Essa escolha serve como referência para nossa equipe
+                preparar o orçamento e pode ser ajustada posteriormente.
+              </p>
+              <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-3">
+                {publicDrinks.map((drink) => {
+                  const selected = form.requested_drink_ids?.includes(drink.id) || false;
+                  return (
+                    <label
+                      key={drink.id}
+                      className={`min-w-0 cursor-pointer overflow-hidden rounded-xl border bg-background transition ${selected ? "border-primary ring-1 ring-primary" : "border-border"}`}
+                    >
+                      {drink.image ? (
+                        <img src={drink.image} alt="" className="h-40 w-full object-cover" />
+                      ) : (
+                        <div className="flex h-40 items-center justify-center bg-input text-muted-foreground">
+                          <ImageOff className="h-8 w-8" />
+                        </div>
+                      )}
+                      <div className="space-y-2 p-4">
+                        <h3 className="break-words font-display font-bold">{drink.name}</h3>
+                        {drink.description && (
+                          <p className="break-words text-sm text-muted-foreground">
+                            {drink.description}
+                          </p>
+                        )}
+                        {drink.ingredients.length > 0 && (
+                          <p className="break-words text-xs text-muted-foreground">
+                            {drink.ingredients.join(", ")}
+                          </p>
+                        )}
+                        <span className="flex items-center gap-2 text-sm font-medium">
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => toggleDrink(drink.id)}
+                            className="h-4 w-4 accent-primary"
+                          />{" "}
+                          Quero este drink
+                        </span>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          )}
           <label className="space-y-2 text-sm font-medium sm:col-span-2">
             Observações
             <textarea
