@@ -684,8 +684,15 @@ describe("Validação de PDF e Storage de Proposta", () => {
   });
 
   it("gera path determinístico e rastreável por evento, versão e proposta", () => {
-    const path = buildDeterministicStoragePath("event-123", "budget-v4", "proposal-abc");
-    expect(path).toBe("events/event-123/budgets/budget-v4/proposals/proposal-abc.pdf");
+    const path = buildDeterministicStoragePath(
+      "event-123",
+      "budget-v4",
+      "proposal-abc",
+      "Proposta Comercial - Casamento.pdf",
+    );
+    expect(path).toBe(
+      "events/event-123/budgets/budget-v4/proposals/proposal-abc/Proposta Comercial - Casamento.pdf",
+    );
   });
 
   it("faz upload com sucesso no Storage com contentType application/pdf", async () => {

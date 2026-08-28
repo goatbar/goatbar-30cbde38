@@ -20,6 +20,7 @@ import {
   validatePdfBytes,
 } from "./logic.ts";
 import { resolveProposalField } from "../../../src/lib/proposal-field-resolver.ts";
+import { buildProposalFilename } from "../../../src/lib/proposal-filename.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -226,7 +227,8 @@ serve(async (req: Request) => {
     validatePdfBytes(pdf);
 
     const proposalId = crypto.randomUUID();
-    const storagePath = buildDeterministicStoragePath(eventId, budget.id, proposalId);
+    const filename = buildProposalFilename(event.event_name);
+    const storagePath = buildDeterministicStoragePath(eventId, budget.id, proposalId, filename);
 
     const { error: storageError } = await uploadPdfToStorage(
       supabaseAdmin.storage,
@@ -310,6 +312,7 @@ serve(async (req: Request) => {
       proposal,
       canva_design_id: generated.designId,
       pdf_url: publicData.publicUrl,
+      filename,
       storage_path: storagePath,
       jobs: { autofill: generated.autofillJobId, export: generated.exportJobId },
     });

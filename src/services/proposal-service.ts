@@ -5,6 +5,7 @@ import type { ProposalTemplateField } from "@/lib/proposal-template-mapper";
 
 import { isValidSourceFieldKey } from "@/lib/proposal-field-catalog";
 import { canonicalizeProposalSourceKey, formatDateDot, formatBulletList } from "@/lib/proposal-field-resolver";
+import { buildProposalFilename } from "@/lib/proposal-filename";
 
 export interface ProposalTemplate {
   id: string;
@@ -379,9 +380,15 @@ export const generatedProposalsService = {
     }
   },
 
-  async uploadGeneratedPDF(eventId: string, pdfBytes: Uint8Array): Promise<string> {
-    const fileName = `${eventId}_proposta_${Date.now()}.pdf`;
-    const filePath = `propostas/${fileName}`;
+  async uploadGeneratedPDF(
+    eventId: string,
+    eventName: string | null | undefined,
+    pdfBytes: Uint8Array,
+  ): Promise<string> {
+    const fileName = buildProposalFilename(eventName);
+    // Preserve the prior timestamp collision strategy in the directory while
+    // making the stored object's basename equal to the delivered filename.
+    const filePath = `propostas/${eventId}_${Date.now()}/${fileName}`;
 
     // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     const blob = new Blob([pdfBytes], { type: "application/pdf" });
@@ -1060,4 +1067,3 @@ export const pdfGenerationService = {
     return pdfDoc;
   },
 };
-

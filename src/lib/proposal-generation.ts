@@ -149,7 +149,12 @@ export async function generateCanvaProposal(eventId: string, budgetVersionId: st
     }
     throw new CanvaProposalError(message, code, upsellUrl, missingFields);
   }
-  return data as { proposal: GeneratedProposal; canva_design_id: string; pdf_url: string };
+  return data as {
+    proposal: GeneratedProposal;
+    canva_design_id: string;
+    pdf_url: string;
+    filename: string;
+  };
 }
 
 export async function deleteGeneratedProposal(proposalId: string) {
