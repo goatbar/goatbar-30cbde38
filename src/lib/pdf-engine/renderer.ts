@@ -1,4 +1,12 @@
-import { PDFDocument, degrees, rgb, StandardFonts, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
+import {
+  PDFDocument,
+  degrees,
+  rgb,
+  StandardFonts,
+  type PDFFont,
+  type PDFPage,
+  type RGB,
+} from "pdf-lib";
 import type { CanonicalProposalData } from "@/lib/proposal-field-resolver";
 import type {
   ProposalFieldSlot,
@@ -29,16 +37,14 @@ function hexToRgb(hex: string): RGB {
  */
 export function sanitizePdfText(text: string): string {
   if (!text) return "";
-  return text
-    .normalize("NFC")
-    .replace(/[^\x00-\xFF]/g, (char) => {
-      const code = char.charCodeAt(0);
-      if (char === "•" || code === 8226) return "•";
-      if (char === "–" || char === "—") return "-";
-      if (char === "“" || char === "”") return '"';
-      if (char === "‘" || char === "’") return "'";
-      return "";
-    });
+  return text.normalize("NFC").replace(/[^\x00-\xFF]/g, (char) => {
+    const code = char.charCodeAt(0);
+    if (char === "•" || code === 8226) return "•";
+    if (char === "–" || char === "—") return "-";
+    if (char === "“" || char === "”") return '"';
+    if (char === "‘" || char === "’") return "'";
+    return "";
+  });
 }
 
 export function wrapTextLines(
@@ -130,10 +136,7 @@ export class ProposalPdfRenderer {
       return isBold ? fontBold : fontRegular;
     };
 
-    let basePdfDoc: PDFDocument | null = null;
-    if (template.basePdfBytes) {
-      basePdfDoc = await PDFDocument.load(template.basePdfBytes);
-    }
+    const basePdfDoc = await this.loadBasePdf(template);
 
     const { width: pageWidth, height: pageHeight } = template.pageSize;
 
@@ -191,6 +194,41 @@ export class ProposalPdfRenderer {
     };
   }
 
+  private static async loadBasePdf(
+    template: ProposalTemplateDefinition,
+  ): Promise<PDFDocument | null> {
+    if (template.basePdfBytes) {
+      return PDFDocument.load(template.basePdfBytes);
+    }
+
+    if (!template.basePdfPath) return null;
+
+    let response: Response;
+    try {
+      response = await fetch(template.basePdfPath);
+    } catch (error) {
+      throw new Error(`Não foi possível carregar a arte base da proposta "${template.name}".`, {
+        cause: error,
+      });
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        `Não foi possível carregar a arte base da proposta "${template.name}" (HTTP ${response.status}).`,
+      );
+    }
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const basePdf = await PDFDocument.load(bytes);
+    const highestPageNumber = Math.max(...template.pages.map((page) => page.pageNumber));
+    if (basePdf.getPageCount() < highestPageNumber) {
+      throw new Error(
+        `A arte base da proposta "${template.name}" possui ${basePdf.getPageCount()} páginas; eram esperadas pelo menos ${highestPageNumber}.`,
+      );
+    }
+    return basePdf;
+  }
+
   private static async renderStandardPage(ctx: {
     doc: PDFDocument;
     basePdfDoc: PDFDocument | null;
@@ -229,9 +267,12 @@ export class ProposalPdfRenderer {
     pageHeight: number;
     getFont: (fontName?: string, isBold?: boolean) => PDFFont;
   }) {
-    const { doc, basePdfDoc, pageDef, template, canonicalData, pageWidth, pageHeight, getFont } = ctx;
+    const { doc, basePdfDoc, pageDef, template, canonicalData, pageWidth, pageHeight, getFont } =
+      ctx;
 
-    const drinksSlot = pageDef.slots.find((s) => s.fieldKey === "drinks" || s.id.includes("drinks"));
+    const drinksSlot = pageDef.slots.find(
+      (s) => s.fieldKey === "drinks" || s.id.includes("drinks"),
+    );
     const font = getFont(drinksSlot?.style.font);
     const fontSize = drinksSlot?.style.fontSize || 22;
     const lineHeight = drinksSlot?.style.lineHeight || 30.7;
@@ -246,8 +287,7 @@ export class ProposalPdfRenderer {
       font,
     );
 
-    const safeDrinksHeight =
-      pageDef.menuSafeArea?.drinksMaxHeight || drinksSlot?.height || 280;
+    const safeDrinksHeight = pageDef.menuSafeArea?.drinksMaxHeight || drinksSlot?.height || 280;
 
     // Determina se os drinks cabem na primeira página
     let page1Drinks: string[] = [];
@@ -264,7 +304,9 @@ export class ProposalPdfRenderer {
     }
 
     // Mede todas as bebidas
-    const bebidasSlot = pageDef.slots.find((s) => s.fieldKey === "bebidas" || s.id.includes("bebidas"));
+    const bebidasSlot = pageDef.slots.find(
+      (s) => s.fieldKey === "bebidas" || s.id.includes("bebidas"),
+    );
     const bebidasFont = getFont(bebidasSlot?.style.font);
     const bebidasFontSize = bebidasSlot?.style.fontSize || 20;
     const bebidasLineHeight = bebidasSlot?.style.lineHeight || 27.7;
@@ -315,8 +357,7 @@ export class ProposalPdfRenderer {
 
     // Se houve overflow de drinks ou bebidas, cria páginas de continuação em loop até renderizar TODOS os itens
     if (overflowDrinks.length > 0 || overflowBebidas.length > 0) {
-      const continuationTitle =
-        template.overflow?.continuationPageTitle || "Drinks & Experiências";
+      const continuationTitle = template.overflow?.continuationPageTitle || "Drinks & Experiências";
       const headerFont = getFont("Helvetica-Bold", true);
       const itemFont = getFont(drinksSlot?.style.font);
       const continuationStartY = 240.0;
@@ -459,7 +500,9 @@ export class ProposalPdfRenderer {
       resolvedText = slot.transform(rawValue, canonicalData);
     } else if (slot.type === "bullet_list") {
       if (Array.isArray(rawValue)) {
-        resolvedText = rawValue.map((item) => (item.startsWith("•") ? item : `• ${item}`)).join("\n");
+        resolvedText = rawValue
+          .map((item) => (item.startsWith("•") ? item : `• ${item}`))
+          .join("\n");
       } else {
         resolvedText = String(rawValue || "");
       }
@@ -508,7 +551,9 @@ export class ProposalPdfRenderer {
       return;
     }
 
-    const lines = resolvedText.split("\n").flatMap((l) => wrapTextLines(l, slot.width, fontSize, font));
+    const lines = resolvedText
+      .split("\n")
+      .flatMap((l) => wrapTextLines(l, slot.width, fontSize, font));
 
     let currentY = pageHeight - slot.y - fontSize;
 
