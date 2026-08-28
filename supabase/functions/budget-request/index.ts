@@ -1,8 +1,9 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
 import { WhatsAppChannelAdapter } from "../_shared/goat-ai/channel/whatsapp-adapter.ts";
-import { buildNotificationMessage, getLinkState, validatePublicBudgetPayload } from "./logic.ts";
+import { getLinkState, validatePublicBudgetPayload } from "./logic.ts";
 import { createBudgetRequestLink } from "../_shared/budget-request-link.ts";
+import { notifyNewBudgetRequest } from "./notifier.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,6 +29,59 @@ serve(async (req) => {
     const body = await req.json();
     const action = body.action;
 
+    const notify = (eventId: string, retry = false) =>
+      notifyNewBudgetRequest(
+        eventId,
+        {
+          claim: async (id, isRetry) => {
+            const { data, error } = await supabase.rpc("claim_budget_request_notification", {
+              p_event_id: id,
+              p_retry: isRetry,
+            });
+            if (error) throw error;
+            return data?.id ? data : null;
+          },
+          loadEvent: async (id) => {
+            const { data, error } = await supabase.from("events").select("*").eq("id", id).single();
+            if (error) throw error;
+            return data;
+          },
+          recipients: async () => {
+            const { data, error } = await supabase
+              .from("user_messaging_accounts")
+              .select("phone_number")
+              .eq("provider", "whatsapp")
+              .eq("verified", true)
+              .eq("receive_new_budget_notifications", true)
+              .not("phone_number", "is", null);
+            if (error) throw error;
+            return data || [];
+          },
+          send: (phone, message, correlationId) =>
+            new WhatsAppChannelAdapter(supabase).sendTextMessage(phone, message, correlationId),
+          finish: async (linkId, sent, error) => {
+            const { error: updateError } = await supabase
+              .from("budget_request_links")
+              .update(
+                sent
+                  ? {
+                      notification_status: "SENT",
+                      notification_sent_at: new Date().toISOString(),
+                      notification_error: null,
+                    }
+                  : {
+                      notification_status: "FAILED",
+                      notification_error: error || "Falha desconhecida.",
+                    },
+              )
+              .eq("id", linkId);
+            if (updateError) throw updateError;
+          },
+          eventUrl: (id) => (appUrl() ? `${appUrl()}/eventos/${id}` : undefined),
+        },
+        retry,
+      );
+
     if (action === "create") {
       const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
       const {
@@ -52,6 +106,16 @@ serve(async (req) => {
           expiresInDays: Number(body.expires_in_days) || undefined,
         }),
       );
+    }
+
+    if (action === "retry_notification") {
+      const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+      const {
+        data: { user },
+      } = await supabase.auth.getUser(bearer);
+      if (!user) return json({ error: "Não autorizado." }, 401);
+      if (typeof body.event_id !== "string") return json({ error: "event_id inválido." }, 400);
+      return json({ notification_status: await notify(body.event_id, true) });
     }
 
     const token =
@@ -88,47 +152,8 @@ serve(async (req) => {
     });
     if (rpcError) throw rpcError;
     if (result.state === "CREATED") {
-      // Claim notification once. A WhatsApp failure never rolls back the event.
-      const { data: claimed } = await supabase
-        .from("budget_request_links")
-        .update({ notification_status: "PROCESSING" })
-        .eq("token", token)
-        .eq("notification_status", "PENDING")
-        .select("id")
-        .maybeSingle();
-      if (claimed) {
-        const internalUrl = appUrl() ? `${appUrl()}/eventos/${result.event_id}` : undefined;
-        const message = buildNotificationMessage(payload, internalUrl);
-        const { data: recipients } = await supabase
-          .from("user_messaging_accounts")
-          .select("phone_number")
-          .eq("provider", "whatsapp")
-          .eq("verified", true);
-        const adapter = new WhatsAppChannelAdapter(supabase);
-        const outcomes = await Promise.all(
-          (recipients || []).map((recipient: any) =>
-            adapter.sendTextMessage(recipient.phone_number, message, `budget_${result.event_id}`),
-          ),
-        );
-        const sent = outcomes.length > 0 && outcomes.every(Boolean);
-        await supabase
-          .from("budget_request_links")
-          .update(
-            sent
-              ? {
-                  notification_status: "SENT",
-                  notification_sent_at: new Date().toISOString(),
-                  notification_error: null,
-                }
-              : {
-                  notification_status: "FAILED",
-                  notification_error: outcomes.length
-                    ? "Falha no envio pelo WhatsApp Adapter."
-                    : "Nenhum destinatário interno verificado.",
-                },
-          )
-          .eq("id", claimed.id);
-      }
+      console.log(`[budget-request] event created event_id=${result.event_id}`);
+      await notify(result.event_id);
     }
     return json({
       state: result.state === "CREATED" ? "USED" : result.state,
