@@ -610,20 +610,49 @@ export function buildAutofillData(
   return data;
 }
 
+export type CanvaPayloadAuditEntry = {
+  canva_field_key: string;
+  source_type: string;
+  source_field_key: string | null;
+  value: string;
+  status: "filled" | "empty";
+};
+
+/** Complete, credential-free inventory of exactly what is sent to Canva. */
+export function auditAutofillPayload(
+  mappings: Mapping[],
+  payload: Record<string, { type: "text"; text: string }>,
+): CanvaPayloadAuditEntry[] {
+  const mappingByKey = new Map(mappings.map((mapping) => [mapping.canva_field_key, mapping]));
+  return Object.entries(payload).map(([canvaFieldKey, field]) => {
+    const mapping = mappingByKey.get(canvaFieldKey);
+    return {
+      canva_field_key: canvaFieldKey,
+      source_type: mapping?.source_type || "field",
+      source_field_key: mapping?.source_field_key || null,
+      value: field.text,
+      status: field.text.trim() ? "filled" : "empty",
+    };
+  });
+}
+
 type Fetch = typeof fetch;
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const SENSITIVE_CANVA_KEYS = /^(access_token|refresh_token|authorization|client_secret|token|secret)$/i;
+const SENSITIVE_CANVA_KEYS =
+  /^(access_token|refresh_token|authorization|client_secret|token|secret)$/i;
 const DIAGNOSTIC_CANVA_KEYS = /(quota|entitlement|plan|workspace|team|account)/i;
 
 /** Preserve Canva diagnostics while ensuring credentials can never cross the API boundary. */
 export function redactCanvaResponse(value: any): any {
   if (Array.isArray(value)) return value.map(redactCanvaResponse);
   if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.entries(value).map(([key, child]) => [
-    key,
-    SENSITIVE_CANVA_KEYS.test(key) ? "[REDACTED]" : redactCanvaResponse(child),
-  ]));
+  return Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [
+      key,
+      SENSITIVE_CANVA_KEYS.test(key) ? "[REDACTED]" : redactCanvaResponse(child),
+    ]),
+  );
 }
 
 function findString(value: any, keys: string[]): string | undefined {
@@ -638,13 +667,17 @@ function findString(value: any, keys: string[]): string | undefined {
 
 export function collectDiagnosticFields(value: any, prefix = ""): string[] {
   if (!value || typeof value !== "object") return [];
-  return [...new Set(Object.entries(value).flatMap(([key, child]) => {
-    const path = prefix ? `${prefix}.${key}` : key;
-    return [
-      ...(DIAGNOSTIC_CANVA_KEYS.test(key) ? [path] : []),
-      ...collectDiagnosticFields(child, path),
-    ];
-  }))];
+  return [
+    ...new Set(
+      Object.entries(value).flatMap(([key, child]) => {
+        const path = prefix ? `${prefix}.${key}` : key;
+        return [
+          ...(DIAGNOSTIC_CANVA_KEYS.test(key) ? [path] : []),
+          ...collectDiagnosticFields(child, path),
+        ];
+      }),
+    ),
+  ];
 }
 
 export function extractCanvaQuotaError(
@@ -653,11 +686,7 @@ export function extractCanvaQuotaError(
   responseHeaders?: Headers,
 ): ProposalGenerationError | null {
   const code = body?.code || body?.error?.code || findString(body, ["code", "error_code"]) || "";
-  const message =
-    body?.message ||
-    body?.error?.message ||
-    findString(body, ["message"]) ||
-    "";
+  const message = body?.message || body?.error?.message || findString(body, ["message"]) || "";
   const upsellUrl =
     body?.upsell_url ||
     body?.upsellUrl ||
@@ -844,12 +873,10 @@ export async function uploadPdfToStorage(
   storagePath: string,
   pdfBytes: Uint8Array,
 ): Promise<{ error: any }> {
-  let { error: uploadError } = await storageClient
-    .from(bucketName)
-    .upload(storagePath, pdfBytes, {
-      contentType: "application/pdf",
-      upsert: true,
-    });
+  let { error: uploadError } = await storageClient.from(bucketName).upload(storagePath, pdfBytes, {
+    contentType: "application/pdf",
+    upsert: true,
+  });
 
   // If bucket does not exist, attempt creation and retry upload
   if (
@@ -863,12 +890,10 @@ export async function uploadPdfToStorage(
       public: true,
     });
     if (!createError || createError.message?.toLowerCase().includes("already exists")) {
-      const retryResult = await storageClient
-        .from(bucketName)
-        .upload(storagePath, pdfBytes, {
-          contentType: "application/pdf",
-          upsert: true,
-        });
+      const retryResult = await storageClient.from(bucketName).upload(storagePath, pdfBytes, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
       uploadError = retryResult.error;
     }
   }
