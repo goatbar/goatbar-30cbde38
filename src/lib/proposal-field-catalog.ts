@@ -254,7 +254,7 @@ export const PROPOSAL_FIELD_CATALOG: ProposalCatalogField[] = [
     label: "Quantidade total calculada de drinks",
     group: "Orçamento",
     type: "number",
-    description: "events.guests × event_budget_versions.drinks_per_person",
+    description: "event_budget_versions.guest_count × event_budget_versions.drinks_per_person",
     example: "600",
   },
   {

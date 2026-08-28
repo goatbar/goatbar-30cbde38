@@ -408,6 +408,8 @@ export type Database = {
           insumos: Json | null
           modality_config: Json | null
           nome: string
+          show_in_public_menu?: boolean
+          show_in_public_menu: boolean
         }
         Insert: {
           categoria?: string | null
@@ -430,6 +432,7 @@ export type Database = {
           insumos?: Json | null
           modality_config?: Json | null
           nome?: string
+          show_in_public_menu?: boolean
         }
         Relationships: []
       }
@@ -623,6 +626,8 @@ export type Database = {
           ice_total_value: number | null
           id: string
           is_current: boolean | null
+          guest_count: number | null
+          event_snapshot: Json | null
           keeper_quantity: number | null
           keeper_unit_value: number | null
           miscellaneous_items: Json | null
@@ -675,6 +680,8 @@ export type Database = {
           ice_total_value?: number | null
           id?: string
           is_current?: boolean | null
+          guest_count?: number | null
+          event_snapshot?: Json | null
           keeper_quantity?: number | null
           keeper_unit_value?: number | null
           miscellaneous_items?: Json | null
@@ -727,6 +734,8 @@ export type Database = {
           ice_total_value?: number | null
           id?: string
           is_current?: boolean | null
+          guest_count?: number | null
+          event_snapshot?: Json | null
           keeper_quantity?: number | null
           keeper_unit_value?: number | null
           miscellaneous_items?: Json | null
