@@ -681,6 +681,8 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const SENSITIVE_CANVA_KEYS =
   /^(access_token|refresh_token|authorization|client_secret|token|secret)$/i;
 const DIAGNOSTIC_CANVA_KEYS = /(quota|entitlement|plan|workspace|team|account)/i;
+const QUOTA_CANVA_PATTERN =
+  /(autofill.{0,40}(quota|limit)|(quota|limit).{0,40}autofill|quota[_ -]?exceeded)/i;
 
 /** Preserve Canva diagnostics while ensuring credentials can never cross the API boundary. */
 export function redactCanvaResponse(value: any): any {
@@ -734,12 +736,12 @@ export function extractCanvaQuotaError(
     findString(body, ["upsell_url", "upsellUrl"]) ||
     null;
 
+  // HTTP 429 also means transient request rate limiting. It is not, by itself,
+  // evidence that an Autofill entitlement/quota was exhausted.
   const isQuota =
-    status === 429 ||
-    code === "limit_exceeded" ||
     code === "quota_exceeded" ||
-    message.toLowerCase().includes("quota") ||
-    message.toLowerCase().includes("limit_exceeded");
+    code === "autofill_quota_exceeded" ||
+    QUOTA_CANVA_PATTERN.test(`${code} ${message}`);
 
   if (isQuota) {
     const details = redactCanvaResponse(body);
@@ -748,21 +750,10 @@ export function extractCanvaQuotaError(
       responseHeaders?.get("x-trace-id") ||
       responseHeaders?.get("trace-id") ||
       findString(details, ["request_id", "requestId", "trace_id", "traceId"]);
-    const quotaFields = collectDiagnosticFields(details);
-
-    console.error("[canva-generate-proposal] Canva 429 Quota Exceeded", {
-      stage: "canva_autofill",
-      status: 429,
-      code: "canva_autofill_quota_exceeded",
-      has_upsell_url: Boolean(upsellUrl),
-      request_id: requestId,
-      quota_fields_present: quotaFields,
-    });
-
     return new ProposalGenerationError(
       "canva_autofill_quota_exceeded",
       "A cota de Autofill do Canva foi atingida.",
-      429,
+      status || 429,
       {
         code: "canva_autofill_quota_exceeded",
         message: "A cota de Autofill do Canva foi atingida.",
@@ -775,7 +766,30 @@ export function extractCanvaQuotaError(
   return null;
 }
 
-async function jsonRequest(fetcher: Fetch, url: string, token: string, init?: RequestInit) {
+function getCanvaRequestId(headers: Headers, body: any): string | undefined {
+  return (
+    headers.get("x-request-id") ||
+    headers.get("x-correlation-id") ||
+    headers.get("x-trace-id") ||
+    headers.get("trace-id") ||
+    findString(body, [
+      "request_id",
+      "requestId",
+      "correlation_id",
+      "correlationId",
+      "trace_id",
+      "traceId",
+    ])
+  );
+}
+
+async function jsonRequest(
+  fetcher: Fetch,
+  url: string,
+  token: string,
+  init?: RequestInit,
+  stage = "canva_api",
+) {
   const response = await fetcher(url, {
     ...init,
     headers: {
@@ -786,8 +800,38 @@ async function jsonRequest(fetcher: Fetch, url: string, token: string, init?: Re
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const quotaError = extractCanvaQuotaError(response.status, body, response.headers);
+    const safeBody = redactCanvaResponse(body);
+    const canvaCode = body?.code || body?.error?.code || findString(body, ["code", "error_code"]);
+    const canvaMessage = body?.message || body?.error?.message || findString(body, ["message"]);
+    const responseHeaders = response.headers || new Headers();
+    const requestId = getCanvaRequestId(responseHeaders, safeBody);
+    console.error("[canva-generate-proposal][canva-api-error]", {
+      stage,
+      endpoint: new URL(url).pathname,
+      method: init?.method || "GET",
+      http_status: response.status,
+      error_code: canvaCode || null,
+      message: canvaMessage || null,
+      request_id: requestId || null,
+      retry_after: responseHeaders.get("retry-after"),
+      diagnostic_fields: collectDiagnosticFields(safeBody),
+      response: safeBody,
+    });
+    const quotaError = extractCanvaQuotaError(response.status, body, responseHeaders);
     if (quotaError) throw quotaError;
+    if (response.status === 429) {
+      throw new ProposalGenerationError(
+        "canva_rate_limited",
+        "O Canva limitou temporariamente a frequência de requisições. Tente novamente em instantes.",
+        429,
+        {
+          code: "canva_rate_limited",
+          canva_message: canvaMessage,
+          canva_details: { ...safeBody, ...(requestId ? { request_id: requestId } : {}) },
+          retry_after: responseHeaders.get("retry-after"),
+        },
+      );
+    }
     throw new Error(
       `Canva HTTP ${response.status}: ${body?.message || body?.error?.message || "erro desconhecido"}`,
     );
@@ -801,13 +845,33 @@ async function pollJob(
   token: string,
   failureCode: string,
   sleep = wait,
+  stage = "canva_job",
 ) {
   for (let attempt = 0; attempt < 20; attempt++) {
-    const body = await jsonRequest(fetcher, url, token);
+    const body = await jsonRequest(fetcher, url, token, undefined, stage);
     const job = body.job || body;
     if (job.status === "success") return job;
     if (job.status === "failed") {
-      const quotaError = extractCanvaQuotaError(429, job.error || job);
+      const safeError = redactCanvaResponse(job.error || job);
+      console.error("[canva-generate-proposal][canva-job-error]", {
+        stage,
+        endpoint: new URL(url).pathname,
+        http_status: 200,
+        error_code: findString(safeError, ["code", "error_code"]) || null,
+        message: findString(safeError, ["message"]) || null,
+        request_id:
+          findString(safeError, [
+            "request_id",
+            "requestId",
+            "correlation_id",
+            "correlationId",
+            "trace_id",
+            "traceId",
+          ]) || null,
+        diagnostic_fields: collectDiagnosticFields(safeError),
+        response: safeError,
+      });
+      const quotaError = extractCanvaQuotaError(0, job.error || job);
       if (quotaError) throw quotaError;
       throw new ProposalGenerationError(
         failureCode,
@@ -838,6 +902,7 @@ export async function autofillAndExportPdf(args: {
         method: "POST",
         body: JSON.stringify({ brand_template_id: args.brandTemplateId, data: args.data }),
       },
+      "canva_autofill_create",
     );
     autofill = await pollJob(
       fetcher,
@@ -845,6 +910,7 @@ export async function autofillAndExportPdf(args: {
       args.token,
       "canva_autofill_failed",
       args.sleep,
+      "canva_autofill_poll",
     );
   } catch (error) {
     if (error instanceof ProposalGenerationError) throw error;
@@ -863,6 +929,7 @@ export async function autofillAndExportPdf(args: {
       "https://api.canva.com/rest/v1/exports",
       args.token,
       { method: "POST", body: JSON.stringify({ design_id: designId, format: { type: "pdf" } }) },
+      "canva_export_create",
     );
     const exported = await pollJob(
       fetcher,
@@ -870,6 +937,7 @@ export async function autofillAndExportPdf(args: {
       args.token,
       "canva_export_failed",
       args.sleep,
+      "canva_export_poll",
     );
     const downloadUrl = exported.urls?.[0];
     if (!downloadUrl) throw new Error("URL do PDF ausente");

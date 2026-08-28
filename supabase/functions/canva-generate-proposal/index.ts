@@ -133,13 +133,30 @@ serve(async (req: Request) => {
 
     const token = await getValidCanvaAccessToken(user.id, supabaseAdmin);
     const integrationAudit = await auditCanvaIntegration(user.id, supabaseAdmin, token);
-    const canvaProfile = await fetchCanvaUserProfile(token).catch(() => ({
-      id: null,
-      display_name: null,
-    }));
+    let profileLookupError: string | null = null;
+    const canvaProfile = await fetchCanvaUserProfile(token).catch((error) => {
+      profileLookupError = error instanceof Error ? error.message : String(error);
+      return { id: null, display_name: null };
+    });
+    if (canvaProfile.id && canvaProfile.id !== integrationAudit.canva_user_id) {
+      const { error: identityUpdateError } = await supabaseAdmin
+        .from("canva_integrations")
+        .update({ canva_user_id: canvaProfile.id, updated_at: new Date().toISOString() })
+        .eq("user_id", user.id);
+      if (identityUpdateError) {
+        console.warn("[canva-generate-proposal][identity-persistence]", {
+          persisted: false,
+          error: identityUpdateError.message,
+        });
+      } else {
+        integrationAudit.canva_user_id = canvaProfile.id;
+      }
+    }
     console.info("[canva-generate-proposal][integration-audit]", {
       ...integrationAudit,
       profile_user_id: canvaProfile.id,
+      profile_display_name: canvaProfile.display_name,
+      profile_lookup_error: profileLookupError,
       profile_matches_integration: Boolean(
         canvaProfile.id && canvaProfile.id === integrationAudit.canva_user_id,
       ),

@@ -1,5 +1,47 @@
 # Auditoria do autofill da Proposta Comercial no Canva
 
+## Auditoria de cota, token e identidade
+
+O Autofill é criado por `POST https://api.canva.com/rest/v1/autofills`; a consulta do job usa
+`GET /rest/v1/autofills/{job_id}`. A resposta de regressão que motivou este tratamento,
+já sem credenciais, é:
+
+```json
+{
+  "code": "limit_exceeded",
+  "message": "Free autofill quota has been exceeded. Present the `upsell_url` to the user and prompt them to upgrade their Canva account to continue using the autofill feature.",
+  "upsell_url": "https://www.canva.com/upgrade?feature=autofill&source=api_quota"
+}
+```
+
+Ela chegou com HTTP `429`. O código antigo tratava **qualquer** HTTP 429 como
+`canva_autofill_quota_exceeded`, e o modal acrescentava por conta própria que a conta havia
+atingido o “limite gratuito”. Essa conclusão não é segura: 429 também pode ser rate limiting,
+e uma mensagem de cota não comprova o plano comercial efetivo da conta.
+
+Agora somente código/mensagem que mencione explicitamente a cota/limite de **Autofill** é
+classificado como `canva_autofill_quota_exceeded`. Um 429 genérico é
+`canva_rate_limited`. Todo erro registra endpoint/etapa, método, HTTP status, código e mensagem
+do Canva, request/correlation/trace id, `retry-after`, campos de quota/entitlement/team/workspace
+presentes e o body recursivamente sanitizado. Tokens, authorization, refresh tokens e secrets
+nunca são registrados ou devolvidos.
+
+O token usado na geração vem da linha mais recente de `canva_integrations` do usuário Goat Bar,
+com refresh atômico quando necessário. A auditoria compara o token efetivamente usado com essa
+linha (sem registrar o token), detecta linhas duplicadas e consulta
+`GET https://api.canva.com/rest/v1/users/me/profile`. O `id` devolvido é comparado e, se estiver
+ausente/desatualizado, persistido em `canva_user_id`. Isso corrige integrações antigas nas quais
+o perfil não havia sido salvo; falhas do endpoint de perfil antes eram engolidas pela geração e
+resultavam em “Não informado”.
+
+O endpoint de perfil confirma o usuário dono do token, mas não informa plano, equipe nem a
+entidade à qual a cota de Autofill está vinculada. Portanto, a aplicação não afirma que o token
+pertence a uma equipe Pro+ nem deduz se a cota é de usuário, equipe, OAuth `client_id` ou Brand
+Template. Se o Canva devolver `team`, `workspace`, `account`, `plan`, `entitlement` ou `quota`,
+esses campos são preservados no diagnóstico seguro e destacados no log. Na ausência desses
+campos, confirmar a titularidade Pro+/equipe exige inspeção operacional no Canva; não pode ser
+deduzida da resposta 429.
+
 ## Causas-raiz
 
 1. Datas dependiam do `formatter` salvo no mapping. Com `raw`, uma data brasileira ou ISO

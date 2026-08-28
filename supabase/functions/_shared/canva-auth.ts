@@ -77,7 +77,7 @@ export class CanvaApiError extends Error {
       | "brand_template_not_found"
       | "canva_api_error"
       | "canva_service_unavailable",
-    message: string
+    message: string,
   ) {
     super(message);
     this.name = "CanvaApiError";
@@ -164,7 +164,7 @@ export function sanitizeLog(data: unknown): unknown {
 export async function exchangeCodeForToken(
   code: string,
   codeVerifier: string,
-  config?: CanvaConfig
+  config?: CanvaConfig,
 ): Promise<CanvaTokenResponse> {
   const cfg = config ?? getCanvaConfig();
   const basicAuth = btoa(`${cfg.clientId}:${cfg.clientSecret}`);
@@ -179,7 +179,7 @@ export async function exchangeCodeForToken(
   const response = await fetch(CANVA_TOKEN_URL, {
     method: "POST",
     headers: {
-      "Authorization": `Basic ${basicAuth}`,
+      Authorization: `Basic ${basicAuth}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: body.toString(),
@@ -214,7 +214,7 @@ export async function exchangeCodeForToken(
  */
 export async function refreshCanvaAccessToken(
   refreshToken: string,
-  config?: CanvaConfig
+  config?: CanvaConfig,
 ): Promise<CanvaTokenResponse> {
   const cfg = config ?? getCanvaConfig();
   const basicAuth = btoa(`${cfg.clientId}:${cfg.clientSecret}`);
@@ -227,7 +227,7 @@ export async function refreshCanvaAccessToken(
   const response = await fetch(CANVA_TOKEN_URL, {
     method: "POST",
     headers: {
-      "Authorization": `Basic ${basicAuth}`,
+      Authorization: `Basic ${basicAuth}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: body.toString(),
@@ -249,13 +249,17 @@ export async function refreshCanvaAccessToken(
     throw new CanvaApiError(
       401,
       "token_expired_or_revoked",
-      `Falha ao renovar token do Canva (Status: ${response.status})`
+      `Falha ao renovar token do Canva (Status: ${response.status})`,
     );
   }
 
   const data = (await response.json()) as CanvaTokenResponse;
   if (!data.access_token || !data.refresh_token) {
-    throw new CanvaApiError(502, "canva_api_error", "Resposta inválida da renovação Canva: tokens ausentes");
+    throw new CanvaApiError(
+      502,
+      "canva_api_error",
+      "Resposta inválida da renovação Canva: tokens ausentes",
+    );
   }
 
   return data;
@@ -267,7 +271,7 @@ export async function refreshCanvaAccessToken(
 export async function getValidCanvaAccessToken(
   userId: string,
   supabaseAdmin: SupabaseClient,
-  config?: CanvaConfig
+  config?: CanvaConfig,
 ): Promise<string> {
   // 1. Fetch current integration record
   // user_id is UNIQUE in the schema, so this is the single current row (there is no
@@ -279,7 +283,11 @@ export async function getValidCanvaAccessToken(
     .maybeSingle();
 
   if (error || !integration) {
-    throw new CanvaApiError(404, "integration_not_found", "Conexão com Canva não encontrada para este usuário.");
+    throw new CanvaApiError(
+      404,
+      "integration_not_found",
+      "Conexão com Canva não encontrada para este usuário.",
+    );
   }
 
   const now = Date.now();
@@ -358,7 +366,11 @@ export async function auditCanvaIntegration(
     .eq("user_id", userId)
     .order("updated_at", { ascending: false });
   if (error || !data?.length) {
-    throw new CanvaApiError(404, "integration_not_found", "Conexão com Canva não encontrada para este usuário.");
+    throw new CanvaApiError(
+      404,
+      "integration_not_found",
+      "Conexão com Canva não encontrada para este usuário.",
+    );
   }
   return summarizeCanvaIntegrations(data, accessTokenUsed)!;
 }
@@ -371,25 +383,59 @@ export async function auditCanvaIntegration(
 export async function fetchCanvaUserProfile(accessToken: string): Promise<CanvaUserProfile> {
   const response = await fetch(CANVA_PROFILE_URL, {
     headers: {
-      "Authorization": `Bearer ${accessToken}`,
+      Authorization: `Bearer ${accessToken}`,
     },
   });
 
-  if (response.status === 401) {
-    throw new CanvaApiError(401, "token_expired_or_revoked", "Token de acesso do Canva expirado ou revogado.");
-  }
-  if (response.status === 403) {
-    throw new CanvaApiError(403, "insufficient_scope", "Escopo profile:read insuficiente na conexão Canva.");
-  }
-  if (response.status >= 500) {
-    throw new CanvaApiError(502, "canva_service_unavailable", "Serviço Canva temporariamente indisponível.");
-  }
+  const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new CanvaApiError(502, "canva_api_error", `Erro na API do Canva: HTTP ${response.status}`);
+    const responseHeaders = response.headers || new Headers();
+    console.warn("[Canva OAuth][profile-error]", {
+      endpoint: new URL(CANVA_PROFILE_URL).pathname,
+      http_status: response.status,
+      error_code: body?.code || body?.error?.code || null,
+      message: body?.message || body?.error?.message || null,
+      request_id:
+        responseHeaders.get("x-request-id") ||
+        responseHeaders.get("x-correlation-id") ||
+        responseHeaders.get("x-trace-id") ||
+        body?.request_id ||
+        body?.trace_id ||
+        null,
+      response: sanitizeLog(body),
+    });
   }
 
-  const data = await response.json();
-  const profile = data?.profile ?? data?.user ?? data;
+  if (response.status === 401) {
+    throw new CanvaApiError(
+      401,
+      "token_expired_or_revoked",
+      "Token de acesso do Canva expirado ou revogado.",
+    );
+  }
+  if (response.status === 403) {
+    throw new CanvaApiError(
+      403,
+      "insufficient_scope",
+      "Escopo profile:read insuficiente na conexão Canva.",
+    );
+  }
+  if (response.status >= 500) {
+    throw new CanvaApiError(
+      502,
+      "canva_service_unavailable",
+      "Serviço Canva temporariamente indisponível.",
+    );
+  }
+  if (!response.ok) {
+    throw new CanvaApiError(
+      502,
+      "canva_api_error",
+      `Erro na API do Canva: HTTP ${response.status}`,
+    );
+  }
+
+  const profile = body?.profile ?? body?.user ?? body;
   return {
     id: profile?.id ?? profile?.user_id ?? profile?.team_user_id ?? null,
     display_name: profile?.display_name ?? profile?.name ?? "Usuário Canva",
@@ -403,7 +449,7 @@ export async function fetchCanvaUserProfile(accessToken: string): Promise<CanvaU
  */
 export async function listCanvaBrandTemplates(
   accessToken: string,
-  continuation?: string
+  continuation?: string,
 ): Promise<CanvaBrandTemplatesListResponse> {
   const url = new URL(CANVA_BRAND_TEMPLATES_URL);
   if (continuation) {
@@ -412,21 +458,37 @@ export async function listCanvaBrandTemplates(
 
   const response = await fetch(url.toString(), {
     headers: {
-      "Authorization": `Bearer ${accessToken}`,
+      Authorization: `Bearer ${accessToken}`,
     },
   });
 
   if (response.status === 401) {
-    throw new CanvaApiError(401, "token_expired_or_revoked", "Token de acesso do Canva expirado ou revogado.");
+    throw new CanvaApiError(
+      401,
+      "token_expired_or_revoked",
+      "Token de acesso do Canva expirado ou revogado.",
+    );
   }
   if (response.status === 403) {
-    throw new CanvaApiError(403, "insufficient_scope", "Escopo brandtemplate:meta:read insuficiente.");
+    throw new CanvaApiError(
+      403,
+      "insufficient_scope",
+      "Escopo brandtemplate:meta:read insuficiente.",
+    );
   }
   if (response.status >= 500) {
-    throw new CanvaApiError(502, "canva_service_unavailable", "Serviço Canva temporariamente indisponível.");
+    throw new CanvaApiError(
+      502,
+      "canva_service_unavailable",
+      "Serviço Canva temporariamente indisponível.",
+    );
   }
   if (!response.ok) {
-    throw new CanvaApiError(502, "canva_api_error", `Erro ao listar templates Canva: HTTP ${response.status}`);
+    throw new CanvaApiError(
+      502,
+      "canva_api_error",
+      `Erro ao listar templates Canva: HTTP ${response.status}`,
+    );
   }
 
   const data = await response.json();
@@ -455,41 +517,63 @@ export async function listCanvaBrandTemplates(
  */
 export async function getCanvaBrandTemplateDataset(
   accessToken: string,
-  brandTemplateId: string
+  brandTemplateId: string,
 ): Promise<CanvaBrandTemplateDatasetResponse> {
   const url = `${CANVA_BRAND_TEMPLATES_URL}/${encodeURIComponent(brandTemplateId)}/dataset`;
 
   const response = await fetch(url, {
     headers: {
-      "Authorization": `Bearer ${accessToken}`,
+      Authorization: `Bearer ${accessToken}`,
     },
   });
 
   if (response.status === 401) {
-    throw new CanvaApiError(401, "token_expired_or_revoked", "Token de acesso do Canva expirado ou revogado.");
+    throw new CanvaApiError(
+      401,
+      "token_expired_or_revoked",
+      "Token de acesso do Canva expirado ou revogado.",
+    );
   }
   if (response.status === 403) {
-    throw new CanvaApiError(403, "insufficient_scope", "Escopo brandtemplate:content:read insuficiente.");
+    throw new CanvaApiError(
+      403,
+      "insufficient_scope",
+      "Escopo brandtemplate:content:read insuficiente.",
+    );
   }
   if (response.status === 404) {
-    throw new CanvaApiError(404, "brand_template_not_found", "Brand Template não encontrado no Canva.");
+    throw new CanvaApiError(
+      404,
+      "brand_template_not_found",
+      "Brand Template não encontrado no Canva.",
+    );
   }
   if (response.status >= 500) {
-    throw new CanvaApiError(502, "canva_service_unavailable", "Serviço Canva temporariamente indisponível.");
+    throw new CanvaApiError(
+      502,
+      "canva_service_unavailable",
+      "Serviço Canva temporariamente indisponível.",
+    );
   }
   if (!response.ok) {
-    throw new CanvaApiError(502, "canva_api_error", `Erro ao consultar dataset do template: HTTP ${response.status}`);
+    throw new CanvaApiError(
+      502,
+      "canva_api_error",
+      `Erro ao consultar dataset do template: HTTP ${response.status}`,
+    );
   }
 
   const data = await response.json();
   const dataset = data?.dataset || {};
 
   // Canva Connect API dataset is a map of field_key -> { type: "string" | "image" | "chart" }
-  const fields: CanvaDataFieldItem[] = Object.entries(dataset).map(([key, value]: [string, any]) => ({
-    key,
-    name: key,
-    type: typeof value === "object" && value?.type ? String(value.type).toLowerCase() : "text",
-  }));
+  const fields: CanvaDataFieldItem[] = Object.entries(dataset).map(
+    ([key, value]: [string, any]) => ({
+      key,
+      name: key,
+      type: typeof value === "object" && value?.type ? String(value.type).toLowerCase() : "text",
+    }),
+  );
 
   return {
     brand_template_id: brandTemplateId,
