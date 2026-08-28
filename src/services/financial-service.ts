@@ -166,8 +166,7 @@ export const financialService = {
     
     const { data, error } = await supabase
       .from("financial_expenses")
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-      .insert(expensePayload)
+      .insert(expensePayload as any)
       .select()
       .single();
     if (error) throw error;
@@ -184,9 +183,7 @@ export const financialService = {
         reviewed: item.reviewed || false
       }));
       const { error: itemsError } = await supabase
-        // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
         .from("financial_expense_items")
-        // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
         .insert(itemsToInsert);
       if (itemsError) console.error("Error inserting expense items:", itemsError);
 
@@ -215,8 +212,7 @@ export const financialService = {
   async updateExpense(id: string, payload: Partial<FinancialExpense>) {
     const { data, error } = await supabase
       .from("financial_expenses")
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-      .update({ ...payload, updated_at: new Date().toISOString() })
+      .update({ ...payload, updated_at: new Date().toISOString() } as any)
       .eq("id", id)
       .select()
       .single();
@@ -376,8 +372,7 @@ export const financialService = {
               product_name: matched.product ? matched.product.name : name,
               raw_product_name: name,
               quantity: qty,
-              // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-              unit: matched.product ? (matched.product.default_unit || unit) : unit,
+              unit: matched.product ? (matched.product.unit || unit) : unit,
               unit_price,
               total_price,
               suggested_category: matched.product ? matched.product.category : inferCategoryFromText(name),

@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VendasRouteImport } from './routes/vendas'
+import { Route as OrcamentoRouteImport } from './routes/orcamento'
 import { Route as ModelosRouteImport } from './routes/modelos'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InventarioRouteImport } from './routes/inventario'
@@ -32,6 +33,11 @@ import { Route as ContratoDadosTokenRouteImport } from './routes/contrato.dados.
 const VendasRoute = VendasRouteImport.update({
   id: '/vendas',
   path: '/vendas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrcamentoRoute = OrcamentoRouteImport.update({
+  id: '/orcamento',
+  path: '/orcamento',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ModelosRoute = ModelosRouteImport.update({
@@ -110,9 +116,9 @@ const EventosEventoIdRoute = EventosEventoIdRouteImport.update({
   getParentRoute: () => EventosRoute,
 } as any)
 const OrcamentoSolicitarTokenRoute = OrcamentoSolicitarTokenRouteImport.update({
-  id: '/orcamento/solicitar/$token',
-  path: '/orcamento/solicitar/$token',
-  getParentRoute: () => rootRouteImport,
+  id: '/solicitar/$token',
+  path: '/solicitar/$token',
+  getParentRoute: () => OrcamentoRoute,
 } as any)
 const ContratoFormEventoIdRoute = ContratoFormEventoIdRouteImport.update({
   id: '/contrato/form/$eventoId',
@@ -138,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/inventario': typeof InventarioRoute
   '/login': typeof LoginRoute
   '/modelos': typeof ModelosRoute
+  '/orcamento': typeof OrcamentoRouteWithChildren
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
@@ -158,6 +165,7 @@ export interface FileRoutesByTo {
   '/inventario': typeof InventarioRoute
   '/login': typeof LoginRoute
   '/modelos': typeof ModelosRoute
+  '/orcamento': typeof OrcamentoRouteWithChildren
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
@@ -180,6 +188,7 @@ export interface FileRoutesById {
   '/inventario': typeof InventarioRoute
   '/login': typeof LoginRoute
   '/modelos': typeof ModelosRoute
+  '/orcamento': typeof OrcamentoRouteWithChildren
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
@@ -203,6 +212,7 @@ export interface FileRouteTypes {
     | '/inventario'
     | '/login'
     | '/modelos'
+    | '/orcamento'
     | '/vendas'
     | '/eventos/$eventoId'
     | '/pos-evento/$eventoId'
@@ -223,6 +233,7 @@ export interface FileRouteTypes {
     | '/inventario'
     | '/login'
     | '/modelos'
+    | '/orcamento'
     | '/vendas'
     | '/eventos/$eventoId'
     | '/pos-evento/$eventoId'
@@ -244,6 +255,7 @@ export interface FileRouteTypes {
     | '/inventario'
     | '/login'
     | '/modelos'
+    | '/orcamento'
     | '/vendas'
     | '/eventos/$eventoId'
     | '/pos-evento/$eventoId'
@@ -266,11 +278,11 @@ export interface RootRouteChildren {
   InventarioRoute: typeof InventarioRoute
   LoginRoute: typeof LoginRoute
   ModelosRoute: typeof ModelosRoute
+  OrcamentoRoute: typeof OrcamentoRouteWithChildren
   VendasRoute: typeof VendasRoute
   PosEventoEventoIdRoute: typeof PosEventoEventoIdRoute
   ContratoDadosTokenRoute: typeof ContratoDadosTokenRoute
   ContratoFormEventoIdRoute: typeof ContratoFormEventoIdRoute
-  OrcamentoSolicitarTokenRoute: typeof OrcamentoSolicitarTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -280,6 +292,13 @@ declare module '@tanstack/react-router' {
       path: '/vendas'
       fullPath: '/vendas'
       preLoaderRoute: typeof VendasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/orcamento': {
+      id: '/orcamento'
+      path: '/orcamento'
+      fullPath: '/orcamento'
+      preLoaderRoute: typeof OrcamentoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/modelos': {
@@ -389,10 +408,10 @@ declare module '@tanstack/react-router' {
     }
     '/orcamento/solicitar/$token': {
       id: '/orcamento/solicitar/$token'
-      path: '/orcamento/solicitar/$token'
+      path: '/solicitar/$token'
       fullPath: '/orcamento/solicitar/$token'
       preLoaderRoute: typeof OrcamentoSolicitarTokenRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof OrcamentoRoute
     }
     '/contrato/form/$eventoId': {
       id: '/contrato/form/$eventoId'
@@ -424,6 +443,18 @@ const EventosRouteChildren: EventosRouteChildren = {
 const EventosRouteWithChildren =
   EventosRoute._addFileChildren(EventosRouteChildren)
 
+interface OrcamentoRouteChildren {
+  OrcamentoSolicitarTokenRoute: typeof OrcamentoSolicitarTokenRoute
+}
+
+const OrcamentoRouteChildren: OrcamentoRouteChildren = {
+  OrcamentoSolicitarTokenRoute: OrcamentoSolicitarTokenRoute,
+}
+
+const OrcamentoRouteWithChildren = OrcamentoRoute._addFileChildren(
+  OrcamentoRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,
@@ -437,11 +468,11 @@ const rootRouteChildren: RootRouteChildren = {
   InventarioRoute: InventarioRoute,
   LoginRoute: LoginRoute,
   ModelosRoute: ModelosRoute,
+  OrcamentoRoute: OrcamentoRouteWithChildren,
   VendasRoute: VendasRoute,
   PosEventoEventoIdRoute: PosEventoEventoIdRoute,
   ContratoDadosTokenRoute: ContratoDadosTokenRoute,
   ContratoFormEventoIdRoute: ContratoFormEventoIdRoute,
-  OrcamentoSolicitarTokenRoute: OrcamentoSolicitarTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

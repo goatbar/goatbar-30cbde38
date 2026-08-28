@@ -261,8 +261,9 @@ function ModelosPage() {
                             Canva
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded text-[10px] bg-secondary text-secondary-foreground border border-border font-medium">
-                            PDF Interno
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-primary/15 text-primary border border-primary/30 font-semibold flex items-center gap-1">
+                            <Sparkles className="h-3 w-3 text-primary" />
+                            PDF Goat Bar
                           </span>
                         )}
                       </div>
@@ -310,14 +311,24 @@ function ModelosPage() {
                         </div>
                       </div>
                     ) : (
-                      <p className="text-xs text-muted-foreground truncate mb-4">
-                        PDF Original: {template.file_url ? template.file_url.split("/").pop() : "Sem arquivo"}
-                      </p>
+                      <div className="flex items-center gap-2.5 my-3 p-2.5 bg-primary/5 rounded-xl border border-primary/20">
+                        <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center border border-primary/30 shrink-0 text-primary font-bold text-xs">
+                          PDF
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-foreground truncate">
+                            Engine Vetorial Goat Bar 16:9
+                          </p>
+                          <p className="text-[10px] text-muted-foreground truncate">
+                            Renderização direta 1:1 • Sem cota de API
+                          </p>
+                        </div>
+                      </div>
                     )}
                   </div>
 
                   <div className="flex flex-col gap-2.5 pt-4 border-t border-border/60">
-                    {/* Primary Mapping Button */}
+                    {/* Primary Action Button */}
                     {isCanva ? (
                       <button
                         onClick={() => setCanvaMapperTemplate(template)}
@@ -332,49 +343,10 @@ function ModelosPage() {
                         )}
                       </button>
                     ) : (
-                      <>
-                        <div className="flex gap-2 w-full">
-                          {template.file_url ? (
-                            <a 
-                              href={template.file_url} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-all"
-                            >
-                              <Eye className="h-3.5 w-3.5" /> Ver PDF Base
-                            </a>
-                          ) : (
-                            <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground h-9 border border-dashed border-border rounded-lg">
-                              Sem visualização
-                            </div>
-                          )}
-
-                          {isAdmin && (
-                            <button
-                              onClick={() => setShowReplaceModal(template)}
-                              className="flex items-center justify-center gap-1.5 px-3 h-9 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-all"
-                              title="Substituir PDF"
-                            >
-                              <RefreshCw className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-
-                        {isAdmin && (
-                          <button
-                            onClick={() => setEditorTemplate(template)}
-                            className="w-full flex items-center justify-center gap-2 h-9 rounded-lg border border-primary/40 bg-primary/10 hover:bg-primary/20 text-xs font-semibold text-primary transition-all"
-                          >
-                            <Map className="h-3.5 w-3.5" />
-                            Mapear Campos (PDF)
-                            {count > 0 && (
-                              <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-primary/20 text-primary border border-primary/30">
-                                {count} campo{count !== 1 ? "s" : ""}
-                              </span>
-                            )}
-                          </button>
-                        )}
-                      </>
+                      <div className="w-full flex items-center justify-center gap-2 h-9 rounded-lg border border-primary/30 bg-primary/10 text-xs font-semibold text-primary">
+                        <Sparkles className="h-3.5 w-3.5 text-primary" />
+                        Template Oficial Nativo Ativo
+                      </div>
                     )}
 
                     {isAdmin && (

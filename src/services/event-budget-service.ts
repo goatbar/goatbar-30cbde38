@@ -25,6 +25,7 @@ export interface Event {
   referral_name?: string;
   is_paid_full: boolean;
   payment_due_date?: string;
+  payment_method?: string;
   payment_percent_received?: number;
   current_budget_value?: number;
   current_profit_value?: number;
@@ -248,9 +249,8 @@ export const eventBudgetService = {
   },
 
   async getBudgetVersionById(id: string) {
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     const { data, error } = await supabase
-      .from("budget_versions")
+      .from("event_budget_versions")
       .select("*")
       .eq("id", id)
       .single();
@@ -260,26 +260,21 @@ export const eventBudgetService = {
 
   // --- Event Planning Items ---
   async getPlanningItems(eventId: string) {
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     const { data, error } = await supabase
       .from("event_planning_items")
       .select("*")
       .eq("event_id", eventId);
     if (error) throw error;
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     return data as EventPlanningItem[];
   },
 
   async addPlanningItems(items: EventPlanningItem[]) {
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     const { data, error } = await supabase.from("event_planning_items").insert(items).select();
     if (error) throw error;
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     return data as EventPlanningItem[];
   },
 
   async updatePlanningItem(id: string, payload: Partial<EventPlanningItem>) {
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     const { data, error } = await supabase
       .from("event_planning_items")
       .update(payload)
@@ -287,19 +282,16 @@ export const eventBudgetService = {
       .select()
       .single();
     if (error) throw error;
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     return data as EventPlanningItem;
   },
 
   async deletePlanningItem(id: string) {
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     const { error } = await supabase.from("event_planning_items").delete().eq("id", id);
     if (error) throw error;
   },
 
   // --- Event Closing ---
   async getEventClosing(eventId: string) {
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     const { data, error } = await supabase
       .from("event_closings")
       .select("*")
@@ -315,7 +307,6 @@ export const eventBudgetService = {
     const existing = await this.getEventClosing(payload.event_id);
 
     if (existing && existing.id) {
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       const { data, error } = await supabase
         .from("event_closings")
         .update(payload)
@@ -323,37 +314,30 @@ export const eventBudgetService = {
         .select()
         .single();
       if (error) throw error;
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       return data as EventClosing;
     } else {
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       const { data, error } = await supabase
         .from("event_closings")
-        .insert(payload)
+        .insert({ ...payload, event_id: payload.event_id! } as any)
         .select()
         .single();
       if (error) throw error;
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       return data as EventClosing;
     }
   },
 
   async getClosingItems(eventId: string) {
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     const { data, error } = await supabase
       .from("event_closing_items")
       .select("*")
       .eq("event_id", eventId);
     if (error) throw error;
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     return data as EventClosingItem[];
   },
 
   async upsertClosingItems(items: EventClosingItem[]) {
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     const { data, error } = await supabase.from("event_closing_items").upsert(items).select();
     if (error) throw error;
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
     return data as EventClosingItem[];
   },
 
@@ -363,9 +347,8 @@ export const eventBudgetService = {
     return data && data.length > 0 ? (data[0] as Event) : null;
   },
 
-  async createEvent(payload: Partial<Event>) {
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-    const { data, error } = await supabase.from("events").insert(payload).select().single();
+  async createEvent(payload: Partial<Event> & Pick<Event, "client_name" | "date" | "event_type" | "guests">) {
+    const { data, error } = await supabase.from("events").insert(payload as any).select().single();
     if (error) throw error;
     return data as Event;
   },
@@ -373,8 +356,7 @@ export const eventBudgetService = {
   async updateEvent(id: string, payload: Partial<Event>) {
     const { data, error } = await supabase
       .from("events")
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-      .update({ ...payload, updated_at: new Date().toISOString() })
+      .update({ ...payload, updated_at: new Date().toISOString() } as any)
       .eq("id", id)
       .select()
       .single();
@@ -419,7 +401,7 @@ export const eventBudgetService = {
       .eq("is_current", true)
       .limit(1);
     if (error) throw error;
-    return data && data.length > 0 ? (data[0] as BudgetVersion) : null;
+    return data && data.length > 0 ? (data[0] as unknown as BudgetVersion) : null;
   },
 
   async listBudgetVersions(eventId: string) {
@@ -429,7 +411,7 @@ export const eventBudgetService = {
       .eq("event_id", eventId)
       .order("version_number", { ascending: false });
     if (error) throw error;
-    return data as BudgetVersion[];
+    return data as unknown as BudgetVersion[];
   },
 
   async createBudgetVersion(eventId: string, payload: any, _isNewVersion: boolean = true) {
@@ -476,7 +458,7 @@ export const eventBudgetService = {
       .single();
 
     if (error) throw error;
-    return data as BudgetVersion;
+    return data as unknown as BudgetVersion;
   },
 
   async deleteBudgetVersion(budgetId: string) {
@@ -495,7 +477,7 @@ export const eventBudgetService = {
       .select()
       .single();
     if (error) throw error;
-    return data as BudgetVersion;
+    return data as unknown as BudgetVersion;
   },
 
   async setCurrentVersion(eventId: string, budgetId: string) {
@@ -617,7 +599,6 @@ export const eventBudgetService = {
 
     const { data: event, error: eventError } = await supabase
       .from("events")
-      // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       .insert(eventPayload)
       .select()
       .single();
@@ -666,7 +647,7 @@ export const eventBudgetService = {
 
     const { data: budget, error: budgetError } = await supabase
       .from("event_budget_versions")
-      .insert(budgetPayload)
+      .insert(budgetPayload as any)
       .select()
       .single();
 

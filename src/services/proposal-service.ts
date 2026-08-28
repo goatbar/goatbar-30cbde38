@@ -91,7 +91,61 @@ export const proposalTemplatesService = {
       .select("*")
       .order("created_at", { ascending: false });
     if (error) throw error;
-    return data as ProposalTemplate[];
+
+    const dbTemplates = (data || []) as ProposalTemplate[];
+
+    // Modelos nativos da engine interna Goat Bar
+    const internalNativeTemplates: ProposalTemplate[] = [
+      {
+        id: "goatbar-commercial-casamento",
+        name: "MODELO PROPOSTA COMERCIAL CASAMENTOS (GOAT BAR)",
+        event_type: "casamento",
+        provider: "internal",
+        file_url: null,
+        is_active: true,
+        is_default: false,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: "goatbar-commercial-aniversario",
+        name: "MODELO PROPOSTA COMERCIAL ANIVERSÁRIOS (GOAT BAR)",
+        event_type: "aniversario",
+        provider: "internal",
+        file_url: null,
+        is_active: true,
+        is_default: false,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: "goatbar-despedida-solteira",
+        name: "MODELO PROPOSTA DESPEDIDA DE SOLTEIRA (GOAT BAR)",
+        event_type: "comemoracao",
+        provider: "internal",
+        file_url: null,
+        is_active: true,
+        is_default: false,
+        created_at: new Date().toISOString(),
+      },
+    ];
+
+    const hasInternalCasamento = dbTemplates.some(
+      (t) => t.provider === "internal" && t.event_type === "casamento"
+    );
+    const hasInternalAniversario = dbTemplates.some(
+      (t) => t.provider === "internal" && t.event_type === "aniversario"
+    );
+    const hasInternalDespedida = dbTemplates.some(
+      (t) =>
+        t.provider === "internal" &&
+        (t.event_type === "comemoracao" || t.name.toLowerCase().includes("despedida"))
+    );
+
+    const merged: ProposalTemplate[] = [...dbTemplates];
+    if (!hasInternalCasamento) merged.push(internalNativeTemplates[0]);
+    if (!hasInternalAniversario) merged.push(internalNativeTemplates[1]);
+    if (!hasInternalDespedida) merged.push(internalNativeTemplates[2]);
+
+    return merged;
   },
 
   async getTemplateById(id: string) {

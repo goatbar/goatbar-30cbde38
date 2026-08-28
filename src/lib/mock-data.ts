@@ -99,11 +99,14 @@ export type EventoStatus =
   | "CONFIRMADO"
   | "FINALIZADO"
   | "CANCELADO"
-  | "NOVO";
+  | "NOVO"
+  | "em_assinatura"
+  | "dados_solicitados";
 
 export interface Evento {
   id: string;
   nome: string;
+  evento_nome?: string;
   cliente: string;
   nomeNoivo?: string;
   nomeNoiva?: string;

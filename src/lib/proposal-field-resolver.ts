@@ -373,3 +373,171 @@ export function formatCanvaProposalField(
   }
   return formatProposalFieldValue(value, formatter);
 }
+
+export interface CanonicalProposalData {
+  // 15 Campos Oficiais
+  nomeEvento: string;
+  dataOrcamento: string;
+  dataEvento: string;
+  inicialNoivo: string;
+  inicialNoiva: string;
+  quantidadePessoas: number | null;
+  quantidadePessoasFormatted: string;
+  drinks: string[];
+  drinksFormatted: string;
+  bebidas: string[];
+  bebidasFormatted: string;
+  qtdBartenders: number | null;
+  qtdBartendersFormatted: string;
+  qtdCopeiras: number | null;
+  qtdCopeirasFormatted: string;
+  qtdBarKeepers: number | null;
+  qtdBarKeepersFormatted: string;
+  quantidadeVariedadesDrinks: number | null;
+  quantidadeVariedadesDrinksFormatted: string;
+  valorInvestimento: number | null;
+  valorInvestimentoFormatted: string;
+  dataFinalPagamento: string;
+  quantidadeHorasEvento: number | null;
+  quantidadeHorasEventoFormatted: string;
+
+  // Campos complementares do evento/orçamento
+  nomeCliente: string;
+  tipoEvento: string;
+  horarioEvento: string | null;
+  formaPagamento: string;
+  observacoes: string;
+  welcomeDrinks: string[];
+  welcomeDrinksTotal: number;
+  shots: string[];
+  shotsTotal: number;
+  servicosInclusos: string[];
+
+  // Dicionário canônico indexado pelas 15 chaves oficiais do Canva
+  officialCanvaValues: Record<string, string>;
+}
+
+export function resolveCanonicalProposalData(context: ProposalFieldContext): CanonicalProposalData {
+  const historicalContext = {
+    ...context,
+    event: getBudgetVersionEventContext(context.budget, context.event),
+  };
+
+  const rawNomeEvento = resolveProposalField("event.event_name", historicalContext);
+  const rawDataOrcamento = resolveProposalField("budget.created_at", historicalContext);
+  const rawDataEvento = resolveProposalField("event.date", historicalContext);
+  const rawIno = resolveProposalField("computed.groom_initial", historicalContext);
+  const rawIna = resolveProposalField("computed.bride_initial", historicalContext);
+  const rawQtdPessoas = resolveProposalField("event.guests", historicalContext);
+  const rawDrinks = resolveProposalField("budget.selected_drinks", historicalContext);
+  const rawBebidas = resolveProposalField("budget.beverages", historicalContext);
+  const rawBartenders = resolveProposalField("budget.bartender_quantity", historicalContext);
+  const rawCopeiras = resolveProposalField("budget.copeira_quantity", historicalContext);
+  const rawKeepers = resolveProposalField("budget.keeper_quantity", historicalContext);
+  const rawVariedades = resolveProposalField("computed.total_drink_varieties", historicalContext);
+  const rawValor = resolveProposalField("budget.final_budget_value", historicalContext);
+  const rawDataFinalPagamento = resolveProposalField("computed.final_payment_date", historicalContext);
+  const rawHoras = resolveProposalField("event.duration_hours", historicalContext);
+
+  const numQtdPessoas = parseNumericValue(rawQtdPessoas);
+  const numBartenders = parseNumericValue(rawBartenders);
+  const numCopeiras = parseNumericValue(rawCopeiras);
+  const numKeepers = parseNumericValue(rawKeepers);
+  const numVariedades = parseNumericValue(rawVariedades);
+  const numValor = parseNumericValue(rawValor);
+  const numHoras = parseNumericValue(rawHoras);
+
+  const drinksList = Array.isArray(rawDrinks) ? rawDrinks : [];
+  const bebidasList = Array.isArray(rawBebidas) ? rawBebidas : [];
+
+  const officialCanvaValues: Record<string, string> = {
+    NOME_EVENTO: formatCanvaProposalField("NOME_EVENTO", rawNomeEvento),
+    DATA_ORCAMENTO: formatCanvaProposalField("DATA_ORCAMENTO", rawDataOrcamento),
+    DATA_EVENTO: formatCanvaProposalField("DATA_EVENTO", rawDataEvento),
+    INO: formatCanvaProposalField("INO", rawIno),
+    INA: formatCanvaProposalField("INA", rawIna),
+    QUANTIDADE_PESSOAS: formatCanvaProposalField("QUANTIDADE_PESSOAS", rawQtdPessoas),
+    DRINKS: formatCanvaProposalField("DRINKS", rawDrinks),
+    BEBIDAS: formatCanvaProposalField("BEBIDAS", rawBebidas),
+    QTD_BARTENDERS: formatCanvaProposalField("QTD_BARTENDERS", rawBartenders),
+    QTD_COPEIRAS: formatCanvaProposalField("QTD_COPEIRAS", rawCopeiras),
+    QTD_BAR_KEEPERS: formatCanvaProposalField("QTD_BAR_KEEPERS", rawKeepers),
+    QUANTIDADE_DRINKS: formatCanvaProposalField("QUANTIDADE_DRINKS", rawVariedades),
+    VALOR_INVESTIMENTO: formatCanvaProposalField("VALOR_INVESTIMENTO", rawValor),
+    DATA_FINAL_PAGAMENTO: formatCanvaProposalField("DATA_FINAL_PAGAMENTO", rawDataFinalPagamento),
+    QUANTIDADE_HORAS_EVENTO: formatCanvaProposalField("QUANTIDADE_HORAS_EVENTO", rawHoras),
+  };
+
+  const ev = historicalContext.event as Record<string, any>;
+  const bg = historicalContext.budget as Record<string, any>;
+
+  const clientName =
+    (typeof ev.client_name === "string" && ev.client_name.trim()) ||
+    (typeof ev.event_name === "string" && ev.event_name.trim()) ||
+    "";
+  const eventType = typeof ev.event_type === "string" ? ev.event_type : "";
+  const eventTime =
+    typeof ev.start_time === "string"
+      ? ev.start_time
+      : typeof ev.time === "string"
+        ? ev.time
+        : null;
+  const paymentTerms =
+    typeof bg.payment_terms === "string"
+      ? bg.payment_terms
+      : typeof bg.forma_pagamento === "string"
+        ? bg.forma_pagamento
+        : "";
+  const observations =
+    typeof bg.observations === "string"
+      ? bg.observations
+      : typeof bg.observacoes === "string"
+        ? bg.observacoes
+        : "";
+  const welcomeDrinks = Array.isArray(bg.welcome_drinks) ? bg.welcome_drinks : [];
+  const welcomeDrinksTotal = Number(bg.welcome_drinks_total || 0);
+  const shots = Array.isArray(bg.shots) ? bg.shots : [];
+  const shotsTotal = Number(bg.shots_total || 0);
+  const servicosInclusos = Array.isArray(bg.included_services) ? bg.included_services : [];
+
+  return {
+    nomeEvento: officialCanvaValues.NOME_EVENTO,
+    dataOrcamento: officialCanvaValues.DATA_ORCAMENTO,
+    dataEvento: officialCanvaValues.DATA_EVENTO,
+    inicialNoivo: officialCanvaValues.INO,
+    inicialNoiva: officialCanvaValues.INA,
+    quantidadePessoas: numQtdPessoas,
+    quantidadePessoasFormatted: officialCanvaValues.QUANTIDADE_PESSOAS,
+    drinks: drinksList,
+    drinksFormatted: officialCanvaValues.DRINKS,
+    bebidas: bebidasList,
+    bebidasFormatted: officialCanvaValues.BEBIDAS,
+    qtdBartenders: numBartenders,
+    qtdBartendersFormatted: officialCanvaValues.QTD_BARTENDERS,
+    qtdCopeiras: numCopeiras,
+    qtdCopeirasFormatted: officialCanvaValues.QTD_COPEIRAS,
+    qtdBarKeepers: numKeepers,
+    qtdBarKeepersFormatted: officialCanvaValues.QTD_BAR_KEEPERS,
+    quantidadeVariedadesDrinks: numVariedades,
+    quantidadeVariedadesDrinksFormatted: officialCanvaValues.QUANTIDADE_DRINKS,
+    valorInvestimento: numValor,
+    valorInvestimentoFormatted: officialCanvaValues.VALOR_INVESTIMENTO,
+    dataFinalPagamento: officialCanvaValues.DATA_FINAL_PAGAMENTO,
+    quantidadeHorasEvento: numHoras && numHoras > 0 ? numHoras : null,
+    quantidadeHorasEventoFormatted: officialCanvaValues.QUANTIDADE_HORAS_EVENTO,
+
+    nomeCliente: clientName,
+    tipoEvento: typeof eventType === "string" ? eventType : String(eventType ?? ""),
+    horarioEvento: typeof eventTime === "string" ? eventTime : null,
+    formaPagamento: paymentTerms,
+    observacoes: observations,
+    welcomeDrinks,
+    welcomeDrinksTotal,
+    shots,
+    shotsTotal,
+    servicosInclusos,
+
+    officialCanvaValues,
+  };
+}
+
