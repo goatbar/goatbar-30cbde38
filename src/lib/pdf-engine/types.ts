@@ -1,7 +1,22 @@
 import type { CanonicalProposalData } from "@/lib/proposal-field-resolver";
 
 export type ProposalFieldAlign = "left" | "center" | "right";
-export type ProposalFieldType = "text" | "bullet_list" | "date" | "currency" | "number" | "image";
+export type ProposalFieldType =
+  | "text"
+  | "bullet_list"
+  | "date"
+  | "currency"
+  | "number"
+  | "image"
+  | "arc";
+
+export interface ProposalArcConfig {
+  radius: number;
+  startDeg: number;
+  endDeg: number;
+  position: "top" | "bottom";
+  minFontSize?: number;
+}
 
 export interface ProposalSlotStyle {
   font?: "Helvetica" | "Helvetica-Bold" | "Times-Roman" | "Times-Bold" | string;
@@ -21,6 +36,7 @@ export interface ProposalFieldSlot {
   width: number;
   height: number;
   style: ProposalSlotStyle;
+  arcConfig?: ProposalArcConfig;
   prefix?: string;
   suffix?: string;
   transform?: (value: any, canonical: CanonicalProposalData) => string;

@@ -81,6 +81,52 @@ export interface MeasuredTextItem {
   height: number;
 }
 
+export interface ArcGlyphLayout {
+  char: string;
+  x: number;
+  y: number;
+  rotationDeg: number;
+  fontSize: number;
+}
+
+/** Distribui glifos vetoriais pelo arco, reduzindo a fonte para nomes longos. */
+export function layoutTextOnArc(
+  text: string,
+  centerX: number,
+  centerY: number,
+  radius: number,
+  startDeg: number,
+  endDeg: number,
+  fontSize: number,
+  minFontSize: number,
+  font: PDFFont,
+): ArcGlyphLayout[] {
+  const chars = [...sanitizePdfText(text).toUpperCase()];
+  if (chars.length === 0) return [];
+
+  const arcLength = (Math.abs(endDeg - startDeg) * Math.PI * radius) / 180;
+  const naturalWidth = chars.reduce(
+    (total, char) => total + font.widthOfTextAtSize(char === " " ? "n" : char, fontSize),
+    0,
+  );
+  const fittedSize = Math.max(minFontSize, Math.min(fontSize, fontSize * (arcLength / naturalWidth)));
+  const angleStep = chars.length > 1 ? (endDeg - startDeg) / (chars.length - 1) : 0;
+  const isBottomArc = (startDeg + endDeg) / 2 > 180;
+
+  return chars.map((char, index) => {
+    const angleDeg = startDeg + index * angleStep;
+    const angleRad = (angleDeg * Math.PI) / 180;
+    const glyphWidth = font.widthOfTextAtSize(char === " " ? "n" : char, fittedSize);
+    return {
+      char,
+      x: centerX + radius * Math.cos(angleRad) - glyphWidth / 2,
+      y: centerY + radius * Math.sin(angleRad) - fittedSize * 0.32,
+      rotationDeg: angleDeg + (isBottomArc ? 90 : -90),
+      fontSize: fittedSize,
+    };
+  });
+}
+
 export function measureBulletList(
   items: string[],
   maxWidth: number,
@@ -521,31 +567,31 @@ export class ProposalPdfRenderer {
     const color = hexToRgb(slot.style.color);
 
     // Suporte especial para texto em arco (ex: capa do casal)
-    if (slot.type === ("arc" as any)) {
-      const cfg = (slot as any).arcConfig || {};
+    if (slot.type === "arc") {
+      const cfg = slot.arcConfig;
+      if (!cfg) return;
       const cx = slot.x;
       const cy = pageHeight - slot.y;
-      const radius = cfg.radius || 150;
-      const isBottom = cfg.position === "bottom";
-      const startDeg = cfg.startDeg ?? (isBottom ? 200 : 20);
-      const endDeg = cfg.endDeg ?? (isBottom ? 340 : 160);
-      const totalAngle = endDeg - startDeg;
-      const chars = sanitizePdfText(resolvedText).split("");
-      const angleStep = chars.length > 1 ? totalAngle / (chars.length - 1) : 0;
+      const glyphs = layoutTextOnArc(
+        resolvedText,
+        cx,
+        cy,
+        cfg.radius,
+        cfg.startDeg,
+        cfg.endDeg,
+        fontSize,
+        cfg.minFontSize ?? fontSize * 0.72,
+        font,
+      );
 
-      chars.forEach((char, i) => {
-        const angleDeg = startDeg + i * angleStep;
-        const angleRad = (angleDeg * Math.PI) / 180;
-        const lx = cx + radius * Math.cos(angleRad);
-        const ly = cy + radius * Math.sin(angleRad);
-        const rotRad = isBottom ? angleRad - Math.PI / 2 : angleRad + Math.PI / 2;
+      glyphs.forEach(({ char, x, y, rotationDeg, fontSize: fittedFontSize }) => {
         page.drawText(char, {
-          x: lx,
-          y: ly,
-          size: fontSize,
+          x,
+          y,
+          size: fittedFontSize,
           font,
           color,
-          rotate: degrees((rotRad * 180) / Math.PI),
+          rotate: degrees(rotationDeg),
         });
       });
       return;
