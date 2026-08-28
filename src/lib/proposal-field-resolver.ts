@@ -57,6 +57,24 @@ export function resolveExplicitInitial(name: string | null | undefined): string 
   return normalized ? Array.from(normalized)[0]?.toLocaleUpperCase("pt-BR") || null : null;
 }
 
+/**
+ * Extrai o monograma do nome persistido do evento/casal. Nomes individuais
+ * (groom_name/bride_name) continuam tendo prioridade quando foram informados,
+ * mas nunca usamos client_name como substituto do nome do casal.
+ */
+export function resolveCoupleInitialsFromEventName(
+  eventName: string | null | undefined,
+): [string | null, string | null] {
+  const normalized = eventName?.trim();
+  if (!normalized) return [null, null];
+
+  const parts = normalized.split(/\s+(?:&|e|and|\+)\s+|\s*\/\s*/i).filter(Boolean);
+  if (parts.length < 2) return [resolveExplicitInitial(normalized), null];
+
+  const firstName = parts[0].replace(/^casamento(?:\s+de)?\s+/i, "").trim();
+  return [resolveExplicitInitial(firstName), resolveExplicitInitial(parts.at(-1))];
+}
+
 export function subtractUtcDays(date: string | null | undefined, days: number): string | null {
   if (!date) return null;
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
@@ -144,8 +162,12 @@ export const PROPOSAL_FIELD_RESOLVERS: Record<
   "event.event_name": ({ event }) => event.event_name?.trim() || null,
   "budget.created_at": ({ budget }) => budget.created_at || null,
   "event.date": ({ event }) => event.date || null,
-  "computed.groom_initial": ({ event }) => resolveExplicitInitial(event.groom_name),
-  "computed.bride_initial": ({ event }) => resolveExplicitInitial(event.bride_name),
+  "computed.groom_initial": ({ event }) =>
+    resolveExplicitInitial(event.groom_name) ??
+    resolveCoupleInitialsFromEventName(event.event_name)[0],
+  "computed.bride_initial": ({ event }) =>
+    resolveExplicitInitial(event.bride_name) ??
+    resolveCoupleInitialsFromEventName(event.event_name)[1],
   "event.guests": ({ event, budget }) => getBudgetVersionGuestCount(budget, event),
   "budget.selected_drinks": ({ hydratedData, budget }) =>
     list(hydratedData?.selectedDrinkNames ?? budget?.selected_drinks ?? budget?.selectedDrinkNames),
@@ -174,12 +196,8 @@ export function resolveProposalField(
   context: ProposalFieldContext,
 ): ProposalFieldValue {
   if (key === "computed.couple_initials") {
-    const value = context.event.client_name?.trim();
-    if (!value) return null;
-    const names = value.split(/\s+(?:&|e)\s+|\s*\/\s*/i).filter(Boolean);
-    return names.length === 2
-      ? `${resolveExplicitInitial(names[0])} | ${resolveExplicitInitial(names[1])}`
-      : null;
+    const [first, second] = resolveCoupleInitialsFromEventName(context.event.event_name);
+    return first && second ? `${first} | ${second}` : null;
   }
   const canonical = canonicalizeProposalSourceKey(key) as ProposalSourceKey;
   const historicalContext = {
@@ -436,7 +454,10 @@ export function resolveCanonicalProposalData(context: ProposalFieldContext): Can
   const rawKeepers = resolveProposalField("budget.keeper_quantity", historicalContext);
   const rawVariedades = resolveProposalField("computed.total_drink_varieties", historicalContext);
   const rawValor = resolveProposalField("budget.final_budget_value", historicalContext);
-  const rawDataFinalPagamento = resolveProposalField("computed.final_payment_date", historicalContext);
+  const rawDataFinalPagamento = resolveProposalField(
+    "computed.final_payment_date",
+    historicalContext,
+  );
   const rawHoras = resolveProposalField("event.duration_hours", historicalContext);
 
   const numQtdPessoas = parseNumericValue(rawQtdPessoas);
@@ -540,4 +561,3 @@ export function resolveCanonicalProposalData(context: ProposalFieldContext): Can
     officialCanvaValues,
   };
 }
-

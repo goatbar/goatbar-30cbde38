@@ -4317,13 +4317,18 @@ function ProposalModal({
 
   const defaultData: import("@/services/proposal-service").ProposalData =
     existingProposal?.proposal_data
-      ? (existingProposal.proposal_data as any)
+      ? {
+          ...(existingProposal.proposal_data as any),
+          // Corrige também propostas antigas que salvaram o solicitante neste campo.
+          clientName: draft?.evento_nome || evento?.event_name || "",
+        }
       : {
           proposalDate: formatDateDot(new Date()),
           eventDate: formatDateDot(draft?.data),
           eventTime: draft?.horario || "",
-          clientName:
-            draft?.evento_nome || evento?.event_name || draft?.cliente || evento?.client_name || "",
+          // A capa identifica exclusivamente o evento/casal persistido. Nunca usar
+          // o solicitante (draft.cliente / client_name) como fallback.
+          clientName: draft?.evento_nome || evento?.event_name || "",
           eventTypeLabel:
             mappedEventType === "casamento"
               ? "Casamento"
@@ -4518,7 +4523,7 @@ function ProposalModal({
               1. Capa da Proposta
             </div>
             <div>
-              <label className="label-eyebrow block mb-1.5">Nome do Cliente / Casal / Evento</label>
+              <label className="label-eyebrow block mb-1.5">Nome do Evento / Casal</label>
               <input
                 type="text"
                 value={formData.clientName}
