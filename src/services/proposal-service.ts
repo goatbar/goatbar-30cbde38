@@ -108,7 +108,7 @@ export const proposalTemplatesService = {
       },
       {
         id: "goatbar-commercial-aniversario",
-        name: "MODELO PROPOSTA COMERCIAL ANIVERSÁRIOS (GOAT BAR)",
+        name: "MODELO PROPOSTA CELEBRAÇÃO",
         event_type: "aniversario",
         provider: "internal",
         file_url: null,

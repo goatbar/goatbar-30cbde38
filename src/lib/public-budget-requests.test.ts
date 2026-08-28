@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getPendingPublicBudgetRequests } from "./public-budget-requests";
+import {
+  getPendingPublicBudgetRequests,
+  isPendingPublicBudgetRequest,
+} from "./public-budget-requests";
 
 const event = (id: string, origin: string, created_at: string, status = "novo_orcamento") =>
   ({ id, origin, created_at, status }) as any;
@@ -14,5 +17,12 @@ describe("getPendingPublicBudgetRequests", () => {
     ]);
     expect(result.map(({ id }) => id)).toEqual(["new", "old"]);
     expect(result).toHaveLength(2);
+  });
+
+  it("ignora registros públicos legados sem status em vez de interromper a página", () => {
+    const legacyEvent = event("legacy", "public_budget_form", "2026-01-01");
+
+    expect(isPendingPublicBudgetRequest({ ...legacyEvent, status: null } as any)).toBe(false);
+    expect(isPendingPublicBudgetRequest({ ...legacyEvent, status: undefined } as any)).toBe(false);
   });
 });
