@@ -1,3 +1,8 @@
+import {
+  getBudgetVersionEventContext,
+  getBudgetVersionGuestCount,
+} from "./budget-version-snapshot";
+
 export interface ProposalFieldContext {
   event: Record<string, any>;
   budget: Record<string, any>;
@@ -141,7 +146,7 @@ export const PROPOSAL_FIELD_RESOLVERS: Record<
   "event.date": ({ event }) => event.date || null,
   "computed.groom_initial": ({ event }) => resolveExplicitInitial(event.groom_name),
   "computed.bride_initial": ({ event }) => resolveExplicitInitial(event.bride_name),
-  "event.guests": ({ event }) => event.guests ?? null,
+  "event.guests": ({ event, budget }) => getBudgetVersionGuestCount(budget, event),
   "budget.selected_drinks": ({ hydratedData, budget }) =>
     list(hydratedData?.selectedDrinkNames ?? budget?.selected_drinks ?? budget?.selectedDrinkNames),
   "budget.beverages": ({ budget }) => list(budget.beverages),
@@ -149,7 +154,7 @@ export const PROPOSAL_FIELD_RESOLVERS: Record<
   "budget.copeira_quantity": ({ budget }) => budget.copeira_quantity ?? null,
   "budget.keeper_quantity": ({ budget }) => budget.keeper_quantity ?? null,
   "computed.total_drinks": ({ event, budget }) => {
-    const guests = parseNumericValue(event?.guests);
+    const guests = parseNumericValue(getBudgetVersionGuestCount(budget, event));
     const perPerson = parseNumericValue(budget?.drinks_per_person);
     return guests !== null && perPerson !== null ? guests * perPerson : null;
   },
@@ -177,7 +182,11 @@ export function resolveProposalField(
       : null;
   }
   const canonical = canonicalizeProposalSourceKey(key) as ProposalSourceKey;
-  return PROPOSAL_FIELD_RESOLVERS[canonical]?.(context) ?? null;
+  const historicalContext = {
+    ...context,
+    event: getBudgetVersionEventContext(context.budget, context.event),
+  };
+  return PROPOSAL_FIELD_RESOLVERS[canonical]?.(historicalContext) ?? null;
 }
 
 export function formatDateDot(value: unknown): string {

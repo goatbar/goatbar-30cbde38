@@ -623,6 +623,8 @@ export type Database = {
           ice_total_value: number | null
           id: string
           is_current: boolean | null
+          guest_count: number | null
+          event_snapshot: Json | null
           keeper_quantity: number | null
           keeper_unit_value: number | null
           miscellaneous_items: Json | null
@@ -675,6 +677,8 @@ export type Database = {
           ice_total_value?: number | null
           id?: string
           is_current?: boolean | null
+          guest_count?: number | null
+          event_snapshot?: Json | null
           keeper_quantity?: number | null
           keeper_unit_value?: number | null
           miscellaneous_items?: Json | null
@@ -727,6 +731,8 @@ export type Database = {
           ice_total_value?: number | null
           id?: string
           is_current?: boolean | null
+          guest_count?: number | null
+          event_snapshot?: Json | null
           keeper_quantity?: number | null
           keeper_unit_value?: number | null
           miscellaneous_items?: Json | null

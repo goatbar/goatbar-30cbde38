@@ -10,6 +10,11 @@ import {
 } from "@/lib/budget-beverages";
 import { fmtBRL } from "@/lib/format";
 import {
+  createBudgetEventSnapshot,
+  getBudgetVersionEventContext,
+  getBudgetVersionGuestCount,
+} from "@/lib/budget-version-snapshot";
+import {
   formatBrazilianDocument,
   getBrazilianDocumentType,
   validateBrazilianDocument,
@@ -482,24 +487,25 @@ function EventoInterna() {
     bebidasInput: "",
   });
 
-  const mapBudgetToDraft = (ev: RealEvent, b: BudgetVersion): Evento => ({
+  const mapBudgetToDraft = (ev: RealEvent, b: BudgetVersion): Evento => {
+    const historicalEvent = getBudgetVersionEventContext(b as any, ev as any) as any;
+    return ({
     id: ev.id,
-    nome: ev.event_name || ev.client_name,
+    nome: historicalEvent.event_name || historicalEvent.client_name,
     // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-    evento_nome: ev.event_name || "",
-    cliente: ev.client_name,
-    nomeNoivo: ev.groom_name || "",
-    nomeNoiva: ev.bride_name || "",
+    evento_nome: historicalEvent.event_name || "",
+    cliente: historicalEvent.client_name,
+    nomeNoivo: historicalEvent.groom_name || "",
+    nomeNoiva: historicalEvent.bride_name || "",
     telefone: ev.phone || "",
     email: ev.email || "",
-    data: ev.date,
-    horario: ev.event_time || "",
-    // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-    duracao: ev.duration_hours || "",
-    local: ev.event_location || "",
-    cidade: ev.city || "",
-    tipo: ev.event_type,
-    convidados: ev.guests || 0,
+    data: historicalEvent.date,
+    horario: historicalEvent.event_time || "",
+    duracao: historicalEvent.duration_hours || "",
+    local: historicalEvent.event_location || "",
+    cidade: historicalEvent.city || "",
+    tipo: historicalEvent.event_type,
+    convidados: getBudgetVersionGuestCount(b as any, ev as any) || 0,
     drinks: (b.selected_drinks as any)?.ids || [],
     observacoes: ev.notes || "",
     status: ev.status as any,
@@ -550,6 +556,7 @@ function EventoInterna() {
       : [],
     bebidasInput: beveragesToEditorValue(b.beverages),
   });
+  };
 
   const [draft, setDraft] = useState<Evento | null>(null);
 
@@ -559,9 +566,23 @@ function EventoInterna() {
     if (!draft || !calc) return;
     setSaving(true);
     try {
+      const createsNewVersion = Boolean(currentBudget) || saveAsNew;
       const descontosValidos = (draft.descontos || []).filter((d) => (Number(d.valor) || 0) > 0);
       const totalDescontos = descontosValidos.reduce((acc, d) => acc + (Number(d.valor) || 0), 0);
       const budgetPayload = {
+        guest_count: draft.convidados,
+        event_snapshot: createBudgetEventSnapshot({
+          event_name: (draft as any).evento_nome,
+          client_name: draft.cliente,
+          groom_name: draft.nomeNoivo,
+          bride_name: draft.nomeNoiva,
+          date: draft.data,
+          event_time: draft.horario,
+          duration_hours: draft.duracao ? Number(draft.duracao) : null,
+          event_location: draft.local,
+          city: draft.cidade,
+          event_type: draft.tipo,
+        }),
         drinks_per_person: draft.drinksPorPessoa,
         drinks_markup_percentage: draft.markupAdicionalDrinks,
         drinks_cost_sum: calc.mediaCustoDrinks * draft.drinks.length,
@@ -643,7 +664,7 @@ function EventoInterna() {
       const newBudget = await eventBudgetService.createBudgetVersion(
         eventoId,
         budgetPayload,
-        saveAsNew,
+        true,
       );
 
       // Adiciona histórico apenas se houver mudança financeira real
@@ -654,14 +675,14 @@ function EventoInterna() {
         await eventBudgetService.addBudgetHistory({
           event_id: eventoId,
           budget_version_id: newBudget.id,
-          action: saveAsNew ? "Nova versão criada" : "Valores financeiros atualizados",
+          action: createsNewVersion ? "Nova versão criada" : "Orçamento inicial criado",
           previous_final_value: currentBudget?.final_budget_value || 0,
           new_final_value: calc.valorTotalOrcamento,
           changed_fields: ["Ajuste de valores"],
         });
       }
 
-      alert(saveAsNew ? "Nova versão do orçamento salva!" : "Orçamento atualizado com sucesso!");
+      alert(createsNewVersion ? "Nova versão do orçamento salva!" : "Orçamento salvo com sucesso!");
       loadAllData();
     } catch (e: any) {
       alert(`Erro ao salvar orçamento: ${e.message}`);
@@ -1680,6 +1701,10 @@ function EventoInterna() {
         {/* TAB ORÇAMENTO */}
         {activeTab === "Orçamento" && (
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-7 animate-in fade-in duration-500">
+            <div className="xl:col-span-12 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+              <span className="font-bold">Quantidade de convidados desta proposta:</span>{" "}
+              {draft.convidados} pessoas
+            </div>
             {/* Esquerda: Configurações */}
             <div className="xl:col-span-8 space-y-6">
               <SectionCard title="1. Drinks & Copos">
@@ -2890,7 +2915,7 @@ function EventoInterna() {
                           </div>
                           <div>
                             <div className="text-xs font-bold">
-                              V{v.version_number} - {fmtBRL(v.final_budget_value)}
+                              V{v.version_number} · {getBudgetVersionGuestCount(v as any, evento as any) ?? "--"} pessoas · {fmtBRL(v.final_budget_value)}
                             </div>
                             <div className="text-[10px] text-muted-foreground">
                               {new Date(v.created_at).toLocaleDateString()}
@@ -3825,7 +3850,7 @@ function EventoInterna() {
                           </div>
                           <div>
                             <div className="font-bold flex items-center gap-2">
-                              {fmtBRL(v.final_budget_value)}
+                              Proposta #{v.version_number} · {getBudgetVersionGuestCount(v as any, evento as any) ?? "--"} pessoas · {fmtBRL(v.final_budget_value)}
                               {v.is_current && (
                                 <span className="text-[10px] bg-primary text-white px-2 py-0.5 rounded-full uppercase">
                                   Atual
@@ -3878,9 +3903,7 @@ function EventoInterna() {
                             Convidados
                           </div>
                           <div className="text-sm font-bold">
-                            {v.average_value_per_person > 0
-                              ? Math.round(v.final_budget_value / v.average_value_per_person)
-                              : "--"}
+                            {getBudgetVersionGuestCount(v as any, evento as any) ?? "--"}
                           </div>
                         </div>
                         <div className="text-center">

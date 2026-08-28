@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { googleCalendarService } from "./google-calendar/google-calendar-service";
+import { createBudgetEventSnapshot } from "@/lib/budget-version-snapshot";
 
 export interface Event {
   id: string;
@@ -40,6 +41,8 @@ export interface BudgetVersion {
   version_number: number;
   is_current: boolean;
   status: string;
+  guest_count: number | null;
+  event_snapshot: Record<string, unknown> | null;
 
   // Budget Details
   selected_drinks: any;
@@ -393,26 +396,9 @@ export const eventBudgetService = {
     return data as BudgetVersion[];
   },
 
-  async createBudgetVersion(eventId: string, payload: any, isNewVersion: boolean = true) {
-    if (!isNewVersion) {
-      // Try to find current version to update
-      const current = await this.getCurrentBudget(eventId);
-      if (current) {
-        const { data, error } = await supabase
-          .from("event_budget_versions")
-          .update({
-            ...payload,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", current.id)
-          .select()
-          .single();
-        if (error) throw error;
-        return data as BudgetVersion;
-      }
-    }
-
-    // Otherwise, create a new version
+  async createBudgetVersion(eventId: string, payload: any, _isNewVersion: boolean = true) {
+    // A persisted version is never edited in place. Even the regular "save"
+    // flow appends a snapshot, so loading an old version cannot rewrite it.
     let versionNumber = 1;
     const { data: latest } = await supabase
       .from("event_budget_versions")
@@ -432,10 +418,19 @@ export const eventBudgetService = {
       .update({ is_current: false })
       .eq("event_id", eventId);
 
+    const event = await this.getEventById(eventId);
+    if (!event) throw new Error("Evento não encontrado ao criar a versão do orçamento.");
+    const guestCount = Number(payload.guest_count ?? event.guests);
+    if (!Number.isFinite(guestCount) || guestCount < 0) {
+      throw new Error("Quantidade de convidados inválida para a versão do orçamento.");
+    }
+
     const { data, error } = await supabase
       .from("event_budget_versions")
       .insert({
         ...payload,
+        guest_count: guestCount,
+        event_snapshot: payload.event_snapshot ?? createBudgetEventSnapshot(event as any),
         event_id: eventId,
         version_number: versionNumber,
         is_current: true,
@@ -598,6 +593,8 @@ export const eventBudgetService = {
       version_number: 1,
       is_current: true,
       status: "approved",
+      guest_count: payload.guests,
+      event_snapshot: createBudgetEventSnapshot(event as any) as any,
       selected_drinks: { ids: payload.drinks, copos: {} },
       drinks_per_person: 4,
       drinks_markup_percentage: 0,
@@ -642,5 +639,3 @@ export const eventBudgetService = {
     return { event, budget };
   },
 };
-
-
