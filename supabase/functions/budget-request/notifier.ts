@@ -5,7 +5,7 @@ export interface NotificationDependencies {
   claim(eventId: string, retry: boolean): Promise<{ id: string } | null>;
   loadEvent(eventId: string): Promise<PublicBudgetPayload | null>;
   recipients(): Promise<Array<{ phone_number: string }>>;
-  send(phone: string, message: string, correlationId: string): Promise<boolean>;
+  send(phone: string, parameters: string[], correlationId: string): Promise<boolean>;
   finish(linkId: string, sent: boolean, error?: string): Promise<void>;
   eventUrl(eventId: string): string | undefined;
 }
@@ -31,13 +31,21 @@ export async function notifyNewBudgetRequest(
       throw new Error("Nenhum destinatário habilitado para novos orçamentos.");
 
     const message = buildNotificationMessage(event, deps.eventUrl(eventId));
+    const parameters = [
+      event.client_name,
+      event.event_name || event.event_type,
+      event.date,
+      String(event.guests),
+      event.phone,
+      message,
+    ];
     for (const recipient of recipients) {
       const phone = normalizePhoneNumber(recipient.phone_number).canonicalPlain;
       if (!phone) throw new Error("Destinatário habilitado possui telefone inválido.");
       console.log(
         `[budget-request] sending whatsapp recipient=${masked(phone)} event_id=${eventId}`,
       );
-      if (!(await deps.send(phone, message, `budget_${eventId}`))) {
+      if (!(await deps.send(phone, parameters, `budget_${eventId}`))) {
         throw new Error("Meta WhatsApp API não aceitou a mensagem; consulte os logs do adapter.");
       }
     }
