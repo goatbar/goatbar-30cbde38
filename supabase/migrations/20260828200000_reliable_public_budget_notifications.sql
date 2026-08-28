@@ -33,6 +33,50 @@ LEFT JOIN public.budget_request_links l ON l.event_id = e.id
 WHERE e.origin = 'public_budget_form'
 ON CONFLICT (event_id) DO NOTHING;
 
+-- The previous migration returned budget_request_links. PostgreSQL cannot change a
+-- function's return type with CREATE OR REPLACE, so remove that exact overload
+-- when it has no dependants. If an existing database object depends on it, rename
+-- it instead: renaming preserves its OID, grants, and all dependency links while
+-- freeing the public name for the new contract.
+DO $$
+DECLARE
+  v_function_oid oid := to_regprocedure(
+    'public.claim_budget_request_notification(uuid,boolean)'
+  );
+  v_has_dependants boolean;
+BEGIN
+  IF v_function_oid IS NULL OR (
+    SELECT p.prorettype = 'public.budget_request_notifications'::regtype
+    FROM pg_catalog.pg_proc p
+    WHERE p.oid = v_function_oid
+  ) THEN
+    RETURN;
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_depend d
+    WHERE d.refclassid = 'pg_catalog.pg_proc'::regclass
+      AND d.refobjid = v_function_oid
+      AND d.deptype <> 'e'
+  ) INTO v_has_dependants;
+
+  IF v_has_dependants THEN
+    IF to_regprocedure(
+      'public.claim_budget_request_notification_legacy(uuid,boolean)'
+    ) IS NOT NULL THEN
+      RAISE EXCEPTION
+        'Cannot preserve dependent claim_budget_request_notification: legacy name already exists';
+    END IF;
+
+    ALTER FUNCTION public.claim_budget_request_notification(uuid, boolean)
+      RENAME TO claim_budget_request_notification_legacy;
+  ELSE
+    DROP FUNCTION public.claim_budget_request_notification(uuid, boolean);
+  END IF;
+END
+$$;
+
 CREATE OR REPLACE FUNCTION public.claim_budget_request_notification(p_event_id uuid, p_retry boolean DEFAULT false)
 RETURNS public.budget_request_notifications
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
