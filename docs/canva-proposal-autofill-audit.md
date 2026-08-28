@@ -66,7 +66,7 @@ deduzida da resposta 429.
 | `DATA_EVENTO`             | `events.date`                                 | `20.10.2026`                             |
 | `INO`                     | primeira letra de `events.groom_name`         | `P`                                      |
 | `INA`                     | primeira letra de `events.bride_name`         | `R`                                      |
-| `QUANTIDADE_PESSOAS`      | `events.guests`                               | `150` (somente número)                   |
+| `QUANTIDADE_PESSOAS`      | `event_budget_versions.guest_count` (fallback legado: `events.guests`) | `150` (somente número) |
 | `DRINKS`                  | `selected_drinks` hidratado por `drinks.nome` | lista com bullets                        |
 | `BEBIDAS`                 | `event_budget_versions.beverages`             | lista com bullets                        |
 | `QTD_BARTENDERS`          | `bartender_quantity`                          | quantidade + função; vazio quando zero   |
