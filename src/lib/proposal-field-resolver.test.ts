@@ -12,6 +12,7 @@ import {
   formatCanvaProposalField,
   formatCurrency,
   formatDateDot,
+  formatProposalDateText,
   formatProposalFieldValue,
   resolveExplicitInitial,
   resolveProposalField,
@@ -391,6 +392,21 @@ describe("Apresentação visual da proposta Canva (formatCanvaProposalField)", (
 });
 
 describe("Testes Obrigatórios de Auditoria da Proposta Comercial", () => {
+  it("formata data brasileira isolada sem alterar texto não semântico", () => {
+    expect(formatProposalDateText("26/08/2026")).toBe("26.08.2026");
+    expect(formatProposalFieldValue("26/08/2026", "date_canva")).toBe("26.08.2026");
+    expect(formatProposalFieldValue("Código 26/08/2026", "raw")).toBe("Código 26/08/2026");
+  });
+
+  it("formata data de vencimento dentro do texto composto", () => {
+    expect(formatProposalDateText("Restante até dia 03/10/2026")).toBe(
+      "Restante até dia 03.10.2026",
+    );
+    expect(formatCanvaProposalField("DATA_FINAL_PAGAMENTO", "Restante até dia 03/10/2026")).toBe(
+      "Restante até dia 03.10.2026",
+    );
+  });
+
   it("TESTE A — Datas: 2026-11-07 -> 07.11.2026", () => {
     expect(formatDateDot("2026-11-07")).toBe("07.11.2026");
     expect(formatProposalFieldValue("2026-11-07", "date_dot")).toBe("07.11.2026");
@@ -441,6 +457,12 @@ describe("Testes Obrigatórios de Auditoria da Proposta Comercial", () => {
     expect(formatCanvaProposalField("QTD_BAR_KEEPERS", 1)).toBe("1 Bar Keeper");
     expect(formatCanvaProposalField("QTD_COPEIRAS", 0)).toBe("");
     expect(formatCanvaProposalField("QTD_COPEIRAS", null)).toBe("");
+  });
+
+  it("não envia o zero default da duração que aparecia abaixo do número de convidados", () => {
+    expect(formatCanvaProposalField("QUANTIDADE_HORAS_EVENTO", 0)).toBe("");
+    expect(formatCanvaProposalField("QUANTIDADE_HORAS_EVENTO", "0")).toBe("");
+    expect(formatCanvaProposalField("QUANTIDADE_HORAS_EVENTO", 6)).toBe("6");
   });
 
   it("TESTE F — Campo sem informação: Campo opcional = null -> campo vazio ''", () => {

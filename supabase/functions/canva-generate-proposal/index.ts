@@ -9,6 +9,7 @@ import {
 } from "../_shared/canva-auth.ts";
 import {
   autofillAndExportPdf,
+  auditAutofillPayload,
   buildAutofillData,
   buildDeterministicStoragePath,
   getMissingCanvaMappingKeys,
@@ -131,11 +132,16 @@ serve(async (req: Request) => {
 
     const token = await getValidCanvaAccessToken(user.id, supabaseAdmin);
     const integrationAudit = await auditCanvaIntegration(user.id, supabaseAdmin, token);
-    const canvaProfile = await fetchCanvaUserProfile(token).catch(() => ({ id: null, display_name: null }));
+    const canvaProfile = await fetchCanvaUserProfile(token).catch(() => ({
+      id: null,
+      display_name: null,
+    }));
     console.info("[canva-generate-proposal][integration-audit]", {
       ...integrationAudit,
       profile_user_id: canvaProfile.id,
-      profile_matches_integration: Boolean(canvaProfile.id && canvaProfile.id === integrationAudit.canva_user_id),
+      profile_matches_integration: Boolean(
+        canvaProfile.id && canvaProfile.id === integrationAudit.canva_user_id,
+      ),
     });
     const dataset = await getCanvaBrandTemplateDataset(token, template.canva_brand_template_id);
     const mappingKeys = (mappings || []).map((mapping) => mapping.canva_field_key);
@@ -182,6 +188,11 @@ serve(async (req: Request) => {
       });
     }
     const autofillData = buildAutofillData(mappings || [], datasetKeys, event, resolvedBudget);
+    console.info("[canva-generate-proposal][payload-audit]", {
+      event_id: eventId,
+      budget_version_id: budgetVersionId,
+      fields: auditAutofillPayload(mappings || [], autofillData),
+    });
     let generated;
     try {
       generated = await autofillAndExportPdf({
