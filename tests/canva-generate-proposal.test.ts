@@ -337,10 +337,7 @@ describe("Normalização e hidratação de selected_drinks", () => {
   });
 
   it("normaliza array de objetos legados sem id mas com nome ou name", () => {
-    const normalized = normalizeSelectedDrinks([
-      { nome: "Moscow Mule" },
-      { name: "Fitzgerald" },
-    ]);
+    const normalized = normalizeSelectedDrinks([{ nome: "Moscow Mule" }, { name: "Fitzgerald" }]);
     expect(normalized).toMatchObject({
       isValid: true,
       isEmpty: false,
@@ -399,11 +396,10 @@ describe("Normalização e hidratação de selected_drinks", () => {
       }),
     };
 
-    const result = await hydrateBudgetDrinks(
-      { ids: ["id-1", "id-2"] },
-      mockDb as any,
-      { event_id: "evt-1", budget_version_id: "bv-1" },
-    );
+    const result = await hydrateBudgetDrinks({ ids: ["id-1", "id-2"] }, mockDb as any, {
+      event_id: "evt-1",
+      budget_version_id: "bv-1",
+    });
 
     expect(mockDb.from).toHaveBeenCalledWith("drinks");
     expect(result.resolvedDrinkNames).toEqual(["Gin Tônica", "Negroni"]);
@@ -441,9 +437,7 @@ describe("Normalização e hidratação de selected_drinks", () => {
       }),
     };
 
-    await expect(
-      hydrateBudgetDrinks({ ids: ["id-1"] }, mockDb as any),
-    ).rejects.toMatchObject({
+    await expect(hydrateBudgetDrinks({ ids: ["id-1"] }, mockDb as any)).rejects.toMatchObject({
       code: "selected_drinks_query_failed",
       details: { query_error_code: "PGRST204" },
     });
@@ -524,21 +518,21 @@ describe("Normalização e hidratação de selected_drinks", () => {
 
 describe("Mensagens amigáveis de erro de proposta no frontend", () => {
   it("diferencia selected_drinks_invalid_format", () => {
-    expect(
-      friendlyCanvaProposalError({ error_code: "selected_drinks_invalid_format" }),
-    ).toBe("Os drinks desta versão estão em um formato antigo ou inválido.");
+    expect(friendlyCanvaProposalError({ error_code: "selected_drinks_invalid_format" })).toBe(
+      "Os drinks desta versão estão em um formato antigo ou inválido.",
+    );
   });
 
   it("diferencia selected_drink_not_found", () => {
-    expect(
-      friendlyCanvaProposalError({ error_code: "selected_drink_not_found" }),
-    ).toBe("Um ou mais drinks desta versão não existem mais no cadastro.");
+    expect(friendlyCanvaProposalError({ error_code: "selected_drink_not_found" })).toBe(
+      "Um ou mais drinks desta versão não existem mais no cadastro.",
+    );
   });
 
   it("diferencia selected_drinks_query_failed", () => {
-    expect(
-      friendlyCanvaProposalError({ error_code: "selected_drinks_query_failed" }),
-    ).toBe("Não foi possível consultar os drinks desta versão.");
+    expect(friendlyCanvaProposalError({ error_code: "selected_drinks_query_failed" })).toBe(
+      "Não foi possível consultar os drinks desta versão.",
+    );
   });
 
   it("diferencia required_field_empty para drinks", () => {
@@ -704,11 +698,10 @@ describe("Validação de PDF e Storage de Proposta", () => {
 
     expect(res.error).toBeNull();
     expect(mockStorage.from).toHaveBeenCalledWith("generated-proposals");
-    expect(mockUpload).toHaveBeenCalledWith(
-      "events/e1/budgets/b1/proposals/p1.pdf",
-      pdf,
-      { contentType: "application/pdf", upsert: true },
-    );
+    expect(mockUpload).toHaveBeenCalledWith("events/e1/budgets/b1/proposals/p1.pdf", pdf, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
   });
 
   it("tenta criar bucket automaticamente se receber erro de bucket não encontrado", async () => {
@@ -808,6 +801,31 @@ describe("Tratamento de cota Canva HTTP 429 (canva_autofill_quota_exceeded)", ()
     expect(error).not.toBeNull();
     expect(error?.code).toBe("canva_autofill_quota_exceeded");
     expect(error?.details?.upsell_url).toBeNull();
+  });
+
+  it("não confunde rate limit HTTP 429 com cota de Autofill", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ code: "rate_limit_exceeded", message: "Too many requests" }), {
+        status: 429,
+        headers: { "retry-after": "10", "x-request-id": "rate-request-1" },
+      }),
+    );
+
+    expect(
+      extractCanvaQuotaError(429, { code: "rate_limit_exceeded", message: "Too many requests" }),
+    ).toBeNull();
+    await expect(
+      autofillAndExportPdf({
+        token: "secret",
+        brandTemplateId: "template-1",
+        data: {},
+        fetcher: fetcher as typeof fetch,
+      }),
+    ).rejects.toMatchObject({
+      code: "canva_rate_limited",
+      status: 429,
+      details: { retry_after: "10" },
+    });
   });
 
   it("autofillAndExportPdf propaga canva_autofill_quota_exceeded sem retentativas em 429", async () => {

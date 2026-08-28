@@ -25,6 +25,8 @@ export const CANVA_PROPOSAL_ERROR_MESSAGES: Record<string, string> = {
   canva_fields_missing: "Existem campos mapeados que ainda não são Data Fields do Canva.",
   canva_autofill_failed: "O Canva não conseguiu preencher o modelo. Tente novamente.",
   canva_autofill_quota_exceeded: "Cota de geração automática do Canva atingida.",
+  canva_rate_limited:
+    "O Canva limitou temporariamente a frequência de requisições. Tente novamente em instantes.",
   canva_export_failed: "O Canva não conseguiu exportar a proposta em PDF. Tente novamente.",
   canva_pdf_download_failed: "Não foi possível baixar o PDF temporário do Canva.",
   pdf_invalid: "O arquivo retornado pelo Canva não é um documento PDF válido.",
@@ -95,7 +97,8 @@ export class CanvaGenerationError extends Error {
 
 export function getCanvaQuotaPresentation(diagnostic?: CanvaGenerationDiagnostic) {
   return {
-    message: "A Canva ainda está identificando esta integração como sem cota de Autofill.",
+    message:
+      "O Canva informou que o limite de Autofill disponível para esta integração foi atingido. Isso não significa necessariamente que sua conta seja gratuita.",
     upsellUrl: diagnostic?.upsell_url,
     accountLabel: diagnostic?.canva_account?.display_name || "Nome não informado",
     canvaUserId: diagnostic?.canva_account?.canva_user_id || "Não informado",

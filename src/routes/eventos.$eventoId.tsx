@@ -254,7 +254,9 @@ function EventoInterna() {
       const template = await proposalTemplatesService.getDefaultTemplate(mappedType);
       setProposalTemplate(template);
       if (!template) {
-        throw new Error("Nenhum modelo de proposta ativo foi configurado para este tipo de evento.");
+        throw new Error(
+          "Nenhum modelo de proposta ativo foi configurado para este tipo de evento.",
+        );
       }
       if (getProposalGenerationFlow(template) === "internal") {
         setShowProposalModal(true);
@@ -273,8 +275,7 @@ function EventoInterna() {
       const code = error?.code || error?.error_code || error?.diagnostic?.code;
       const upsellUrl =
         error?.upsellUrl || error?.upsell_url || error?.diagnostic?.upsell_url || null;
-      const diagnostic =
-        error instanceof CanvaGenerationError ? error.diagnostic : undefined;
+      const diagnostic = error instanceof CanvaGenerationError ? error.diagnostic : undefined;
       setCanvaGeneration({
         open: true,
         status: "error",
@@ -1420,7 +1421,9 @@ function EventoInterna() {
                           disabled={isSyncingCalendar}
                           className="text-[11px] text-primary underline hover:text-primary/80 inline-flex items-center gap-1 cursor-pointer"
                         >
-                          <RefreshCw className={`h-3 w-3 ${isSyncingCalendar ? "animate-spin" : ""}`} />
+                          <RefreshCw
+                            className={`h-3 w-3 ${isSyncingCalendar ? "animate-spin" : ""}`}
+                          />
                           {isSyncingCalendar ? "Sincronizando..." : "Sincronizar no Calendar"}
                         </button>
                       </div>
@@ -2732,13 +2735,13 @@ function EventoInterna() {
                 {(() => {
                   const isProposalCurrent = Boolean(
                     existingProposal &&
-                      currentBudget?.id &&
-                      existingProposal.budget_id === currentBudget.id,
+                    currentBudget?.id &&
+                    existingProposal.budget_id === currentBudget.id,
                   );
                   const isProposalOutdated = Boolean(
                     existingProposal &&
-                      currentBudget?.id &&
-                      existingProposal.budget_id !== currentBudget.id,
+                    currentBudget?.id &&
+                    existingProposal.budget_id !== currentBudget.id,
                   );
 
                   return (
@@ -4096,7 +4099,11 @@ function CanvaProposalGenerationModal({
             </p>
           </div>
           {state.status !== "loading" && (
-            <button onClick={onClose} aria-label="Fechar" className="text-muted-foreground hover:text-foreground">
+            <button
+              onClick={onClose}
+              aria-label="Fechar"
+              className="text-muted-foreground hover:text-foreground"
+            >
               ✕
             </button>
           )}
@@ -4121,13 +4128,19 @@ function CanvaProposalGenerationModal({
             <div>{state.message}</div>
             {isQuotaExceeded && (
               <p className="text-xs text-red-300/80">
-                A sua conta do Canva atingiu o limite gratuito de preenchimento automático (Autofill).
+                O Canva informou que o limite de Autofill disponível para esta integração foi
+                atingido. Isso não significa necessariamente que sua conta seja gratuita.
               </p>
             )}
             {state.diagnostic?.canva_account && (
               <div className="text-xs text-muted-foreground pt-1 border-t border-red-500/20">
-                <p>Conta Canva conectada: {state.diagnostic.canva_account.display_name || "Nome não informado"}</p>
-                <p>canva_user_id: {state.diagnostic.canva_account.canva_user_id || "Não informado"}</p>
+                <p>
+                  Conta Canva conectada:{" "}
+                  {state.diagnostic.canva_account.display_name || "Nome não informado"}
+                </p>
+                <p>
+                  canva_user_id: {state.diagnostic.canva_account.canva_user_id || "Não informado"}
+                </p>
               </div>
             )}
           </div>
