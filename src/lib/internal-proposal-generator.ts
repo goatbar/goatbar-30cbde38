@@ -47,11 +47,10 @@ export async function loadProposalContext(
   // Hidrata nomes de drinks a partir dos IDs
   let resolvedDrinkNames: string[] = [];
   try {
-    const hydrated = await hydrateBudgetDrinks(
-      budget.selected_drinks,
-      supabase as any,
-      { event_id: eventId, budget_version_id: budgetVersionId },
-    );
+    const hydrated = await hydrateBudgetDrinks(budget.selected_drinks, supabase as any, {
+      event_id: eventId,
+      budget_version_id: budgetVersionId,
+    });
     resolvedDrinkNames = hydrated.resolvedDrinkNames;
   } catch (err: any) {
     console.warn("[loadProposalContext] Falha ao hidratar drinks via catálogo:", err?.message);
@@ -82,7 +81,11 @@ export function selectProposalTemplateForEvent(
     if (found) return found;
   }
   const typeClean = (eventType || "").toLowerCase().trim();
-  if (typeClean === "despedida" || typeClean === "despedida_solteira" || typeClean.includes("despedida")) {
+  if (
+    typeClean === "despedida" ||
+    typeClean === "despedida_solteira" ||
+    typeClean.includes("despedida")
+  ) {
     const despedida = ProposalTemplateRegistry.getTemplate("goatbar-despedida");
     if (despedida) return despedida;
   }
@@ -117,6 +120,12 @@ export async function generateProposalPreview(params: {
     budget: context.budget,
     hydratedData: { selectedDrinkNames: context.resolvedDrinkNames },
   });
+
+  if (!canonicalData.nomeEvento.trim()) {
+    throw new Error(
+      'Preencha "Nome do Evento / Casal" antes de gerar a proposta. O solicitante não é usado como fallback.',
+    );
+  }
 
   const template = selectProposalTemplateForEvent(
     canonicalData.tipoEvento || (context.event as any)?.event_type,
@@ -157,6 +166,12 @@ export async function generateAndPersistProposal(params: {
     budget: context.budget,
     hydratedData: { selectedDrinkNames: context.resolvedDrinkNames },
   });
+
+  if (!canonicalData.nomeEvento.trim()) {
+    throw new Error(
+      'Preencha "Nome do Evento / Casal" antes de gerar a proposta. O solicitante não é usado como fallback.',
+    );
+  }
 
   const template = selectProposalTemplateForEvent(
     canonicalData.tipoEvento || (context.event as any)?.event_type,
@@ -213,7 +228,10 @@ export async function generateAndPersistProposal(params: {
 
   if (insertError) {
     // Remove o arquivo órfão no Storage
-    await supabase.storage.from("generated-proposals").remove([storagePath]).catch(() => {});
+    await supabase.storage
+      .from("generated-proposals")
+      .remove([storagePath])
+      .catch(() => {});
     throw new Error(`Falha ao registrar proposta no banco: ${insertError.message}`);
   }
 

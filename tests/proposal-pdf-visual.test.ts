@@ -7,20 +7,20 @@ import { ProposalPdfRenderer } from "@/lib/pdf-engine/renderer";
 import { resolveCanonicalProposalData } from "@/lib/proposal-field-resolver";
 import { GOATBAR_COMMERCIAL_V1_TEMPLATE } from "@/templates/proposals/goatbar-commercial-v1/template";
 
-const gustavoMarianaContext = {
+const sidneyLuciaContext = {
   event: {
-    id: "gustavo-mariana",
-    event_name: "Casamento Gustavo & Mariana",
-    client_name: "Gustavo & Mariana",
-    groom_name: "Gustavo",
-    bride_name: "Mariana",
+    id: "sidney-lucia",
+    event_name: "Sidney & Lúcia",
+    client_name: "Mariana Campos Moreira",
+    groom_name: null,
+    bride_name: null,
     guests: 90,
     date: "2026-11-14",
     duration_hours: 6,
     event_type: "casamento",
   },
   budget: {
-    id: "budget-gustavo-mariana",
+    id: "budget-sidney-lucia",
     created_at: "2026-08-28",
     bartender_quantity: 3,
     keeper_quantity: 1,
@@ -45,13 +45,13 @@ describe("Proposta Comercial Goat Bar - regressão visual", () => {
       basePdfPath: undefined,
       basePdfBytes: new Uint8Array(cleanTemplate),
     };
-    const canonical = resolveCanonicalProposalData(gustavoMarianaContext);
+    const canonical = resolveCanonicalProposalData(sidneyLuciaContext);
     const result = await ProposalPdfRenderer.render(template, canonical);
     const document = await pdfjs.getDocument({ data: result.pdfBytes.slice() }).promise;
-    const auditDirectory = path.resolve("scratch/gustavo-mariana-visual-audit");
+    const auditDirectory = path.resolve("scratch/sidney-lucia-visual-audit");
     if (process.env.SAVE_PROPOSAL_VISUAL_AUDIT === "1") {
       fs.mkdirSync(auditDirectory, { recursive: true });
-      fs.writeFileSync(path.join(auditDirectory, "proposta-gustavo-mariana.pdf"), result.pdfBytes);
+      fs.writeFileSync(path.join(auditDirectory, "proposta-sidney-lucia.pdf"), result.pdfBytes);
     }
 
     expect(document.numPages).toBe(8);
@@ -59,6 +59,9 @@ describe("Proposta Comercial Goat Bar - regressão visual", () => {
     expect(canonical.quantidadeHorasEventoFormatted).toBe("6");
     expect(canonical.valorInvestimentoFormatted).toMatch(/2\.350,30/);
     expect(canonical.dataFinalPagamento).toBe("07.11.2026");
+    expect(canonical.nomeEvento).toBe("Sidney & Lúcia");
+    expect(canonical.nomeEvento).not.toBe(sidneyLuciaContext.event.client_name);
+    expect([canonical.inicialNoivo, canonical.inicialNoiva]).toEqual(["S", "L"]);
     expect(template.pages[5].slots.every((slot) => slot.style.color !== "#FFFFFF")).toBe(true);
     const coverName = template.pages[0].slots.find((slot) => slot.id === "capa-nome-evento-topo")!;
     const coverDate = template.pages[0].slots.find((slot) => slot.id === "capa-data-evento")!;

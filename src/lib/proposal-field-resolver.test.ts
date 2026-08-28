@@ -14,6 +14,7 @@ import {
   formatDateDot,
   formatProposalDateText,
   formatProposalFieldValue,
+  resolveCanonicalProposalData,
   resolveExplicitInitial,
   resolveProposalField,
 } from "./proposal-field-resolver";
@@ -136,7 +137,7 @@ describe("resolver", () => {
     expect(formatProposalFieldValue(value)).toBe("Água com gás, Refrigerante zero, Vinho branco");
     expect(PROPOSAL_FIELD_CATALOG.some((field) => field.key === "budget.beverages")).toBe(true);
   });
-  it("resolve iniciais exclusivamente das fontes explícitas", () => {
+  it("prioriza iniciais explícitas e deriva do nome do evento quando ausentes", () => {
     expect(resolveProposalField("computed.groom_initial", context)).toBe("P");
     expect(resolveProposalField("computed.bride_initial", context)).toBe("R");
     expect(resolveExplicitInitial(undefined)).toBeNull();
@@ -145,14 +146,14 @@ describe("resolver", () => {
         ...context,
         event: { ...context.event, groom_name: null },
       }),
-    ).toBeNull();
+    ).toBe("C");
   });
   it("mantém o resolver legado para mappings persistidos", () => {
     expect(isValidSourceFieldKey("computed.couple_initials")).toBe(true);
     expect(PROPOSAL_FIELD_CATALOG.some((field) => field.key === "computed.couple_initials")).toBe(
       false,
     );
-    expect(resolveProposalField("computed.couple_initials", context)).toBe("R | P");
+    expect(resolveProposalField("computed.couple_initials", context)).toBeNull();
   });
 });
 
@@ -392,6 +393,32 @@ describe("Apresentação visual da proposta Canva (formatCanvaProposalField)", (
 });
 
 describe("Testes Obrigatórios de Auditoria da Proposta Comercial", () => {
+  it("usa somente event_name no nome e no monograma, sem fallback para o solicitante", () => {
+    const proposalContext = {
+      event: {
+        event_name: "Sidney & Lúcia",
+        client_name: "Mariana Campos Moreira",
+        groom_name: null,
+        bride_name: null,
+      },
+      budget: {},
+    };
+
+    const canonical = resolveCanonicalProposalData(proposalContext);
+    expect(canonical.nomeEvento).toBe("Sidney & Lúcia");
+    expect(canonical.inicialNoivo).toBe("S");
+    expect(canonical.inicialNoiva).toBe("L");
+    expect(resolveProposalField("computed.couple_initials", proposalContext)).toBe("S | L");
+
+    const missingEventName = resolveCanonicalProposalData({
+      ...proposalContext,
+      event: { ...proposalContext.event, event_name: "" },
+    });
+    expect(missingEventName.nomeEvento).toBe("");
+    expect(missingEventName.inicialNoivo).toBe("");
+    expect(missingEventName.inicialNoiva).toBe("");
+  });
+
   it("formata data brasileira isolada sem alterar texto não semântico", () => {
     expect(formatProposalDateText("26/08/2026")).toBe("26.08.2026");
     expect(formatProposalFieldValue("26/08/2026", "date_canva")).toBe("26.08.2026");
@@ -513,4 +540,3 @@ describe("resolveCanonicalProposalData", () => {
     expect(canonical.officialCanvaValues.DATA_FINAL_PAGAMENTO).toBe("13.10.2026");
   });
 });
-

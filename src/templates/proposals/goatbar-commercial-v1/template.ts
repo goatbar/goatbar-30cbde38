@@ -97,7 +97,7 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
         },
         {
           id: "capa-inicial-solitaria",
-          fieldKey: "nomeCliente",
+          fieldKey: "nomeEvento",
           type: "text",
           x: 235.0,
           y: 393.6,
@@ -113,7 +113,7 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
           transform: (val, canonical) => {
             // Em eventos de aniversariante único (ex: 15 anos), exibe 1 inicial centralizada grande
             if (!canonical.inicialNoivo || !canonical.inicialNoiva) {
-              const name = canonical.nomeCliente || canonical.nomeEvento || "";
+              const name = canonical.nomeEvento || "";
               const first = name.trim()[0];
               return first ? first.toUpperCase() : "";
             }
@@ -122,7 +122,7 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
         },
         {
           id: "capa-nome-evento-topo",
-          fieldKey: "nomeCliente",
+          fieldKey: "nomeEvento",
           type: "arc",
           x: 282.5,
           y: 454.0,

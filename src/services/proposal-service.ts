@@ -679,8 +679,12 @@ export const pdfGenerationService = {
     }
 
     // ── Fallback: hardcoded legacy config ──────────────────────────
-    const targetWidth  = 1600;
-    const targetHeight = 900;
+    // A configuração histórica foi criada sobre uma prancheta 1600×900. A arte
+    // exportada pelo Canva pode usar outra resolução 16:9 (por exemplo 1440×810),
+    // portanto página e overlays devem ser escalados juntos, nunca esticados ou
+    // recortados para um tamanho independente.
+    const configWidth = 1600;
+    const configHeight = 900;
     const config = proposalTemplateConfigs[eventType as EventTemplateType] || [];
 
     const drawLines = (page: any, field: FieldConfig, lines: string[]) => {
@@ -702,11 +706,23 @@ export const pdfGenerationService = {
     };
 
     for (const [pageIndex, sourcePage] of pages.entries()) {
+      const { width: targetWidth, height: targetHeight } = sourcePage.getSize();
+      const scaleX = targetWidth / configWidth;
+      const scaleY = targetHeight / configHeight;
+      const scale = Math.min(scaleX, scaleY);
       const outPage = outputDoc.addPage([targetWidth, targetHeight]);
       const embedded = await outputDoc.embedPage(sourcePage);
       outPage.drawPage(embedded, { x: 0, y: 0, width: targetWidth, height: targetHeight });
 
-      const pageFields = config.filter((f) => f.page === pageIndex);
+      const pageFields = config.filter((f) => f.page === pageIndex).map((field) => ({
+        ...field,
+        x: field.x * scaleX,
+        y: field.y * scaleY,
+        maxWidth: field.maxWidth * scaleX,
+        maxHeight: field.maxHeight * scaleY,
+        fontSize: field.fontSize * scale,
+        lineHeight: field.lineHeight * scale,
+      }));
       for (const field of pageFields) {
         if (field.field === "proposalDateTop" || field.field === "proposalDateBottom") {
           drawLines(outPage, field, [formatDateDot(data.proposalDate)]);
