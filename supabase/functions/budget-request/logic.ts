@@ -262,17 +262,19 @@ export function validatePublicBudgetPayload(input: unknown): PublicBudgetPayload
     throw new Error("Quantidade de drinks selecionados inválida.");
 
   if (payload.event_type === "Casamento") {
-    if (!payload.groom_name && !payload.bride_name) {
-      const couple = parseWeddingCoupleName(payload.event_name);
-      if (couple) {
-        payload.groom_name = couple.groom_name;
-        payload.bride_name = couple.bride_name;
-      }
+    if (!payload.event_name) {
+      throw new Error("Nome do casal é obrigatório.");
     }
-    if (!payload.event_name && (payload.groom_name || payload.bride_name)) {
-      payload.event_name = [payload.groom_name, payload.bride_name].filter(Boolean).join(" e ");
+    const couple = parseWeddingCoupleName(payload.event_name);
+    if (!couple) {
+      throw new Error("Informe o nome do casal no formato 'Nome e Nome'.");
     }
+    payload.groom_name = couple.groom_name;
+    payload.bride_name = couple.bride_name;
   } else {
+    if (!payload.event_name) {
+      throw new Error("Nome do evento é obrigatório.");
+    }
     payload.groom_name = "";
     payload.bride_name = "";
   }

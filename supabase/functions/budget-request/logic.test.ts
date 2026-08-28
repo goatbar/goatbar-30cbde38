@@ -83,7 +83,17 @@ describe("budget request backend", () => {
     });
   });
 
-  it("preserva exatamente o event_name digitado e popula groom_name/bride_name canônicos", () => {
+  it("1. 'João e Maria' -> groom_name João e bride_name Maria", () => {
+    const payload = validatePublicBudgetPayload({
+      ...valid,
+      event_name: "João e Maria",
+    });
+    expect(payload.event_name).toBe("João e Maria");
+    expect(payload.groom_name).toBe("João");
+    expect(payload.bride_name).toBe("Maria");
+  });
+
+  it("2. 'João & Maria' -> correto", () => {
     const payload = validatePublicBudgetPayload({
       ...valid,
       event_name: "João da Silva & Maria Oliveira",
@@ -93,14 +103,36 @@ describe("budget request backend", () => {
     expect(payload.bride_name).toBe("Maria Oliveira");
   });
 
-  it("não bloqueia casamento quando o nome não possui separador reconhecível", () => {
-    const payload = validatePublicBudgetPayload({
+  it("3. 'João / Maria' e 'João + Maria' -> correto", () => {
+    const slash = validatePublicBudgetPayload({
       ...valid,
-      event_name: "Bodas de Prata da Família",
+      event_name: "João / Maria",
     });
-    expect(payload.event_name).toBe("Bodas de Prata da Família");
-    expect(payload.groom_name).toBe("");
-    expect(payload.bride_name).toBe("");
+    expect(slash.groom_name).toBe("João");
+    expect(slash.bride_name).toBe("Maria");
+
+    const plus = validatePublicBudgetPayload({
+      ...valid,
+      event_name: "João + Maria",
+    });
+    expect(plus.groom_name).toBe("João");
+    expect(plus.bride_name).toBe("Maria");
+  });
+
+  it("4. casamento com apenas um nome (ex: 'João') -> rejeita com mensagem amigável", () => {
+    expect(() =>
+      validatePublicBudgetPayload({
+        ...valid,
+        event_name: "João",
+      }),
+    ).toThrow("Informe o nome do casal no formato 'Nome e Nome'.");
+
+    expect(() =>
+      validatePublicBudgetPayload({
+        ...valid,
+        event_name: "",
+      }),
+    ).toThrow("Nome do casal é obrigatório.");
   });
 
   it("não exige nem tenta popular noivos em outro tipo de evento", () => {

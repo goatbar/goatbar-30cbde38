@@ -157,12 +157,14 @@ export function PublicBudgetRequestForm({ mode, token }: PublicBudgetRequestForm
     key: keyof BudgetRequestPayload,
     type = "text",
     required = false,
+    placeholder?: string,
   ) => (
     <label className="space-y-2 text-sm font-medium">
       {label}
       <input
         type={type}
         required={required}
+        placeholder={placeholder}
         value={String(form[key] ?? "")}
         onChange={(e) =>
           setForm((old) => ({
@@ -170,7 +172,7 @@ export function PublicBudgetRequestForm({ mode, token }: PublicBudgetRequestForm
             [key]: type === "number" ? Number(e.target.value) : e.target.value,
           }))
         }
-        className="mt-2 h-11 w-full rounded-lg border border-border bg-input px-3 outline-none focus:border-primary"
+        className="mt-2 h-11 w-full rounded-lg border border-border bg-input px-3 outline-none focus:border-primary placeholder:text-muted-foreground/60"
       />
     </label>
   );
@@ -241,14 +243,9 @@ export function PublicBudgetRequestForm({ mode, token }: PublicBudgetRequestForm
             </select>
           </label>
 
-          {isWedding ? (
-            <>
-              {field("Nome do noivo *", "groom_name", "text", true)}
-              {field("Nome da noiva *", "bride_name", "text", true)}
-            </>
-          ) : (
-            field("Nome do evento", "event_name")
-          )}
+          {isWedding
+            ? field("Nome do casal *", "event_name", "text", true, "Ex.: João e Maria")
+            : field("Nome do evento *", "event_name", "text", true, "Ex.: Aniversário 40 anos")}
 
           {field("Data do evento *", "date", "date", true)}
           {field("Horário", "event_time", "time")}
@@ -311,17 +308,19 @@ export function PublicBudgetRequestForm({ mode, token }: PublicBudgetRequestForm
                       }`}
                     >
                       <div>
-                        {drink.image ? (
-                          <img
-                            src={drink.image}
-                            alt={drink.name}
-                            className="h-36 w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-36 items-center justify-center bg-input text-muted-foreground">
-                            <ImageOff className="h-8 w-8 opacity-60" />
-                          </div>
-                        )}
+                        <div className="relative flex h-48 w-full items-center justify-center bg-black/40 p-2 overflow-hidden">
+                          {drink.image ? (
+                            <img
+                              src={drink.image}
+                              alt={drink.name}
+                              className="h-full w-full object-contain"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                              <ImageOff className="h-8 w-8 opacity-60" />
+                            </div>
+                          )}
+                        </div>
                         <div className="space-y-2 p-4">
                           <h3 className="break-words font-display font-bold text-sm text-foreground">
                             {drink.name}
@@ -329,12 +328,6 @@ export function PublicBudgetRequestForm({ mode, token }: PublicBudgetRequestForm
                           {drink.description && (
                             <p className="break-words text-xs text-muted-foreground line-clamp-3">
                               {drink.description}
-                            </p>
-                          )}
-                          {drink.ingredients.length > 0 && (
-                            <p className="break-words text-[11px] text-muted-foreground/90">
-                              <span className="font-semibold text-foreground/80">Insumos:</span>{" "}
-                              {drink.ingredients.join(", ")}
                             </p>
                           )}
                         </div>
