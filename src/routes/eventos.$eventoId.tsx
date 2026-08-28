@@ -103,6 +103,7 @@ import {
   getProposalGenerationFlow,
 } from "@/lib/proposal-generation";
 import { formatDateDot } from "@/lib/proposal-field-resolver";
+import { buildProposalFilename } from "@/lib/proposal-filename";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
   component: EventoInterna,
@@ -234,6 +235,7 @@ function EventoInterna() {
     open: boolean;
     status: "loading" | "success" | "error";
     pdfUrl?: string;
+    filename?: string;
     message?: string;
     code?: string;
     upsellUrl?: string | null;
@@ -267,7 +269,12 @@ function EventoInterna() {
       setCanvaGeneration({ open: true, status: "loading" });
       const result = await generateCanvaProposal(eventoId, currentBudget.id);
       setExistingProposal(result.proposal);
-      setCanvaGeneration({ open: true, status: "success", pdfUrl: result.pdf_url });
+      setCanvaGeneration({
+        open: true,
+        status: "success",
+        pdfUrl: result.pdf_url,
+        filename: result.filename,
+      });
     } catch (error: any) {
       const message = friendlyCanvaProposalError(error);
       const code = error?.code || error?.error_code || error?.diagnostic?.code;
@@ -2801,8 +2808,7 @@ function EventoInterna() {
                         {existingProposal?.final_pdf_url && (
                           <a
                             href={existingProposal.final_pdf_url}
-                            target="_blank"
-                            rel="noreferrer"
+                            download={buildProposalFilename(evento?.event_name)}
                             className="flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-xl border border-border bg-background hover:bg-muted text-xs font-bold transition-all text-foreground"
                           >
                             <Download className="h-4 w-4" />
@@ -4062,6 +4068,7 @@ function CanvaProposalGenerationModal({
   state: {
     status: "loading" | "success" | "error";
     pdfUrl?: string;
+    filename?: string;
     message?: string;
     code?: string;
     upsellUrl?: string | null;
@@ -4145,7 +4152,7 @@ function CanvaProposalGenerationModal({
             <a
               className="flex-1 rounded-xl border border-border px-4 py-3 text-center text-xs font-bold hover:bg-muted transition-all"
               href={state.pdfUrl}
-              download
+              download={state.filename || "Proposta Comercial - Evento.pdf"}
             >
               Baixar PDF
             </a>
@@ -4351,7 +4358,12 @@ function ProposalModal({
         formData,
         mappedEventType,
       );
-      const pdfUrl = await generatedProposalsService.uploadGeneratedPDF(eventoId, pdfBytes);
+      const filename = buildProposalFilename(evento?.event_name);
+      const pdfUrl = await generatedProposalsService.uploadGeneratedPDF(
+        eventoId,
+        evento?.event_name,
+        pdfBytes,
+      );
       const saved = await generatedProposalsService.saveProposal({
         id: existingProposal?.id,
         event_id: eventoId,
@@ -4367,7 +4379,7 @@ function ProposalModal({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `proposta-${formData.clientName.replace(/\s+/g, "-").toLowerCase()}.pdf`;
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
       onSaved(saved);

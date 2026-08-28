@@ -902,8 +902,11 @@ export function buildDeterministicStoragePath(
   eventId: string,
   budgetVersionId: string,
   proposalId: string,
+  filename: string,
 ): string {
-  return `events/${eventId}/budgets/${budgetVersionId}/proposals/${proposalId}.pdf`;
+  // Keep the existing proposal-id collision strategy while giving the object
+  // the same human-readable basename delivered to the user.
+  return `events/${eventId}/budgets/${budgetVersionId}/proposals/${proposalId}/${filename}`;
 }
 
 export async function uploadPdfToStorage(
