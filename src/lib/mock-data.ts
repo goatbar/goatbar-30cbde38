@@ -27,6 +27,7 @@ export interface Drink {
     goatbotequim: ModalityConfig;
   };
   imagem?: string;
+  showInPublicMenu?: boolean;
 }
 
 export interface Venda {
@@ -144,7 +145,13 @@ export interface Evento {
     dataPagamento?: string;
   };
   coposVinculados: Record<string, string>; // drinkId -> glasswareId
-  drinksSnapshots?: Array<{ drinkId: string; nome: string; custoUnitario: number; copoId?: string; copoNome?: string }>;
+  drinksSnapshots?: Array<{
+    drinkId: string;
+    nome: string;
+    custoUnitario: number;
+    copoId?: string;
+    copoNome?: string;
+  }>;
   historicoAlteracoes: EventoHistoricoAlteracao[];
   historicoNegociacao: EventoHistoricoNegociacao[];
   lead_source?: string;

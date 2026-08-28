@@ -287,21 +287,19 @@ export async function uploadDrinkImage(drinkId: string, base64OrUrl: string): Pr
   const ext = mime.split("/")[1] || "png";
   const fileName = `${drinkId}_${Date.now()}.${ext}`;
 
-  const { data, error } = await supabase.storage
-    .from("drink_images")
-    .upload(fileName, blob, {
-      contentType: mime,
-      upsert: true,
-    });
+  const { data, error } = await supabase.storage.from("drink_images").upload(fileName, blob, {
+    contentType: mime,
+    upsert: true,
+  });
 
   if (error) {
     console.error("Error uploading image to Supabase:", error);
     throw error;
   }
 
-  const { data: { publicUrl } } = supabase.storage
-    .from("drink_images")
-    .getPublicUrl(fileName);
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from("drink_images").getPublicUrl(fileName);
 
   return publicUrl;
 }
@@ -353,10 +351,11 @@ async function syncDrinkToSupabase(id: string, payload: Partial<Drink>) {
       insumos: payload.insumos ? payload.insumos : undefined,
       modality_config: payload.modalityConfig ? payload.modalityConfig : undefined,
       imagem: imageUrl,
+      show_in_public_menu: payload.showInPublicMenu,
     };
 
     const cleanPayload = Object.fromEntries(
-      Object.entries(dbPayload).filter(([_, v]) => v !== undefined)
+      Object.entries(dbPayload).filter(([_, v]) => v !== undefined),
     );
 
     if (existing) {
@@ -375,7 +374,7 @@ async function syncDrinkToSupabase(id: string, payload: Partial<Drink>) {
         insumos: payload.insumos ?? [],
         modality_config: payload.modalityConfig ?? {},
         imagem: imageUrl ?? null,
-        ...cleanPayload
+        ...cleanPayload,
       };
       // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
       await supabase.from("drinks").insert(insertPayload);
@@ -441,14 +440,18 @@ export function useAppStore() {
             const parsedDrinks = data.map((d: any) => {
               let parsedInsumos = [];
               try {
-                parsedInsumos = typeof d.insumos === "string" ? JSON.parse(d.insumos) : (d.insumos || []);
+                parsedInsumos =
+                  typeof d.insumos === "string" ? JSON.parse(d.insumos) : d.insumos || [];
               } catch (err) {
                 parsedInsumos = d.insumos || [];
               }
 
               let parsedConfig = {};
               try {
-                parsedConfig = typeof d.modality_config === "string" ? JSON.parse(d.modality_config) : (d.modality_config || {});
+                parsedConfig =
+                  typeof d.modality_config === "string"
+                    ? JSON.parse(d.modality_config)
+                    : d.modality_config || {};
               } catch (err) {
                 parsedConfig = d.modality_config || {};
               }
@@ -462,6 +465,7 @@ export function useAppStore() {
                 insumos: parsedInsumos,
                 modalityConfig: parsedConfig,
                 imagem: d.imagem,
+                showInPublicMenu: Boolean(d.show_in_public_menu),
               } as Drink;
             });
 
@@ -476,7 +480,9 @@ export function useAppStore() {
                       await supabase.from("drinks").update({ imagem: publicUrl }).eq("id", d.id);
                       setGlobalStore((prev) => ({
                         ...prev,
-                        drinks: prev.drinks.map((x) => (x.id === d.id ? { ...x, imagem: publicUrl } : x)),
+                        drinks: prev.drinks.map((x) =>
+                          x.id === d.id ? { ...x, imagem: publicUrl } : x,
+                        ),
                       }));
                       await deleteImage(key);
                     } catch (err) {
@@ -495,7 +501,7 @@ export function useAppStore() {
           } else {
             console.log("Supabase drinks table is empty. Seeding default drinks...");
             const initialDrinks = readStore().drinks;
-            
+
             setGlobalStore((prev) => ({
               ...prev,
               drinks: initialDrinks,
@@ -729,5 +735,3 @@ export function useAppStore() {
 
   return { ...store, ...actions };
 }
-
-
