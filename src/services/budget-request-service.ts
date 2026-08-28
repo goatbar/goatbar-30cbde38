@@ -28,6 +28,19 @@ export interface PublicDrink {
   ingredients: string[];
 }
 
+export interface PublicLeadContext {
+  visitor_id: string;
+  session_id: string;
+  source?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
+  referrer?: string;
+  landing_page?: string;
+}
+
 async function invoke<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke("budget-request", { body });
   if (error) throw error;
@@ -47,6 +60,29 @@ export const budgetRequestService = {
     }>({
       action: "validate",
       token,
+    });
+  },
+  startPublicJourney(context: PublicLeadContext) {
+    return invoke<{ state: "ACTIVE"; public_drinks?: PublicDrink[] }>({
+      action: "start_public_journey",
+      context,
+    });
+  },
+  capturePublicLead(
+    context: PublicLeadContext,
+    contact: { client_name: string; phone: string; email?: string },
+  ) {
+    return invoke<{ lead_id: string; state: "CONTACT_CAPTURED" }>({
+      action: "capture_public_lead",
+      context,
+      contact,
+    });
+  },
+  submitPublicLeadRequest(context: PublicLeadContext, payload: BudgetRequestPayload) {
+    return invoke<{ state: "USED"; idempotent: boolean; event_id?: string }>({
+      action: "submit_public_lead_request",
+      context,
+      payload,
     });
   },
   submit(token: string, payload: BudgetRequestPayload) {
