@@ -86,6 +86,28 @@ export function getLinkState(link: any, now = new Date()): LinkState {
   return link.status === "ACTIVE" ? "ACTIVE" : "INVALID";
 }
 
+export function parseWeddingCoupleName(
+  eventName?: string,
+): { groom_name: string; bride_name: string } | null {
+  if (!eventName || typeof eventName !== "string") return null;
+  const trimmed = eventName.trim();
+  if (!trimmed) return null;
+
+  const parts = trimmed
+    .split(/\s+[eE]\s+|\s*[/+&]\s*/)
+    .map((part) => part.trim().replace(/[\u0000-\u001f\u007f]/g, " "))
+    .filter(Boolean);
+
+  if (parts.length === 2 && parts[0] && parts[1]) {
+    return {
+      groom_name: parts[0].slice(0, 120),
+      bride_name: parts[1].slice(0, 120),
+    };
+  }
+
+  return null;
+}
+
 export function validatePublicBudgetPayload(input: unknown): PublicBudgetPayload {
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw new Error("Payload inválido.");
@@ -146,10 +168,16 @@ export function validatePublicBudgetPayload(input: unknown): PublicBudgetPayload
     throw new Error("Duração do evento inválida.");
   if ((payload.requested_drink_ids?.length || 0) > 50)
     throw new Error("Quantidade de drinks selecionados inválida.");
+
   if (payload.event_type === "Casamento") {
-    if (!payload.groom_name || !payload.bride_name)
-      throw new Error("Nome do noivo e nome da noiva são obrigatórios para casamento.");
-    payload.event_name = `${payload.bride_name} & ${payload.groom_name}`;
+    const couple = parseWeddingCoupleName(payload.event_name);
+    if (couple) {
+      payload.groom_name = couple.groom_name;
+      payload.bride_name = couple.bride_name;
+    } else {
+      payload.groom_name = "";
+      payload.bride_name = "";
+    }
   } else {
     payload.groom_name = "";
     payload.bride_name = "";

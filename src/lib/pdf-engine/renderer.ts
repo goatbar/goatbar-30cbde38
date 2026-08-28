@@ -283,48 +283,73 @@ export class ProposalPdfRenderer {
       this.drawSlot(page1, slot, page1Data, pageHeight, getFont);
     }
 
-    // Se houve overflow, cria página adicional de continuação
+    // Se houve overflow, cria páginas de continuação em loop até renderizar TODOS os itens
     if (overflowDrinks.length > 0) {
-      const continuationPage = doc.addPage([pageWidth, pageHeight]);
-      
-      // Usa o mesmo background da página de cardápio limpa
-      if (basePdfDoc && basePdfDoc.getPageCount() >= pageDef.pageNumber) {
-        const sourcePage = basePdfDoc.getPage(pageDef.pageNumber - 1);
-        const embedded = await doc.embedPage(sourcePage);
-        continuationPage.drawPage(embedded, { x: 0, y: 0, width: pageWidth, height: pageHeight });
-      } else {
-        this.drawBackground(continuationPage, pageDef, pageWidth, pageHeight);
-      }
-
       const continuationTitle =
-        template.overflow?.continuationPageTitle || "CARDÁPIO (CONTINUAÇÃO)";
-
-      // Cabeçalho da continuação
+        template.overflow?.continuationPageTitle || "Drinks & Experiências";
       const headerFont = getFont("Helvetica-Bold", true);
-      continuationPage.drawText(sanitizePdfText(continuationTitle), {
-        x: drinksSlot?.x || 81,
-        y: pageHeight - (drinksSlot?.y || 260) + 30,
-        size: 20,
-        font: headerFont,
-        color: hexToRgb(drinksSlot?.style.color || "#D4AF37"),
-      });
-
-      // Renderiza itens excedentes
-      let currentY = pageHeight - (drinksSlot?.y || 301.3) - fontSize;
       const itemFont = getFont(drinksSlot?.style.font);
+      const continuationStartY = 240.0;
+      const continuationMaxHeight = 520.0; // Espaço vertical seguro na página de continuação
 
-      for (const drink of overflowDrinks) {
-        const bulletText = drink.startsWith("•") ? drink : `• ${drink}`;
-        const lines = wrapTextLines(bulletText, availableWidth, fontSize, itemFont);
-        for (const line of lines) {
-          continuationPage.drawText(sanitizePdfText(line), {
-            x: drinksSlot?.x || 81,
-            y: currentY,
-            size: fontSize,
-            font: itemFont,
-            color: hexToRgb(drinksSlot?.style.color || "#FFFFFF"),
-          });
-          currentY -= lineHeight;
+      let remainingDrinks = [...overflowDrinks];
+
+      while (remainingDrinks.length > 0) {
+        const continuationPage = doc.addPage([pageWidth, pageHeight]);
+
+        // Usa o mesmo background da página de cardápio limpa
+        if (basePdfDoc && basePdfDoc.getPageCount() >= pageDef.pageNumber) {
+          const sourcePage = basePdfDoc.getPage(pageDef.pageNumber - 1);
+          const embedded = await doc.embedPage(sourcePage);
+          continuationPage.drawPage(embedded, { x: 0, y: 0, width: pageWidth, height: pageHeight });
+        } else {
+          this.drawBackground(continuationPage, pageDef, pageWidth, pageHeight);
+        }
+
+        // Título estilizado da continuação
+        continuationPage.drawText(sanitizePdfText(continuationTitle), {
+          x: drinksSlot?.x || 81,
+          y: pageHeight - 112.4,
+          size: 41,
+          font: headerFont,
+          color: hexToRgb("#FFFFFF"),
+        });
+
+        continuationPage.drawText(sanitizePdfText("Drinks (continuação)"), {
+          x: drinksSlot?.x || 81,
+          y: pageHeight - 180.0,
+          size: 24,
+          font: headerFont,
+          color: hexToRgb("#D4AF37"),
+        });
+
+        let currentY = pageHeight - continuationStartY - fontSize;
+        let pageAccumHeight = 0;
+        const currentBatch: string[] = [];
+
+        while (remainingDrinks.length > 0) {
+          const drink = remainingDrinks[0];
+          const bulletText = drink.startsWith("•") ? drink : `• ${drink}`;
+          const lines = wrapTextLines(bulletText, availableWidth, fontSize, itemFont);
+          const itemH = Math.max(1, lines.length) * lineHeight;
+
+          if (pageAccumHeight + itemH > continuationMaxHeight && currentBatch.length > 0) {
+            break; // Cria próxima página
+          }
+
+          pageAccumHeight += itemH;
+          currentBatch.push(remainingDrinks.shift()!);
+
+          for (const line of lines) {
+            continuationPage.drawText(sanitizePdfText(line), {
+              x: drinksSlot?.x || 81,
+              y: currentY,
+              size: fontSize,
+              font: itemFont,
+              color: hexToRgb(drinksSlot?.style.color || "#FFFFFF"),
+            });
+            currentY -= lineHeight;
+          }
         }
       }
     }

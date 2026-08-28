@@ -3,13 +3,13 @@ import fs from "fs";
 import path from "path";
 
 /**
- * Carrega os bytes do PDF limpo de referência caso disponível no filesystem local.
+ * Carrega os bytes do PDF limpo corrigido de referência (P4 e P8 substituídas pelas versões institucionais corretas).
  */
 function loadCleanBasePdf(): Uint8Array | undefined {
   try {
     const candidates = [
-      path.resolve("Proposta limpa/Cópia de Proposta Comercial - Sidney & Lúcia.pdf"),
       path.resolve("src/templates/proposals/goatbar-commercial-v1/clean-template.pdf"),
+      path.resolve("Proposta limpa/Cópia de Proposta Comercial - Sidney & Lúcia.pdf"),
     ];
     for (const candidate of candidates) {
       if (fs.existsSync(candidate)) {
@@ -25,12 +25,19 @@ function loadCleanBasePdf(): Uint8Array | undefined {
 /**
  * TEMPLATE OFICIAL: Proposta Comercial Goat Bar (16:9 Widescreen)
  * Calibrado pixel a pixel a partir dos PDFs reais do Canva.
+ * 
+ * NOTA TIPOGRÁFICA:
+ * Utiliza Helvetica / Helvetica-Bold como fallback tipográfico padrão do PDF.
+ * Para fidelidade visual estrita (0% diff nas páginas de texto), suporta a futura
+ * inclusão dos arquivos .ttf das fontes comerciais:
+ * - Neue Montreal (Regular / Bold)
+ * - Allrounder Monument (Regular / Book)
  */
 export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
   id: "goatbar-commercial",
   version: "1.0.0",
   name: "Proposta Comercial Goat Bar",
-  description: "Modelo oficial 16:9 (1440x810) com máxima fidelidade ao design Canva",
+  description: "Modelo oficial 16:9 (1440x810) - Base vetorial corrigida com fallback Helvetica",
   isDevelopment: false,
   basePdfBytes: loadCleanBasePdf(),
   pageSize: {
@@ -40,7 +47,7 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
   overflow: {
     enabled: true,
     maxMenuHeight: 280,
-    continuationPageTitle: "CARDÁPIO DE DRINKS (CONTINUAÇÃO)",
+    continuationPageTitle: "Drinks & Experiências",
   },
   pages: [
     // --- PÁGINA 1: CAPA ---
@@ -79,6 +86,11 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
             color: "#FFFFFF",
             align: "center",
           },
+          transform: (val, canonical) => {
+            // Em casamento com dois noivos, exibe inicial do noivo
+            if (canonical.inicialNoivo && canonical.inicialNoiva) return canonical.inicialNoivo;
+            return "";
+          },
         },
         {
           id: "capa-inicial-noiva",
@@ -95,9 +107,39 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
             color: "#FFFFFF",
             align: "center",
           },
+          transform: (val, canonical) => {
+            // Em casamento com dois noivos, exibe inicial da noiva
+            if (canonical.inicialNoivo && canonical.inicialNoiva) return canonical.inicialNoiva;
+            return "";
+          },
         },
         {
-          id: "capa-nome-casal",
+          id: "capa-inicial-solitaria",
+          fieldKey: "nomeCliente",
+          type: "text",
+          x: 235.0,
+          y: 393.6,
+          width: 110,
+          height: 100,
+          style: {
+            font: "Helvetica-Bold",
+            fontSize: 93,
+            lineHeight: 95,
+            color: "#FFFFFF",
+            align: "center",
+          },
+          transform: (val, canonical) => {
+            // Em eventos de aniversariante único (ex: 15 anos), exibe 1 inicial centralizada grande
+            if (!canonical.inicialNoivo || !canonical.inicialNoiva) {
+              const name = canonical.nomeCliente || canonical.nomeEvento || "";
+              const first = name.trim()[0];
+              return first ? first.toUpperCase() : "";
+            }
+            return "";
+          },
+        },
+        {
+          id: "capa-nome-evento-topo",
           fieldKey: "nomeEvento",
           type: "text",
           x: 170.0,
@@ -112,12 +154,14 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
             align: "center",
           },
           transform: (val, canonical) => {
+            // Se for casamento com nomes separados, exibe "Noivo & Noiva"
             if (canonical.inicialNoivo && canonical.inicialNoiva) {
               const groom = canonical.inicialNoivo;
               const bride = canonical.inicialNoiva;
               return `${groom} & ${bride}`;
             }
-            return String(val || "");
+            // Em 15 anos / outros eventos, exibe o nome do evento limpo
+            return String(val || canonical.nomeCliente || "");
           },
         },
         {

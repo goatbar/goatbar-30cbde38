@@ -34,8 +34,6 @@ function PublicBudgetRequestPage() {
     lead_source: "",
     referral_name: "",
     notes: "",
-    groom_name: "",
-    bride_name: "",
     duration_hours: 5,
     requested_drink_ids: [],
   });
@@ -45,7 +43,13 @@ function PublicBudgetRequestPage() {
       .validate(token)
       .then((result) => {
         setState(result.state);
-        setPublicDrinks(result.public_drinks || []);
+        const drinks = result.public_drinks || [];
+        setPublicDrinks(drinks);
+        if (drinks.length === 0 && process.env.NODE_ENV !== "production") {
+          console.info(
+            "[budget-request] public_drinks retornou vazio ([]). Para exibir drinks na carta pública, configure show_in_public_menu = true e modalidade Evento ativa.",
+          );
+        }
         if (result.state === "ACTIVE" && result.metadata?.customer_name_hint)
           setForm((old) => ({ ...old, client_name: result.metadata!.customer_name_hint! }));
       })
@@ -66,7 +70,6 @@ function PublicBudgetRequestPage() {
     }
   };
 
-  const isWedding = form.event_type === "Casamento";
   const toggleDrink = (id: string) =>
     setForm((old) => ({
       ...old,
@@ -154,9 +157,7 @@ function PublicBudgetRequestPage() {
               ))}
             </select>
           </label>
-          {isWedding && field("Nome do noivo *", "groom_name", "text", true)}
-          {isWedding && field("Nome da noiva *", "bride_name", "text", true)}
-          {!isWedding && field("Nome do evento", "event_name")}
+          {field("Nome do evento / casal", "event_name")}
           {field("Data do evento *", "date", "date", true)}
           {field("Horário", "event_time", "time")}
           <label className="space-y-2 text-sm font-medium">
@@ -195,48 +196,68 @@ function PublicBudgetRequestPage() {
           {publicDrinks.length > 0 && (
             <fieldset className="sm:col-span-2 min-w-0 space-y-4 border-t border-border pt-6">
               <legend className="font-display text-lg font-bold">
-                Com base na nossa carta de drinks, tem algum drink que não pode faltar no seu
-                evento?
+                Tem algum drink que não pode faltar?
               </legend>
               <p className="text-sm text-muted-foreground">
-                Selecione os seus preferidos. Essa escolha serve como referência para nossa equipe
-                preparar o orçamento e pode ser ajustada posteriormente.
+                Com base na nossa carta de drinks, selecione os seus favoritos. Isso nos ajuda a
+                preparar uma proposta mais personalizada.
               </p>
-              <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {publicDrinks.map((drink) => {
                   const selected = form.requested_drink_ids?.includes(drink.id) || false;
                   return (
                     <label
                       key={drink.id}
-                      className={`min-w-0 cursor-pointer overflow-hidden rounded-xl border bg-background transition ${selected ? "border-primary ring-1 ring-primary" : "border-border"}`}
+                      className={`relative flex min-w-0 flex-col justify-between cursor-pointer overflow-hidden rounded-xl border transition-all select-none ${
+                        selected
+                          ? "border-primary bg-primary/10 ring-2 ring-primary shadow-md"
+                          : "border-border bg-background/60 hover:border-border-strong hover:bg-background/80"
+                      }`}
                     >
-                      {drink.image ? (
-                        <img src={drink.image} alt="" className="h-40 w-full object-cover" />
-                      ) : (
-                        <div className="flex h-40 items-center justify-center bg-input text-muted-foreground">
-                          <ImageOff className="h-8 w-8" />
+                      <div>
+                        {drink.image ? (
+                          <img
+                            src={drink.image}
+                            alt={drink.name}
+                            className="h-36 w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-36 items-center justify-center bg-input text-muted-foreground">
+                            <ImageOff className="h-8 w-8 opacity-60" />
+                          </div>
+                        )}
+                        <div className="space-y-2 p-4">
+                          <h3 className="break-words font-display font-bold text-sm text-foreground">
+                            {drink.name}
+                          </h3>
+                          {drink.description && (
+                            <p className="break-words text-xs text-muted-foreground line-clamp-3">
+                              {drink.description}
+                            </p>
+                          )}
+                          {drink.ingredients.length > 0 && (
+                            <p className="break-words text-[11px] text-muted-foreground/90">
+                              <span className="font-semibold text-foreground/80">Insumos:</span>{" "}
+                              {drink.ingredients.join(", ")}
+                            </p>
+                          )}
                         </div>
-                      )}
-                      <div className="space-y-2 p-4">
-                        <h3 className="break-words font-display font-bold">{drink.name}</h3>
-                        {drink.description && (
-                          <p className="break-words text-sm text-muted-foreground">
-                            {drink.description}
-                          </p>
-                        )}
-                        {drink.ingredients.length > 0 && (
-                          <p className="break-words text-xs text-muted-foreground">
-                            {drink.ingredients.join(", ")}
-                          </p>
-                        )}
-                        <span className="flex items-center gap-2 text-sm font-medium">
+                      </div>
+                      <div className="p-4 pt-0">
+                        <span
+                          className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                            selected
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-surface text-muted-foreground"
+                          }`}
+                        >
                           <input
                             type="checkbox"
                             checked={selected}
                             onChange={() => toggleDrink(drink.id)}
                             className="h-4 w-4 accent-primary"
-                          />{" "}
-                          Quero este drink
+                          />
+                          {selected ? "Selecionado" : "Quero este drink"}
                         </span>
                       </div>
                     </label>
