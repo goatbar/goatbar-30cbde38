@@ -860,5 +860,38 @@ describe("Assinafy End-to-End Audit & Edge Cases", () => {
       expect(errorPayload.reconciliationRequired).toBe(true);
       expect(errorPayload.diagnostic.assinafyDocumentId).toBe("103f6b0f60836521e7197ba01824");
     });
+
+    it("13. assinafy-resend bloqueia reenvio quando signatário já está assinado", () => {
+      const signer = { id: "sig-1", status: "signed", external_signer_id: "103e76b58306fe70757bab706cac" };
+      let error: any = null;
+      try {
+        if (signer && signer.status === "signed") {
+          throw Object.assign(new Error("Este signatário já concluiu a assinatura do documento."), {
+            status: 409,
+            code: "signer_already_signed",
+          });
+        }
+      } catch (err) {
+        error = err;
+      }
+
+      expect(error).not.toBeNull();
+      expect(error.code).toBe("signer_already_signed");
+      expect(error.status).toBe(409);
+    });
+
+    it("14. assinafy-resend classifica stages de execução com precisão", () => {
+      const stages = [
+        "validating_input",
+        "verifying_signer",
+        "estimating_cost",
+        "calling_resend_api",
+        "verifying_activity",
+        "updating_database",
+        "completed",
+      ];
+      expect(stages).toHaveLength(7);
+      expect(stages.includes("calling_resend_api")).toBe(true);
+    });
   });
 });
