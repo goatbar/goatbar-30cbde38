@@ -160,30 +160,37 @@ export function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export function PrimaryButton({
-  children,
-  ...rest
-}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+export const PrimaryButton = React.forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement>
+>(({ children, ...rest }, ref) => {
   return (
     <button
+      ref={ref}
       {...rest}
       className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:brightness-110 transition-all shadow-[0_8px_24px_-12px_var(--primary)] ${rest.className ?? ""}`}
     >
       {children}
     </button>
   );
-}
+});
+PrimaryButton.displayName = "PrimaryButton";
 
-export function GhostButton({ children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+export const GhostButton = React.forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement>
+>(({ children, ...rest }, ref) => {
   return (
     <button
+      ref={ref}
       {...rest}
       className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-surface text-sm hover:border-border-strong transition-all ${rest.className ?? ""}`}
     >
       {children}
     </button>
   );
-}
+});
+GhostButton.displayName = "GhostButton";
 
 export function MiniBars({ data, height = 60 }: { data: number[]; height?: number }) {
   const max = Math.max(...data, 1);

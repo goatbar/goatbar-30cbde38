@@ -33,22 +33,26 @@ import {
 } from "@/lib/mock-data";
 
 const STORAGE_KEY = "goatbar-functional-store-v11";
-const STORE_SYNC_EVENT = "goatbar-store-sync";
+let isWritingStore = false;
 
 function writeStore(store: AppStore) {
-  if (typeof window === "undefined") return;
-  const sanitized: AppStore = {
-    ...store,
-    drinks: store.drinks.map((d) => {
-      if (d.imagem && d.imagem.startsWith("data:")) {
-        return { ...d, imagem: `idb:` };
-      }
-      return d;
-    }),
-  };
-  delete (sanitized as any).loadingDrinks;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
-  window.dispatchEvent(new CustomEvent(STORE_SYNC_EVENT));
+  if (typeof window === "undefined" || isWritingStore) return;
+  isWritingStore = true;
+  try {
+    const sanitized: AppStore = {
+      ...store,
+      drinks: store.drinks.map((d) => {
+        if (d.imagem && d.imagem.startsWith("data:")) {
+          return { ...d, imagem: `idb:` };
+        }
+        return d;
+      }),
+    };
+    delete (sanitized as any).loadingDrinks;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
+  } finally {
+    isWritingStore = false;
+  }
 }
 
 type AppStore = {
@@ -254,14 +258,15 @@ function setGlobalStore(updater: AppStore | ((prev: AppStore) => AppStore)) {
   }
 }
 
-// Sync across tabs
+// Sync across other tabs
 if (typeof window !== "undefined") {
-  const syncFromLocalStorage = () => {
+  const syncFromLocalStorage = (e: StorageEvent) => {
+    if (e.key && e.key !== STORAGE_KEY) return;
     const fresh = readStore();
-    setGlobalStore({ ...fresh, loadingDrinks: globalStore.loadingDrinks });
+    globalStore = { ...fresh, loadingDrinks: globalStore.loadingDrinks };
+    subscribers.forEach((callback) => callback(globalStore));
   };
   window.addEventListener("storage", syncFromLocalStorage);
-  window.addEventListener(STORE_SYNC_EVENT, syncFromLocalStorage);
 }
 
 // Helper to convert base64 data URL to Blob
