@@ -17,6 +17,8 @@ export interface SignatureProvider {
     pdfHash?: string;
   }): Promise<{
     success: boolean;
+    dispatchOutcome?: "new_dispatch" | "reuse" | "reconciliation_required" | "already_signed";
+    message?: string;
     externalDocumentId?: string;
     externalAssignmentId?: string;
     status: string;
@@ -117,6 +119,8 @@ export const assinafySignatureProvider: SignatureProvider = {
     );
     return {
       success: res.success,
+      dispatchOutcome: res.dispatchOutcome,
+      message: res.message,
       externalDocumentId: res.externalDocumentId,
       externalAssignmentId: res.externalAssignmentId,
       status: res.status || "pending",

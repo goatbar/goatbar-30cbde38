@@ -982,21 +982,43 @@ function EventoInterna() {
 
       if (result.success && result.externalDocumentId) {
         await handleStatusChange(
-          
           "em_assinatura",
           `Contrato enviado para assinatura digital via ${provider.name}.`,
         );
-        alert(
-          `Contrato enviado para ${provider.name} com sucesso!\n\nID do Documento: ${result.externalDocumentId}\nHash SHA-256: ${hash.substring(0, 16)}...${result.diagnostic ? `\n\n${formatAssinafyDiagnostic(result.diagnostic)}` : ""}`,
-        );
+
+        if (result.dispatchOutcome === "new_dispatch") {
+          toast.success("Contrato enviado para assinatura com sucesso!", {
+            description: `Documento: ${result.externalDocumentId}`,
+          });
+        } else if (result.dispatchOutcome === "already_signed") {
+          toast.info("Este contrato já foi assinado por todas as partes.");
+        } else if (result.dispatchOutcome === "reuse" || result.dispatchOutcome === "reconciliation_required") {
+          toast.info("Este contrato já está aguardando assinatura. O documento existente foi reaproveitado.", {
+            description: `Documento: ${result.externalDocumentId}`,
+          });
+        } else {
+          toast.success(`Contrato processado via ${provider.name}.`, {
+            description: `Documento: ${result.externalDocumentId}`,
+          });
+        }
+
+        console.info("[assinafy-dispatch] result", {
+          outcome: result.dispatchOutcome,
+          documentId: result.externalDocumentId,
+          assignmentId: result.externalAssignmentId,
+          diagnostic: result.diagnostic,
+        });
+
         await loadContractModule();
       } else {
-        alert(`Erro ao enviar contrato: Resultado vazio.`);
+        toast.error("Erro ao enviar contrato: Resposta vazia do servidor.");
       }
     } catch (err: any) {
       console.error("Erro no disparo de assinatura:", err);
-      const diagnostic = err?.diagnostic ? `\n\n${formatAssinafyDiagnostic(err.diagnostic)}` : "";
-      alert(`Erro ao enviar: ${err.message || "Erro inesperado"}${diagnostic}`);
+      const reqId = err?.diagnostic?.correlationId || err?.requestId;
+      toast.error(err.message || "Erro inesperado ao enviar contrato.", {
+        description: reqId ? `ID da requisição: ${reqId}` : undefined,
+      });
     } finally {
       isSignatureDispatchLocked.current = false;
       setIsDispatchingSignature(false);

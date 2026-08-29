@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export interface AssinafyRequestResponse {
   success: boolean;
+  dispatchOutcome?: "new_dispatch" | "reuse" | "reconciliation_required" | "already_signed";
   signatureRequestId?: string;
   externalDocumentId?: string;
   externalAssignmentId?: string;

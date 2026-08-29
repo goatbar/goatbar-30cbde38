@@ -136,9 +136,28 @@ serve(async (req) => {
       decision.action === "reconcile"
     ) {
       const needsReconciliation = decision.action !== "reuse";
+      const outcome =
+        decision.action === "reuse"
+          ? sigReq.dispatch_status === "signed" || sigReq.dispatch_status === "completed"
+            ? "already_signed"
+            : "reuse"
+          : "reconciliation_required";
+
+      if (contract.status === "draft" && sigReq.dispatch_status === "pending_signature") {
+        await admin
+          .from("event_contracts")
+          .update({ status: "sent", sent_for_signature_at: sigReq.sent_at || new Date().toISOString() })
+          .eq("id", contractId);
+      }
+
       return json(
         {
           success: true,
+          dispatchOutcome: outcome,
+          message:
+            outcome === "already_signed"
+              ? "Este contrato já foi assinado por todas as partes."
+              : "Este contrato já havia sido enviado para assinatura. O documento existente foi reaproveitado.",
           remoteCreated: Boolean(sigReq.external_document_id),
           reconciliationRequired: needsReconciliation,
           signatureRequestId: sigReq.id,
@@ -408,6 +427,8 @@ serve(async (req) => {
       return json(
         {
           success: true,
+          dispatchOutcome: "new_dispatch",
+          message: "Contrato enviado para assinatura com sucesso.",
           remoteCreated: true,
           reconciliationRequired: false,
           signatureRequestId: sigReq.id,

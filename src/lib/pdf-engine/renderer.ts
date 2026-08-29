@@ -614,14 +614,84 @@ export class ProposalPdfRenderer {
     const lineHeight = slot.style.lineHeight;
     const color = hexToRgb(slot.style.color);
 
-    if (slot.id === "resumo-formas-pagamento") {
+    if (slot.id === "resumo-convidados") {
       page.drawRectangle({
-        x: 745,
-        y: 40,
-        width: 650,
-        height: 150,
+        x: 80,
+        y: 632,
+        width: 450,
+        height: 28,
         color: hexToRgb("#111115"),
       });
+    } else if (slot.id === "resumo-duracao-horas") {
+      page.drawRectangle({
+        x: 40,
+        y: 552,
+        width: 700,
+        height: 33,
+        color: hexToRgb("#111115"),
+      });
+    } else if (slot.id === "resumo-equipe-staff") {
+      page.drawRectangle({
+        x: 880,
+        y: 420,
+        width: 400,
+        height: 100,
+        color: hexToRgb("#111115"),
+      });
+    } else if (slot.id === "resumo-variedades-drinks") {
+      page.drawRectangle({
+        x: 110,
+        y: 318,
+        width: 630,
+        height: 26,
+        color: hexToRgb("#111115"),
+      });
+    } else if (slot.id === "resumo-investimento-total") {
+      page.drawRectangle({
+        x: 110,
+        y: 115,
+        width: 400,
+        height: 45,
+        color: hexToRgb("#111115"),
+      });
+    } else if (slot.id === "resumo-formas-pagamento") {
+      page.drawRectangle({
+        x: 740,
+        y: 65,
+        width: 650,
+        height: 115,
+        color: hexToRgb("#111115"),
+      });
+      const dataFinal = resolvedText || "03.10.2026";
+      page.drawText(sanitizePdfText("• 30% na assinatura do contrato -"), {
+        x: 793.34,
+        y: 152.04,
+        size: fontSize,
+        font,
+        color,
+      });
+      page.drawText(sanitizePdfText(`Restante até dia  ${dataFinal}`), {
+        x: 750.85,
+        y: 127.29,
+        size: fontSize,
+        font,
+        color,
+      });
+      page.drawText(sanitizePdfText("• 5% de desconto para pagamento à vista"), {
+        x: 793.34,
+        y: 102.54,
+        size: fontSize,
+        font,
+        color,
+      });
+      page.drawText(sanitizePdfText("• Parcelamento no cartão ou boleto (a consultar)"), {
+        x: 793.34,
+        y: 77.79,
+        size: fontSize,
+        font,
+        color,
+      });
+      return;
     }
 
     // Suporte especial para texto em arco (ex: capa do casal)

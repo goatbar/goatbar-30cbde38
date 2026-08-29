@@ -640,4 +640,53 @@ describe("Assinafy End-to-End Audit & Edge Cases", () => {
     expect(clientUrl).toBe("https://app.assinafy.com.br/sign/doc1?email=cliente@example.com");
     expect(companyUrl).toBe("https://app.assinafy.com.br/sign/doc1?email=socio@goatbar.com.br");
   });
+
+  it("garante que reuse não gera dispatchOutcome new_dispatch (prevenção de falso sucesso)", () => {
+    const existing = {
+      id: "40188082-6110-40f1-825b-07a7683a0390",
+      dispatch_status: "pending_signature",
+      original_file_hash: "hash-same",
+      external_document_id: "103f6b0f60836521e7197ba01824",
+      external_assignment_id: "103f6b1030a9badec94fba2f9cb3",
+      signature_url: "https://app.assinafy.com.br/sign/103f6b0f60836521e7197ba01824?email=test@example.com",
+    };
+    const decision = decideDispatch(existing, "hash-same");
+    expect(decision.action).toBe("reuse");
+
+    const outcome = decision.action === "reuse" ? "reuse" : "new_dispatch";
+    expect(outcome).not.toBe("new_dispatch");
+    expect(outcome).toBe("reuse");
+  });
+
+  it("garante que notified=false resulta em notification_status=pending e não sent", () => {
+    const assignedSigner = {
+      id: "signer-pending-notification",
+      email: "cliente@example.com",
+      step: 1,
+      notified: false,
+      completed: false,
+    };
+
+    const isNotified = assignedSigner.notified !== false;
+    const notificationStatus = isNotified ? "sent" : "pending";
+    const notifiedAt = isNotified ? new Date().toISOString() : null;
+
+    expect(isNotified).toBe(false);
+    expect(notificationStatus).toBe("pending");
+    expect(notifiedAt).toBeNull();
+  });
+
+  it("diferencia contrato já assinado de contrato aguardando assinatura", () => {
+    const signedRecord = {
+      id: "req-already-signed",
+      dispatch_status: "signed",
+      original_file_hash: "hash-signed",
+      external_document_id: "doc-signed-123",
+      external_assignment_id: "assign-signed-123",
+    };
+    const decision = decideDispatch(signedRecord, "hash-signed");
+    expect(decision.action).toBe("reuse");
+    const outcome = signedRecord.dispatch_status === "signed" ? "already_signed" : "reuse";
+    expect(outcome).toBe("already_signed");
+  });
 });

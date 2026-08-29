@@ -14,9 +14,9 @@ const sidneyLuciaContext = {
     client_name: "Mariana Campos Moreira",
     groom_name: null,
     bride_name: null,
-    guests: 90,
-    date: "2026-11-14",
-    duration_hours: 6,
+    guests: 70,
+    date: "2026-10-10",
+    duration_hours: 5,
     event_type: "casamento",
   },
   budget: {
@@ -24,14 +24,22 @@ const sidneyLuciaContext = {
     created_at: "2026-08-28",
     bartender_quantity: 3,
     keeper_quantity: 1,
-    copeira_quantity: 0,
-    final_budget_value: 2350.3,
+    copeira_quantity: 1,
+    final_budget_value: 3941.13,
     drinks_per_person: 4,
     beverages: ["Vodka Smirnoff", "Cachaça artesanal", "Gelo filtrado"],
-    payment_terms: "30% na assinatura do contrato - Restante até dia 07.11.2026",
+    payment_terms: "30% na assinatura do contrato - Restante até dia 03.10.2026",
   },
   hydratedData: {
-    selectedDrinkNames: ["Moscow Mule", "Fitzgerald", "Gin Tropical", "Aperol Spritz"],
+    selectedDrinkNames: [
+      "Moscow Mule",
+      "Fitzgerald",
+      "Gin Tropical",
+      "Aperol Spritz",
+      "Negroni",
+      "Caipivodka Morango",
+      "Espresso Martini",
+    ],
   },
 };
 
@@ -55,10 +63,14 @@ describe("Proposta Comercial Goat Bar - regressão visual", () => {
     }
 
     expect(document.numPages).toBe(8);
-    expect(canonical.quantidadePessoasFormatted).toBe("90");
-    expect(canonical.quantidadeHorasEventoFormatted).toBe("6");
-    expect(canonical.valorInvestimentoFormatted).toMatch(/2\.350,30/);
-    expect(canonical.dataFinalPagamento).toBe("07.11.2026");
+    expect(canonical.quantidadePessoasFormatted).toBe("70");
+    expect(canonical.quantidadeHorasEventoFormatted).toBe("5");
+    expect(canonical.valorInvestimentoFormatted).toMatch(/3\.941,13/);
+    expect(canonical.dataFinalPagamento).toBe("03.10.2026");
+    expect(canonical.quantidadeVariedadesDrinksFormatted).toBe("7");
+    expect(canonical.qtdBartendersFormatted).toBe("3 Bartenders");
+    expect(canonical.qtdBarKeepersFormatted).toBe("1 Bar Keeper");
+    expect(canonical.qtdCopeirasFormatted).toBe("1 Copeira");
     expect(canonical.nomeEvento).toBe("Sidney & Lúcia");
     expect(canonical.nomeEvento).not.toBe(sidneyLuciaContext.event.client_name);
     expect([canonical.inicialNoivo, canonical.inicialNoiva]).toEqual(["S", "L"]);

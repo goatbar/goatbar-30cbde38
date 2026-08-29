@@ -231,9 +231,9 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
           id: "resumo-convidados",
           fieldKey: "quantidadePessoasFormatted",
           type: "text",
-          x: 304.0,
-          y: 145.9,
-          width: 44,
+          x: 81.0,
+          y: 145.92,
+          width: 500,
           height: 30,
           style: {
             font: "Helvetica",
@@ -241,79 +241,63 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
             lineHeight: 24,
             color: "#FFFFFF",
             align: "left",
+          },
+          transform: (val, canonical) => {
+            const count = canonical.quantidadePessoasFormatted || val || "70";
+            return `Número de convidados: ${count} pessoas`;
           },
         },
         {
           id: "resumo-duracao-horas",
           fieldKey: "quantidadeHorasEventoFormatted",
           type: "text",
-          x: 440.0,
-          y: 216.0,
-          width: 32,
+          x: 42.39,
+          y: 216.01,
+          width: 700,
           height: 35,
           style: {
             font: "Helvetica",
-            fontSize: 29,
-            lineHeight: 30,
+            fontSize: 28.99,
+            lineHeight: 32,
             color: "#FFFFFF",
             align: "left",
           },
+          transform: (val, canonical) => {
+            const hours = canonical.quantidadeHorasEventoFormatted || val || "5";
+            return `Serviço de bar completo durante ${hours} horas de festa`;
+          },
         },
         {
-          id: "resumo-equipe-bartenders",
+          id: "resumo-equipe-staff",
           fieldKey: "qtdBartendersFormatted",
-          type: "text",
-          x: 901.2,
-          y: 284.2,
-          width: 300,
-          height: 30,
+          type: "bullet_list",
+          x: 890.0,
+          y: 284.19,
+          width: 400,
+          height: 110,
           style: {
             font: "Helvetica",
             fontSize: 22,
-            lineHeight: 24,
+            lineHeight: 32.68,
             color: "#FFFFFF",
             align: "left",
           },
-        },
-        {
-          id: "resumo-equipe-keepers",
-          fieldKey: "qtdBarKeepersFormatted",
-          type: "text",
-          x: 901.2,
-          y: 316.9,
-          width: 300,
-          height: 30,
-          style: {
-            font: "Helvetica",
-            fontSize: 22,
-            lineHeight: 24,
-            color: "#FFFFFF",
-            align: "left",
-          },
-        },
-        {
-          id: "resumo-equipe-copeiras",
-          fieldKey: "qtdCopeirasFormatted",
-          type: "text",
-          x: 901.2,
-          y: 349.5,
-          width: 300,
-          height: 30,
-          style: {
-            font: "Helvetica",
-            fontSize: 22,
-            lineHeight: 24,
-            color: "#FFFFFF",
-            align: "left",
+          transform: (_val, canonical) => {
+            const items = [
+              canonical.qtdBartendersFormatted,
+              canonical.qtdBarKeepersFormatted,
+              canonical.qtdCopeirasFormatted,
+            ].filter((s) => s && s.trim().length > 0);
+            return items.map((i) => (i.startsWith("•") ? i : `• ${i}`)).join("\n");
           },
         },
         {
           id: "resumo-variedades-drinks",
           fieldKey: "quantidadeVariedadesDrinksFormatted",
           type: "text",
-          x: 377.0,
-          y: 459.6,
-          width: 25,
+          x: 118.0,
+          y: 460.37,
+          width: 600,
           height: 30,
           style: {
             font: "Helvetica",
@@ -322,13 +306,17 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
             color: "#FFFFFF",
             align: "left",
           },
+          transform: (val, canonical) => {
+            const count = canonical.quantidadeVariedadesDrinksFormatted || val || "7";
+            return `• Carta composta por ${count} variedades de drinks`;
+          },
         },
         {
           id: "resumo-investimento-total",
           fieldKey: "valorInvestimentoFormatted",
           type: "currency",
-          x: 130.8,
-          y: 648.0,
+          x: 130.77,
+          y: 647.96,
           width: 400,
           height: 40,
           style: {
@@ -342,26 +330,21 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
         {
           id: "resumo-formas-pagamento",
           fieldKey: "dataFinalPagamento",
-          type: "bullet_list",
-          x: 750.8,
-          y: 627.7,
-          width: 600,
-          height: 150,
+          type: "text",
+          x: 750.85,
+          y: 632.96,
+          width: 650,
+          height: 130,
           style: {
             font: "Helvetica",
-            fontSize: 22,
-            lineHeight: 28,
+            fontSize: 25,
+            lineHeight: 25,
             color: "#FFFFFF",
             align: "left",
           },
           transform: (val, canonical) => {
-            const dataFinal = canonical.dataFinalPagamento || (typeof val === "string" ? val : "") || "";
-            return [
-              "• 30% na assinatura do contrato",
-              `• Restante até dia ${dataFinal}`.trim(),
-              "• 5% de desconto para pagamento à vista",
-              "• Parcelamento no cartão ou boleto (a consultar)",
-            ].join("\n");
+            const dataFinal = canonical.dataFinalPagamento || (typeof val === "string" ? val : "") || "03.10.2026";
+            return dataFinal;
           },
         },
       ],
