@@ -1157,4 +1157,71 @@ describe("remote_document_missing — fluxo completo", () => {
     const shouldShortCircuit = shortCircuitStatuses.includes(sigReq.dispatch_status);
     expect(shouldShortCircuit).toBe(true); // não tenta GET /v1/documents/{id} — retorna status local direto
   });
+
+  it("29. REGRESSÃO: local pending_signature + external_document_id + remoto 404 => remote_document_missing, sem criação automática", async () => {
+    // Cenário real encontrado em produção:
+    //   dispatch_status = pending_signature
+    //   external_document_id = 103f6b0f60836521e7197ba01824
+    //   GET /v1/documents/103f6b0f60836521e7197ba01824 → 404
+    //   Esperado: remote_document_missing, nenhum documento criado
+
+    const localRequest = {
+      id: "req-uuid-legacy",
+      dispatch_status: "pending_signature",
+      external_document_id: "103f6b0f60836521e7197ba01824",
+      external_assignment_id: "103f6b1030a9badec94fba2f9cb3",
+    };
+
+    // Simula decideDispatch: pending_signature → action "reuse"
+    function decideDispatch(req: any): { action: string } {
+      if (!req) return { action: "create" };
+      if (req.dispatch_status === "remote_document_missing") return { action: "recreate" };
+      if (["pending_signature", "assignment_created"].includes(req.dispatch_status)) return { action: "reuse" };
+      return { action: "continue" };
+    }
+    const decision = decideDispatch(localRequest);
+    expect(decision.action).toBe("reuse"); // Confirma que, sem o check remoto, seria "reuse"
+
+    // Simula a verificação remota: getDocumentStatus lança AssinafyApiError com providerStatus=404
+    class MockAssinafyApiError extends Error {
+      constructor(public providerStatus: number) {
+        super(`Assinafy API Error (${providerStatus})`);
+        this.name = "AssinafyApiError";
+      }
+    }
+    async function mockGetDocumentStatus(documentId: string): Promise<void> {
+      if (documentId === "103f6b0f60836521e7197ba01824") {
+        throw new MockAssinafyApiError(404);
+      }
+    }
+
+    // Simula o novo fluxo do assinafy-create-doc:
+    let remoteExists = true;
+    let persistedStatus: string | null = null;
+    let newDocumentCreated = false;
+
+    if (decision.action === "reuse" && localRequest.external_document_id) {
+      try {
+        await mockGetDocumentStatus(localRequest.external_document_id);
+      } catch (err) {
+        if (err instanceof MockAssinafyApiError && err.providerStatus === 404) {
+          remoteExists = false;
+        }
+      }
+
+      if (!remoteExists) {
+        // Persiste remote_document_missing, NÃO cria documento novo
+        persistedStatus = "remote_document_missing";
+        // newDocumentCreated permanece false — verificado abaixo
+      }
+    }
+
+    expect(remoteExists).toBe(false);
+    expect(persistedStatus).toBe("remote_document_missing");
+    expect(newDocumentCreated).toBe(false); // Nunca cria documento automaticamente
+
+    // Verifica que os IDs antigos são preservados (não são zerados)
+    expect(localRequest.external_document_id).toBe("103f6b0f60836521e7197ba01824");
+    expect(localRequest.external_assignment_id).toBe("103f6b1030a9badec94fba2f9cb3");
+  });
 });

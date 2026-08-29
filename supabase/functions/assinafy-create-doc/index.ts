@@ -5,6 +5,8 @@ import {
   findSigner,
   createSigner,
   createAssignment,
+  getDocumentStatus,
+  AssinafyApiError,
   ASSINAFY_ACCOUNT_ID,
   ASSINAFY_API_KEY,
 } from "../_shared/assinafy-client.ts";
@@ -135,6 +137,77 @@ serve(async (req) => {
       decision.action === "reconcile_local_persistence" ||
       decision.action === "reconcile"
     ) {
+      // ── Remote existence check ──────────────────────────────────────────────
+      // Before trusting the local state, verify that the document still exists
+      // on the Assinafy side. A 404 here means the remote was deleted/expired.
+      if (sigReq.external_document_id) {
+        stage = "verifying_remote_document";
+        let remoteExists = true;
+        try {
+          await getDocumentStatus(sigReq.external_document_id);
+        } catch (remoteErr) {
+          if (
+            remoteErr instanceof AssinafyApiError &&
+            remoteErr.providerStatus === 404
+          ) {
+            remoteExists = false;
+          } else {
+            // Non-404 upstream errors (5xx, network) — log but don't block.
+            // We fall back to normal reuse/reconcile so we don't create duplicates.
+            console.warn("[assinafy-create-doc] remote_check_warn", {
+              documentId: sigReq.external_document_id,
+              error: remoteErr instanceof Error ? remoteErr.message : String(remoteErr),
+            });
+          }
+        }
+
+        if (!remoteExists) {
+          // Persist the new status so assinafy-status & the UI know immediately.
+          // Preserve external_document_id / external_assignment_id for audit — do NOT null them.
+          stage = "persisting_remote_document_missing";
+          const { error: updateErr } = await admin
+            .from("contract_signature_requests")
+            .update({
+              dispatch_status: "remote_document_missing",
+              last_error: `Documento remoto ${sigReq.external_document_id} não encontrado na Assinafy (HTTP 404). Verificado em ${new Date().toISOString()}.`,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", sigReq.id);
+          if (updateErr) throw updateErr;
+
+          console.info("[assinafy-create-doc] remote_document_missing", {
+            contractId,
+            signatureRequestId: sigReq.id,
+            assinafyDocumentId: sigReq.external_document_id,
+          });
+
+          return json(
+            {
+              success: false,
+              dispatchOutcome: "remote_document_missing",
+              recreationRequired: true,
+              message:
+                "O documento anterior não existe mais na Assinafy. É necessário gerar um novo envio para assinatura.",
+              signatureRequestId: sigReq.id,
+              externalDocumentId: sigReq.external_document_id,
+              externalAssignmentId: sigReq.external_assignment_id,
+              status: "remote_document_missing",
+              diagnostic: {
+                stage: "verifying_remote_document",
+                correlationId,
+                assinafyRequestSent: true,
+                assinafyDocumentId: sigReq.external_document_id,
+                httpStatus: 404,
+                databaseUpdated: true,
+              },
+            },
+            404,
+            correlationId,
+          );
+        }
+      }
+      // ── End remote existence check ──────────────────────────────────────────
+
       const needsReconciliation = decision.action !== "reuse";
 
       // Inspect local signers to determine if reconciliation is required

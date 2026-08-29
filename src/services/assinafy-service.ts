@@ -172,6 +172,12 @@ export async function dispatchContractToAssinafy(
     throw new AssinafyDiagnosticError(normalized.message, normalized.diagnostic);
   }
 
+  // Remote document confirmed missing — not a crash, return structured result so
+  // the frontend can show the "Gerar Novo Envio" banner without an error boundary.
+  if (data?.dispatchOutcome === "remote_document_missing") {
+    return data as AssinafyRequestResponse;
+  }
+
   if (!data?.success) {
     throw new AssinafyDiagnosticError(
       data?.error || "Erro desconhecido na criação do documento Assinafy",

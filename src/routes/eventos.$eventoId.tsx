@@ -992,6 +992,25 @@ function EventoInterna() {
 
       console.log("🔹 [Signature Dispatch] Hash SHA-256 do PDF imutável:", hash);
 
+      // ── Remote document missing ────────────────────────────────────────────
+      // The local record has an external_document_id but the Assinafy API returned 404.
+      // Persist state so the banner shows immediately; do NOT show a success or error toast.
+      if (result.dispatchOutcome === "remote_document_missing") {
+        setProviderDetails((prev: any) => ({
+          ...prev,
+          dispatch_status: "remote_document_missing",
+          externalDocumentId: result.externalDocumentId,
+          externalAssignmentId: result.externalAssignmentId,
+        }));
+        toast.warning("Documento anterior não encontrado na Assinafy.", {
+          description: "Use o botão \"Gerar Novo Envio\" para criar um novo envio para assinatura.",
+          duration: 8000,
+        });
+        await loadContractModule();
+        return;
+      }
+      // ── End remote document missing ────────────────────────────────────────
+
       if (result.success && result.externalDocumentId) {
         await handleStatusChange(
           "em_assinatura",
