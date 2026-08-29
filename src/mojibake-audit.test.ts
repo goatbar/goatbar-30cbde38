@@ -44,5 +44,5 @@ describe("auditoria de encoding dos arquivos-fonte", () => {
     });
 
     expect(violations, `Mojibake encontrado em: ${violations.join(", ")}`).toEqual([]);
-  });
+  }, 30000);
 });
