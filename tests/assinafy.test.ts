@@ -478,3 +478,74 @@ describe("Assinafy Stage 12 & Stage 13 Persistence & Schema Tests", () => {
   });
 });
 
+import { validateRequiredSigners, buildRequiredAssignment } from "../supabase/functions/assinafy-create-doc/logic";
+
+describe("Assinafy End-to-End Audit & Edge Cases", () => {
+  it("valida obrigatoriedade do signatário da empresa Goat Bar antes do envio", () => {
+    expect(() =>
+      validateRequiredSigners(
+        { name: "Cliente Teste", email: "cliente@example.com" },
+        null,
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        status: 422,
+        code: "company_signer_required",
+        message: "Selecione o responsável legal da Goat Bar no contrato antes do envio.",
+      }),
+    );
+  });
+
+  it("rejeita signatários com o mesmo e-mail (contratante e contratada distintos)", () => {
+    expect(() =>
+      validateRequiredSigners(
+        { name: "Cliente Teste", email: "same@example.com" },
+        { name: "Sócio Goat", email: "same@example.com" },
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        status: 422,
+        code: "distinct_signers_required",
+        message: "Contratante e contratada devem possuir signatários distintos.",
+      }),
+    );
+  });
+
+  it("valida montagem estrita do assignment para ambas as partes", () => {
+    const signers = [
+      { role: "client" as const, externalSignerId: "ext-client-1" },
+      { role: "company" as const, externalSignerId: "ext-company-2" },
+    ];
+    const assignment = buildRequiredAssignment(signers);
+    expect(assignment).toEqual([{ id: "ext-client-1" }, { id: "ext-company-2" }]);
+  });
+
+  it("trata erro upstream 502/500 da Assinafy e mantém diagnóstico sem vazar tokens", async () => {
+    const errorWithContext = {
+      name: "FunctionsHttpError",
+      message: "Edge Function returned a non-2xx status code",
+      context: new Response(
+        JSON.stringify({
+          code: "assinafy_upstream_error",
+          message: "A Assinafy rejeitou a operação.",
+          requestId: "req-audit-123",
+          diagnostic: {
+            stage: "creating_remote_document",
+            assinafyRequestSent: true,
+            httpStatus: 502,
+            timedOut: false,
+          },
+        }),
+        { status: 502, headers: { "content-type": "application/json" } },
+      ),
+    };
+
+    const normalized = await normalizeAssinafyInvokeError(errorWithContext, "contract-xyz");
+    expect(normalized.diagnostic.backendReached).toBe(true);
+    expect(normalized.diagnostic.assinafyRequestSent).toBe(true);
+    expect(normalized.diagnostic.httpStatus).toBe(502);
+    expect(normalized.message).toContain("assinafy-create-doc failed:");
+    expect(normalized.message).toContain("HTTP 502");
+    expect(normalized.message).toContain("requestId: req-audit-123");
+  });
+});

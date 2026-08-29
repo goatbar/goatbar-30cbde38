@@ -89,7 +89,7 @@ export interface ArcGlyphLayout {
   fontSize: number;
 }
 
-/** Distribui glifos vetoriais pelo arco, reduzindo a fonte para nomes longos. */
+/** Distribui glifos vetoriais pelo arco de forma perfeitamente simétrica e tangencial. */
 export function layoutTextOnArc(
   text: string,
   centerX: number,
@@ -100,28 +100,54 @@ export function layoutTextOnArc(
   fontSize: number,
   minFontSize: number,
   font: PDFFont,
+  position?: "top" | "bottom",
 ): ArcGlyphLayout[] {
   const chars = [...sanitizePdfText(text).toUpperCase()];
   if (chars.length === 0) return [];
 
-  const arcLength = (Math.abs(endDeg - startDeg) * Math.PI * radius) / 180;
+  const isBottom = position === "bottom" || (startDeg + endDeg) / 2 > 180;
+  const angleSpan = Math.abs(endDeg - startDeg);
+  const arcLength = (angleSpan * Math.PI * radius) / 180;
+
   const naturalWidth = chars.reduce(
     (total, char) => total + font.widthOfTextAtSize(char === " " ? "n" : char, fontSize),
     0,
   );
-  const fittedSize = Math.max(minFontSize, Math.min(fontSize, fontSize * (arcLength / naturalWidth)));
-  const angleStep = chars.length > 1 ? (endDeg - startDeg) / (chars.length - 1) : 0;
-  const isBottomArc = (startDeg + endDeg) / 2 > 180;
+
+  const fittedSize =
+    naturalWidth > arcLength * 0.95
+      ? Math.max(minFontSize, fontSize * ((arcLength * 0.95) / naturalWidth))
+      : fontSize;
+
+  const n = chars.length;
+  const angleStep = n > 1 ? (endDeg - startDeg) / (n - 1) : 0;
 
   return chars.map((char, index) => {
-    const angleDeg = startDeg + index * angleStep;
+    const angleDeg = n > 1 ? startDeg + index * angleStep : (startDeg + endDeg) / 2;
     const angleRad = (angleDeg * Math.PI) / 180;
     const glyphWidth = font.widthOfTextAtSize(char === " " ? "n" : char, fittedSize);
+
+    let x: number;
+    let y: number;
+    let rotationDeg: number;
+
+    if (!isBottom) {
+      // Arco superior: texto corre da esquerda para a direita (sentido horário)
+      rotationDeg = angleDeg - 90;
+      x = centerX + radius * Math.cos(angleRad) - (glyphWidth / 2) * Math.sin(angleRad);
+      y = centerY + radius * Math.sin(angleRad) + (glyphWidth / 2) * Math.cos(angleRad);
+    } else {
+      // Arco inferior: texto corre da esquerda para a direita (sentido anti-horário)
+      rotationDeg = angleDeg + 90;
+      x = centerX + radius * Math.cos(angleRad) + (glyphWidth / 2) * Math.sin(angleRad);
+      y = centerY + radius * Math.sin(angleRad) - (glyphWidth / 2) * Math.cos(angleRad);
+    }
+
     return {
       char,
-      x: centerX + radius * Math.cos(angleRad) - glyphWidth / 2,
-      y: centerY + radius * Math.sin(angleRad) - fittedSize * 0.32,
-      rotationDeg: angleDeg + (isBottomArc ? 90 : -90),
+      x,
+      y,
+      rotationDeg,
       fontSize: fittedSize,
     };
   });
@@ -275,6 +301,15 @@ export class ProposalPdfRenderer {
     return basePdf;
   }
 
+  private static async embedCleanPage(doc: PDFDocument, sourcePage: PDFPage) {
+    const mb = sourcePage.getMediaBox();
+    return doc.embedPage(
+      sourcePage,
+      { left: 0, bottom: 0, right: mb.width, top: mb.height },
+      [1, 0, 0, 1, -mb.x, -mb.y],
+    );
+  }
+
   private static async renderStandardPage(ctx: {
     doc: PDFDocument;
     basePdfDoc: PDFDocument | null;
@@ -291,7 +326,7 @@ export class ProposalPdfRenderer {
     // Embed base clean PDF page if available
     if (basePdfDoc && basePdfDoc.getPageCount() >= pageDef.pageNumber) {
       const sourcePage = basePdfDoc.getPage(pageDef.pageNumber - 1);
-      const embedded = await doc.embedPage(sourcePage);
+      const embedded = await this.embedCleanPage(doc, sourcePage);
       page.drawPage(embedded, { x: 0, y: 0, width: pageWidth, height: pageHeight });
     } else {
       this.drawBackground(page, pageDef, pageWidth, pageHeight);
@@ -391,7 +426,7 @@ export class ProposalPdfRenderer {
     const page1 = doc.addPage([pageWidth, pageHeight]);
     if (basePdfDoc && basePdfDoc.getPageCount() >= pageDef.pageNumber) {
       const sourcePage = basePdfDoc.getPage(pageDef.pageNumber - 1);
-      const embedded = await doc.embedPage(sourcePage);
+      const embedded = await this.embedCleanPage(doc, sourcePage);
       page1.drawPage(embedded, { x: 0, y: 0, width: pageWidth, height: pageHeight });
     } else {
       this.drawBackground(page1, pageDef, pageWidth, pageHeight);
@@ -418,7 +453,7 @@ export class ProposalPdfRenderer {
         // Usa o mesmo background da página de cardápio limpa
         if (basePdfDoc && basePdfDoc.getPageCount() >= pageDef.pageNumber) {
           const sourcePage = basePdfDoc.getPage(pageDef.pageNumber - 1);
-          const embedded = await doc.embedPage(sourcePage);
+          const embedded = await this.embedCleanPage(doc, sourcePage);
           continuationPage.drawPage(embedded, { x: 0, y: 0, width: pageWidth, height: pageHeight });
         } else {
           this.drawBackground(continuationPage, pageDef, pageWidth, pageHeight);
@@ -582,6 +617,7 @@ export class ProposalPdfRenderer {
         fontSize,
         cfg.minFontSize ?? fontSize * 0.72,
         font,
+        cfg.position,
       );
 
       glyphs.forEach(({ char, x, y, rotationDeg, fontSize: fittedFontSize }) => {

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { createCanvas } from "@napi-rs/canvas";
+import * as mupdf from "mupdf";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { describe, expect, it } from "vitest";
 import { ProposalPdfRenderer } from "@/lib/pdf-engine/renderer";
@@ -66,8 +66,8 @@ describe("Proposta Comercial Goat Bar - regressão visual", () => {
     const coverName = template.pages[0].slots.find((slot) => slot.id === "capa-nome-evento-topo")!;
     const coverDate = template.pages[0].slots.find((slot) => slot.id === "capa-data-evento")!;
     expect(coverName.type).toBe("arc");
-    expect(coverName.arcConfig).toMatchObject({ radius: 122, startDeg: 160, endDeg: 20 });
-    expect(coverDate.arcConfig).toMatchObject({ radius: 122, startDeg: 200, endDeg: 340 });
+    expect(coverName.arcConfig).toMatchObject({ radius: 135, startDeg: 160, endDeg: 20 });
+    expect(coverDate.arcConfig).toMatchObject({ radius: 135, startDeg: 205, endDeg: 335 });
 
     const drinks = template.pages[5].slots.find((slot) => slot.id === "drinks-list")!;
     const beverages = template.pages[5].slots.find((slot) => slot.id === "bebidas-list")!;
@@ -81,27 +81,26 @@ describe("Proposta Comercial Goat Bar - regressão visual", () => {
     )!;
     expect(investment.style.font).toBe("Helvetica");
 
-    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber++) {
-      const page = await document.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: 0.25 });
-      const canvas = createCanvas(viewport.width, viewport.height);
-      await page.render({ canvasContext: canvas.getContext("2d") as any, viewport }).promise;
+    const mupdfDoc = mupdf.Document.openDocument(result.pdfBytes, "application/pdf");
+    for (let pageNumber = 0; pageNumber < mupdfDoc.countPages(); pageNumber++) {
+      const page = mupdfDoc.loadPage(pageNumber);
+      const pix = page.toPixmap(mupdf.Matrix.scale(0.25, 0.25), mupdf.ColorSpace.DeviceRGB, false);
       if (process.env.SAVE_PROPOSAL_VISUAL_AUDIT === "1") {
         fs.writeFileSync(
-          path.join(auditDirectory, `pagina-${pageNumber}.png`),
-          canvas.toBuffer("image/png"),
+          path.join(auditDirectory, `pagina-${pageNumber + 1}.png`),
+          pix.asPNG(),
         );
       }
-      const pixels = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
+      const pixels = pix.getPixels();
       let nonWhitePixels = 0;
-      for (let index = 0; index < pixels.length; index += 4) {
+      for (let index = 0; index < pixels.length; index += 3) {
         if (pixels[index] < 245 || pixels[index + 1] < 245 || pixels[index + 2] < 245) {
           nonWhitePixels++;
         }
       }
       expect(
-        nonWhitePixels / (canvas.width * canvas.height),
-        `página ${pageNumber}`,
+        nonWhitePixels / (pix.getWidth() * pix.getHeight()),
+        `página ${pageNumber + 1}`,
       ).toBeGreaterThan(0.08);
     }
 

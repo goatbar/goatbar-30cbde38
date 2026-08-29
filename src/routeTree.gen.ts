@@ -188,7 +188,6 @@ export interface FileRoutesByTo {
   '/modelos': typeof ModelosRoute
   '/vendas': typeof VendasRoute
   '/eventos/$eventoId': typeof EventosEventoIdRoute
-  '/orcamento/solicitar': typeof OrcamentoSolicitarRouteWithChildren
   '/pos-evento/$eventoId': typeof PosEventoEventoIdRoute
   '/eventos': typeof EventosIndexRoute
   '/orcamento': typeof OrcamentoIndexRoute
@@ -264,7 +263,6 @@ export interface FileRouteTypes {
     | '/modelos'
     | '/vendas'
     | '/eventos/$eventoId'
-    | '/orcamento/solicitar'
     | '/pos-evento/$eventoId'
     | '/eventos'
     | '/orcamento'
@@ -519,17 +517,6 @@ interface OrcamentoRouteChildren {
 const OrcamentoRouteChildren: OrcamentoRouteChildren = {
   OrcamentoSolicitarRoute: OrcamentoSolicitarRouteWithChildren,
   OrcamentoIndexRoute: OrcamentoIndexRoute,
-}
-
-const OrcamentoSolicitarRouteWithChildren =
-  OrcamentoSolicitarRoute._addFileChildren(OrcamentoSolicitarRouteChildren)
-
-interface OrcamentoRouteChildren {
-  OrcamentoSolicitarRoute: typeof OrcamentoSolicitarRouteWithChildren
-}
-
-const OrcamentoRouteChildren: OrcamentoRouteChildren = {
-  OrcamentoSolicitarRoute: OrcamentoSolicitarRouteWithChildren,
 }
 
 const OrcamentoRouteWithChildren = OrcamentoRoute._addFileChildren(
