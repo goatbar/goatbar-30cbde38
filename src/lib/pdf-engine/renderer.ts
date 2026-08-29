@@ -333,7 +333,7 @@ export class ProposalPdfRenderer {
     pageHeight: number;
     getFont: (fontName?: string, isBold?: boolean) => PDFFont;
   }) {
-    const { doc, basePdfDoc, pageDef, canonicalData, pageWidth, pageHeight, getFont } = ctx;
+    const { doc, basePdfDoc, pageDef, template, canonicalData, pageWidth, pageHeight, getFont } = ctx;
     const page = doc.addPage([pageWidth, pageHeight]);
 
     // Embed base clean PDF page if available
@@ -343,6 +343,12 @@ export class ProposalPdfRenderer {
       page.drawPage(embedded, { x: 0, y: 0, width: pageWidth, height: pageHeight });
     } else {
       this.drawBackground(page, pageDef, pageWidth, pageHeight);
+    }
+
+    // Special dedicated precision grid for Page 7 of Commercial Proposal
+    if (pageDef.pageNumber === 7 && template.id === "goatbar-commercial-v1") {
+      this.renderCommercialValuesAndConditionsPage(page, canonicalData, getFont);
+      return;
     }
 
     // Slots de campos
@@ -580,6 +586,218 @@ export class ProposalPdfRenderer {
     }
   }
 
+  private static renderCommercialValuesAndConditionsPage(
+    page: PDFPage,
+    canonicalData: CanonicalProposalData,
+    getFont: (fontName?: string, isBold?: boolean) => PDFFont,
+  ) {
+    const bgColor = hexToRgb("#111115");
+    const textWhite = hexToRgb("#FFFFFF");
+    const lineMuted = hexToRgb("#787878");
+    const font = getFont("Helvetica");
+
+    // 1. Clear the entire old Canva content area below the title 'Valores e condições'
+    page.drawRectangle({
+      x: 35,
+      y: 40,
+      width: 1375,
+      height: 655,
+      color: bgColor,
+    });
+
+    // 2. Top section (Left aligned at x = 81.0)
+    page.drawText(sanitizePdfText("Preparamos uma proposta especial para você:"), {
+      x: 81.0,
+      y: 675.08,
+      size: 22,
+      font,
+      color: textWhite,
+    });
+    const guests = canonicalData.quantidadePessoasFormatted || "90";
+    page.drawText(sanitizePdfText(`Número de convidados: ${guests} pessoas.`), {
+      x: 81.0,
+      y: 642.08,
+      size: 22,
+      font,
+      color: textWhite,
+    });
+
+    // 3. Grid Coordinates
+    const col1_x = 81.0;
+    const col2_x = 750.85;
+    const col_width = 580;
+    const bulletIndent = 50;
+
+    // Row 1: Serviço de bar & Equipe (y_pdf = 565.0, lines at y_pdf = 541.0)
+    const duration = canonicalData.quantidadeHorasEventoFormatted || "6";
+    page.drawText(sanitizePdfText(`Serviço de bar completo durante ${duration} horas de festa.`), {
+      x: col1_x,
+      y: 565.0,
+      size: 28,
+      font,
+      color: textWhite,
+    });
+    page.drawLine({
+      start: { x: col1_x, y: 541.0 },
+      end: { x: col1_x + col_width, y: 541.0 },
+      thickness: 1.2,
+      color: lineMuted,
+    });
+    page.drawText(sanitizePdfText("• Copos e insumos inclusos."), {
+      x: col1_x + bulletIndent,
+      y: 503.81,
+      size: 22,
+      font,
+      color: textWhite,
+    });
+
+    page.drawText(sanitizePdfText("Equipe de bar completa."), {
+      x: col2_x,
+      y: 565.0,
+      size: 28,
+      font,
+      color: textWhite,
+    });
+    page.drawLine({
+      start: { x: col2_x, y: 541.0 },
+      end: { x: col2_x + col_width, y: 541.0 },
+      thickness: 1.2,
+      color: lineMuted,
+    });
+
+    const rawStaff = [
+      canonicalData.qtdBartendersFormatted,
+      canonicalData.qtdBarKeepersFormatted,
+      canonicalData.qtdCopeirasFormatted,
+    ].filter((s): s is string => Boolean(s && s.trim().length > 0));
+
+    const staffYs = [503.81, 471.14, 438.46];
+    rawStaff.forEach((staffItem, idx) => {
+      const y = staffYs[idx] ?? 503.81 - idx * 32.68;
+      const cleanItem = staffItem.replace(/^•\s*/, "").replace(/\.*$/, "");
+      page.drawText(sanitizePdfText(`• ${cleanItem}.`), {
+        x: col2_x + bulletIndent,
+        y,
+        size: 22,
+        font,
+        color: textWhite,
+      });
+    });
+
+    // Row 2: Carta de drinks & Decoração (y_pdf = 389.47, lines at y_pdf = 365.0)
+    page.drawText(sanitizePdfText("Carta de drinks personalizada."), {
+      x: col1_x,
+      y: 389.47,
+      size: 28,
+      font,
+      color: textWhite,
+    });
+    page.drawLine({
+      start: { x: col1_x, y: 365.0 },
+      end: { x: col1_x + col_width, y: 365.0 },
+      thickness: 1.2,
+      color: lineMuted,
+    });
+    const drinksCount = canonicalData.quantidadeVariedadesDrinksFormatted || "6";
+    page.drawText(sanitizePdfText(`• Carta composta por ${drinksCount} variedades de drinks.`), {
+      x: col1_x + bulletIndent,
+      y: 327.63,
+      size: 22,
+      font,
+      color: textWhite,
+    });
+    page.drawText(sanitizePdfText("• Todas as opções podem ser feitas sem álcool."), {
+      x: col1_x + bulletIndent,
+      y: 298.45,
+      size: 22,
+      font,
+      color: textWhite,
+    });
+
+    page.drawText(sanitizePdfText("Decoração do bar personalizada."), {
+      x: col2_x,
+      y: 389.47,
+      size: 28,
+      font,
+      color: textWhite,
+    });
+    page.drawLine({
+      start: { x: col2_x, y: 365.0 },
+      end: { x: col2_x + col_width, y: 365.0 },
+      thickness: 1.2,
+      color: lineMuted,
+    });
+    page.drawText(sanitizePdfText("• Conectada com a decoração do evento."), {
+      x: col2_x + bulletIndent,
+      y: 327.63,
+      size: 22,
+      font,
+      color: textWhite,
+    });
+
+    // Long horizontal dividing line across the page at y_pdf = 254.0
+    page.drawLine({
+      start: { x: col1_x, y: 254.0 },
+      end: { x: col2_x + col_width, y: 254.0 },
+      thickness: 1.5,
+      color: textWhite,
+    });
+
+    // Bottom Row: Investimento & Formas de pagamento
+    page.drawText(sanitizePdfText("Investimento:"), {
+      x: col1_x + 30,
+      y: 201.54,
+      size: 29,
+      font,
+      color: textWhite,
+    });
+    const investment = canonicalData.valorInvestimentoFormatted || "R$ 2.350,30";
+    page.drawText(sanitizePdfText(investment), {
+      x: col1_x + 30,
+      y: 132.04,
+      size: 32,
+      font,
+      color: textWhite,
+    });
+
+    page.drawText(sanitizePdfText("Formas de pagamento:"), {
+      x: col2_x,
+      y: 201.54,
+      size: 29,
+      font,
+      color: textWhite,
+    });
+    const dataFinal = canonicalData.dataFinalPagamento || "07.11.2026";
+    page.drawText(sanitizePdfText("• 30% na assinatura do contrato -"), {
+      x: col2_x + 30,
+      y: 154.0,
+      size: 23,
+      font,
+      color: textWhite,
+    });
+    page.drawText(sanitizePdfText(`Restante até dia ${dataFinal}.`), {
+      x: col2_x + 48,
+      y: 126.0,
+      size: 23,
+      font,
+      color: textWhite,
+    });
+    page.drawText(sanitizePdfText("• 5% de desconto para pagamento à vista."), {
+      x: col2_x + 30,
+      y: 98.0,
+      size: 23,
+      font,
+      color: textWhite,
+    });
+    page.drawText(sanitizePdfText("• Parcelamento no cartão ou boleto (a consultar)."), {
+      x: col2_x + 30,
+      y: 70.0,
+      size: 23,
+      font,
+      color: textWhite,
+    });
+  }
+
   private static drawSlot(
     page: PDFPage,
     slot: ProposalFieldSlot,
@@ -613,86 +831,6 @@ export class ProposalPdfRenderer {
     const fontSize = slot.style.fontSize;
     const lineHeight = slot.style.lineHeight;
     const color = hexToRgb(slot.style.color);
-
-    if (slot.id === "resumo-convidados") {
-      page.drawRectangle({
-        x: 80,
-        y: 632,
-        width: 450,
-        height: 28,
-        color: hexToRgb("#111115"),
-      });
-    } else if (slot.id === "resumo-duracao-horas") {
-      page.drawRectangle({
-        x: 40,
-        y: 552,
-        width: 700,
-        height: 33,
-        color: hexToRgb("#111115"),
-      });
-    } else if (slot.id === "resumo-equipe-staff") {
-      page.drawRectangle({
-        x: 880,
-        y: 420,
-        width: 400,
-        height: 100,
-        color: hexToRgb("#111115"),
-      });
-    } else if (slot.id === "resumo-variedades-drinks") {
-      page.drawRectangle({
-        x: 110,
-        y: 318,
-        width: 630,
-        height: 26,
-        color: hexToRgb("#111115"),
-      });
-    } else if (slot.id === "resumo-investimento-total") {
-      page.drawRectangle({
-        x: 110,
-        y: 115,
-        width: 400,
-        height: 45,
-        color: hexToRgb("#111115"),
-      });
-    } else if (slot.id === "resumo-formas-pagamento") {
-      page.drawRectangle({
-        x: 740,
-        y: 65,
-        width: 650,
-        height: 115,
-        color: hexToRgb("#111115"),
-      });
-      const dataFinal = resolvedText || "03.10.2026";
-      page.drawText(sanitizePdfText("• 30% na assinatura do contrato -"), {
-        x: 793.34,
-        y: 152.04,
-        size: fontSize,
-        font,
-        color,
-      });
-      page.drawText(sanitizePdfText(`Restante até dia  ${dataFinal}`), {
-        x: 750.85,
-        y: 127.29,
-        size: fontSize,
-        font,
-        color,
-      });
-      page.drawText(sanitizePdfText("• 5% de desconto para pagamento à vista"), {
-        x: 793.34,
-        y: 102.54,
-        size: fontSize,
-        font,
-        color,
-      });
-      page.drawText(sanitizePdfText("• Parcelamento no cartão ou boleto (a consultar)"), {
-        x: 793.34,
-        y: 77.79,
-        size: fontSize,
-        font,
-        color,
-      });
-      return;
-    }
 
     // Suporte especial para texto em arco (ex: capa do casal)
     if (slot.type === "arc") {

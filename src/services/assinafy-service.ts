@@ -184,7 +184,7 @@ export async function dispatchContractToAssinafy(
 export async function syncAssinafyStatus(contractId: string): Promise<Record<string, unknown>> {
   const { data: request, error: requestError } = await (supabase as any)
     .from("contract_signature_requests")
-    .select("id")
+    .select("id, dispatch_status, external_document_id, external_assignment_id, signature_url")
     .eq("contract_id", contractId)
     .eq("signature_provider", "assinafy")
     .order("created_at", { ascending: false })
@@ -194,16 +194,34 @@ export async function syncAssinafyStatus(contractId: string): Promise<Record<str
   if (requestError) throw new Error(`Falha ao localizar solicitação: ${requestError.message}`);
   if (!request) return { status: "not_sent", dispatch_status: "idle" };
 
-  const { data, error } = await supabase.functions.invoke(`assinafy-status`, {
-    method: "POST",
-    body: { action: "sync", signatureRequestId: request.id },
-  });
+  try {
+    const { data, error } = await supabase.functions.invoke(`assinafy-status`, {
+      method: "POST",
+      body: { action: "sync", signatureRequestId: request.id },
+    });
 
-  if (error) {
-    throw new Error(`Falha ao invocar assinafy-status: ${error.message}`);
+    if (error) {
+      console.warn(`[syncAssinafyStatus] Falha ao invocar assinafy-status, usando estado local:`, error);
+      return {
+        status: request.dispatch_status || "pending",
+        dispatch_status: request.dispatch_status || "pending",
+        externalDocumentId: request.external_document_id,
+        externalAssignmentId: request.external_assignment_id,
+        signature_url: request.signature_url,
+      };
+    }
+
+    return data || { status: request.dispatch_status };
+  } catch (err) {
+    console.warn(`[syncAssinafyStatus] Erro na sincronização, usando estado local:`, err);
+    return {
+      status: request.dispatch_status || "pending",
+      dispatch_status: request.dispatch_status || "pending",
+      externalDocumentId: request.external_document_id,
+      externalAssignmentId: request.external_assignment_id,
+      signature_url: request.signature_url,
+    };
   }
-
-  return data;
 }
 
 export async function resendAssinafySignature(

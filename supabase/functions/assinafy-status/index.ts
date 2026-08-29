@@ -54,15 +54,40 @@ serve(async (req) => {
     if (!sigReq.external_document_id || ["failed", "reconciliation_required", "canceled"].includes(sigReq.dispatch_status)) return json({ ...local, status: sigReq.dispatch_status });
 
     let provider;
-    try { provider = await getDocumentStatus(sigReq.external_document_id); }
-    catch (e) {
-      console.error("[assinafy-status] provider_error", { ...context, endpoint: "get_document_status", providerError: e instanceof Error ? e.message.replace(/\([^)]*\):.*/, "$1") : "unknown" });
-      throw new StatusHttpError(502, "assinafy_upstream_error", "Falha ao consultar status na Assinafy.");
+    try {
+      provider = await getDocumentStatus(sigReq.external_document_id);
+    } catch (e) {
+      console.warn("[assinafy-status] provider_unavailable_fallback", {
+        ...context,
+        endpoint: "get_document_status",
+        providerError: e instanceof Error ? e.message : "unknown",
+      });
+      return json({
+        ...local,
+        status: sigReq.dispatch_status,
+        dispatch_status: sigReq.dispatch_status,
+        upstream_synced: false,
+      });
     }
     const doc = provider.data || provider;
     const status = normalizeAssinafyStatus(doc.status || doc.document_status);
-    if (status !== sigReq.dispatch_status) await admin.from("contract_signature_requests").update({ dispatch_status: status, internal_status: status === "signed" ? "signed" : "pending_signature", last_synced_at: new Date().toISOString() }).eq("id", sigReq.id);
-    return json({ ...local, status, dispatch_status: status, artifacts: doc.artifacts });
+    if (status !== sigReq.dispatch_status) {
+      await admin
+        .from("contract_signature_requests")
+        .update({
+          dispatch_status: status,
+          internal_status: status === "signed" ? "signed" : "pending_signature",
+          last_synced_at: new Date().toISOString(),
+        })
+        .eq("id", sigReq.id);
+    }
+    return json({
+      ...local,
+      status,
+      dispatch_status: status,
+      artifacts: doc.artifacts,
+      upstream_synced: true,
+    });
   } catch (e) {
     const err = e instanceof StatusHttpError ? e : new StatusHttpError(500, "internal_error", "Erro interno ao consultar assinatura.");
     console.error(`[assinafy-status] ${err.status}`, { ...context, reason: err.code });

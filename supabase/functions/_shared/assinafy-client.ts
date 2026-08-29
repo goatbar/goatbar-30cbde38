@@ -224,7 +224,7 @@ export async function createAssignment(
 }
 
 export async function getDocumentStatus(documentId: string) {
-  const url = `${ASSINAFY_BASE_URL}/v1/documents/${documentId}?expand=assignment`;
+  const url = `${ASSINAFY_BASE_URL}/v1/documents/${documentId}`;
   return await assinafyFetch(url, { method: "GET", headers: getAssinafyHeaders() });
 }
 
