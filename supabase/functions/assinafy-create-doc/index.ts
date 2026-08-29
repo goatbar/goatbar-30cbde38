@@ -324,12 +324,52 @@ serve(async (req) => {
         provider.assignmentId = assignment?.id || null;
         if (!provider.assignmentId) throw new Error("API não retornou o ID do Assignment.");
         stage = "persisting_remote_assignment";
+
+        const returnedSigners = Array.isArray(assignment?.signers) ? assignment.signers : [];
+        const returnedSigningUrls = Array.isArray(assignment?.signing_urls) ? assignment.signing_urls : [];
+
+        // Atualiza cada signatário com seu link de assinatura individual e status de notificação
+        for (const party of requiredSigners) {
+          const externalSignerObj = externalSignerIds.find((s) => s.role === party.role);
+          const extId = externalSignerObj?.externalSignerId;
+          const assignedSigner = returnedSigners.find(
+            (s: any) => s.id === extId || s.email?.trim().toLowerCase() === party.email.trim().toLowerCase(),
+          );
+          const signingUrlObj = returnedSigningUrls.find(
+            (u: any) => u.signer_id === extId || u.signer_id === assignedSigner?.id,
+          );
+          const signerUrl = signingUrlObj?.url || null;
+          const isNotified = assignedSigner?.notified !== false;
+
+          await admin
+            .from("contract_signature_signers")
+            .update({
+              signature_url: signerUrl,
+              notification_status: isNotified ? "sent" : "pending",
+              notified_at: isNotified ? new Date().toISOString() : null,
+              status: isNotified ? "sent" : "pending",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("signature_request_id", sigReq.id)
+            .eq("role", party.role);
+        }
+
+        const clientSigningUrl =
+          returnedSigningUrls.find(
+            (u: any) => u.signer_id === externalSignerIds.find((s) => s.role === "client")?.externalSignerId,
+          )?.url ||
+          returnedSigningUrls[0]?.url ||
+          assignment?.signature_url ||
+          null;
+
+        const anyNotified = returnedSigners.length === 0 || returnedSigners.some((s: any) => s.notified !== false);
+
         const saved = await admin
           .from("contract_signature_requests")
           .update({
             external_assignment_id: provider.assignmentId,
-            signature_url: assignment?.signature_url || assignment?.signing_urls?.[0]?.url,
-            dispatch_status: "pending_signature",
+            signature_url: clientSigningUrl,
+            dispatch_status: anyNotified ? "pending_signature" : "assignment_created",
             sent_at: new Date().toISOString(),
           })
           .eq("id", sigReq.id)
@@ -337,6 +377,22 @@ serve(async (req) => {
           .single();
         if (saved.error || !saved.data)
           throw saved.error || new Error("Assignment remoto não pôde ser persistido.");
+
+        console.info("[assinafy-create-doc] assignment_created", {
+          requestId: correlationId,
+          documentId: provider.documentId,
+          assignmentId: provider.assignmentId,
+          signersSummary: requiredSigners.map((party) => {
+            const extId = externalSignerIds.find((s) => s.role === party.role)?.externalSignerId;
+            const assignedSigner = returnedSigners.find((s: any) => s.id === extId);
+            return {
+              role: party.role,
+              email: party.email,
+              externalSignerId: extId,
+              notified: assignedSigner?.notified ?? true,
+            };
+          }),
+        });
       }
 
       stage = "persisting_contract_status";

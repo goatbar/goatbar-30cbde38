@@ -201,18 +201,18 @@ export async function createSigner(fullName: string, email: string) {
 
 export async function createAssignment(
   documentId: string,
-  signers: { id: string; verification_method?: string; notification_methods?: string[] }[],
+  signers: { id: string; verification_method?: string; notification_methods?: string[]; step?: number }[],
 ) {
   const url = `${ASSINAFY_BASE_URL}/v1/documents/${documentId}/assignments`;
-  // Do not rely on provider defaults: without an explicit notification method the
-  // assignment can be created successfully without sending the invitation email.
+  // Parallel notification (step 1 for all signers) ensures all required parties receive
+  // the invitation email immediately upon assignment creation.
   const payload = {
     method: "virtual",
-    signers: signers.map((signer, index) => ({
-      ...signer,
+    signers: signers.map((signer) => ({
+      id: signer.id,
       verification_method: signer.verification_method || "Email",
       notification_methods: signer.notification_methods || ["Email"],
-      step: index + 1,
+      step: signer.step ?? 1,
     })),
   };
 
@@ -224,7 +224,7 @@ export async function createAssignment(
 }
 
 export async function getDocumentStatus(documentId: string) {
-  const url = `${ASSINAFY_BASE_URL}/v1/documents/${documentId}`;
+  const url = `${ASSINAFY_BASE_URL}/v1/documents/${documentId}?expand=assignment`;
   return await assinafyFetch(url, { method: "GET", headers: getAssinafyHeaders() });
 }
 

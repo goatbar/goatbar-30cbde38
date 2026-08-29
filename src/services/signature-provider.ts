@@ -1,4 +1,4 @@
-﻿import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import { dispatchContractToZapSign, getZapSignStatus } from "./zapsign-service";
 import {
   dispatchContractToAssinafy,
@@ -126,14 +126,18 @@ export const assinafySignatureProvider: SignatureProvider = {
   },
 
   async getSignatureLink(providerDocumentId, signerEmail) {
-    // A Assinafy virtual deve buscar o sign_url dos signers no banco, ou usar url unica se a API devolver.
+    if (!signerEmail) return "";
+    const cleanEmail = signerEmail.toLowerCase().trim();
     const { data } = await (supabase as any)
       .from("contract_signature_signers")
-      .select("status") // Ou url se houver
-      .eq("external_signer_id", signerEmail)
+      .select("signature_url")
+      .ilike("email", cleanEmail)
+      .not("signature_url", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
-    return ""; // Pode retornar vazio se não for necessário
+    return data?.signature_url || "";
   },
 
   async syncStatus(contractId) {

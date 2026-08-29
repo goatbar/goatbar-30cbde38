@@ -199,8 +199,8 @@ export class ProposalPdfRenderer {
       "NeueMontreal-Regular": fontRegular,
       "NeueMontreal-Bold": fontBold,
       "NeueMontreal-Light": fontRegular,
-      "AllrounderMonument-Regular": fontBold,
-      "AllrounderMonument-Book": fontBold,
+      "AllrounderMonument-Regular": fontRegular,
+      "AllrounderMonument-Book": fontRegular,
     };
 
     const getFont = (fontName?: string, isBold?: boolean): PDFFont => {
@@ -298,6 +298,19 @@ export class ProposalPdfRenderer {
         `A arte base da proposta "${template.name}" possui ${basePdf.getPageCount()} páginas; eram esperadas pelo menos ${highestPageNumber}.`,
       );
     }
+
+    for (const page of basePdf.getPages()) {
+      const mb = page.getMediaBox();
+      if (mb.x !== 0 || mb.y !== 0) {
+        page.translateContent(-mb.x, -mb.y);
+        page.setMediaBox(0, 0, mb.width, mb.height);
+        page.setCropBox(0, 0, mb.width, mb.height);
+        page.setBleedBox(0, 0, mb.width, mb.height);
+        page.setTrimBox(0, 0, mb.width, mb.height);
+        page.setArtBox(0, 0, mb.width, mb.height);
+      }
+    }
+
     return basePdf;
   }
 
@@ -600,6 +613,16 @@ export class ProposalPdfRenderer {
     const fontSize = slot.style.fontSize;
     const lineHeight = slot.style.lineHeight;
     const color = hexToRgb(slot.style.color);
+
+    if (slot.id === "resumo-formas-pagamento") {
+      page.drawRectangle({
+        x: 745,
+        y: 40,
+        width: 650,
+        height: 150,
+        color: hexToRgb("#111115"),
+      });
+    }
 
     // Suporte especial para texto em arco (ex: capa do casal)
     if (slot.type === "arc") {

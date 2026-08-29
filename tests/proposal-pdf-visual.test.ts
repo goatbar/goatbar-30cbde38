@@ -84,7 +84,7 @@ describe("Proposta Comercial Goat Bar - regressão visual", () => {
     const mupdfDoc = mupdf.Document.openDocument(result.pdfBytes, "application/pdf");
     for (let pageNumber = 0; pageNumber < mupdfDoc.countPages(); pageNumber++) {
       const page = mupdfDoc.loadPage(pageNumber);
-      const pix = page.toPixmap(mupdf.Matrix.scale(0.25, 0.25), mupdf.ColorSpace.DeviceRGB, false);
+      const pix = page.toPixmap(mupdf.Matrix.scale(1, 1), mupdf.ColorSpace.DeviceRGB, false);
       if (process.env.SAVE_PROPOSAL_VISUAL_AUDIT === "1") {
         fs.writeFileSync(
           path.join(auditDirectory, `pagina-${pageNumber + 1}.png`),
@@ -92,6 +92,19 @@ describe("Proposta Comercial Goat Bar - regressão visual", () => {
         );
       }
       const pixels = pix.getPixels();
+      const w = pix.getWidth();
+      const h = pix.getHeight();
+
+      // Audit the bottom rows: no page should end with a white band
+      let bottomWhiteCount = 0;
+      for (let x = 0; x < w; x++) {
+        const idx = ((h - 1) * w + x) * 3;
+        if (pixels[idx] > 240 && pixels[idx + 1] > 240 && pixels[idx + 2] > 240) {
+          bottomWhiteCount++;
+        }
+      }
+      expect(bottomWhiteCount, `faixa branca na página ${pageNumber + 1}`).toBe(0);
+
       let nonWhitePixels = 0;
       for (let index = 0; index < pixels.length; index += 3) {
         if (pixels[index] < 245 || pixels[index + 1] < 245 || pixels[index + 2] < 245) {
@@ -99,7 +112,7 @@ describe("Proposta Comercial Goat Bar - regressão visual", () => {
         }
       }
       expect(
-        nonWhitePixels / (pix.getWidth() * pix.getHeight()),
+        nonWhitePixels / (w * h),
         `página ${pageNumber + 1}`,
       ).toBeGreaterThan(0.08);
     }

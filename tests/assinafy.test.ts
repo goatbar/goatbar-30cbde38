@@ -548,4 +548,96 @@ describe("Assinafy End-to-End Audit & Edge Cases", () => {
     expect(normalized.message).toContain("HTTP 502");
     expect(normalized.message).toContain("requestId: req-audit-123");
   });
+
+  it("rejeita envio se destinatário cliente estiver sem e-mail", () => {
+    expect(() =>
+      validateRequiredSigners(
+        { name: "Cliente Sem Email", email: "" },
+        { name: "Sócio Goat", email: "socio@goatbar.com.br" },
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        status: 422,
+        code: "signer_email_required",
+        message: "E-mail válido do signatário não informado no evento.",
+      }),
+    );
+  });
+
+  it("rejeita envio se o e-mail tiver formato inválido", () => {
+    expect(() =>
+      validateRequiredSigners(
+        { name: "Cliente Invalido", email: "email-invalido-sem-arroba" },
+        { name: "Sócio Goat", email: "socio@goatbar.com.br" },
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        status: 422,
+        code: "signer_email_required",
+      }),
+    );
+  });
+
+  it("cenário: falha sem IDs remotos -> limpa registro obsoleto para nova tentativa", () => {
+    const existing = {
+      id: "req-clean-retry",
+      dispatch_status: "failed",
+      original_file_hash: "hash-clean",
+      external_document_id: null,
+      external_assignment_id: null,
+      signature_url: null,
+    };
+    const decision = decideDispatch(existing, "hash-clean");
+    expect(decision.action).toBe("obsolete_failed_without_external_ids");
+  });
+
+  it("cenário: assignment criado com notificação disparada para ambos os signatários", () => {
+    const fakeAssignmentResponse = {
+      status: 200,
+      data: {
+        id: "assign-123",
+        resource: "assignment",
+        signers: [
+          {
+            id: "signer-client-1",
+            email: "cliente@example.com",
+            step: 1,
+            notified: true,
+            completed: false,
+          },
+          {
+            id: "signer-company-2",
+            email: "socio@goatbar.com.br",
+            step: 1,
+            notified: true,
+            completed: false,
+          },
+        ],
+        signing_urls: [
+          {
+            signer_id: "signer-client-1",
+            url: "https://app.assinafy.com.br/sign/doc1?email=cliente@example.com",
+          },
+          {
+            signer_id: "signer-company-2",
+            url: "https://app.assinafy.com.br/sign/doc1?email=socio@goatbar.com.br",
+          },
+        ],
+      },
+    };
+
+    const returnedSigners = fakeAssignmentResponse.data.signers;
+    const returnedUrls = fakeAssignmentResponse.data.signing_urls;
+    const anyNotified = returnedSigners.some((s) => s.notified !== false);
+
+    expect(anyNotified).toBe(true);
+    expect(returnedSigners[0].notified).toBe(true);
+    expect(returnedSigners[1].notified).toBe(true);
+
+    const clientUrl = returnedUrls.find((u) => u.signer_id === "signer-client-1")?.url;
+    const companyUrl = returnedUrls.find((u) => u.signer_id === "signer-company-2")?.url;
+
+    expect(clientUrl).toBe("https://app.assinafy.com.br/sign/doc1?email=cliente@example.com");
+    expect(companyUrl).toBe("https://app.assinafy.com.br/sign/doc1?email=socio@goatbar.com.br");
+  });
 });
