@@ -60,7 +60,7 @@ serve(async (req) => {
       });
     }
 
-    stage = "verifying_signer";
+    stage = "lookup_request";
     const { data: signatureRequest, error: lookupError } = await admin
       .from("contract_signature_requests")
       .select("id,contract_id,dispatch_status,external_document_id,external_assignment_id")
@@ -69,33 +69,38 @@ serve(async (req) => {
       .maybeSingle();
 
     if (lookupError) {
-      throw Object.assign(lookupError, { status: 500, code: "database_sync_failed" });
+      throw Object.assign(lookupError, { status: 500, code: "database_sync_failed", stage: "lookup_request" });
     }
     if (!signatureRequest) {
       throw Object.assign(new Error("Documento Assinafy não encontrado no registro local."), {
         status: 404,
         code: "validation_error",
+        stage: "lookup_request",
       });
     }
 
     contractId = signatureRequest.contract_id;
     internalDocumentId = signatureRequest.id;
+
+    stage = "authorization";
     await requireContractSignatureAccess(auth, "admin", contractId);
 
     if (signatureRequest.external_assignment_id !== assignmentId) {
       throw Object.assign(new Error("O assignment não pertence à solicitação armazenada."), {
         status: 409,
         code: "validation_error",
+        stage: "validating_input",
       });
     }
 
     if (["signed", "completed", "canceled", "cancelled"].includes(signatureRequest.dispatch_status)) {
       throw Object.assign(
         new Error(`Não é possível reenviar uma solicitação com status ${signatureRequest.dispatch_status}.`),
-        { status: 409, code: "validation_error" },
+        { status: 409, code: "validation_error", stage: "validating_input" },
       );
     }
 
+    stage = "verifying_signer";
     const { data: signer } = await admin
       .from("contract_signature_signers")
       .select("id, status")
@@ -107,6 +112,7 @@ serve(async (req) => {
       throw Object.assign(new Error("Este signatário já concluiu a assinatura do documento."), {
         status: 409,
         code: "signer_already_signed",
+        stage: "verifying_signer",
       });
     }
 
@@ -205,7 +211,7 @@ serve(async (req) => {
     const message = error instanceof Error ? error.message : String(error);
 
     const diagnostic = {
-      stage,
+      stage: error?.stage || stage,
       code,
       requestStarted: true,
       backendReached: true,
