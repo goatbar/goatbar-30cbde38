@@ -58,7 +58,7 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
           fieldKey: "inicialNoivo",
           type: "text",
           x: 174.62,
-          y: 488.0,
+          y: 393.6,
           width: 108,
           height: 100,
           style: {
@@ -79,7 +79,7 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
           fieldKey: "inicialNoiva",
           type: "text",
           x: 282.62,
-          y: 488.0,
+          y: 393.6,
           width: 108,
           height: 100,
           style: {
@@ -100,7 +100,7 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
           fieldKey: "nomeEvento",
           type: "text",
           x: 228.62,
-          y: 488.0,
+          y: 393.6,
           width: 108,
           height: 100,
           style: {

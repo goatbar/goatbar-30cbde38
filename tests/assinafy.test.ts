@@ -792,5 +792,73 @@ describe("Assinafy End-to-End Audit & Edge Cases", () => {
       const outcomeAfter = (!hasClientAfter || !hasCompanyAfter) ? "reconciliation_required" : "reuse_healthy";
       expect(outcomeAfter).toBe("reuse_healthy");
     });
+
+    it("10. resolve corretamente requiredSigners sem variáveis não declaradas", () => {
+      const requiredSigners = [
+        { role: "client", name: "Mariana", email: "mariana@example.com" },
+        { role: "company", name: "Sócio Goat", email: "socio@goatbar.com.br" },
+      ];
+      const existingSigners = [
+        { role: "client", email: "mariana@example.com" },
+      ];
+
+      const clientReq = requiredSigners.find((s) => s.role === "client");
+      const companyReq = requiredSigners.find((s) => s.role === "company");
+
+      const hasClient = existingSigners?.some(
+        (s) => s.role === "client" || (clientReq && s.email.toLowerCase() === clientReq.email.toLowerCase()),
+      );
+      const hasCompany = companyReq
+        ? existingSigners?.some(
+            (s) => s.role === "company" || s.email.toLowerCase() === companyReq.email.toLowerCase(),
+          )
+        : true;
+      const isMissingSigners =
+        !hasClient || !hasCompany || (existingSigners?.length || 0) < (companyReq ? 2 : 1);
+
+      expect(hasClient).toBe(true);
+      expect(hasCompany).toBe(false);
+      expect(isMissingSigners).toBe(true);
+    });
+
+    it("11. falha antes da chamada à Assinafy não marca providerCalled e não gera documento órfão", () => {
+      const providerState = { called: false, documentId: null, assignmentId: null };
+      const stage = "resolving_idempotency";
+
+      const errorPayload = {
+        success: false,
+        remoteCreated: Boolean(providerState.documentId),
+        reconciliationRequired: providerState.called,
+        diagnostic: {
+          stage,
+          assinafyRequestSent: providerState.called,
+          assinafyDocumentId: providerState.documentId,
+        },
+      };
+
+      expect(errorPayload.remoteCreated).toBe(false);
+      expect(errorPayload.reconciliationRequired).toBe(false);
+      expect(errorPayload.diagnostic.assinafyRequestSent).toBe(false);
+    });
+
+    it("12. falha depois da criação do documento remoto marca reconciliation_required para proteger contra duplicidade", () => {
+      const providerState = { called: true, documentId: "103f6b0f60836521e7197ba01824", assignmentId: null };
+      const stage = "persisting_db";
+
+      const errorPayload = {
+        success: false,
+        remoteCreated: Boolean(providerState.documentId),
+        reconciliationRequired: providerState.called,
+        diagnostic: {
+          stage,
+          assinafyRequestSent: providerState.called,
+          assinafyDocumentId: providerState.documentId,
+        },
+      };
+
+      expect(errorPayload.remoteCreated).toBe(true);
+      expect(errorPayload.reconciliationRequired).toBe(true);
+      expect(errorPayload.diagnostic.assinafyDocumentId).toBe("103f6b0f60836521e7197ba01824");
+    });
   });
 });

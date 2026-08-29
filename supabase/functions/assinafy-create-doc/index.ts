@@ -143,9 +143,18 @@ serve(async (req) => {
         .select("id, role, full_name, email, signature_url, notification_status")
         .eq("signature_request_id", sigReq.id);
 
-      const hasClient = existingSigners?.some((s) => s.role === "client" || s.email.toLowerCase() === clientSigner.email.toLowerCase());
-      const hasCompany = companySigner ? existingSigners?.some((s) => s.role === "company" || s.email.toLowerCase() === companySigner.email.toLowerCase()) : true;
-      const isMissingSigners = !hasClient || !hasCompany || (existingSigners?.length || 0) < (companySigner ? 2 : 1);
+      const clientReq = requiredSigners.find((s) => s.role === "client");
+      const companyReq = requiredSigners.find((s) => s.role === "company");
+      const hasClient = existingSigners?.some(
+        (s) => s.role === "client" || (clientReq && s.email.toLowerCase() === clientReq.email.toLowerCase()),
+      );
+      const hasCompany = companyReq
+        ? existingSigners?.some(
+            (s) => s.role === "company" || s.email.toLowerCase() === companyReq.email.toLowerCase(),
+          )
+        : true;
+      const isMissingSigners =
+        !hasClient || !hasCompany || (existingSigners?.length || 0) < (companyReq ? 2 : 1);
 
       const outcome =
         decision.action === "reuse"
@@ -523,14 +532,18 @@ serve(async (req) => {
       contractId,
       signatureRequestId,
       status,
-      code: error?.code || "internal_error",
+      code: error?.code || (error?.name === "AssinafyApiError" ? "assinafy_upstream_error" : "internal_error"),
+      errorMessage: error?.message || String(caught),
       providerCalled: provider.called,
       remoteCreated: Boolean(provider.documentId),
+      externalDocumentId: provider.documentId,
+      externalAssignmentId: provider.assignmentId,
+      upstreamStatus: error?.diagnostic?.httpStatus ?? null,
     });
     return json(
       {
         success: false,
-        remoteCreated: false,
+        remoteCreated: Boolean(provider.documentId),
         reconciliationRequired: provider.called,
         message: safeMessage,
         error: safeMessage,
@@ -548,6 +561,7 @@ serve(async (req) => {
           databaseUpdated: Boolean(signatureRequestId),
           httpStatus: error?.diagnostic?.httpStatus ?? null,
           timedOut: Boolean(error?.diagnostic?.timedOut),
+          technicalError: error?.message || undefined,
         },
       },
       status,
