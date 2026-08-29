@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export interface AssinafyRequestResponse {
   success: boolean;
-  dispatchOutcome?: "new_dispatch" | "reuse_healthy" | "reuse" | "reconciliation_required" | "already_signed";
+  dispatchOutcome?: "new_dispatch" | "reuse_healthy" | "reuse" | "reconciliation_required" | "already_signed" | "remote_document_missing";
   signatureRequestId?: string;
   externalDocumentId?: string;
   externalAssignmentId?: string;
@@ -14,6 +14,7 @@ export interface AssinafyRequestResponse {
   message?: string;
   requestId?: string;
   diagnostic?: AssinafyDiagnostic;
+  recreationRequired?: boolean;
 }
 
 export interface AssinafyDiagnostic {
@@ -232,6 +233,12 @@ export async function estimateAssinafyResendCost(
   const { data, error } = await supabase.functions.invoke("assinafy-resend", {
     body: { action: "estimate", documentId, assignmentId, signerId },
   });
+  if (data?.code === "remote_document_missing") {
+    const err = new Error(data.error || "O documento anterior não existe mais na Assinafy. É necessário gerar um novo envio para assinatura.");
+    (err as any).code = "remote_document_missing";
+    (err as any).recreationRequired = true;
+    throw err;
+  }
   if (error || !data?.success) {
     throw new Error(`Falha ao estimar custo de reenvio: ${error?.message || data?.error}`);
   }
@@ -246,6 +253,13 @@ export async function resendAssinafySignature(
   const { data, error } = await supabase.functions.invoke("assinafy-resend", {
     body: { action: "resend", documentId, assignmentId, signerId },
   });
+
+  if (data?.code === "remote_document_missing") {
+    const err = new Error(data.error || "O documento anterior não existe mais na Assinafy. É necessário gerar um novo envio para assinatura.");
+    (err as any).code = "remote_document_missing";
+    (err as any).recreationRequired = true;
+    throw err;
+  }
 
   if (error || !data?.success) {
     throw new Error(`Falha ao reenviar assinatura: ${error?.message || data?.error}`);

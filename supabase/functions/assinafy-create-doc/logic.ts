@@ -175,6 +175,8 @@ export function decideDispatch(existing: DispatchRecord | null, pdfHash: string)
     return { action: "processing" as const, request: existing };
   if (existing.dispatch_status === "reconciliation_required")
     return { action: "reconcile" as const, request: existing };
+  if (existing.dispatch_status === "remote_document_missing")
+    return { action: "recreate" as const, request: existing };
 
   if (existing.original_file_hash && existing.original_file_hash !== pdfHash) {
     return { action: "hash_conflict" as const, request: existing };

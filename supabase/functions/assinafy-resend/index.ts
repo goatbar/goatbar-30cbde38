@@ -5,6 +5,7 @@ import {
   resendAssignment,
   estimateResendCost,
   getDocumentActivities,
+  getDocumentStatus,
 } from "../_shared/assinafy-client.ts";
 import { requireContractSignatureAccess } from "../_shared/auth-helper.ts";
 
@@ -85,14 +86,6 @@ serve(async (req) => {
     stage = "authorization";
     await requireContractSignatureAccess(auth, "admin", contractId);
 
-    if (signatureRequest.external_assignment_id !== assignmentId) {
-      throw Object.assign(new Error("O assignment não pertence à solicitação armazenada."), {
-        status: 409,
-        code: "validation_error",
-        stage: "validating_input",
-      });
-    }
-
     if (["signed", "completed", "canceled", "cancelled"].includes(signatureRequest.dispatch_status)) {
       throw Object.assign(
         new Error(`Não é possível reenviar uma solicitação com status ${signatureRequest.dispatch_status}.`),
@@ -103,7 +96,7 @@ serve(async (req) => {
     stage = "verifying_signer";
     const { data: signer } = await admin
       .from("contract_signature_signers")
-      .select("id, status")
+      .select("id, email, status, external_signer_id")
       .eq("signature_request_id", signatureRequest.id)
       .eq("external_signer_id", signerId)
       .maybeSingle();
@@ -116,12 +109,143 @@ serve(async (req) => {
       });
     }
 
+    // Auto-reconcile with canonical remote state
+    stage = "verifying_remote_document";
+    let activeAssignmentId = assignmentId;
+    let activeSignerId = signerId;
+
+    try {
+      const docRes = await getDocumentStatus(documentId, "assignment");
+      const docData = (docRes as any)?.data || docRes;
+
+      if (docData?.assignment) {
+        const remoteAssignmentId = docData.assignment.id;
+        if (remoteAssignmentId && remoteAssignmentId !== activeAssignmentId) {
+          activeAssignmentId = remoteAssignmentId;
+          await admin
+            .from("contract_signature_requests")
+            .update({ external_assignment_id: activeAssignmentId })
+            .eq("id", signatureRequest.id);
+        }
+
+        const remoteSigners = Array.isArray(docData.assignment.signers) ? docData.assignment.signers : [];
+        const matchedSigner = remoteSigners.find(
+          (s: any) =>
+            s.id === activeSignerId ||
+            (signer?.email && s.email?.trim().toLowerCase() === signer.email.trim().toLowerCase()),
+        );
+
+        if (matchedSigner?.id && matchedSigner.id !== activeSignerId) {
+          activeSignerId = matchedSigner.id;
+          if (signer) {
+            await admin
+              .from("contract_signature_signers")
+              .update({ external_signer_id: activeSignerId })
+              .eq("id", signer.id);
+          }
+        }
+      }
+    } catch (remoteErr: any) {
+      const isNotFound =
+        (remoteErr instanceof AssinafyApiError &&
+          (remoteErr.diagnostic?.httpStatus === 404 || remoteErr.status === 404)) ||
+        remoteErr?.status === 404;
+
+      if (isNotFound) {
+        await admin
+          .from("contract_signature_requests")
+          .update({
+            dispatch_status: "remote_document_missing",
+            internal_status: "remote_document_missing",
+            last_error: "Documento não encontrado na Assinafy.",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", signatureRequest.id);
+
+        return new Response(
+          JSON.stringify({
+            success: false,
+            code: "remote_document_missing",
+            stage: "verifying_remote_document",
+            recreationRequired: true,
+            error: "O documento anterior não existe mais na Assinafy. É necessário gerar um novo envio para assinatura.",
+            diagnostic: {
+              stage: "verifying_remote_document",
+              code: "remote_document_missing",
+              requestStarted: true,
+              backendReached: true,
+              assinafyRequestSent: true,
+              httpStatus: 404,
+              assinafyResponse: remoteErr.diagnostic?.responseBody || { message: "Documento não encontrado." },
+              errorMessage: "Documento não encontrado na Assinafy.",
+              internalContractId: contractId,
+              internalDocumentId,
+              assinafyDocumentId: documentId,
+              databaseUpdated: true,
+              timedOut: false,
+              authenticationRejected: false,
+            },
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+      console.warn("[assinafy-resend] remote_state_lookup_warn", remoteErr);
+    }
+
     if (action === "estimate") {
       stage = "estimating_cost";
       let estimateResult;
       try {
-        estimateResult = await estimateResendCost(documentId, assignmentId, signerId);
-      } catch (err) {
+        estimateResult = await estimateResendCost(documentId, activeAssignmentId, activeSignerId);
+      } catch (err: any) {
+        const isNotFound =
+          (err instanceof AssinafyApiError &&
+            (err.diagnostic?.httpStatus === 404 || err.status === 404)) ||
+          err?.status === 404;
+
+        if (isNotFound) {
+          await admin
+            .from("contract_signature_requests")
+            .update({
+              dispatch_status: "remote_document_missing",
+              internal_status: "remote_document_missing",
+              last_error: "Documento ou signatário não encontrado na Assinafy durante estimativa.",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", signatureRequest.id);
+
+          return new Response(
+            JSON.stringify({
+              success: false,
+              code: "remote_document_missing",
+              stage: "verifying_remote_document",
+              recreationRequired: true,
+              error: "O documento anterior não existe mais na Assinafy. É necessário gerar um novo envio para assinatura.",
+              diagnostic: {
+                stage: "verifying_remote_document",
+                code: "remote_document_missing",
+                requestStarted: true,
+                backendReached: true,
+                assinafyRequestSent: true,
+                httpStatus: 404,
+                assinafyResponse: err.diagnostic?.responseBody || { message: "Documento não encontrado." },
+                errorMessage: "Documento não encontrado na Assinafy.",
+                internalContractId: contractId,
+                internalDocumentId,
+                assinafyDocumentId: documentId,
+                databaseUpdated: true,
+              },
+            }),
+            {
+              status: 404,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
+
         throw Object.assign(err, { code: "estimate_failed" });
       }
       const costData = (estimateResult as any)?.data || estimateResult;
@@ -145,14 +269,14 @@ serve(async (req) => {
       contractId,
       internalDocumentId,
       documentId,
-      assignmentId,
-      signerId,
+      assignmentId: activeAssignmentId,
+      signerId: activeSignerId,
     });
 
     providerCalled = true;
     let providerResult;
     try {
-      providerResult = await resendAssignment(documentId, assignmentId, signerId);
+      providerResult = await resendAssignment(documentId, activeAssignmentId, activeSignerId);
     } catch (err) {
       throw Object.assign(err, { code: "resend_failed" });
     }

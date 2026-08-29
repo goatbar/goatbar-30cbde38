@@ -238,6 +238,8 @@ function EventoInterna() {
   const [reconcileSignersList, setReconcileSignersList] = useState<any[]>([]);
   const [isReconciling, setIsReconciling] = useState(false);
   const [resendingSignerId, setResendingSignerId] = useState<string | null>(null);
+  const [showNewDispatchDialog, setShowNewDispatchDialog] = useState(false);
+  const [isCreatingNewDispatch, setIsCreatingNewDispatch] = useState(false);
 
   // --- Contract Viewer States ---
   const [showContractPreviewModal, setShowContractPreviewModal] = useState(false);
@@ -1156,9 +1158,34 @@ function EventoInterna() {
       setReconcileSignersList(updated);
       await loadContractModule();
     } catch (e: any) {
-      toast.error(`Falha ao reenviar notificação: ${e.message}`);
+      if ((e as any).code === "remote_document_missing") {
+        setShowReconcileDialog(false);
+        toast.warning("O documento anterior não existe mais na Assinafy.", {
+          description: "Use a opção \"Gerar Novo Envio\" para criar um novo documento.",
+          duration: 8000,
+        });
+        setProviderDetails((prev: any) => ({ ...prev, dispatch_status: "remote_document_missing" }));
+      } else {
+        toast.error(`Falha ao reenviar notificação: ${e.message}`);
+      }
     } finally {
       setResendingSignerId(null);
+    }
+  };
+
+  const handleNewDispatch = async () => {
+    if (!realContract?.id) return;
+    setIsCreatingNewDispatch(true);
+    setShowNewDispatchDialog(false);
+    try {
+      // Trigger a full re-dispatch by calling handleDispatchSignature with current contract HTML
+      // The assinafy-create-doc will detect dispatch_status=remote_document_missing → action=recreate
+      // and retire the old row, then create a fresh document/assignment.
+      await handleDispatchSignature();
+    } catch (e: any) {
+      toast.error(`Falha ao gerar novo envio: ${e.message}`);
+    } finally {
+      setIsCreatingNewDispatch(false);
     }
   };
 
@@ -3582,6 +3609,79 @@ function EventoInterna() {
                           </div>
                         </div>
                       )}
+
+                      {integrationState === "remote_document_missing" && (
+                        <div className="mt-4 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive-foreground text-sm">
+                          <div className="flex items-start gap-2 mb-3">
+                            <AlertCircle className="h-5 w-5 shrink-0 mt-0.5 text-destructive" />
+                            <div>
+                              <strong className="text-destructive">Documento anterior não encontrado na Assinafy.</strong>
+                              <p className="mt-1 opacity-90 text-xs text-muted-foreground">
+                                O documento remoto foi removido ou expirou. É necessário gerar um novo envio para assinatura. Os IDs anteriores serão preservados apenas para auditoria.
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowNewDispatchDialog(true)}
+                            disabled={isCreatingNewDispatch}
+                            className="w-full mt-1 flex items-center justify-center gap-2 rounded-lg bg-destructive px-4 py-2 text-xs font-semibold text-white hover:bg-destructive/90 disabled:opacity-50 transition-colors"
+                          >
+                            {isCreatingNewDispatch ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                Criando novo envio...
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="h-3.5 w-3.5" />
+                                Gerar Novo Envio
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Diálogo de confirmação — Gerar Novo Envio */}
+                      <AlertDialog.Root open={showNewDispatchDialog} onOpenChange={setShowNewDispatchDialog}>
+                        <AlertDialog.Portal>
+                          <AlertDialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 animate-in fade-in" />
+                          <AlertDialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-surface border border-border p-6 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95">
+                            <AlertDialog.Title className="text-xl font-bold font-display text-foreground flex items-center gap-2">
+                              <RefreshCw className="h-6 w-6 text-destructive" />
+                              Gerar Novo Envio para Assinatura?
+                            </AlertDialog.Title>
+                            <AlertDialog.Description className="mt-3 text-sm text-muted-foreground">
+                              Esta ação criará um novo documento na Assinafy com o PDF atual, um novo assignment e os dois signatários (ambos no passo 1). O envio anterior será arquivado para auditoria e NÃO será excluído. Esta ação não pode ser desfeita.
+                            </AlertDialog.Description>
+                            <div className="mt-6 flex justify-end gap-3">
+                              <AlertDialog.Cancel asChild>
+                                <GhostButton disabled={isCreatingNewDispatch} className="h-10">
+                                  Cancelar
+                                </GhostButton>
+                              </AlertDialog.Cancel>
+                              <AlertDialog.Action asChild>
+                                <PrimaryButton
+                                  onClick={(e: any) => {
+                                    e.preventDefault();
+                                    handleNewDispatch();
+                                  }}
+                                  disabled={isCreatingNewDispatch}
+                                  className="h-10 bg-destructive text-white hover:bg-destructive/90"
+                                >
+                                  {isCreatingNewDispatch ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Criando...
+                                    </>
+                                  ) : (
+                                    "Sim, Gerar Novo Envio"
+                                  )}
+                                </PrimaryButton>
+                              </AlertDialog.Action>
+                            </div>
+                          </AlertDialog.Content>
+                        </AlertDialog.Portal>
+                      </AlertDialog.Root>
 
                       {/* Modal de Regeneração Nativo Radix */}
                       <AlertDialog.Root

@@ -3,6 +3,7 @@ export type SignatureIntegrationState =
   | "sending"
   | "send_failed"
   | "reconciliation_required"
+  | "remote_document_missing"
   | "active"
   | "canceling"
   | "canceled"
@@ -25,6 +26,7 @@ export function getSignatureIntegrationState(
   if (status === "processing") return "sending";
   if (status === "canceling") return "canceling";
   if (status === "reconciliation_required") return "reconciliation_required";
+  if (status === "remote_document_missing") return "remote_document_missing";
   if (status === "failed") return "send_failed";
   if (status === "canceled" || status === "voided" || status === "rejected_by_user") return "canceled";
   

@@ -17,7 +17,7 @@ export interface SignatureProvider {
     pdfHash?: string;
   }): Promise<{
     success: boolean;
-    dispatchOutcome?: "new_dispatch" | "reuse_healthy" | "reuse" | "reconciliation_required" | "already_signed";
+    dispatchOutcome?: "new_dispatch" | "reuse_healthy" | "reuse" | "reconciliation_required" | "already_signed" | "remote_document_missing";
     message?: string;
     externalDocumentId?: string;
     externalAssignmentId?: string;

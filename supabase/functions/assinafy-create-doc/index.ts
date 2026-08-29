@@ -202,6 +202,23 @@ serve(async (req) => {
         correlationId,
       );
     }
+
+    // Remote document has been confirmed deleted; retire old request preserving IDs for audit,
+    // then fall through to create a fresh document/assignment.
+    if (decision.action === "recreate") {
+      const retireErr = await admin
+        .from("contract_signature_requests")
+        .update({
+          dispatch_status: "obsolete",
+          last_error: "Documento remoto ausente na Assinafy. Substituído por nova criação explícita.",
+          updated_at: new Date().toISOString(),
+          // preserve external_document_id / external_assignment_id for audit — do NOT null them
+        })
+        .eq("id", sigReq.id);
+      if (retireErr.error) throw retireErr.error;
+      sigReq = null; // force insert of new row below
+    }
+
     if (["processing", "hash_conflict"].includes(decision.action))
       throw new CreateDocHttpError(
         409,

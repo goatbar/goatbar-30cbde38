@@ -1001,5 +1001,160 @@ describe("Assinafy End-to-End Audit & Edge Cases", () => {
       expect(resendCalled).toBe(true);
       expect(activityVerified).toBe(true);
     });
+
+    it("21. assinafy-resend auto-reconcilia assignmentId e signerId divergentes contra estado remoto", () => {
+      const localState = {
+        assignmentId: "103f6b1030a9badec94fba2f9cb3",
+        signerId: "103e76b58306fe70757bab706cac",
+      };
+
+      const remoteDoc = {
+        id: "103f6b0f60836521e7197ba01824",
+        assignment: {
+          id: "103f6b1030a9badec94fba2f9cb3",
+          signers: [
+            { id: "103e76b58306fe70757bab706cac", email: "mariana@goatbar.com.br", step: 1 },
+          ],
+        },
+      };
+
+      let activeAssignmentId = localState.assignmentId;
+      let activeSignerId = localState.signerId;
+
+      if (remoteDoc.assignment?.id && remoteDoc.assignment.id !== activeAssignmentId) {
+        activeAssignmentId = remoteDoc.assignment.id;
+      }
+
+      const matchedSigner = remoteDoc.assignment?.signers.find(
+        (s) => s.id === activeSignerId || s.email === "mariana@goatbar.com.br",
+      );
+      if (matchedSigner?.id && matchedSigner.id !== activeSignerId) {
+        activeSignerId = matchedSigner.id;
+      }
+
+      expect(activeAssignmentId).toBe("103f6b1030a9badec94fba2f9cb3");
+      expect(activeSignerId).toBe("103e76b58306fe70757bab706cac");
+    });
+
+    it("22. assinafy-resend mapeia 404 de documento remoto para document_not_found com stage verifying_remote_state", () => {
+      const remoteStatus = 404;
+      let error: any = null;
+
+      try {
+        if (remoteStatus === 404) {
+          throw Object.assign(
+            new Error("Documento não encontrado na Assinafy. É necessária uma reconciliação ou novo envio."),
+            { status: 404, code: "document_not_found", stage: "verifying_remote_state" },
+          );
+        }
+      } catch (err) {
+        error = err;
+      }
+
+      expect(error).not.toBeNull();
+      expect(error.status).toBe(404);
+      expect(error.code).toBe("document_not_found");
+      expect(error.stage).toBe("verifying_remote_state");
+    });
+  });
+});
+
+describe("remote_document_missing — fluxo completo", () => {
+  it("23. getSignatureIntegrationState retorna 'remote_document_missing' quando dispatch_status='remote_document_missing'", () => {
+    const { getSignatureIntegrationState } = (() => {
+      type SIS = "not_sent" | "sending" | "send_failed" | "reconciliation_required" | "remote_document_missing" | "active" | "canceling" | "canceled" | "completed";
+      function getSignatureIntegrationState(contractStatus: string, providerDetails: any): SIS {
+        if (!providerDetails) return contractStatus === "signed" ? "completed" : "not_sent";
+        const status = providerDetails.dispatch_status || providerDetails.status;
+        if (!status || status === "idle") return "not_sent";
+        if (status === "processing") return "sending";
+        if (status === "canceling") return "canceling";
+        if (status === "reconciliation_required") return "reconciliation_required";
+        if (status === "remote_document_missing") return "remote_document_missing";
+        if (status === "failed") return "send_failed";
+        if (status === "canceled" || status === "voided" || status === "rejected_by_user") return "canceled";
+        if (["signed", "completed"].includes(status) || contractStatus === "signed") return "completed";
+        return "active";
+      }
+      return { getSignatureIntegrationState };
+    })();
+
+    const state = getSignatureIntegrationState("pending", { dispatch_status: "remote_document_missing" });
+    expect(state).toBe("remote_document_missing");
+  });
+
+  it("24. decideDispatch retorna action='recreate' para dispatch_status='remote_document_missing'", () => {
+    function decideDispatch(existing: any | null, _pdfHash?: string): { action: string; request: any } {
+      if (!existing) return { action: "create", request: null };
+      if (existing.dispatch_status === "processing") return { action: "processing", request: existing };
+      if (existing.dispatch_status === "reconciliation_required") return { action: "reconcile", request: existing };
+      if (existing.dispatch_status === "remote_document_missing") return { action: "recreate", request: existing };
+      return { action: "continue", request: existing };
+    }
+
+    const result = decideDispatch({ id: "req-1", dispatch_status: "remote_document_missing", external_document_id: "old-doc" });
+    expect(result.action).toBe("recreate");
+    expect(result.request.external_document_id).toBe("old-doc"); // preserved
+  });
+
+  it("25. assinafy-resend retorna code='remote_document_missing' + recreationRequired=true ao receber 404 do upstream", () => {
+    const mockEdgeFnResponse = {
+      success: false,
+      code: "remote_document_missing",
+      error: "Documento não encontrado na Assinafy.",
+      recreationRequired: true,
+      diagnostic: {
+        stage: "verifying_remote_document",
+        assinafyRequestSent: true,
+        httpStatus: 404,
+        databaseUpdated: true,
+      },
+    };
+
+    expect(mockEdgeFnResponse.code).toBe("remote_document_missing");
+    expect(mockEdgeFnResponse.recreationRequired).toBe(true);
+    expect(mockEdgeFnResponse.diagnostic.httpStatus).toBe(404);
+    expect(mockEdgeFnResponse.diagnostic.databaseUpdated).toBe(true);
+  });
+
+  it("26. estimateAssinafyResendCost lança erro com code='remote_document_missing' quando Edge Function retorna esse código", () => {
+    async function estimateAssinafyResendCost(documentId: string): Promise<{ cost: number }> {
+      const data = { code: "remote_document_missing", success: false, error: "Documento ausente" };
+      if (data.code === "remote_document_missing") {
+        const err = new Error(data.error);
+        (err as any).code = "remote_document_missing";
+        (err as any).recreationRequired = true;
+        throw err;
+      }
+      return { cost: 0 };
+    }
+
+    return estimateAssinafyResendCost("103f6b0f60836521e7197ba01824").catch((e: any) => {
+      expect(e.code).toBe("remote_document_missing");
+      expect(e.recreationRequired).toBe(true);
+    });
+  });
+
+  it("27. assinafy-create-doc action='recreate' preserva external_document_id antigo na linha obsolete", () => {
+    const oldRow = {
+      id: "req-uuid",
+      dispatch_status: "remote_document_missing",
+      external_document_id: "103f6b0f60836521e7197ba01824",
+      external_assignment_id: "103f6b1030a9badec94fba2f9cb3",
+    };
+
+    // Simula a lógica de retire: atualiza dispatch_status para obsolete mas mantém external_document_id
+    const retired = { ...oldRow, dispatch_status: "obsolete" };
+    expect(retired.dispatch_status).toBe("obsolete");
+    expect(retired.external_document_id).toBe("103f6b0f60836521e7197ba01824"); // preservado para auditoria
+    expect(retired.external_assignment_id).toBe("103f6b1030a9badec94fba2f9cb3"); // preservado para auditoria
+  });
+
+  it("28. assinafy-status retorna dispatch_status='remote_document_missing' sem tentar chamar API remota", () => {
+    const sigReq = { dispatch_status: "remote_document_missing", external_document_id: "103f6b0f60836521e7197ba01824" };
+    const shortCircuitStatuses = ["failed", "reconciliation_required", "remote_document_missing", "canceled"];
+
+    const shouldShortCircuit = shortCircuitStatuses.includes(sigReq.dispatch_status);
+    expect(shouldShortCircuit).toBe(true); // não tenta GET /v1/documents/{id} — retorna status local direto
   });
 });

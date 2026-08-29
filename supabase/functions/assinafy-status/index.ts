@@ -51,7 +51,7 @@ serve(async (req) => {
 
     const { data: signers } = await admin.from("contract_signature_signers").select("full_name,email,status,signature_url,notification_status,notified_at,signed_at").eq("signature_request_id", sigReq.id);
     const local = { ...sigReq, externalDocumentId: sigReq.external_document_id, externalAssignmentId: sigReq.external_assignment_id, signers: signers || [] };
-    if (!sigReq.external_document_id || ["failed", "reconciliation_required", "canceled"].includes(sigReq.dispatch_status)) return json({ ...local, status: sigReq.dispatch_status });
+    if (!sigReq.external_document_id || ["failed", "reconciliation_required", "remote_document_missing", "canceled"].includes(sigReq.dispatch_status)) return json({ ...local, status: sigReq.dispatch_status });
 
     let provider;
     try {

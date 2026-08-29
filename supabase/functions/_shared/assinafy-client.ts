@@ -223,8 +223,9 @@ export async function createAssignment(
   });
 }
 
-export async function getDocumentStatus(documentId: string) {
-  const url = `${ASSINAFY_BASE_URL}/v1/documents/${documentId}`;
+export async function getDocumentStatus(documentId: string, expand?: string) {
+  const query = expand ? `?expand=${encodeURIComponent(expand)}` : "";
+  const url = `${ASSINAFY_BASE_URL}/v1/documents/${documentId}${query}`;
   return await assinafyFetch(url, { method: "GET", headers: getAssinafyHeaders() });
 }
 
