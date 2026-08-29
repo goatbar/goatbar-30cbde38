@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export interface AssinafyRequestResponse {
   success: boolean;
-  dispatchOutcome?: "new_dispatch" | "reuse" | "reconciliation_required" | "already_signed";
+  dispatchOutcome?: "new_dispatch" | "reuse_healthy" | "reuse" | "reconciliation_required" | "already_signed";
   signatureRequestId?: string;
   externalDocumentId?: string;
   externalAssignmentId?: string;
@@ -224,19 +224,59 @@ export async function syncAssinafyStatus(contractId: string): Promise<Record<str
   }
 }
 
+export async function estimateAssinafyResendCost(
+  documentId: string,
+  assignmentId: string,
+  signerId: string,
+): Promise<{ cost: number; currency: string }> {
+  const { data, error } = await supabase.functions.invoke("assinafy-resend", {
+    body: { action: "estimate", documentId, assignmentId, signerId },
+  });
+  if (error || !data?.success) {
+    throw new Error(`Falha ao estimar custo de reenvio: ${error?.message || data?.error}`);
+  }
+  return { cost: data.cost ?? 0, currency: data.currency ?? "BRL" };
+}
+
 export async function resendAssinafySignature(
   documentId: string,
   assignmentId: string,
   signerId: string,
-): Promise<boolean> {
+): Promise<{ success: boolean; activityVerified?: boolean }> {
   const { data, error } = await supabase.functions.invoke("assinafy-resend", {
-    body: { documentId, assignmentId, signerId },
+    body: { action: "resend", documentId, assignmentId, signerId },
   });
 
   if (error || !data?.success) {
     throw new Error(`Falha ao reenviar assinatura: ${error?.message || data?.error}`);
   }
-  return true;
+  return { success: true, activityVerified: data.activityVerified };
+}
+
+export async function reconcileAssinafySigners(contractId: string): Promise<any[]> {
+  const { data: req } = await (supabase as any)
+    .from("contract_signature_requests")
+    .select("id, external_document_id, external_assignment_id")
+    .eq("contract_id", contractId)
+    .eq("signature_provider", "assinafy")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!req) throw new Error("Solicitação de assinatura não encontrada para este contrato.");
+
+  const { data: signers, error } = await (supabase as any)
+    .from("contract_signature_signers")
+    .select("id, role, full_name, email, status, signature_url, notification_status, notified_at, signed_at, external_signer_id")
+    .eq("signature_request_id", req.id);
+
+  if (error) throw error;
+  return (signers || []).map((s: any) => ({
+    ...s,
+    signature_url: s.signature_url || (req.external_document_id && s.email ? `https://app.assinafy.com.br/sign/${req.external_document_id}?email=${encodeURIComponent(s.email)}` : null),
+    external_document_id: req.external_document_id,
+    external_assignment_id: req.external_assignment_id,
+  }));
 }
 
 export async function downloadAssinafyArtifact(

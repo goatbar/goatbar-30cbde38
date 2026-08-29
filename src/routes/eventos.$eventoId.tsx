@@ -99,7 +99,13 @@ import {
   canDeleteOrRegenerateContract,
   canCancelContract,
 } from "@/lib/contract-state";
-import { cancelAssinafySignature, type AssinafyDiagnostic } from "@/services/assinafy-service";
+import {
+  cancelAssinafySignature,
+  estimateAssinafyResendCost,
+  resendAssinafySignature,
+  reconcileAssinafySigners,
+  type AssinafyDiagnostic,
+} from "@/services/assinafy-service";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import {
   deleteGeneratedProposal,
@@ -228,6 +234,10 @@ function EventoInterna() {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showDeleteContractDialog, setShowDeleteContractDialog] = useState(false);
   const [showRegenerateContractDialog, setShowRegenerateContractDialog] = useState(false);
+  const [showReconcileDialog, setShowReconcileDialog] = useState(false);
+  const [reconcileSignersList, setReconcileSignersList] = useState<any[]>([]);
+  const [isReconciling, setIsReconciling] = useState(false);
+  const [resendingSignerId, setResendingSignerId] = useState<string | null>(null);
 
   // --- Contract Viewer States ---
   const [showContractPreviewModal, setShowContractPreviewModal] = useState(false);
@@ -992,7 +1002,11 @@ function EventoInterna() {
           });
         } else if (result.dispatchOutcome === "already_signed") {
           toast.info("Este contrato já foi assinado por todas as partes.");
-        } else if (result.dispatchOutcome === "reuse" || result.dispatchOutcome === "reconciliation_required") {
+        } else if (result.dispatchOutcome === "reconciliation_required") {
+          toast.warning("Contrato legado carregado. Pendente de conciliação de signatários/notificações.", {
+            description: `Documento: ${result.externalDocumentId}`,
+          });
+        } else if (result.dispatchOutcome === "reuse_healthy" || result.dispatchOutcome === "reuse") {
           toast.info("Este contrato já está aguardando assinatura. O documento existente foi reaproveitado.", {
             description: `Documento: ${result.externalDocumentId}`,
           });
@@ -1083,6 +1097,70 @@ function EventoInterna() {
   const integrationState = realContract
     ? getSignatureIntegrationState(realContract.status, providerDetails)
     : "not_sent";
+
+  const handleOpenReconciliation = async () => {
+    if (!realContract?.id) return;
+    setIsReconciling(true);
+    setShowReconcileDialog(true);
+    try {
+      const signers = await reconcileAssinafySigners(realContract.id);
+      setReconcileSignersList(signers);
+    } catch (e: any) {
+      toast.error(`Falha ao buscar signatários para conciliação: ${e.message}`);
+    } finally {
+      setIsReconciling(false);
+    }
+  };
+
+  const handleResendSigner = async (signer: any) => {
+    if (!signer.external_document_id || !signer.external_assignment_id || !signer.external_signer_id) {
+      toast.error("Identificadores externos incompletos para reenvio.");
+      return;
+    }
+    if (signer.status === "signed") {
+      toast.info("Este signatário já concluiu a assinatura.");
+      return;
+    }
+
+    try {
+      setResendingSignerId(signer.external_signer_id);
+      const { cost, currency } = await estimateAssinafyResendCost(
+        signer.external_document_id,
+        signer.external_assignment_id,
+        signer.external_signer_id,
+      );
+
+      if (cost > 0) {
+        const confirmed = window.confirm(
+          `O reenvio da notificação para ${signer.full_name || signer.email} terá um custo estimado de ${currency} ${cost.toFixed(2)}. Deseja prosseguir com o disparo?`,
+        );
+        if (!confirmed) {
+          toast.info("Reenvio cancelado pelo usuário.");
+          return;
+        }
+      }
+
+      const res = await resendAssinafySignature(
+        signer.external_document_id,
+        signer.external_assignment_id,
+        signer.external_signer_id,
+      );
+
+      if (res.activityVerified) {
+        toast.success(`Notificação reenviada com sucesso para ${signer.full_name || signer.email} (Atividade confirmada pela Assinafy).`);
+      } else {
+        toast.success(`Notificação reenviada para ${signer.full_name || signer.email}.`);
+      }
+
+      const updated = await reconcileAssinafySigners(realContract.id);
+      setReconcileSignersList(updated);
+      await loadContractModule();
+    } catch (e: any) {
+      toast.error(`Falha ao reenviar notificação: ${e.message}`);
+    } finally {
+      setResendingSignerId(null);
+    }
+  };
 
   const refreshSignatureStatus = async () => {
     if (!realContract?.id || isRefreshingSignature) return;
@@ -3362,21 +3440,118 @@ function EventoInterna() {
                           ))}
                         </div>
 
-                        {providerDetails?.signature_url && integrationState === "active" && (
-                          <div className="mt-4 flex flex-col gap-2 rounded-xl bg-primary/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-                            <p className="text-xs">
-                              O link abaixo pode ser enviado manualmente ao contratante caso o
-                              e-mail não chegue.
-                            </p>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {providerDetails?.signature_url && integrationState === "active" && (
                             <GhostButton
                               onClick={() => window.open(providerDetails.signature_url, "_blank")}
-                              className="h-9 shrink-0 px-4 text-xs font-bold"
+                              className="h-9 px-4 text-xs font-bold"
                             >
                               <LinkIcon className="mr-2 h-4 w-4" /> ABRIR LINK DE ASSINATURA
                             </GhostButton>
-                          </div>
-                        )}
+                          )}
+                          <GhostButton
+                            onClick={handleOpenReconciliation}
+                            className="h-9 px-4 text-xs font-bold border border-primary/30 text-primary hover:bg-primary/10"
+                          >
+                            <RefreshCw className="mr-2 h-4 w-4" /> RECONCILIAR ASSINATURA
+                          </GhostButton>
+                        </div>
                       </div>
+
+                      {/* Modal de Reconciliação de Assinatura */}
+                      <AlertDialog.Root open={showReconcileDialog} onOpenChange={setShowReconcileDialog}>
+                        <AlertDialog.Portal>
+                          <AlertDialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 animate-in fade-in" />
+                          <AlertDialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-surface border border-border p-6 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95 max-h-[85vh] overflow-y-auto">
+                            <AlertDialog.Title className="text-xl font-bold font-display text-foreground flex items-center gap-2">
+                              <RefreshCw className="h-6 w-6 text-primary" />
+                              Reconciliação de Assinatura Digital
+                            </AlertDialog.Title>
+                            <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
+                              Verifique o estado dos signatários vinculados ao documento existente na Assinafy e sincronize URLs ou reenvie notificações pendentes.
+                            </AlertDialog.Description>
+
+                            <div className="mt-4 space-y-3">
+                              {isReconciling ? (
+                                <div className="flex items-center justify-center p-8">
+                                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                </div>
+                              ) : reconcileSignersList.length === 0 ? (
+                                <p className="text-xs text-muted-foreground italic">Nenhum signatário registrado localmente para esta solicitação.</p>
+                              ) : (
+                                reconcileSignersList.map((signer) => (
+                                  <div key={signer.id || signer.email} className="p-3.5 rounded-xl border border-border bg-background/60 flex flex-col gap-2">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <span className="text-xs font-bold text-foreground">
+                                          {signer.full_name || signer.email}
+                                        </span>
+                                        <span className="ml-2 text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                                          {signer.role === "client" ? "Contratante" : "Goat Bar"}
+                                        </span>
+                                      </div>
+                                      <span className={`text-[11px] font-semibold ${signer.status === "signed" ? "text-emerald-500" : "text-amber-500"}`}>
+                                        {signer.status === "signed" ? "Assinado" : "Pendente"}
+                                      </span>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground flex flex-col gap-1">
+                                      <span>E-mail: {signer.email}</span>
+                                      <span>Notificação: <strong className="text-foreground">{signer.notification_status === "sent" ? "Enviada" : "Pendente"}</strong></span>
+                                      {signer.signature_url && (
+                                        <div className="mt-1 flex items-center gap-2">
+                                          <input
+                                            readOnly
+                                            value={signer.signature_url}
+                                            className="w-full bg-surface border border-border text-[10px] font-mono px-2 py-1 rounded truncate select-all"
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => window.open(signer.signature_url, "_blank")}
+                                            className="text-xs text-primary hover:underline shrink-0"
+                                          >
+                                            Abrir
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                    {signer.status !== "signed" && signer.external_signer_id && (
+                                      <div className="mt-1 flex justify-end">
+                                        <GhostButton
+                                          disabled={resendingSignerId === signer.external_signer_id}
+                                          onClick={() => handleResendSigner(signer)}
+                                          className="h-8 px-3 text-xs"
+                                        >
+                                          {resendingSignerId === signer.external_signer_id ? (
+                                            <>
+                                              <Loader2 className="h-3 w-3 mr-1 animate-spin" /> Reenviando...
+                                            </>
+                                          ) : (
+                                            "Reenviar Notificação"
+                                          )}
+                                        </GhostButton>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              )}
+                            </div>
+
+                            <div className="mt-6 flex justify-end gap-3">
+                              <AlertDialog.Cancel asChild>
+                                <GhostButton className="h-10">Fechar</GhostButton>
+                              </AlertDialog.Cancel>
+                              <PrimaryButton
+                                onClick={handleOpenReconciliation}
+                                disabled={isReconciling}
+                                className="h-10"
+                              >
+                                {isReconciling ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                                Atualizar Estado
+                              </PrimaryButton>
+                            </div>
+                          </AlertDialog.Content>
+                        </AlertDialog.Portal>
+                      </AlertDialog.Root>
 
                       {integrationState === "send_failed" && (
                         <div className="mt-4 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-start gap-2">
@@ -3400,10 +3575,9 @@ function EventoInterna() {
                         <div className="mt-4 p-4 rounded-xl bg-warning/10 border border-warning/20 text-warning-foreground text-sm flex items-start gap-2">
                           <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
                           <div>
-                            <strong>Verificação de estado necessária.</strong>
+                            <strong>Reconciliação necessária.</strong>
                             <p className="mt-1 opacity-90 text-xs">
-                              O sistema está verificando o estado da assinatura no provedor, ou
-                              ocorreu um timeout. Caso demore muito, contate o suporte.
+                              O contrato já foi criado no provedor, mas requer sincronização de signatários ou reenvio de notificações. Use a opção "Reconciliar Assinatura".
                             </p>
                           </div>
                         </div>

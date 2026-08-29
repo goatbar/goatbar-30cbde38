@@ -136,11 +136,24 @@ serve(async (req) => {
       decision.action === "reconcile"
     ) {
       const needsReconciliation = decision.action !== "reuse";
+
+      // Inspect local signers to determine if reconciliation is required
+      const { data: existingSigners } = await admin
+        .from("contract_signature_signers")
+        .select("id, role, full_name, email, signature_url, notification_status")
+        .eq("signature_request_id", sigReq.id);
+
+      const hasClient = existingSigners?.some((s) => s.role === "client" || s.email.toLowerCase() === clientSigner.email.toLowerCase());
+      const hasCompany = companySigner ? existingSigners?.some((s) => s.role === "company" || s.email.toLowerCase() === companySigner.email.toLowerCase()) : true;
+      const isMissingSigners = !hasClient || !hasCompany || (existingSigners?.length || 0) < (companySigner ? 2 : 1);
+
       const outcome =
         decision.action === "reuse"
           ? sigReq.dispatch_status === "signed" || sigReq.dispatch_status === "completed"
             ? "already_signed"
-            : "reuse"
+            : isMissingSigners
+              ? "reconciliation_required"
+              : "reuse_healthy"
           : "reconciliation_required";
 
       if (contract.status === "draft" && sigReq.dispatch_status === "pending_signature") {
@@ -157,15 +170,17 @@ serve(async (req) => {
           message:
             outcome === "already_signed"
               ? "Este contrato já foi assinado por todas as partes."
-              : "Este contrato já havia sido enviado para assinatura. O documento existente foi reaproveitado.",
+              : outcome === "reconciliation_required"
+                ? "Este contrato já havia sido enviado, mas possui pendências de conciliação de signatários/notificações."
+                : "Este contrato já está aguardando assinatura. O documento existente foi reaproveitado.",
           remoteCreated: Boolean(sigReq.external_document_id),
-          reconciliationRequired: needsReconciliation,
+          reconciliationRequired: outcome === "reconciliation_required",
           signatureRequestId: sigReq.id,
           externalDocumentId: sigReq.external_document_id,
           externalAssignmentId: sigReq.external_assignment_id,
           status: sigReq.dispatch_status,
           diagnostic: {
-            stage: needsReconciliation
+            stage: outcome === "reconciliation_required"
               ? "remote_created_local_reconciliation_required"
               : "idempotent_reuse",
             correlationId,
@@ -174,7 +189,7 @@ serve(async (req) => {
             databaseUpdated: false,
           },
         },
-        needsReconciliation ? 202 : 200,
+        outcome === "reconciliation_required" ? 202 : 200,
         correlationId,
       );
     }

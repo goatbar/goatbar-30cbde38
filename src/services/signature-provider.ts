@@ -17,7 +17,7 @@ export interface SignatureProvider {
     pdfHash?: string;
   }): Promise<{
     success: boolean;
-    dispatchOutcome?: "new_dispatch" | "reuse" | "reconciliation_required" | "already_signed";
+    dispatchOutcome?: "new_dispatch" | "reuse_healthy" | "reuse" | "reconciliation_required" | "already_signed";
     message?: string;
     externalDocumentId?: string;
     externalAssignmentId?: string;
@@ -40,7 +40,11 @@ export interface SignatureProvider {
     artifactName?: string,
   ): Promise<{ fileUrl?: string; blob?: Blob }>;
 
-  resend(documentId: string, assignmentId: string, signerId: string): Promise<boolean>;
+  resend(
+    documentId: string,
+    assignmentId: string,
+    signerId: string,
+  ): Promise<boolean | { success: boolean; activityVerified?: boolean }>;
 }
 
 export const zapSignSignatureProvider: SignatureProvider = {

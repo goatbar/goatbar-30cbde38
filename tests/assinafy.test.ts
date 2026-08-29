@@ -689,4 +689,108 @@ describe("Assinafy End-to-End Audit & Edge Cases", () => {
     const outcome = signedRecord.dispatch_status === "signed" ? "already_signed" : "reuse";
     expect(outcome).toBe("already_signed");
   });
+
+  describe("Reconciliação e Resend Seguro de Contratos Legados", () => {
+    it("1. executa reconciliação sem reenvio e recupera signatários locais", () => {
+      const remoteDocId = "103f6b0f60836521e7197ba01824";
+      const signers = [
+        { id: "s1", role: "client", full_name: "Mariana", email: "mariana@example.com", status: "pending", signature_url: null },
+        { id: "s2", role: "company", full_name: "Goat Bar", email: "contato@goatbar.com.br", status: "pending", signature_url: null },
+      ];
+
+      const reconciled = signers.map((s) => ({
+        ...s,
+        signature_url: s.signature_url || `https://app.assinafy.com.br/sign/${remoteDocId}?email=${encodeURIComponent(s.email)}`,
+      }));
+
+      expect(reconciled[0].signature_url).toBe("https://app.assinafy.com.br/sign/103f6b0f60836521e7197ba01824?email=mariana%40example.com");
+      expect(reconciled[1].signature_url).toBe("https://app.assinafy.com.br/sign/103f6b0f60836521e7197ba01824?email=contato%40goatbar.com.br");
+      expect(reconciled.length).toBe(2);
+    });
+
+    it("2. recupera signature_url quando ausente", () => {
+      const docId = "doc-legacy-123";
+      const email = "cliente.teste@gmail.com";
+      const url = `https://app.assinafy.com.br/sign/${docId}?email=${encodeURIComponent(email)}`;
+      expect(url).toBe("https://app.assinafy.com.br/sign/doc-legacy-123?email=cliente.teste%40gmail.com");
+    });
+
+    it("3. permite resend para signatário com status pending", () => {
+      const signer = { id: "signer-pending", status: "pending", external_signer_id: "ext-s1" };
+      const canResend = signer.status !== "signed" && Boolean(signer.external_signer_id);
+      expect(canResend).toBe(true);
+    });
+
+    it("4. bloqueia resend para signatário com status signed", () => {
+      const signer = { id: "signer-signed", status: "signed", external_signer_id: "ext-s2" };
+      const canResend = signer.status !== "signed" && Boolean(signer.external_signer_id);
+      expect(canResend).toBe(false);
+    });
+
+    it("5. trata falha de rede/upstream no resend", () => {
+      const mockApiError = {
+        status: 502,
+        message: "Assinafy upstream error",
+        diagnostic: { requestStarted: true, assinafyRequestSent: true, httpStatus: 502 },
+      };
+      expect(mockApiError.status).toBe(502);
+      expect(mockApiError.diagnostic.assinafyRequestSent).toBe(true);
+    });
+
+    it("6. estima custo de resend com sucesso", () => {
+      const costResponse = { data: { cost: 1.5, currency: "BRL" } };
+      const cost = Number(costResponse.data.cost);
+      expect(cost).toBe(1.5);
+      expect(costResponse.data.currency).toBe("BRL");
+    });
+
+    it("7. permite que o usuário recuse o custo e aborte o disparo", () => {
+      const cost = 2.0;
+      let resendCalled = false;
+      const userConfirmed = false; // Usuário recusa
+      if (cost > 0 && !userConfirmed) {
+        // Abortado
+      } else {
+        resendCalled = true;
+      }
+      expect(resendCalled).toBe(false);
+    });
+
+    it("8. confirma disparo através do histórico de atividades", () => {
+      const activities = [
+        { event: "document.created", created_at: "2026-08-28T20:00:00Z" },
+        { event: "signer.invitation_sent", created_at: "2026-08-28T22:50:00Z", payload: { signerId: "ext-s1" } },
+      ];
+      const verified = Array.isArray(activities) && activities.some((a) => a.event.includes("sent") || a.event.includes("created"));
+      expect(verified).toBe(true);
+    });
+
+    it("9. transiciona documento legado de reconciliation_required para reuse_healthy após conciliação", () => {
+      const existingReq = {
+        id: "req-1",
+        dispatch_status: "pending_signature",
+        original_file_hash: "hash-matched",
+        external_document_id: "doc-1",
+      };
+      const client = { email: "cliente@example.com" };
+      const company = { email: "socio@goatbar.com.br" };
+
+      // Antes da conciliação: falta signatário da empresa
+      const signersBefore = [{ role: "client", email: "cliente@example.com" }];
+      const hasClientBefore = signersBefore.some((s) => s.role === "client");
+      const hasCompanyBefore = signersBefore.some((s) => s.role === "company");
+      const outcomeBefore = (!hasClientBefore || !hasCompanyBefore) ? "reconciliation_required" : "reuse_healthy";
+      expect(outcomeBefore).toBe("reconciliation_required");
+
+      // Depois da conciliação: ambos signatários presentes
+      const signersAfter = [
+        { role: "client", email: "cliente@example.com" },
+        { role: "company", email: "socio@goatbar.com.br" },
+      ];
+      const hasClientAfter = signersAfter.some((s) => s.role === "client");
+      const hasCompanyAfter = signersAfter.some((s) => s.role === "company");
+      const outcomeAfter = (!hasClientAfter || !hasCompanyAfter) ? "reconciliation_required" : "reuse_healthy";
+      expect(outcomeAfter).toBe("reuse_healthy");
+    });
+  });
 });

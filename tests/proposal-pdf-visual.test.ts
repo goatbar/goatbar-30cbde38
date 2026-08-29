@@ -77,8 +77,8 @@ describe("Proposta Comercial Goat Bar - regressão visual", () => {
     const coverName = template.pages[0].slots.find((slot) => slot.id === "capa-nome-evento-topo")!;
     const coverDate = template.pages[0].slots.find((slot) => slot.id === "capa-data-evento")!;
     expect(coverName.type).toBe("arc");
-    expect(coverName.arcConfig).toMatchObject({ radius: 135, startDeg: 160, endDeg: 20 });
-    expect(coverDate.arcConfig).toMatchObject({ radius: 135, startDeg: 205, endDeg: 335 });
+    expect(coverName.arcConfig).toMatchObject({ radius: 114, startDeg: 175, endDeg: 5 });
+    expect(coverDate.arcConfig).toMatchObject({ radius: 134.4, startDeg: 216, endDeg: 324 });
 
     const drinks = template.pages[5].slots.find((slot) => slot.id === "drinks-list")!;
     const beverages = template.pages[5].slots.find((slot) => slot.id === "bebidas-list")!;

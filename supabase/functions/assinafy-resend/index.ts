@@ -33,6 +33,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
     const body = await req.json();
+    const action = typeof body.action === "string" ? body.action : "resend";
     documentId = typeof body.documentId === "string" ? body.documentId : undefined;
     const assignmentId = typeof body.assignmentId === "string" ? body.assignmentId : undefined;
     const signerId = typeof body.signerId === "string" ? body.signerId : undefined;
@@ -68,14 +69,32 @@ serve(async (req) => {
 
     const { data: signer } = await admin
       .from("contract_signature_signers")
-      .select("id")
+      .select("id, status")
       .eq("signature_request_id", signatureRequest.id)
       .eq("external_signer_id", signerId)
       .maybeSingle();
-    if (!signer)
-      throw Object.assign(new Error("O signatário não pertence à solicitação armazenada."), {
+
+    if (signer && signer.status === "signed") {
+      throw Object.assign(new Error("Este signatário já concluiu a assinatura do documento."), {
         status: 409,
       });
+    }
+
+    if (action === "estimate") {
+      const estimateResult = await estimateResendCost(documentId, assignmentId, signerId);
+      const costData = (estimateResult as any)?.data || estimateResult;
+      const cost = Number(costData?.cost || costData?.amount || 0);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          action: "estimate",
+          cost,
+          currency: costData?.currency || "BRL",
+          diagnostic: estimateResult.diagnostic,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     console.info("[assinafy-resend] validated", {
       timestamp,
@@ -86,15 +105,34 @@ serve(async (req) => {
       signerId,
     });
     const providerResult = await resendAssignment(documentId, assignmentId, signerId);
-    const { error: updateError } = await admin
-      .from("contract_signature_signers")
-      .update({ notification_status: "sent", notified_at: new Date().toISOString() })
-      .eq("id", signer.id);
-    if (updateError) throw updateError;
+
+    // Verify activity from Assinafy activities trail
+    let activityVerified = false;
+    try {
+      const activitiesResult = await getDocumentActivities(documentId);
+      const activities = (activitiesResult as any)?.data || activitiesResult;
+      activityVerified = Array.isArray(activities) && activities.length > 0;
+    } catch (e) {
+      console.warn("[assinafy-resend] activities_verification_warn", e);
+    }
+
+    if (signer) {
+      const { error: updateError } = await admin
+        .from("contract_signature_signers")
+        .update({
+          notification_status: "sent",
+          notified_at: new Date().toISOString(),
+          status: "pending",
+        })
+        .eq("id", signer.id);
+      if (updateError) throw updateError;
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
+        action: "resend",
+        activityVerified,
         diagnostic: {
           requestStarted: true,
           backendReached: true,

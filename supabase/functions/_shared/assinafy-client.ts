@@ -233,9 +233,19 @@ export async function downloadArtifact(documentId: string, artifactName: string)
   return await assinafyFetch(url, { method: "GET", headers: getAssinafyHeaders() });
 }
 
+export async function estimateResendCost(documentId: string, assignmentId: string, signerId: string) {
+  const url = `${ASSINAFY_BASE_URL}/v1/documents/${documentId}/assignments/${assignmentId}/signers/${signerId}/estimate-resend-cost`;
+  return await assinafyFetch(url, { method: "POST", headers: getAssinafyHeaders() });
+}
+
 export async function resendAssignment(documentId: string, assignmentId: string, signerId: string) {
   const url = `${ASSINAFY_BASE_URL}/v1/documents/${documentId}/assignments/${assignmentId}/signers/${signerId}/resend`;
   return await assinafyFetch(url, { method: "PUT", headers: getAssinafyHeaders() });
+}
+
+export async function getDocumentActivities(documentId: string) {
+  const url = `${ASSINAFY_BASE_URL}/v1/documents/${documentId}/activities`;
+  return await assinafyFetch(url, { method: "GET", headers: getAssinafyHeaders() });
 }
 
 export async function cancelDocument(documentId: string) {

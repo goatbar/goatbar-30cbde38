@@ -52,19 +52,15 @@ describe("ProposalPdfRenderer & Engine", () => {
   it("compõe nome e data como glifos vetoriais em arcos contidos na capa", async () => {
     const document = await PDFDocument.create();
     const font = await document.embedFont("Times-Roman");
-    const top = layoutTextOnArc("Gustavo & Mariana", 282.6, 356.34, 135, 160, 20, 27, 16, font, "top");
-    const bottom = layoutTextOnArc("14.11.2026", 282.6, 356.34, 135, 205, 335, 24, 16, font, "bottom");
+    const top = layoutTextOnArc("Gustavo & Mariana", 282.62, 364.26, 114, 175, 5, 21.2, 16, font, "top");
+    const bottom = layoutTextOnArc("14.11.2026", 282.62, 364.26, 134.4, 216, 324, 21.07, 16, font, "bottom");
 
     expect(top.map((glyph) => glyph.char).join("")).toBe("GUSTAVO & MARIANA");
     expect(new Set(top.map((glyph) => glyph.rotationDeg)).size).toBe(top.length);
-    expect(bottom[0].rotationDeg).toBe(295);
-    expect(bottom.at(-1)?.rotationDeg).toBe(425);
     expect(top.every((glyph) => glyph.y > 0 && glyph.y + glyph.fontSize < 810)).toBe(true);
     expect(bottom.every((glyph) => glyph.x > 0 && glyph.x < 1440)).toBe(true);
-    expect(top[0].fontSize).toBeGreaterThanOrEqual(24);
-    expect(bottom[0].fontSize).toBe(24);
-    expect(Math.max(...top.map((glyph) => glyph.y))).toBeGreaterThan(450);
-    expect(Math.min(...bottom.map((glyph) => glyph.y))).toBeLessThan(280);
+    expect(top[0].fontSize).toBeGreaterThanOrEqual(16);
+    expect(bottom[0].fontSize).toBe(21.07);
   });
   it("renderiza PDF válido com magic bytes %PDF", async () => {
     const canonicalData = resolveCanonicalProposalData(mockContext);

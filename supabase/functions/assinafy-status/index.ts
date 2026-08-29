@@ -67,6 +67,7 @@ serve(async (req) => {
         status: sigReq.dispatch_status,
         dispatch_status: sigReq.dispatch_status,
         upstream_synced: false,
+        upstream_error: e instanceof Error ? e.message : "unknown",
       });
     }
     const doc = provider.data || provider;
