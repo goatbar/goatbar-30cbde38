@@ -3987,22 +3987,21 @@ function EventoInterna() {
                   )}
 
                   {/* REPOSITÓRIO CANÔNICO DE DOCUMENTOS & TERMOS ADITIVOS */}
-                  {realContract && (
-                    <SectionCard
-                      title="Repositório de Documentos Contratuais & Aditivos"
-                      subtitle="Histórico completo de minutas, contratos assinados, termos aditivos e anexos"
-                      action={
-                        <PrimaryButton
-                          onClick={() => setShowUploadDocumentModal(true)}
-                          className="h-9 px-4 text-xs font-bold flex items-center gap-2"
-                        >
-                          <Upload className="h-4 w-4" /> ADICIONAR DOCUMENTOS
-                        </PrimaryButton>
-                      }
-                    >
+                  <SectionCard
+                    title="Repositório de Documentos Contratuais & Aditivos"
+                    subtitle="Histórico completo de minutas, contratos assinados, termos aditivos e anexos"
+                    action={
+                      <PrimaryButton
+                        onClick={() => setShowUploadDocumentModal(true)}
+                        className="h-9 px-4 text-xs font-bold flex items-center gap-2"
+                      >
+                        <Upload className="h-4 w-4" /> ADICIONAR DOCUMENTOS
+                      </PrimaryButton>
+                    }
+                  >
                       <div className="space-y-4">
                         {/* Banner de alerta quando alteração pós-contrato é detectada */}
-                        {realContract.status === "signed" && addendumRequiresAction && (
+                        {realContract?.status === "signed" && addendumRequiresAction && (
                           <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div className="flex items-start gap-3">
                               <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
@@ -4263,7 +4262,6 @@ function EventoInterna() {
                         )}
                       </div>
                     </SectionCard>
-                  )}
                 </div>
 
                 <div className="lg:col-span-4">
@@ -4960,6 +4958,17 @@ function EventoInterna() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UploadDocumentModal
+        open={showUploadDocumentModal}
+        onOpenChange={setShowUploadDocumentModal}
+        eventId={eventoId}
+        contractId={realContract?.id}
+        onSuccess={() => {
+          loadContractModule();
+          loadAllData();
+        }}
+      />
     </>
   );
 }
