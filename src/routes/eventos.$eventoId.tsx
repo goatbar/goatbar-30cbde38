@@ -1025,7 +1025,7 @@ function EventoInterna() {
     }
   };
 
-  const handleConfirmGenerateAddendum = async (paymentMethod: string, dueDate: string) => {
+  const handleConfirmGenerateAddendum = async (condition: string, paymentMethod: string, dueDate: string) => {
     if (!realContract) return;
 
     try {
@@ -1033,8 +1033,9 @@ function EventoInterna() {
       const newAdd = await contractAddendumService.createAddendum({
         contractId: realContract.id,
         eventId: eventoId,
-        overridePaymentMethod: paymentMethod,
-        overrideDueDate: dueDate,
+        paymentCondition: condition,
+        paymentMethod,
+        dueDates: dueDate.split(/\s*(?:,|;|\se\s)\s*/).filter(Boolean),
       });
 
       setShowAddendumDiffModal(false);

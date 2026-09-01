@@ -18,6 +18,35 @@ describe("compareContractVersions", () => {
     pending_payment_date: "2026-11-01",
   };
 
+  it("preserva R$ 3.400 pagos ao elevar contrato de R$ 6.800 para R$ 8.000", () => {
+    const result = compareContractVersions(
+      { final_budget_value: 6800, paid_value: 3400 },
+      { final_budget_value: 8000 },
+    );
+    expect(result.valor_diferenca).toBe(1200);
+    expect(result.valor_ja_pago).toBe(3400);
+    expect(result.novo_saldo_restante).toBe(4600);
+  });
+
+  it("expõe crédito quando o pagamento supera o novo total", () => {
+    const result = compareContractVersions({ final_budget_value: 8000, paid_value: 7000 }, { final_budget_value: 6000 });
+    expect(result.novo_saldo_restante).toBe(0);
+    expect(result.credito_cliente).toBe(1000);
+  });
+
+  it("detecta somente convidados e gera mudança estruturada", () => {
+    const result = compareContractVersions({ ...baseV1, guest_count: 100 }, { ...baseV1, guest_count: 120 });
+    expect(result.changes.map((change) => change.key)).toEqual(["guest_count"]);
+    expect(result.guestCount).toMatchObject({ changed: true, previous: 100, current: 120 });
+  });
+
+  it("separa à vista, PIX e vencimento", () => {
+    const result = compareContractVersions(baseV1, { ...baseV1, payment_method: "À vista via PIX", pending_payment_date: "15/09/2026" });
+    expect(result.forma_pagamento_saldo).toBe("À vista");
+    expect(result.meio_pagamento_saldo).toBe("PIX");
+    expect(result.datas_vencimento).toEqual(["15/09/2026"]);
+  });
+
   it("1. detecta quando ocorre somente alteração de drinks", () => {
     const updatedV2 = {
       ...baseV1,

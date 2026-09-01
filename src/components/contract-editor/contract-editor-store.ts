@@ -6,6 +6,7 @@ import {
   Building2,
   GlassWater,
   Sparkles,
+  FileText,
 } from "lucide-react";
 
 export interface EditorFieldDef {
@@ -24,6 +25,16 @@ export interface FieldCategoryDef {
 }
 
 export const EDITOR_FIELD_CATEGORIES: FieldCategoryDef[] = [
+  {
+    category: "📑 Termo Aditivo", icon: FileText,
+    fields: [
+      { key:"contrato.data_assinatura_original",label:"Data da assinatura original",category:"Contrato",desc:"Data fully_signed_at do contrato original",sampleValue:"01/09/2026",defaultTag:"[DATA_ASSINATURA_ORIGINAL]" },
+      ...[["numero","Número","1"],["data","Data","01/09/2026"],["valor_total_anterior","Total anterior","R$ 6.800,00"],["valor_total_novo","Total novo","R$ 8.000,00"],["valor_diferenca","Diferença","R$ 1.200,00"],["valor_ja_pago","Valor já pago","R$ 3.400,00"],["saldo_anterior","Saldo anterior","R$ 3.400,00"],["novo_saldo_restante","Novo saldo","R$ 4.600,00"],["credito_cliente","Crédito do cliente","R$ 0,00"],["forma_pagamento_saldo","Condição do saldo","À vista"],["meio_pagamento_saldo","Meio do saldo","PIX"],["datas_vencimento","Vencimentos","15/09/2026"],["resumo_alteracoes","Resumo das alterações","Valor total alterado"],["drinks_anteriores","Drinks anteriores","Moscow Mule"],["drinks_atuais","Drinks atuais","Fitzgerald"]].flatMap(([key,label,sample])=>[
+        {key:`aditivo.${key}`,label,category:"Aditivo",desc:label,sampleValue:sample,defaultTag:`[ADITIVO_${key.toUpperCase()}]`},
+        ...(["valor_total_anterior","valor_total_novo","valor_diferenca","valor_ja_pago","saldo_anterior","novo_saldo_restante","credito_cliente"].includes(key)?[{key:`aditivo.${key}_extenso`,label:`${label} por extenso`,category:"Aditivo",desc:`${label} por extenso`,sampleValue:"quatro mil e seiscentos reais",defaultTag:`[ADITIVO_${key.toUpperCase()}_EXTENSO]`}]:[]),
+      ]),
+    ],
+  },
   {
     category: "🥂 Evento",
     icon: Calendar,
