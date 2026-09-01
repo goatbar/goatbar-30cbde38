@@ -11,7 +11,7 @@ interface AddendumDiffPreviewModalProps {
   comparison: ContractAddendumComparison | null;
   addendumNumber: number;
   compiledHtml: string;
-  onConfirmGenerate: (paymentMethod: string, dueDate: string) => Promise<void>;
+  onConfirmGenerate: (condition: string, paymentMethod: string, dueDate: string) => Promise<void>;
   isLoading?: boolean;
 }
 
@@ -26,21 +26,16 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
 }) => {
   if (!comparison) return null;
 
-  const [paymentMethod, setPaymentMethod] = useState(
-    comparison.financial.paymentMethod !== "Não informado"
-      ? comparison.financial.paymentMethod
-      : "PIX",
-  );
-  const [dueDate, setDueDate] = useState(
-    comparison.financial.dueDate !== "A definir" ? comparison.financial.dueDate : "",
-  );
+  const [condition, setCondition] = useState(comparison.financial.paymentCondition || "");
+  const [paymentMethod, setPaymentMethod] = useState(comparison.financial.paymentMethod || "");
+  const [dueDate, setDueDate] = useState(comparison.financial.dueDate);
   const [showHtmlPreview, setShowHtmlPreview] = useState(false);
 
   const fmt = (v: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 
   const handleConfirm = async () => {
-    await onConfirmGenerate(paymentMethod, dueDate);
+    await onConfirmGenerate(condition, paymentMethod, dueDate);
   };
 
   return (
@@ -58,12 +53,12 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
           <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive flex items-start gap-3">
             <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-bold">Geração Automática Bloqueada</h4>
+              <h4 className="font-bold">Crédito do cliente detectado</h4>
               <p className="text-sm mt-1">
-                O novo valor contratual (<strong>{comparison.totalValue.currentFormatted}</strong>) é inferior ao valor já pago pelo cliente (<strong>{fmt(comparison.financial.paidAmount)}</strong>).
+                O novo valor contratual (<strong>{comparison.totalValue.currentFormatted}</strong>) é inferior ao valor já pago pelo cliente (<strong>{fmt(comparison.financial.paidAmount || 0)}</strong>).
               </p>
               <p className="text-xs mt-1 opacity-90">
-                Existe um saldo excedente de <strong>{fmt(comparison.financial.creditAmount)}</strong> a devolver ou converter em crédito. É necessária negociação e definição da regra de crédito antes da geração do termo aditivo.
+                O snapshot registrará crédito de <strong>{fmt(comparison.financial.creditAmount)}</strong>; confirme no documento a destinação acordada com o cliente.
               </p>
             </div>
           </div>
@@ -162,11 +157,11 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
             </div>
             <div>
               <div className="text-xs text-muted-foreground">Já Pago pelo Cliente</div>
-              <div className="text-lg font-bold text-emerald-600">{fmt(comparison.financial.paidAmount)}</div>
+              <div className="text-lg font-bold text-emerald-600">{comparison.financial.paidAmount === null ? "Pendente" : fmt(comparison.financial.paidAmount)}</div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground">Saldo Remanescente a Pagar</div>
-              <div className="text-lg font-bold text-primary">{fmt(comparison.financial.remainingBalance)}</div>
+              <div className="text-lg font-bold text-primary">{comparison.financial.remainingBalance === null ? "Pendente" : fmt(comparison.financial.remainingBalance)}</div>
             </div>
           </div>
         </div>
@@ -177,16 +172,13 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
             3. Condições de Pagamento do Saldo Remanescente
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div><label className="text-xs font-semibold text-muted-foreground block mb-1">Condição *</label><select className="w-full h-10 rounded-md border bg-background px-3" value={condition} onChange={(e)=>setCondition(e.target.value)}><option value="">Selecione</option><option>À vista</option><option>Parcelado</option></select></div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-1">
                 Forma de Pagamento do Saldo *
               </label>
-              <Input
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                placeholder="Ex: PIX, Transferência Bancária, Cartão em 2x..."
-              />
+              <select className="w-full h-10 rounded-md border bg-background px-3" value={paymentMethod} onChange={(e)=>setPaymentMethod(e.target.value)}><option value="">Selecione</option><option>PIX</option><option>Transferência</option><option>Cartão</option><option>Boleto</option></select>
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-1">
@@ -227,7 +219,7 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={comparison.financial.hasExcessPaymentCredit || !paymentMethod.trim() || !dueDate.trim() || isLoading}
+            disabled={comparison.financial.paidAmount === null || !condition || !paymentMethod || !dueDate.trim() || isLoading}
           >
             {isLoading ? "Gerando Aditivo..." : "Gerar Rascunho do Termo Aditivo"}
           </Button>

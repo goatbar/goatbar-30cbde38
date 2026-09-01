@@ -1882,6 +1882,10 @@ export type Database = {
           external_assignment_id: string | null
           external_document_id: string | null
           financial_snapshot: Json
+          comparison_snapshot: Json
+          balance_payment_condition: string | null
+          balance_payment_method: string | null
+          balance_due_dates: Json
           fully_signed_at: string | null
           generated_file_url: string | null
           generated_html: string | null
@@ -1908,6 +1912,10 @@ export type Database = {
           external_assignment_id?: string | null
           external_document_id?: string | null
           financial_snapshot?: Json
+          comparison_snapshot?: Json
+          balance_payment_condition?: string | null
+          balance_payment_method?: string | null
+          balance_due_dates?: Json
           fully_signed_at?: string | null
           generated_file_url?: string | null
           generated_html?: string | null
@@ -1934,6 +1942,10 @@ export type Database = {
           external_assignment_id?: string | null
           external_document_id?: string | null
           financial_snapshot?: Json
+          comparison_snapshot?: Json
+          balance_payment_condition?: string | null
+          balance_payment_method?: string | null
+          balance_due_dates?: Json
           fully_signed_at?: string | null
           generated_file_url?: string | null
           generated_html?: string | null

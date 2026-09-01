@@ -17,6 +17,10 @@ export interface ContractAddendumRow {
   previous_snapshot: Record<string, any>;
   current_snapshot: Record<string, any>;
   financial_snapshot: Record<string, any>;
+  comparison_snapshot: Record<string, any>;
+  balance_payment_condition: string | null;
+  balance_payment_method: string | null;
+  balance_due_dates: string[];
   original_contract_date: string;
   addendum_date: string;
   generated_html: string | null;
@@ -39,8 +43,20 @@ export interface EffectiveBudgetVersionResult {
   addendumNumber?: number;
 }
 
+export function assertAddendumReadyForSignature(addendum: Pick<ContractAddendumRow, "generated_html" | "original_contract_date" | "financial_snapshot">) {
+  const html=addendum.generated_html||"";
+  if (!addendum.original_contract_date) throw new Error("PENDING_ORIGINAL_SIGNATURE_DATE");
+  if (addendum.financial_snapshot?.paid_amount === null || addendum.financial_snapshot?.paid_amount === undefined) throw new Error("PENDING_PAID_AMOUNT");
+  if (/Não informado|A definir|\{\{|\[[A-Z0-9_]+\]/i.test(html)) throw new Error("ADDENDUM_HAS_UNRESOLVED_PLACEHOLDERS");
+}
+
 /** Modelo Oficial do Termo Aditivo ao Contrato */
 export function buildAddendumTemplateHtml(vars: Record<string, string>): string {
+  const clauses: string[] = [];
+  if (vars.clausula_drinks) clauses.push(`<h3>CLÁUSULA — DOS DRINKS E BEBIDAS</h3><p>${vars.clausula_drinks}</p>`);
+  if (vars.clausula_valor) clauses.push(`<h3>CLÁUSULA — DO VALOR E PAGAMENTO</h3><p>${vars.clausula_valor}</p>`);
+  if (vars.clausula_convidados) clauses.push(`<h3>CLÁUSULA — DOS CONVIDADOS</h3><p>${vars.clausula_convidados}</p>`);
+  if (vars.clausula_demais) clauses.push(`<h3>CLÁUSULA — DAS DEMAIS ALTERAÇÕES</h3><p>${vars.clausula_demais}</p>`);
   return `
 <h1 style="text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 16px; text-transform: uppercase;">
   TERMO ADITIVO AO CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE BAR PARA EVENTOS
@@ -62,35 +78,7 @@ export function buildAddendumTemplateHtml(vars: Record<string, string>): string 
   As partes acima qualificadas têm entre si justo e acertado o presente <strong>TERMO ADITIVO</strong> ao Contrato de Prestação de Serviços de Bar para Eventos firmado em <strong>${vars.data_contrato_original || ""}</strong>, mediante as seguintes cláusulas:
 </p>
 
-<h3 style="font-size: 14px; font-weight: bold; margin-top: 16px; margin-bottom: 6px;">
-  CLÁUSULA PRIMEIRA — DOS DRINKS E BEBIDAS
-</h3>
-<p style="text-align: justify; margin-bottom: 12px;">
-  1.1. As partes acordam que os drinks e bebidas que serão servidos no evento passam a vigorar com a seguinte redação final:<br />
-  <em>“${vars.drinks_atuais || ""}”</em>
-</p>
-
-<h3 style="font-size: 14px; font-weight: bold; margin-top: 16px; margin-bottom: 6px;">
-  CLÁUSULA SEGUNDA — DO VALOR E FORMA DE PAGAMENTO
-</h3>
-<p style="text-align: justify; margin-bottom: 8px;">
-  2.1. O valor total do contrato passa a ser de <strong>${vars.novo_valor_total || ""}</strong> (${vars.novo_valor_total_extenso || ""}).
-</p>
-
-<p style="text-align: justify; margin-bottom: 8px;">
-  2.2. O CONTRATANTE já efetuou o pagamento do montante de <strong>${vars.valor_ja_pago || "R$ 0,00"}</strong>, restando o saldo remanescente de <strong>${vars.saldo_restante || "R$ 0,00"}</strong>.
-</p>
-
-<p style="text-align: justify; margin-bottom: 12px;">
-  2.3. O pagamento do saldo remanescente será efetuado da seguinte forma: <strong>${vars.forma_pagamento_saldo || ""}</strong>, com vencimento em <strong>${vars.datas_vencimento || ""}</strong>.
-</p>
-
-<h3 style="font-size: 14px; font-weight: bold; margin-top: 16px; margin-bottom: 6px;">
-  CLÁUSULA TERCEIRA — DO CONVIDADO EXCEDENTE
-</h3>
-<p style="text-align: justify; margin-bottom: 12px;">
-  3.1. O valor por convidado excedente passa a ser de <strong>${vars.valor_convidado_excedente || ""}</strong> (${vars.valor_convidado_excedente_extenso || ""}).
-</p>
+${clauses.join("\n")}
 
 <h3 style="font-size: 14px; font-weight: bold; margin-top: 16px; margin-bottom: 6px;">
   CLÁUSULA QUARTA — DA RATIFICAÇÃO
@@ -344,19 +332,26 @@ export const contractAddendumService = {
       novo_valor_total: comparison.totalValue.currentFormatted,
       novo_valor_total_extenso: comparison.totalValue.currentWords,
       valor_ja_pago: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-        comparison.financial.paidAmount,
+        comparison.financial.paidAmount || 0,
       ),
       saldo_restante: new Intl.NumberFormat("pt-BR", {
         style: "currency",
         currency: "BRL",
-      }).format(comparison.financial.remainingBalance),
-      forma_pagamento_saldo: comparison.financial.paymentMethod,
+      }).format(comparison.financial.remainingBalance || 0),
+      forma_pagamento_saldo: comparison.financial.paymentCondition || "",
+      meio_pagamento_saldo: comparison.financial.paymentMethod || "",
       datas_vencimento: comparison.financial.dueDate,
       valor_convidado_excedente: comparison.extraGuestValue.currentFormatted,
       valor_convidado_excedente_extenso: comparison.extraGuestValue.currentWords,
       cidade_assinatura: evento?.city || "São Paulo/SP",
       data_aditivo: new Date().toLocaleDateString("pt-BR"),
+      resumo_alteracoes: comparison.resumo_alteracoes,
     };
+    if (comparison.drinks.changed) templateVars.clausula_drinks = `Os drinks e bebidas passam a ser: <em>“${comparison.drinks.finalListText}”</em>.`;
+    if (comparison.totalValue.changed) templateVars.clausula_valor = "As condições financeiras serão detalhadas após a confirmação das condições do saldo.";
+    if (comparison.guestCount.changed || comparison.extraGuestValue.changed) templateVars.clausula_convidados = `${comparison.guestCount.changed ? `A quantidade de convidados passa de ${comparison.guestCount.previous} para ${comparison.guestCount.current}. ` : ""}${comparison.extraGuestValue.changed ? `O valor por convidado excedente passa a ser ${comparison.extraGuestValue.currentFormatted} (${comparison.extraGuestValue.currentWords}).` : ""}`;
+    const otherChanges=comparison.changes.filter((c)=>!["drinks","total_value","guest_count","extra_guest_value"].includes(c.key));
+    if (otherChanges.length) templateVars.clausula_demais=otherChanges.map((c)=>`${c.label}: de ${JSON.stringify(c.previous)} para ${JSON.stringify(c.current)}.`).join(" ");
 
     const compiledHtml = buildAddendumTemplateHtml(templateVars);
 
@@ -377,8 +372,9 @@ export const contractAddendumService = {
   async createAddendum(params: {
     contractId: string;
     eventId: string;
-    overridePaymentMethod?: string;
-    overrideDueDate?: string;
+    paymentCondition?: string;
+    paymentMethod?: string;
+    dueDates?: string[];
   }): Promise<ContractAddendumRow> {
     const { active, activeAddendum } = await this.hasActiveAddendum(params.contractId);
     if (active && activeAddendum) {
@@ -389,30 +385,19 @@ export const contractAddendumService = {
 
     const data = await this.prepareAddendumData(params.contractId, params.eventId);
 
-    if (data.comparison.financial.hasExcessPaymentCredit) {
-      throw new Error(
-        `O novo valor contratual (${data.comparison.totalValue.currentFormatted}) é inferior ao valor já pago (${new Intl.NumberFormat(
-          "pt-BR",
-          { style: "currency", currency: "BRL" },
-        ).format(
-          data.comparison.financial.paidAmount,
-        )}). É necessária definição da regra de crédito/devolução antes da geração do aditivo.`,
-      );
-    }
-
     if (!data.comparison.requiresAddendum) {
       throw new Error(
         "A versão atual da proposta não possui alterações contratuais relevantes para gerar um Termo Aditivo.",
       );
     }
 
-    // Aplica overrides de pagamento se informados na UI
-    if (params.overridePaymentMethod) {
-      data.templateVars.forma_pagamento_saldo = params.overridePaymentMethod;
-    }
-    if (params.overrideDueDate) {
-      data.templateVars.datas_vencimento = params.overrideDueDate;
-    }
+    if (data.comparison.valor_ja_pago === null) throw new Error("PENDING_PAID_AMOUNT");
+    const condition=params.paymentCondition||data.comparison.forma_pagamento_saldo;
+    const method=params.paymentMethod||data.comparison.meio_pagamento_saldo;
+    const dueDates=params.dueDates?.filter(Boolean).length?params.dueDates:data.comparison.datas_vencimento;
+    if (data.comparison.novo_saldo_restante! > 0 && (!condition || !method || !dueDates.length)) throw new Error("PENDING_BALANCE_PAYMENT_TERMS");
+    data.templateVars.forma_pagamento_saldo=condition||""; data.templateVars.meio_pagamento_saldo=method||""; data.templateVars.datas_vencimento=dueDates.join(" e ");
+    if (data.comparison.totalValue.changed) data.templateVars.clausula_valor=`O valor total passa a ser de <strong>${data.templateVars.novo_valor_total}</strong> (${data.templateVars.novo_valor_total_extenso}). O CONTRATANTE já pagou <strong>${data.templateVars.valor_ja_pago}</strong>, restando <strong>${data.templateVars.saldo_restante}</strong>, que será pago ${condition?.toLowerCase()}, via ${method}, com vencimento em ${dueDates.join(" e ")}.`;
 
     const finalHtml = buildAddendumTemplateHtml(data.templateVars);
 
@@ -433,8 +418,7 @@ export const contractAddendumService = {
       addendum_difference: data.comparison.totalValue.difference,
       paid_amount: data.comparison.financial.paidAmount,
       remaining_balance: data.comparison.financial.remainingBalance,
-      payment_method: data.templateVars.forma_pagamento_saldo,
-      due_dates: data.templateVars.datas_vencimento,
+      payment_condition: condition, payment_method: method, due_dates: dueDates,
       previous_extra_guest_value: data.comparison.extraGuestValue.previous,
       current_extra_guest_value: data.comparison.extraGuestValue.current,
     };
@@ -470,6 +454,10 @@ export const contractAddendumService = {
         previous_snapshot: previousSnapshot,
         current_snapshot: currentSnapshot,
         financial_snapshot: financialSnapshot,
+        comparison_snapshot: data.comparison as any,
+        balance_payment_condition: condition,
+        balance_payment_method: method,
+        balance_due_dates: dueDates,
         original_contract_date: data.originalContractDate,
         generated_html: finalHtml,
         status: "draft",
@@ -497,6 +485,7 @@ export const contractAddendumService = {
     if (!addendum || !addendum.generated_html) {
       throw new Error("Aditivo não encontrado ou sem minuta gerada.");
     }
+    assertAddendumReadyForSignature(addendum as ContractAddendumRow);
 
     const eventName = (addendum.events as any)?.event_name || (addendum.events as any)?.client_name || "Evento";
     const rawDate = ((addendum.events as any)?.date || "").slice(0, 10);
