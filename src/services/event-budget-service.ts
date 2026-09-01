@@ -29,6 +29,8 @@ export interface Event {
   payment_percent_received?: number;
   current_budget_value?: number;
   current_profit_value?: number;
+  /** Derived from persisted event_budget_versions rows; never stored on events. */
+  has_budget_version?: boolean;
   google_calendar_event_id?: string | null;
   google_calendar_sync_status?: "not_synced" | "pending" | "synced" | "error" | "cancelled";
   google_calendar_synced_at?: string | null;
@@ -182,6 +184,11 @@ export const eventBudgetService = {
     return supabase
       .channel("event-list-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "events" }, onChange)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "event_budget_versions" },
+        onChange,
+      )
       .subscribe();
   },
   // --- Events ---
@@ -195,12 +202,11 @@ export const eventBudgetService = {
     const events = (data || []) as Event[];
     if (events.length === 0) return events;
 
-    const { data: currentBudgets, error: budgetError } = await supabase
+    const { data: persistedBudgets, error: budgetError } = await supabase
       .from("event_budget_versions")
       .select(
-        "event_id, profit_value, paid_percentage, pending_payment_date, final_budget_value, discount_value, discount_description",
-      )
-      .eq("is_current", true);
+        "event_id, is_current, profit_value, paid_percentage, pending_payment_date, final_budget_value, discount_value, discount_description",
+      );
 
     if (budgetError) {
       console.warn(
@@ -210,11 +216,14 @@ export const eventBudgetService = {
       return events;
     }
 
-    const budgetByEvent = new Map((currentBudgets || []).map((b: any) => [b.event_id, b]));
+    const eventIdsWithBudget = new Set((persistedBudgets || []).map((b: any) => b.event_id));
+    const budgetByEvent = new Map(
+      (persistedBudgets || []).filter((b: any) => b.is_current).map((b: any) => [b.event_id, b]),
+    );
 
     return events.map((event) => {
       const budget = budgetByEvent.get(event.id);
-      if (!budget) return event;
+      if (!budget) return { ...event, has_budget_version: eventIdsWithBudget.has(event.id) };
 
       const discount = Number(budget.discount_value || 0);
       const discountDescription = budget.discount_description;
@@ -238,6 +247,7 @@ export const eventBudgetService = {
 
       return {
         ...event,
+        has_budget_version: true,
         current_budget_value: Number(budget.final_budget_value || event.current_budget_value || 0),
         current_profit_value: reconciledProfit,
         payment_percent_received: Number(
@@ -347,8 +357,14 @@ export const eventBudgetService = {
     return data && data.length > 0 ? (data[0] as Event) : null;
   },
 
-  async createEvent(payload: Partial<Event> & Pick<Event, "client_name" | "date" | "event_type" | "guests">) {
-    const { data, error } = await supabase.from("events").insert(payload as any).select().single();
+  async createEvent(
+    payload: Partial<Event> & Pick<Event, "client_name" | "date" | "event_type" | "guests">,
+  ) {
+    const { data, error } = await supabase
+      .from("events")
+      .insert(payload as any)
+      .select()
+      .single();
     if (error) throw error;
     return data as Event;
   },

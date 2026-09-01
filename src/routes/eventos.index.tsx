@@ -39,6 +39,7 @@ import {
   getPendingPublicBudgetRequests,
   isPendingPublicBudgetRequest,
 } from "@/lib/public-budget-requests";
+import { deleteEventFromList } from "@/lib/event-list-deletion";
 
 const VIEW_STORAGE_KEY = "goatbar:eventos:view";
 
@@ -363,8 +364,12 @@ function EventosIndex() {
             ev.preventDefault();
             ev.stopPropagation();
             if (confirm("Excluir este orçamento definitivamente?")) {
-              await eventBudgetService.deleteEvent(e.id);
-              loadEvents();
+              await deleteEventFromList(e.id, {
+                deleteEvent: eventBudgetService.deleteEvent,
+                reload: loadEvents,
+                showSuccess: toast.success,
+                showError: toast.error,
+              });
             }
           }}
         >
