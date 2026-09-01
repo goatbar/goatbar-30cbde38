@@ -1,5 +1,6 @@
 export type EventListDeletionDependencies = {
-  deleteEvent: (eventId: string) => Promise<void>;
+  deleteRequest: (eventId: string) => Promise<void>;
+  removeFromList: (eventId: string) => void;
   reload: () => Promise<unknown>;
   showSuccess: (message: string) => void;
   showError: (message: string) => void;
@@ -10,7 +11,10 @@ export async function deleteEventFromList(
   dependencies: EventListDeletionDependencies,
 ): Promise<boolean> {
   try {
-    await dependencies.deleteEvent(eventId);
+    await dependencies.deleteRequest(eventId);
+    // Update the card and counter synchronously after the database confirms the
+    // deletion; the refetch below only reconciles the local state.
+    dependencies.removeFromList(eventId);
     await dependencies.reload();
     dependencies.showSuccess("Orçamento excluído.");
     return true;

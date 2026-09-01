@@ -3261,6 +3261,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      delete_public_budget_request: {
+        Args: { p_event_id: string }
+        Returns: Json
+      }
       consume_budget_request_link:
         | {
             Args: {
