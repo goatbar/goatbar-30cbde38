@@ -171,22 +171,121 @@ export const CONTRACT_DOCUMENT_CSS = `
 
 /** Self-contained styles for the isolated A4 document captured for signing. */
 export const CONTRACT_PDF_DOCUMENT_CSS = `
-  @page { size: A4; margin: 15mm; }
+  @page { size: A4; margin: 23mm 23mm 23mm 23mm; }
   html, body { margin: 0 !important; padding: 0 !important; background: #ffffff !important; color: #000000 !important; color-scheme: light only; }
-  #contract-pdf-document { box-sizing: border-box; width: 180mm; min-height: 267mm; margin: 0; padding: 0; overflow-wrap: break-word; background: #ffffff !important; color: #000000 !important; font-family: Arial, Helvetica, sans-serif; font-size: 13px; line-height: 1.6; }
+  #contract-pdf-document {
+    box-sizing: border-box;
+    width: 164mm;
+    min-height: 251mm;
+    margin: 0;
+    padding: 0;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 14.85px; /* ≈ 11pt at 96 dpi (1pt = 1.3333px) */
+    line-height: 1.42;
+  }
   #contract-pdf-document, #contract-pdf-document * { color-scheme: light only; }
   #contract-pdf-document * { color: #000000 !important; }
   #contract-pdf-document p, #contract-pdf-document div, #contract-pdf-document span, #contract-pdf-document li { background-color: transparent !important; }
-  #contract-pdf-document p { margin: 0 0 0.75rem; line-height: 1.6; }
-  #contract-pdf-document h1, #contract-pdf-document h2, #contract-pdf-document h3, #contract-pdf-document h4, #contract-pdf-document h5, #contract-pdf-document h6 { color: #000000 !important; font-weight: 700; line-height: 1.3; margin: 1.25rem 0 0.5rem; break-after: avoid; page-break-after: avoid; }
-  #contract-pdf-document h1 { font-size: 20px; } #contract-pdf-document h2 { font-size: 16px; } #contract-pdf-document h3 { font-size: 14px; } #contract-pdf-document h4 { font-size: 13px; }
+
+  /* Body paragraphs */
+  #contract-pdf-document p {
+    margin: 0 0 9px;
+    line-height: 1.42;
+    text-align: justify;
+  }
+
+  /* Heading hierarchy — mirrors the old contract's visual weight */
+  #contract-pdf-document h1, #contract-pdf-document h2, #contract-pdf-document h3,
+  #contract-pdf-document h4, #contract-pdf-document h5, #contract-pdf-document h6 {
+    color: #000000 !important;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: 6px;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Main title: "CONTRATO DE PRESTAÇÃO DE SERVIÇOS" */
+  #contract-pdf-document h1 {
+    font-size: 18.67px; /* ≈ 14pt */
+    margin-top: 0;
+    margin-bottom: 14px;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  /* Section label: "CONTRATANTE:", "CONTRATADA:" */
+  #contract-pdf-document h2 {
+    font-size: 16px; /* ≈ 12pt */
+    margin-top: 18px;
+    margin-bottom: 5px;
+  }
+
+  /* Clause titles: "CLÁUSULA 1ª — ..." */
+  #contract-pdf-document h3 {
+    font-size: 14.85px; /* ≈ 11pt, same as body but bold */
+    margin-top: 16px;
+    margin-bottom: 5px;
+  }
+
+  #contract-pdf-document h4 { font-size: 14.85px; margin-top: 12px; margin-bottom: 4px; }
+
   #contract-pdf-document strong, #contract-pdf-document b { font-weight: 700; }
-  #contract-pdf-document ul, #contract-pdf-document ol { margin: 0 0 0.75rem; padding-left: 1.5rem; } #contract-pdf-document li { margin-bottom: 0.25rem; }
-  #contract-pdf-document table { width: 100%; border-collapse: collapse; margin: 1rem 0; break-inside: avoid; page-break-inside: avoid; background: #ffffff !important; }
-  #contract-pdf-document th, #contract-pdf-document td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; vertical-align: top; color: #000000 !important; }
-  #contract-pdf-document th { background: #f8fafc !important; font-weight: 700; } #contract-pdf-document td { background: #ffffff !important; }
-  #contract-pdf-document .docx-page-break, #contract-pdf-document [style*="page-break-after"], #contract-pdf-document [style*="break-after"] { display: block !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; page-break-after: always !important; break-after: page !important; }
+
+  /* Lists */
+  #contract-pdf-document ul, #contract-pdf-document ol {
+    margin: 0 0 9px;
+    padding-left: 1.6rem;
+  }
+  #contract-pdf-document li { margin-bottom: 3px; line-height: 1.42; }
+
+  /* Tables */
+  #contract-pdf-document table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    background: #ffffff !important;
+  }
+  #contract-pdf-document th, #contract-pdf-document td {
+    border: 1px solid #cbd5e1;
+    padding: 6px 10px;
+    text-align: left;
+    vertical-align: top;
+    color: #000000 !important;
+    font-size: 14.85px;
+    line-height: 1.42;
+  }
+  #contract-pdf-document th { background: #f8fafc !important; font-weight: 700; }
+  #contract-pdf-document td { background: #ffffff !important; }
+
+  /* Page breaks */
+  #contract-pdf-document .docx-page-break,
+  #contract-pdf-document [style*="page-break-after"],
+  #contract-pdf-document [style*="break-after"] {
+    display: block !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  /* Signature block — keep on same page as preceding text */
+  #contract-pdf-document .signature-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-top: 24px;
+  }
 `;
+
 
 export const CONTRACT_PRINT_HTML_SHELL = (title: string, bodyHtml: string): string => `
 <!DOCTYPE html>

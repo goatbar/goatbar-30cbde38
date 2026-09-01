@@ -15,6 +15,7 @@ export interface SignatureProvider {
     pdfBase64?: string;
     pdfUrl?: string;
     pdfHash?: string;
+    documentTitle?: string;
   }): Promise<{
     success: boolean;
     dispatchOutcome?: "new_dispatch" | "reuse_healthy" | "reuse" | "reconciliation_required" | "already_signed" | "remote_document_missing";
@@ -120,6 +121,7 @@ export const assinafySignatureProvider: SignatureProvider = {
       payload.pdfBase64,
       payload.pdfUrl,
       payload.pdfHash,
+      payload.documentTitle,
     );
     return {
       success: res.success,

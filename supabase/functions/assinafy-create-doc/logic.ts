@@ -27,6 +27,7 @@ export type CreateDocPayload = {
   pdfBase64?: string;
   pdfUrl?: string;
   pdfHash: string;
+  documentTitle?: string;
 };
 
 export function validateCreateDocPayload(value: unknown): CreateDocPayload {
@@ -45,11 +46,16 @@ export function validateCreateDocPayload(value: unknown): CreateDocPayload {
   const hasUrl = typeof body.pdfUrl === "string" && body.pdfUrl.length > 0;
   if (!hasBase64 && !hasUrl)
     throw new CreateDocHttpError(422, "pdf_required", "PDF é obrigatório (pdfBase64 ou pdfUrl).");
+  const documentTitle =
+    typeof body.documentTitle === "string" && body.documentTitle.trim()
+      ? body.documentTitle.trim()
+      : undefined;
   return {
     contractId: body.contractId,
     pdfBase64: hasBase64 ? (body.pdfBase64 as string) : undefined,
     pdfUrl: hasUrl ? (body.pdfUrl as string) : undefined,
     pdfHash: body.pdfHash.toLowerCase(),
+    documentTitle,
   };
 }
 

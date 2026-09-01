@@ -65,6 +65,7 @@ import {
   type ContractSigner,
 } from "@/services/contract-service";
 import { convertHtmlToPdf } from "@/services/pdf-service";
+import { buildContractTitle } from "@/lib/contract-filename";
 import {
   convertAndDispatchSignature,
   getSignatureDispatchIdentifiers,
@@ -983,7 +984,7 @@ function EventoInterna() {
       });
       const { pdf, result } = await convertAndDispatchSignature({
         html: compiledHtml,
-        title: `Contrato_${realClientData.client_name || "Evento"}`,
+        title: buildContractTitle(evento?.event_name, evento?.client_name, evento?.date),
         contractId: identifiers.contractId,
         convert: convertHtmlToPdf,
         provider,

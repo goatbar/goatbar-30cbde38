@@ -88,7 +88,7 @@ serve(async (req) => {
       if (result.error || !result.data) return result;
       const event = await auth
         .from("events")
-        .select("client_name,email")
+        .select("client_name,email,event_name,date")
         .eq("id", result.data.event_id)
         .maybeSingle();
       if (event.error) return { data: null, error: event.error };
@@ -386,7 +386,22 @@ serve(async (req) => {
           );
         stage = "creating_remote_document";
         provider.called = true;
-        const uploaded = await uploadDocument(`Contrato_${contract.event_id}.pdf`, bytes);
+        // Build human-readable filename: prefer title passed by the frontend, fall back to
+        // constructing it from event data. Preserve accents, strip filesystem-illegal chars.
+        const buildDocumentFilename = (title?: string): string => {
+          if (title) return title.endsWith(".pdf") ? title : `${title}.pdf`;
+          const rawName = (contract.event?.event_name || contract.event?.client_name || "Evento").trim();
+          const safeName = rawName.replace(/[/\\:*?"<>|]/g, "").replace(/\s+/g, " ").trim();
+          const rawDate = (contract.event?.date || "").slice(0, 10);
+          const datePart = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+            ? `${rawDate.slice(8, 10)}-${rawDate.slice(5, 7)}-${rawDate.slice(0, 4)}`
+            : "";
+          const parts = ["Contrato Goat Bar", safeName || "Evento"];
+          if (datePart) parts.push(datePart);
+          return `${parts.join(" - ")}.pdf`;
+        };
+        const documentFilename = buildDocumentFilename(payload.documentTitle);
+        const uploaded = await uploadDocument(documentFilename, bytes);
         provider.diagnostic = uploaded.diagnostic;
         provider.documentId = uploaded?.data?.id || uploaded?.id || null;
         if (!provider.documentId) throw new Error("API não retornou o ID do documento.");

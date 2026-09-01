@@ -162,9 +162,10 @@ export async function dispatchContractToAssinafy(
   pdfBase64?: string,
   pdfUrl?: string,
   pdfHash?: string,
+  documentTitle?: string,
 ): Promise<AssinafyRequestResponse> {
   const { data, error } = await supabase.functions.invoke("assinafy-create-doc", {
-    body: { contractId, pdfBase64, pdfUrl, pdfHash },
+    body: { contractId, pdfBase64, pdfUrl, pdfHash, documentTitle },
   });
 
   if (error) {

@@ -64,7 +64,7 @@ describe("signature PDF dispatch", () => {
     expect(documentHtml).toContain("background:#ffffff");
     expect(documentHtml).toContain("color:#000000");
     expect(documentHtml).toContain("color-scheme:light");
-    expect(documentHtml).toContain("width: 180mm");
+    expect(documentHtml).toContain("width: 164mm");
     expect(documentHtml).toContain("page-break-after: always");
     expect(documentHtml).toContain("<strong>essencial</strong>");
     expect(documentHtml).toContain("<p>Cláusula");

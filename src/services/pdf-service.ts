@@ -27,7 +27,7 @@ export function buildContractPdfDocument(htmlContent: string, title: string): st
   return `<!DOCTYPE html>
 <html lang="pt-BR" style="background:#ffffff;color:#000000;color-scheme:light">
 <head><meta charset="UTF-8"><meta name="color-scheme" content="light only"><title>${escapeHtmlText(title)}</title><style>${CONTRACT_PDF_DOCUMENT_CSS}</style></head>
-<body style="margin:0;background:#ffffff!important;color:#000000!important"><main id="contract-pdf-document" style="box-sizing:border-box;width:180mm;min-height:267mm;background:#ffffff!important;color:#000000!important;isolation:isolate">${cleanHtml}</main></body>
+<body style="margin:0;background:#ffffff!important;color:#000000!important"><main id="contract-pdf-document" style="box-sizing:border-box;width:164mm;min-height:251mm;background:#ffffff!important;color:#000000!important;isolation:isolate">${cleanHtml}</main></body>
 </html>`;
 }
 
@@ -49,8 +49,10 @@ export async function convertHtmlToPdf(
   iframe.style.position = "absolute";
   iframe.style.left = "-9999px";
   iframe.style.top = "0";
-  // 210 × 297 mm at CSS' canonical 96 dpi. The captured root itself is the
-  // printable 180 × 267 mm area after 15 mm margins.
+  // A4 at 96 dpi = 794×1123px. Content area with 23mm margins:
+  // width:  210mm - 2×23mm = 164mm ≈ 620px
+  // height: 297mm - 2×23mm = 251mm ≈ 950px
+  // The iframe captures the full A4 page; html2pdf adds the @page margins.
   iframe.style.width = "794px";
   iframe.style.height = "1123px";
   iframe.style.border = "none";
@@ -68,7 +70,7 @@ export async function convertHtmlToPdf(
 
   try {
     const opt = {
-      margin: [15, 15, 15, 15] as [number, number, number, number],
+      margin: [23, 23, 23, 23] as [number, number, number, number],
       filename: `${title}.pdf`,
       image: { type: "jpeg" as const, quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: "#ffffff" },

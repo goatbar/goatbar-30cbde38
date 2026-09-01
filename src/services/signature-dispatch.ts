@@ -5,6 +5,7 @@ export interface SignatureDispatchProvider<Result> {
     contractId: string;
     pdfBase64: string;
     pdfHash: string;
+    documentTitle?: string;
   }): Promise<Result>;
 }
 
@@ -28,6 +29,7 @@ export async function convertAndDispatchSignature<Result>(options: {
     contractId: options.contractId,
     pdfBase64: pdf.base64,
     pdfHash: pdf.hash,
+    documentTitle: options.title,
   });
   return { pdf, result };
 }
