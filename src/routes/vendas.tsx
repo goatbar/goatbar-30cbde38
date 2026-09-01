@@ -1545,7 +1545,7 @@ function VendasPage() {
                     onChange={(e) => setLegacyForm((p) => ({ ...p, eventType: e.target.value }))}
                     className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors"
                   >
-                    {["Casamento", "Corporativo", "Aniversário", "Confraternização", "Outros"].map(
+                    {["Casamento", "Corporativo", "Aniversário", "Comemoração", "Outros"].map(
                       (t) => (
                         <option key={t} value={t}>
                           {t}

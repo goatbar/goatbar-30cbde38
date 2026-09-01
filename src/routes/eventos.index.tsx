@@ -564,7 +564,7 @@ function EventosIndex() {
                 <div>
                   <label className="label-eyebrow block mb-2">Tipo</label>
                   <select value={form.tipo} onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))} className="w-full h-10 px-4 rounded-lg bg-input border border-border focus:border-primary focus:outline-none text-sm transition-colors">
-                    {["Casamento", "Corporativo", "Aniversário", "Confraternização"].map((t) => <option key={t} value={t}>{t}</option>)}
+                    {["Casamento", "Corporativo", "Aniversário", "Comemoração"].map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
               </div>

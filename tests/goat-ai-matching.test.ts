@@ -22,7 +22,7 @@ describe("Goat AI Deterministic Event Matching Engine & Thresholds", () => {
       client_name: "Empresa ABC Tech",
       bride_name: null,
       groom_name: null,
-      event_name: "Confraternização ABC Tech",
+      event_name: "Comemoração ABC Tech",
       date: "2026-10-20",
       event_location: "Hotel Fasano",
       city: "Belo Horizonte",
