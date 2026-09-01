@@ -1761,6 +1761,112 @@ export type Database = {
         }
         Relationships: []
       }
+      contract_documents: {
+        Row: {
+          addendum_id: string | null
+          archive_status: string
+          contract_id: string | null
+          created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          document_name: string
+          document_type: string
+          event_id: string
+          external_assignment_id: string | null
+          external_document_id: string | null
+          external_url: string | null
+          file_size: number | null
+          id: string
+          is_final: boolean
+          is_signed: boolean
+          manual_signature_date: string | null
+          mime_type: string | null
+          original_filename: string | null
+          signed_at: string | null
+          source: string
+          storage_bucket: string
+          storage_path: string | null
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          addendum_id?: string | null
+          archive_status?: string
+          contract_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          document_name: string
+          document_type: string
+          event_id: string
+          external_assignment_id?: string | null
+          external_document_id?: string | null
+          external_url?: string | null
+          file_size?: number | null
+          id?: string
+          is_final?: boolean
+          is_signed?: boolean
+          manual_signature_date?: string | null
+          mime_type?: string | null
+          original_filename?: string | null
+          signed_at?: string | null
+          source?: string
+          storage_bucket?: string
+          storage_path?: string | null
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          addendum_id?: string | null
+          archive_status?: string
+          contract_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          document_name?: string
+          document_type?: string
+          event_id?: string
+          external_assignment_id?: string | null
+          external_document_id?: string | null
+          external_url?: string | null
+          file_size?: number | null
+          id?: string
+          is_final?: boolean
+          is_signed?: boolean
+          manual_signature_date?: string | null
+          mime_type?: string | null
+          original_filename?: string | null
+          signed_at?: string | null
+          source?: string
+          storage_bucket?: string
+          storage_path?: string | null
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_documents_addendum_id_fkey"
+            columns: ["addendum_id"]
+            isOneToOne: false
+            referencedRelation: "contract_addendums"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_documents_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "event_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_documents_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contract_addendums: {
         Row: {
           addendum_date: string

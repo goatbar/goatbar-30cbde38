@@ -6,6 +6,7 @@ import {
   redactSensitive,
   secureTokenMatches,
 } from "./logic.ts";
+import { archiveAssinafyDocument } from "../_shared/archive-assinafy-document.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,6 +49,8 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
+
+    // 1. Processamento rápido no banco (transição de status + insert de pending document)
     const { data, error } = await admin.rpc("process_assinafy_webhook_event", {
       p_external_event_id: String(externalEventId),
       p_event_type: String(eventType),
@@ -56,6 +59,35 @@ serve(async (req) => {
       p_request_id: correlationId,
     });
     if (error) throw error;
+
+    // 2. Se for conclusão integral do documento por todos os signatários, agenda o arquivador via EdgeRuntime.waitUntil
+    if (["document_completed", "completed"].includes(normType) && documentId) {
+      const archivingPromise = (async () => {
+        try {
+          const { data: docRecord } = await admin
+            .from("contract_documents")
+            .select("id")
+            .eq("external_document_id", documentId)
+            .maybeSingle();
+
+          if (docRecord?.id) {
+            await archiveAssinafyDocument(admin, docRecord.id);
+            console.info("[assinafy-webhook] archiving_completed", { documentId, docRecordId: docRecord.id });
+          }
+        } catch (archErr: any) {
+          console.error("[assinafy-webhook] background_archiving_failed", {
+            documentId,
+            error: archErr?.message || String(archErr),
+          });
+        }
+      })();
+
+      // Garante que o Supabase Edge Runtime mantém o contexto ativo até a conclusão da promessa
+      if (typeof (globalThis as any).EdgeRuntime?.waitUntil === "function") {
+        (globalThis as any).EdgeRuntime.waitUntil(archivingPromise);
+      }
+    }
+
     console.info("[assinafy-webhook] processed", {
       correlationId,
       eventType,
@@ -63,6 +95,8 @@ serve(async (req) => {
       duplicate: Boolean(data?.duplicate),
       processed: Boolean(data?.processed),
     });
+
+    // 3. Retorno imediato HTTP 200 para a Assinafy
     return new Response(JSON.stringify({ received: true, ...data }), {
       headers: {
         ...corsHeaders,

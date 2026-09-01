@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { contractDocumentService } from "./contract-document-service";
 import {
   calcularWelcomeDrinks,
   calcularTotalShots,
@@ -577,30 +578,16 @@ export const eventContractsService = {
   },
 
   async uploadSignedContractFile(eventId: string, file: File): Promise<string> {
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${eventId}_signed_${Date.now()}.${fileExt}`;
-    const filePath = `signed/${fileName}`;
-
-    try {
-      const { error } = await supabase.storage
-        .from("contract-templates")
-        .upload(filePath, file, { upsert: true });
-
-      if (error) throw error;
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("contract-templates").getPublicUrl(filePath);
-
-      return publicUrl;
-    } catch (err) {
-      console.warn("Storage upload error for signed contract, using Data URL fallback:", err);
-      return new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-      });
-    }
+    // Redireciona para o serviço canônico de documentos no bucket privado contract-documents
+    const doc = await contractDocumentService.uploadDocument({
+      file,
+      eventId,
+      documentType: "manual_signed_contract",
+      documentName: file.name,
+      isSigned: true,
+      source: "manual",
+    });
+    return doc.storage_path || "";
   },
 
   async saveSignedContract(

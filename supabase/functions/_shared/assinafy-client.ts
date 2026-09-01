@@ -1,10 +1,11 @@
 // _shared/assinafy-client.ts
+declare const Deno: any;
 
-export const ASSINAFY_ENV = Deno.env.get("ASSINAFY_ENVIRONMENT") || "sandbox";
+export const ASSINAFY_ENV = (typeof Deno !== "undefined" ? Deno.env.get("ASSINAFY_ENVIRONMENT") : "") || "sandbox";
 export const ASSINAFY_BASE_URL =
   ASSINAFY_ENV === "production" ? "https://api.assinafy.com.br" : "https://sandbox.assinafy.com.br";
-export const ASSINAFY_API_KEY = Deno.env.get("ASSINAFY_API_KEY");
-export const ASSINAFY_ACCOUNT_ID = Deno.env.get("ASSINAFY_ACCOUNT_ID");
+export const ASSINAFY_API_KEY = typeof Deno !== "undefined" ? Deno.env.get("ASSINAFY_API_KEY") : "";
+export const ASSINAFY_ACCOUNT_ID = typeof Deno !== "undefined" ? Deno.env.get("ASSINAFY_ACCOUNT_ID") : "";
 
 export type AssinafyDiagnostic = {
   requestStarted: boolean;
@@ -176,7 +177,7 @@ export async function findSigner(email: string) {
     const url = `${ASSINAFY_BASE_URL}/v1/accounts/${ASSINAFY_ACCOUNT_ID}/signers?search=${encodedSearch}&page=${page}&per-page=${perPage}`;
     const res = await assinafyFetch(url, { method: "GET", headers: getAssinafyHeaders() });
 
-    const signers = res.data || res || [];
+    const signers = (res as any).data || res || [];
     if (!Array.isArray(signers) || signers.length === 0) break;
 
     // Match exato

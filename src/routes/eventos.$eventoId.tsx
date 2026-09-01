@@ -78,6 +78,11 @@ import {
   type ContractAddendumRow,
 } from "@/services/contract-addendum-service";
 import {
+  contractDocumentService,
+  type ContractDocumentRow,
+} from "@/services/contract-document-service";
+import { UploadDocumentModal } from "@/components/contract-editor/UploadDocumentModal";
+import {
   compareContractVersions,
   type ContractAddendumComparison,
 } from "@/lib/contract-addendum-comparator";
@@ -269,6 +274,10 @@ function EventoInterna() {
   const [selectedLegacyBudgetId, setSelectedLegacyBudgetId] = useState<string>("");
   const [effectiveBudgetVersion, setEffectiveBudgetVersion] = useState<any>(null);
   const [addendumRequiresAction, setAddendumRequiresAction] = useState<boolean>(false);
+
+  // --- Contract Documents States ---
+  const [contractDocuments, setContractDocuments] = useState<ContractDocumentRow[]>([]);
+  const [showUploadDocumentModal, setShowUploadDocumentModal] = useState(false);
 
   // --- Proposal Modal States ---
   const [showProposalModal, setShowProposalModal] = useState(false);
@@ -933,10 +942,20 @@ function EventoInterna() {
     }
   };
 
+  const fetchContractDocuments = async () => {
+    try {
+      const docs = await contractDocumentService.listDocuments({ eventId: eventoId });
+      setContractDocuments(docs);
+    } catch (err) {
+      console.warn("Erro ao buscar documentos contratuais:", err);
+    }
+  };
+
   const fetchAddendumsAndEvaluate = async (contractId: string, currentB: any) => {
     try {
       const list = await contractAddendumService.listAddendumsByContract(contractId);
       setAddendums(list);
+      await fetchContractDocuments();
 
       for (const add of list) {
         if (add.status === "sent" && add.external_document_id) {
@@ -3967,15 +3986,23 @@ function EventoInterna() {
                     </SectionCard>
                   )}
 
-                  {/* TERMO ADITIVO & HISTÓRICO DE DOCUMENTOS */}
-                  {realContract?.status === "signed" && (
+                  {/* REPOSITÓRIO CANÔNICO DE DOCUMENTOS & TERMOS ADITIVOS */}
+                  {realContract && (
                     <SectionCard
-                      title="Histórico de Contrato & Termos Aditivos"
-                      subtitle="Gerenciamento de aditivos contratuais e ciclo de vida documental"
+                      title="Repositório de Documentos Contratuais & Aditivos"
+                      subtitle="Histórico completo de minutas, contratos assinados, termos aditivos e anexos"
+                      action={
+                        <PrimaryButton
+                          onClick={() => setShowUploadDocumentModal(true)}
+                          className="h-9 px-4 text-xs font-bold flex items-center gap-2"
+                        >
+                          <Upload className="h-4 w-4" /> ADICIONAR DOCUMENTOS
+                        </PrimaryButton>
+                      }
                     >
                       <div className="space-y-4">
                         {/* Banner de alerta quando alteração pós-contrato é detectada */}
-                        {addendumRequiresAction && (
+                        {realContract.status === "signed" && addendumRequiresAction && (
                           <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div className="flex items-start gap-3">
                               <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
@@ -3996,121 +4023,244 @@ function EventoInterna() {
                           </div>
                         )}
 
-                        {/* Documento 1: Contrato Original */}
-                        <div className="p-4 rounded-xl bg-surface border border-border flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                          <div className="flex items-center gap-3">
-                            <FileTextIcon className="h-6 w-6 text-primary shrink-0" />
-                            <div>
-                              <div className="font-bold text-sm flex items-center gap-2">
-                                Contrato Original (Prestação de Serviços)
-                                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                                  ASSINADO
-                                </span>
-                              </div>
-                              <div className="text-xs text-muted-foreground mt-0.5">
-                                Firmado em {realContract.fully_signed_at ? new Date(realContract.fully_signed_at).toLocaleDateString("pt-BR") : "---"}
-                              </div>
-                            </div>
-                          </div>
-                          {realContract.signed_file_url && (
-                            <GhostButton
-                              onClick={() => window.open(realContract.signed_file_url, "_blank")}
-                              className="h-8 text-xs font-bold border"
-                            >
-                              ABRIR PDF CONTRATO
-                            </GhostButton>
-                          )}
-                        </div>
+                        {/* LISTA DE DOCUMENTOS ARQUIVADOS (contract_documents) */}
+                        {contractDocuments.length > 0 && (
+                          <div className="space-y-3">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                              Documentos Arquivados ({contractDocuments.length})
+                            </h4>
+                            {contractDocuments.map((doc) => {
+                              const getBadgeStyle = () => {
+                                if (doc.is_signed) return "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
+                                if (doc.document_type === "attachment") return "bg-blue-500/10 text-blue-600 border-blue-500/20";
+                                return "bg-muted text-muted-foreground border-border";
+                              };
 
-                        {/* Lista de Termos Aditivos */}
-                        {addendums.map((add) => (
-                          <div
-                            key={add.id}
-                            className="p-4 rounded-xl bg-surface border border-border flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
-                          >
-                            <div className="flex items-center gap-3">
-                              <FileSignature className="h-6 w-6 text-amber-600 shrink-0" />
-                              <div>
-                                <div className="font-bold text-sm flex items-center gap-2">
-                                  Termo Aditivo nº {add.addendum_number}
-                                  <span
-                                    className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${
-                                      add.status === "signed"
-                                        ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                                        : add.status === "sent"
-                                          ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
-                                          : add.status === "cancelled"
-                                            ? "bg-muted text-muted-foreground border-border"
-                                            : "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                                    }`}
-                                  >
-                                    {add.status === "signed"
-                                      ? "ASSINADO"
-                                      : add.status === "sent"
-                                        ? "ENVIADO"
-                                        : add.status === "cancelled"
-                                          ? "CANCELADO"
-                                          : "RASCUNHO"}
-                                  </span>
+                              const getDocTypeLabel = () => {
+                                switch (doc.document_type) {
+                                  case "signed_contract":
+                                    return "CONTRATO ASSINADO (ASSINAFY)";
+                                  case "manual_signed_contract":
+                                    return "CONTRATO ASSINADO (MANUAL)";
+                                  case "signed_addendum":
+                                    return "TERMO ADITIVO ASSINADO";
+                                  case "original_contract":
+                                    return "CONTRATO ORIGINAL";
+                                  case "addendum":
+                                    return "MINUTA ADITIVO";
+                                  case "attachment":
+                                    return "ANEXO / COMPLEMENTAR";
+                                  default:
+                                    return "DOCUMENTO";
+                                }
+                              };
+
+                              return (
+                                <div
+                                  key={doc.id}
+                                  className="p-4 rounded-xl bg-surface border border-border flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <FileTextIcon className="h-6 w-6 text-primary shrink-0" />
+                                    <div>
+                                      <div className="font-bold text-sm flex items-center gap-2 flex-wrap">
+                                        {doc.document_name}
+                                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${getBadgeStyle()}`}>
+                                          {getDocTypeLabel()}
+                                        </span>
+                                        {doc.source === "assinafy" && (
+                                          <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-purple-500/10 text-purple-600 border border-purple-500/20">
+                                            ASSINAFY
+                                          </span>
+                                        )}
+                                        {doc.source === "manual" && (
+                                          <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-500/10 text-slate-600 border border-slate-500/20">
+                                            MANUAL
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3 flex-wrap">
+                                        <span>
+                                          Enviado em {new Date(doc.created_at).toLocaleDateString("pt-BR")}
+                                        </span>
+                                        {doc.manual_signature_date && (
+                                          <span>
+                                            • Data Assinatura: {new Date(doc.manual_signature_date).toLocaleDateString("pt-BR")}
+                                          </span>
+                                        )}
+                                        {doc.file_size && (
+                                          <span>
+                                            • {(doc.file_size / (1024 * 1024)).toFixed(2)} MB
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Alerta de erro de arquivamento para Assinafy */}
+                                      {doc.archive_status === "failed" && (
+                                        <div className="mt-1 text-xs text-destructive flex items-center gap-1 font-semibold">
+                                          <AlertCircle className="h-3.5 w-3.5" /> Assinatura concluída, mas o PDF certificado não pôde ser arquivado no storage próprio.
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {/* Botão de Retry para arquivamento pendente ou com falha */}
+                                    {doc.archive_status === "failed" && doc.external_document_id && (
+                                      <GhostButton
+                                        onClick={async () => {
+                                          try {
+                                            toast.info("Tentando baixar PDF certificado da Assinafy...");
+                                            await contractDocumentService.retryArchivingFromAssinafy(doc.id);
+                                            toast.success("PDF arquivado com sucesso no storage da GOAT Bar!");
+                                            await fetchContractDocuments();
+                                          } catch (e: any) {
+                                            toast.error(`Falha no arquivamento: ${e.message}`);
+                                          }
+                                        }}
+                                        className="h-8 text-xs font-bold border border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                                      >
+                                        <RefreshCw className="h-3.5 w-3.5 mr-1" /> Tentar Arquivar Novamente
+                                      </GhostButton>
+                                    )}
+
+                                    <GhostButton
+                                      onClick={async () => {
+                                        try {
+                                          const url = await contractDocumentService.getDocumentSignedUrl(doc.id);
+                                          window.open(url, "_blank");
+                                        } catch (e: any) {
+                                          toast.error(`Não foi possível abrir o documento: ${e.message}`);
+                                        }
+                                      }}
+                                      className="h-8 text-xs font-bold border"
+                                    >
+                                      ABRIR / BAIXAR
+                                    </GhostButton>
+
+                                    {!doc.is_signed && (
+                                      <GhostButton
+                                        onClick={async () => {
+                                          if (confirm(`Tem certeza que deseja remover o anexo "${doc.document_name}"?`)) {
+                                            try {
+                                              await contractDocumentService.softDeleteDocument(doc.id);
+                                              toast.success("Anexo removido com sucesso.");
+                                              await fetchContractDocuments();
+                                            } catch (e: any) {
+                                              toast.error(`Erro ao remover anexo: ${e.message}`);
+                                            }
+                                          }
+                                        }}
+                                        className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 border border-destructive/20"
+                                        title="Remover anexo"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </GhostButton>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="text-xs text-muted-foreground mt-0.5">
-                                  Criado em {new Date(add.created_at).toLocaleDateString("pt-BR")}
-                                  {add.financial_snapshot?.previous_total !== undefined && (
-                                    <span className="ml-2 font-medium text-foreground">
-                                      ({new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(add.financial_snapshot.previous_total)} → {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(add.financial_snapshot.current_total)})
-                                    </span>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* LISTA DE TERMOS ADITIVOS EM ANDAMENTO OU RASCUNHO */}
+                        {addendums.length > 0 && (
+                          <div className="space-y-3 pt-4 border-t border-border/40">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                              Termos Aditivos ({addendums.length})
+                            </h4>
+                            {addendums.map((add) => (
+                              <div
+                                key={add.id}
+                                className="p-4 rounded-xl bg-surface border border-border flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <FileSignature className="h-6 w-6 text-amber-600 shrink-0" />
+                                  <div>
+                                    <div className="font-bold text-sm flex items-center gap-2">
+                                      Termo Aditivo nº {add.addendum_number}
+                                      <span
+                                        className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${
+                                          add.status === "signed"
+                                            ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                                            : add.status === "sent"
+                                              ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
+                                              : add.status === "cancelled"
+                                                ? "bg-muted text-muted-foreground border-border"
+                                                : "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                                        }`}
+                                      >
+                                        {add.status === "signed"
+                                          ? "ASSINADO"
+                                          : add.status === "sent"
+                                            ? "ENVIADO"
+                                            : add.status === "cancelled"
+                                              ? "CANCELADO"
+                                              : "RASCUNHO"}
+                                      </span>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground mt-0.5">
+                                      Criado em {new Date(add.created_at).toLocaleDateString("pt-BR")}
+                                      {add.financial_snapshot?.previous_total !== undefined && (
+                                        <span className="ml-2 font-medium text-foreground">
+                                          ({new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(add.financial_snapshot.previous_total)} → {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(add.financial_snapshot.current_total)})
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {add.signed_file_url && (
+                                    <GhostButton
+                                      onClick={() => window.open(add.signed_file_url!, "_blank")}
+                                      className="h-8 text-xs font-bold border"
+                                    >
+                                      ABRIR PDF ADITIVO
+                                    </GhostButton>
+                                  )}
+                                  {add.status === "draft" && (
+                                    <PrimaryButton
+                                      onClick={() => {
+                                        setActiveAddendumForReview(add);
+                                        setCompiledContractText(add.generated_html || "");
+                                        setShowContractPreviewModal(true);
+                                      }}
+                                      className="h-8 px-3 text-xs font-bold"
+                                    >
+                                      REVISAR E ENVIAR
+                                    </PrimaryButton>
+                                  )}
+                                  {add.status === "sent" && (
+                                    <GhostButton
+                                      onClick={async () => {
+                                        await contractAddendumService.syncAddendumStatus(add.id);
+                                        await fetchAddendumsAndEvaluate(realContract.id, currentBudget);
+                                        toast.success("Status do aditivo atualizado!");
+                                      }}
+                                      className="h-8 text-xs font-bold border"
+                                    >
+                                      ATUALIZAR STATUS
+                                    </GhostButton>
+                                  )}
+                                  {["draft", "sent"].includes(add.status) && (
+                                    <GhostButton
+                                      onClick={async () => {
+                                        await contractAddendumService.cancelAddendum(add.id);
+                                        await fetchAddendumsAndEvaluate(realContract.id, currentBudget);
+                                        toast.success("Termo aditivo cancelado.");
+                                      }}
+                                      className="h-8 text-xs font-bold text-destructive hover:bg-destructive/10 border border-destructive/20"
+                                    >
+                                      CANCELAR
+                                    </GhostButton>
                                   )}
                                 </div>
                               </div>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              {add.signed_file_url && (
-                                <GhostButton
-                                  onClick={() => window.open(add.signed_file_url!, "_blank")}
-                                  className="h-8 text-xs font-bold border"
-                                >
-                                  ABRIR PDF ADITIVO
-                                </GhostButton>
-                              )}
-                              {add.status === "draft" && (
-                                <PrimaryButton
-                                  onClick={() => {
-                                    setActiveAddendumForReview(add);
-                                    setCompiledContractText(add.generated_html || "");
-                                    setShowContractPreviewModal(true);
-                                  }}
-                                  className="h-8 px-3 text-xs font-bold"
-                                >
-                                  REVISAR E ENVIAR
-                                </PrimaryButton>
-                              )}
-                              {add.status === "sent" && (
-                                <GhostButton
-                                  onClick={async () => {
-                                    await contractAddendumService.syncAddendumStatus(add.id);
-                                    await fetchAddendumsAndEvaluate(realContract.id, currentBudget);
-                                    toast.success("Status do aditivo atualizado!");
-                                  }}
-                                  className="h-8 text-xs font-bold border"
-                                >
-                                  ATUALIZAR STATUS
-                                </GhostButton>
-                              )}
-                              {["draft", "sent"].includes(add.status) && (
-                                <GhostButton
-                                  onClick={async () => {
-                                    await contractAddendumService.cancelAddendum(add.id);
-                                    await fetchAddendumsAndEvaluate(realContract.id, currentBudget);
-                                    toast.success("Termo aditivo cancelado.");
-                                  }}
-                                  className="h-8 text-xs font-bold text-destructive hover:bg-destructive/10 border border-destructive/20"
-                                >
-                                  CANCELAR
-                                </GhostButton>
-                              )}
-                            </div>
+                            ))}
                           </div>
-                        ))}
+                        )}
                       </div>
                     </SectionCard>
                   )}
