@@ -120,6 +120,7 @@ export interface Evento {
   tipo: string;
   convidados: number;
   drinks: string[]; // drink ids
+  drinkCustomizations: Record<string, import("./drink-customization").DrinkCustomization>;
   observacoes: string;
   status: EventoStatus;
   contratoId?: string;

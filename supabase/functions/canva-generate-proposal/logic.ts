@@ -3,6 +3,10 @@ import {
   formatProposalFieldValue,
   resolveProposalField,
 } from "../../../src/lib/proposal-field-resolver.ts";
+import {
+  formatCustomizedDrinkNames,
+  getDrinkCustomizations,
+} from "../../../src/lib/drink-customization.ts";
 
 export type Mapping = {
   canva_field_key: string;
@@ -194,7 +198,10 @@ export async function resolveSelectedDrinks(
       },
     );
   }
-  return ids.map((id) => byId.get(id)!).filter((name) => typeof name === "string" && name.trim());
+  const names = ids
+    .map((id) => byId.get(id)!)
+    .filter((name) => typeof name === "string" && name.trim());
+  return formatCustomizedDrinkNames(ids, names, getDrinkCustomizations(value));
 }
 
 export function isEmptyProposalValue(value: unknown) {

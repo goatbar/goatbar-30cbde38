@@ -9,6 +9,7 @@ import { ProposalTemplateRegistry } from "./pdf-engine/registry";
 import type { ProposalRenderResult, ProposalTemplateDefinition } from "./pdf-engine/types";
 import { hydrateBudgetDrinks } from "../../supabase/functions/canva-generate-proposal/logic";
 import type { GeneratedProposal } from "@/services/proposal-service";
+import { formatCustomizedDrinkNames, getDrinkCustomizations } from "@/lib/drink-customization";
 
 export interface ProposalGenerationContext {
   event: Record<string, any>;
@@ -51,7 +52,14 @@ export async function loadProposalContext(
       event_id: eventId,
       budget_version_id: budgetVersionId,
     });
-    resolvedDrinkNames = hydrated.resolvedDrinkNames;
+    const ids = Array.isArray((budget.selected_drinks as any)?.ids)
+      ? (budget.selected_drinks as any).ids
+      : [];
+    resolvedDrinkNames = formatCustomizedDrinkNames(
+      ids,
+      hydrated.resolvedDrinkNames,
+      getDrinkCustomizations(budget.selected_drinks),
+    );
   } catch (err: any) {
     console.warn("[loadProposalContext] Falha ao hidratar drinks via catálogo:", err?.message);
     // Fallback gracioso se drinks já estiverem em array de nomes

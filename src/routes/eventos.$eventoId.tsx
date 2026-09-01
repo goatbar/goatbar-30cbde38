@@ -9,6 +9,8 @@ import {
   preserveBeveragesInput,
 } from "@/lib/budget-beverages";
 import { fmtBRL } from "@/lib/format";
+import { formatCustomizedDrinkNames, getDrinkCustomizations, type DrinkCustomization } from "@/lib/drink-customization";
+import { whatsappHref } from "@/lib/whatsapp";
 import {
   createBudgetEventSnapshot,
   getBudgetVersionEventContext,
@@ -180,6 +182,7 @@ const HeaderField = ({
   onChange,
   icon,
   type = "text",
+  href,
 }: {
   label: string;
   value: string;
@@ -187,6 +190,7 @@ const HeaderField = ({
   onChange: (v: string) => void;
   icon?: React.ReactNode;
   type?: string;
+  href?: string | null;
 }) => {
   let displayValue = value || "---";
   if (!isEditing && type === "date" && value) {
@@ -208,6 +212,8 @@ const HeaderField = ({
           onChange={(e) => onChange(e.target.value)}
           className="w-full h-8 px-2 rounded bg-input border border-border text-xs focus:ring-1 focus:ring-primary outline-none transition-all"
         />
+      ) : href ? (
+        <a className="text-sm font-bold truncate text-primary hover:underline block" title={displayValue} href={href} target="_blank" rel="noreferrer">{displayValue}</a>
       ) : (
         <div className="text-sm font-bold truncate" title={displayValue}>
           {displayValue}
@@ -511,6 +517,7 @@ function EventoInterna() {
     tipo: ev.event_type,
     convidados: ev.guests || 0,
     drinks: Array.isArray(ev.drinks) ? ev.drinks : [],
+    drinkCustomizations: {},
     observacoes: ev.notes || "",
     status: ev.status as any,
     lead_source: ev.lead_source || "",
@@ -572,6 +579,7 @@ function EventoInterna() {
     tipo: historicalEvent.event_type,
     convidados: getBudgetVersionGuestCount(b as any, ev as any) || 0,
     drinks: (b.selected_drinks as any)?.ids || [],
+    drinkCustomizations: getDrinkCustomizations(b.selected_drinks),
     observacoes: ev.notes || "",
     status: ev.status as any,
     lead_source: ev.lead_source || "",
@@ -689,6 +697,7 @@ function EventoInterna() {
         beverages: normalizeBeveragesForSave(draft.bebidasInput),
         selected_drinks: {
           ids: draft.drinks,
+          customizations: draft.drinkCustomizations,
           copos: draft.coposVinculados,
           descricaoBebidas: draft.descricaoBebidas,
         },
@@ -868,7 +877,9 @@ function EventoInterna() {
       const newDrinks = isSelected ? p.drinks.filter((x) => x !== id) : [...p.drinks, id];
       const newCopos = { ...p.coposVinculados };
       if (isSelected) delete newCopos[id];
-      return { ...p, drinks: newDrinks, coposVinculados: newCopos };
+      const customizations = { ...p.drinkCustomizations };
+      if (isSelected) delete customizations[id];
+      return { ...p, drinks: newDrinks, coposVinculados: newCopos, drinkCustomizations: customizations };
     });
   };
 
@@ -1834,6 +1845,7 @@ function EventoInterna() {
                 value={draft.telefone}
                 isEditing={isEditingHeader}
                 onChange={(v) => setDraft((p) => (p ? { ...p, telefone: v } : null))}
+                href={whatsappHref(draft.telefone)}
                 icon={<MessageCircle className="h-3 w-3 text-primary/60" />}
               />
               <HeaderField
@@ -2150,6 +2162,23 @@ function EventoInterna() {
                               <div className="text-[9px] font-bold text-primary/80">
                                 Sugerido: {fmtBRL(d.modalityConfig?.steakhouse?.price || 0)}
                               </div>
+                              {draft.drinks.includes(d.id) && (
+                                <select
+                                  aria-label={`Personalização de ${d.nome}`}
+                                  value={draft.drinkCustomizations[d.id] || "none"}
+                                  onClick={(event) => event.stopPropagation()}
+                                  onChange={(event) => {
+                                    event.stopPropagation();
+                                    const customization = event.target.value as DrinkCustomization;
+                                    setDraft((current) => current ? { ...current, drinkCustomizations: { ...current.drinkCustomizations, [d.id]: customization } } : null);
+                                  }}
+                                  className="mt-2 w-full rounded border border-border bg-input px-1 py-1 text-[9px]"
+                                >
+                                  <option value="none">Sem personalização</option>
+                                  <option value="monogram">Com monograma</option>
+                                  <option value="rice_paper">Com papel de arroz</option>
+                                </select>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -5163,9 +5192,11 @@ function ProposalModal({
               : mappedEventType === "aniversario"
                 ? "Aniversário"
                 : "Comemoração",
-          selectedDrinks: (draft?.drinks || [])
-            .map((id: string) => allDrinks.find((d: any) => d.id === id)?.nome)
-            .filter(Boolean),
+          selectedDrinks: formatCustomizedDrinkNames(
+            draft?.drinks || [],
+            (draft?.drinks || []).map((id: string) => allDrinks.find((d: any) => d.id === id)?.nome || ""),
+            draft?.drinkCustomizations,
+          ),
           includedBeverages: draft?.descricaoBebidas
             ? draft.descricaoBebidas.split("\n").filter((l: string) => l.trim())
             : [],
