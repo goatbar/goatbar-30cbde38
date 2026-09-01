@@ -18,12 +18,18 @@ DECLARE
   v_count INTEGER;
 BEGIN
   FOR r IN SELECT id, event_id FROM public.event_contracts WHERE budget_version_id IS NULL LOOP
-    SELECT COUNT(*), MIN(id)
-      INTO v_count, v_budget_id
+    SELECT COUNT(*)
+      INTO v_count
       FROM public.event_budget_versions
      WHERE event_id = r.event_id::uuid;
 
     IF v_count = 1 THEN
+      SELECT id
+        INTO v_budget_id
+        FROM public.event_budget_versions
+       WHERE event_id = r.event_id::uuid
+       LIMIT 1;
+
       UPDATE public.event_contracts
          SET budget_version_id = v_budget_id
        WHERE id = r.id;
