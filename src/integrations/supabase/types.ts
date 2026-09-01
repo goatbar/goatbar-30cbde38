@@ -3265,6 +3265,7 @@ export type Database = {
         Args: { p_event_id: string }
         Returns: Json
       }
+      delete_event: { Args: { p_event_id: string }; Returns: Json }
       consume_budget_request_link:
         | {
             Args: {

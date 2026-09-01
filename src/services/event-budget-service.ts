@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { googleCalendarService } from "./google-calendar/google-calendar-service";
 import { createBudgetEventSnapshot } from "@/lib/budget-version-snapshot";
+import { logSupabaseError } from "@/lib/supabase-error";
 
 export interface Event {
   id: string;
@@ -398,8 +399,21 @@ export const eventBudgetService = {
   },
 
   async deleteEvent(id: string) {
-    const { error } = await supabase.from("events").delete().eq("id", id);
-    if (error) throw error;
+    const { data, error } = await supabase.rpc("delete_event", { p_event_id: id });
+    if (error) {
+      logSupabaseError("[eventBudgetService.deleteEvent] Supabase DELETE failed", error);
+      throw error;
+    }
+
+    const result = data as { deleted?: boolean; reason?: string } | null;
+    if (!result?.deleted) {
+      const notFoundError = Object.assign(new Error("Evento não encontrado; nada foi excluído."), {
+        code: result?.reason === "not_found" ? "PGRST116" : "EVENT_DELETE_FAILED",
+        details: result?.reason,
+      });
+      logSupabaseError("[eventBudgetService.deleteEvent] DELETE was not confirmed", notFoundError);
+      throw notFoundError;
+    }
   },
 
   async deletePublicBudgetRequest(eventId: string) {

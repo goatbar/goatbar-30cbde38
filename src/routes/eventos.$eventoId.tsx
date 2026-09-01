@@ -68,6 +68,7 @@ import {
 } from "@/services/contract-service";
 import { convertHtmlToPdf } from "@/services/pdf-service";
 import { buildContractTitle } from "@/lib/contract-filename";
+import { formatSupabaseError, logSupabaseError } from "@/lib/supabase-error";
 import {
   convertAndDispatchSignature,
   getSignatureDispatchIdentifiers,
@@ -1546,7 +1547,8 @@ function EventoInterna() {
       await eventBudgetService.deleteEvent(eventoId);
       window.history.back();
     } catch (e) {
-      alert("Erro ao excluir evento.");
+      logSupabaseError("[EventDetails.handleDelete] Não foi possível excluir o evento", e);
+      alert(`Erro ao excluir evento: ${formatSupabaseError(e) || "erro desconhecido"}`);
       setSaving(false);
     }
   };
