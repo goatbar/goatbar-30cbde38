@@ -585,16 +585,19 @@ export const eventContractsService = {
   async getOrCreateContractForEvent(
     eventId: string,
     contractId?: string | null,
-  ): Promise<{ id: string; status: string | null }> {
+  ): Promise<{ id: string; status?: string | null }> {
     if (contractId) {
       const { data: existing, error } = await supabase
         .from("event_contracts")
         .select("id, status")
         .eq("id", contractId)
+        .eq("event_id", eventId)
         .single();
 
       if (error || !existing) {
-        throw new Error(`Contrato com id "${contractId}" não encontrado.`);
+        throw new Error(
+          `Contrato com id "${contractId}" não pertence a este evento ou não foi encontrado.`,
+        );
       }
 
       return existing;
@@ -615,8 +618,11 @@ export const eventContractsService = {
           "Múltiplos contratos ativos encontrados para este evento. Especifique qual contrato deseja vincular ao documento.",
         );
       }
-
-      return activeContracts[0] || contracts[0];
+      if (activeContracts.length === 1) {
+        return activeContracts[0];
+      }
+      // Se activeContracts.length === 0 (todos os contratos existentes estão cancelados),
+      // o fluxo continua abaixo e cria um NOVO contrato draft.
     }
 
     const nowStr = new Date().toISOString();

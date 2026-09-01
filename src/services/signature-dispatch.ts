@@ -6,6 +6,7 @@ export interface SignatureDispatchProvider<Result> {
     pdfBase64: string;
     pdfHash: string;
     documentTitle?: string;
+    forceRecreate?: boolean;
   }): Promise<Result>;
 }
 
@@ -21,6 +22,7 @@ export async function convertAndDispatchSignature<Result>(options: {
   html: string;
   title: string;
   contractId: string;
+  forceRecreate?: boolean;
   convert: (html: string, title: string) => Promise<PdfArtifacts>;
   provider: SignatureDispatchProvider<Result>;
 }): Promise<{ pdf: PdfArtifacts; result: Result }> {
@@ -30,6 +32,7 @@ export async function convertAndDispatchSignature<Result>(options: {
     pdfBase64: pdf.base64,
     pdfHash: pdf.hash,
     documentTitle: options.title,
+    forceRecreate: options.forceRecreate,
   });
   return { pdf, result };
 }

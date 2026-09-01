@@ -56,7 +56,31 @@ serve(async (req) => {
     let provider;
     try {
       provider = await getDocumentStatus(sigReq.external_document_id);
-    } catch (e) {
+    } catch (e: any) {
+      const is404 = e?.providerStatus === 404 || e?.status === 404 || String(e?.message || "").includes("404");
+      if (is404) {
+        console.info("[assinafy-status] remote_document_missing_404_detected", {
+          ...context,
+          documentId: sigReq.external_document_id,
+        });
+        await admin
+          .from("contract_signature_requests")
+          .update({
+            dispatch_status: "remote_document_missing",
+            last_error: `Documento remoto ${sigReq.external_document_id} não encontrado na Assinafy (HTTP 404). Sincronizado em ${new Date().toISOString()}.`,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", sigReq.id);
+
+        return json({
+          ...local,
+          status: "remote_document_missing",
+          dispatch_status: "remote_document_missing",
+          upstream_synced: true,
+          message: "O documento anterior não existe mais na Assinafy. É necessário gerar um novo envio para assinatura.",
+        });
+      }
+
       console.warn("[assinafy-status] provider_unavailable_fallback", {
         ...context,
         endpoint: "get_document_status",

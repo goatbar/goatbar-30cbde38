@@ -162,134 +162,200 @@ serve(async (req) => {
         }
 
         if (!remoteExists) {
-          // Persist the new status so assinafy-status & the UI know immediately.
-          // Preserve external_document_id / external_assignment_id for audit — do NOT null them.
-          stage = "persisting_remote_document_missing";
-          const { error: updateErr } = await admin
-            .from("contract_signature_requests")
-            .update({
-              dispatch_status: "remote_document_missing",
-              last_error: `Documento remoto ${sigReq.external_document_id} não encontrado na Assinafy (HTTP 404). Verificado em ${new Date().toISOString()}.`,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", sigReq.id);
-          if (updateErr) throw updateErr;
-
-          console.info("[assinafy-create-doc] remote_document_missing", {
-            contractId,
-            signatureRequestId: sigReq.id,
-            assinafyDocumentId: sigReq.external_document_id,
-          });
-
-          return json(
-            {
-              success: false,
-              dispatchOutcome: "remote_document_missing",
-              recreationRequired: true,
-              message:
-                "O documento anterior não existe mais na Assinafy. É necessário gerar um novo envio para assinatura.",
+          if (payload.forceRecreate) {
+            console.info("[assinafy-create-doc] remote_document_missing_auto_recreate", {
+              contractId,
               signatureRequestId: sigReq.id,
-              externalDocumentId: sigReq.external_document_id,
-              externalAssignmentId: sigReq.external_assignment_id,
-              status: "remote_document_missing",
-              diagnostic: {
-                stage: "verifying_remote_document",
-                correlationId,
-                assinafyRequestSent: true,
-                assinafyDocumentId: sigReq.external_document_id,
-                httpStatus: 404,
-                databaseUpdated: true,
+              assinafyDocumentId: sigReq.external_document_id,
+            });
+            const { data: retired, error: retireErr } = await admin
+              .from("contract_signature_requests")
+              .update({
+                dispatch_status: "obsolete",
+                last_error: `Documento remoto ${sigReq.external_document_id} não encontrado na Assinafy (HTTP 404). Substituído por novo envio.`,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", sigReq.id)
+              .neq("dispatch_status", "obsolete")
+              .select("id")
+              .maybeSingle();
+
+            if (retireErr) throw retireErr;
+
+            if (!retired) {
+              const { data: activeReq } = await admin
+                .from("contract_signature_requests")
+                .select("*")
+                .eq("contract_id", contractId)
+                .eq("signature_provider", "assinafy")
+                .neq("dispatch_status", "obsolete")
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+              if (activeReq) {
+                sigReq = activeReq;
+              } else {
+                sigReq = null;
+              }
+            } else {
+              sigReq = null;
+            }
+          } else {
+            // Persist the new status so assinafy-status & the UI know immediately.
+            // Preserve external_document_id / external_assignment_id for audit — do NOT null them.
+            stage = "persisting_remote_document_missing";
+            const { error: updateErr } = await admin
+              .from("contract_signature_requests")
+              .update({
+                dispatch_status: "remote_document_missing",
+                last_error: `Documento remoto ${sigReq.external_document_id} não encontrado na Assinafy (HTTP 404). Verificado em ${new Date().toISOString()}.`,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", sigReq.id)
+              .neq("dispatch_status", "obsolete");
+            if (updateErr) throw updateErr;
+
+            console.info("[assinafy-create-doc] remote_document_missing", {
+              contractId,
+              signatureRequestId: sigReq.id,
+              assinafyDocumentId: sigReq.external_document_id,
+            });
+
+            return json(
+              {
+                success: false,
+                dispatchOutcome: "remote_document_missing",
+                recreationRequired: true,
+                message:
+                  "O documento anterior não existe mais na Assinafy. É necessário gerar um novo envio para assinatura.",
+                signatureRequestId: sigReq.id,
+                externalDocumentId: sigReq.external_document_id,
+                externalAssignmentId: sigReq.external_assignment_id,
+                status: "remote_document_missing",
+                diagnostic: {
+                  stage: "verifying_remote_document",
+                  correlationId,
+                  assinafyRequestSent: true,
+                  assinafyDocumentId: sigReq.external_document_id,
+                  httpStatus: 404,
+                  databaseUpdated: true,
+                },
               },
-            },
-            404,
-            correlationId,
-          );
+              200,
+              correlationId,
+            );
+          }
         }
       }
       // ── End remote existence check ──────────────────────────────────────────
 
-      const needsReconciliation = decision.action !== "reuse";
+      if (sigReq) {
+        const needsReconciliation = decision.action !== "reuse";
 
-      // Inspect local signers to determine if reconciliation is required
-      const { data: existingSigners } = await admin
-        .from("contract_signature_signers")
-        .select("id, role, full_name, email, signature_url, notification_status")
-        .eq("signature_request_id", sigReq.id);
+        // Inspect local signers to determine if reconciliation is required
+        const { data: existingSigners } = await admin
+          .from("contract_signature_signers")
+          .select("id, role, full_name, email, signature_url, notification_status")
+          .eq("signature_request_id", sigReq.id);
 
-      const clientReq = requiredSigners.find((s) => s.role === "client");
-      const companyReq = requiredSigners.find((s) => s.role === "company");
-      const hasClient = existingSigners?.some(
-        (s) => s.role === "client" || (clientReq && s.email.toLowerCase() === clientReq.email.toLowerCase()),
-      );
-      const hasCompany = companyReq
-        ? existingSigners?.some(
-            (s) => s.role === "company" || s.email.toLowerCase() === companyReq.email.toLowerCase(),
-          )
-        : true;
-      const isMissingSigners =
-        !hasClient || !hasCompany || (existingSigners?.length || 0) < (companyReq ? 2 : 1);
+        const clientReq = requiredSigners.find((s) => s.role === "client");
+        const companyReq = requiredSigners.find((s) => s.role === "company");
+        const hasClient = existingSigners?.some(
+          (s) => s.role === "client" || (clientReq && s.email.toLowerCase() === clientReq.email.toLowerCase()),
+        );
+        const hasCompany = companyReq
+          ? existingSigners?.some(
+              (s) => s.role === "company" || s.email.toLowerCase() === companyReq.email.toLowerCase(),
+            )
+          : true;
+        const isMissingSigners =
+          !hasClient || !hasCompany || (existingSigners?.length || 0) < (companyReq ? 2 : 1);
 
-      const outcome =
-        decision.action === "reuse"
-          ? sigReq.dispatch_status === "signed" || sigReq.dispatch_status === "completed"
-            ? "already_signed"
-            : isMissingSigners
-              ? "reconciliation_required"
-              : "reuse_healthy"
-          : "reconciliation_required";
+        const outcome =
+          decision.action === "reuse"
+            ? sigReq.dispatch_status === "signed" || sigReq.dispatch_status === "completed"
+              ? "already_signed"
+              : isMissingSigners
+                ? "reconciliation_required"
+                : "reuse_healthy"
+            : "reconciliation_required";
 
-      if (contract.status === "draft" && sigReq.dispatch_status === "pending_signature") {
-        await admin
-          .from("event_contracts")
-          .update({ status: "sent", sent_for_signature_at: sigReq.sent_at || new Date().toISOString() })
-          .eq("id", contractId);
-      }
+        if (contract.status === "draft" && sigReq.dispatch_status === "pending_signature") {
+          await admin
+            .from("event_contracts")
+            .update({ status: "sent", sent_for_signature_at: sigReq.sent_at || new Date().toISOString() })
+            .eq("id", contractId);
+        }
 
-      return json(
-        {
-          success: true,
-          dispatchOutcome: outcome,
-          message:
-            outcome === "already_signed"
-              ? "Este contrato já foi assinado por todas as partes."
-              : outcome === "reconciliation_required"
-                ? "Este contrato já havia sido enviado, mas possui pendências de conciliação de signatários/notificações."
-                : "Este contrato já está aguardando assinatura. O documento existente foi reaproveitado.",
-          remoteCreated: Boolean(sigReq.external_document_id),
-          reconciliationRequired: outcome === "reconciliation_required",
-          signatureRequestId: sigReq.id,
-          externalDocumentId: sigReq.external_document_id,
-          externalAssignmentId: sigReq.external_assignment_id,
-          status: sigReq.dispatch_status,
-          diagnostic: {
-            stage: outcome === "reconciliation_required"
-              ? "remote_created_local_reconciliation_required"
-              : "idempotent_reuse",
-            correlationId,
-            assinafyRequestSent: false,
-            assinafyDocumentId: sigReq.external_document_id,
-            databaseUpdated: false,
+        return json(
+          {
+            success: true,
+            dispatchOutcome: outcome,
+            message:
+              outcome === "already_signed"
+                ? "Este contrato já foi assinado por todas as partes."
+                : outcome === "reconciliation_required"
+                  ? "Este contrato já havia sido enviado, mas possui pendências de conciliação de signatários/notificações."
+                  : "Este contrato já está aguardando assinatura. O documento existente foi reaproveitado.",
+            remoteCreated: Boolean(sigReq.external_document_id),
+            reconciliationRequired: outcome === "reconciliation_required",
+            signatureRequestId: sigReq.id,
+            externalDocumentId: sigReq.external_document_id,
+            externalAssignmentId: sigReq.external_assignment_id,
+            status: sigReq.dispatch_status,
+            diagnostic: {
+              stage: outcome === "reconciliation_required"
+                ? "remote_created_local_reconciliation_required"
+                : "idempotent_reuse",
+              correlationId,
+              assinafyRequestSent: false,
+              assinafyDocumentId: sigReq.external_document_id,
+              databaseUpdated: false,
+            },
           },
-        },
-        outcome === "reconciliation_required" ? 202 : 200,
-        correlationId,
-      );
+          outcome === "reconciliation_required" ? 202 : 200,
+          correlationId,
+        );
+      }
     }
 
     // Remote document has been confirmed deleted; retire old request preserving IDs for audit,
     // then fall through to create a fresh document/assignment.
     if (decision.action === "recreate") {
-      const retireErr = await admin
+      const { data: retired, error: retireErr } = await admin
         .from("contract_signature_requests")
         .update({
           dispatch_status: "obsolete",
           last_error: "Documento remoto ausente na Assinafy. Substituído por nova criação explícita.",
           updated_at: new Date().toISOString(),
-          // preserve external_document_id / external_assignment_id for audit — do NOT null them
         })
-        .eq("id", sigReq.id);
-      if (retireErr.error) throw retireErr.error;
-      sigReq = null; // force insert of new row below
+        .eq("id", sigReq.id)
+        .neq("dispatch_status", "obsolete")
+        .select("id")
+        .maybeSingle();
+
+      if (retireErr) throw retireErr;
+
+      if (!retired) {
+        const { data: activeReq } = await admin
+          .from("contract_signature_requests")
+          .select("*")
+          .eq("contract_id", contractId)
+          .eq("signature_provider", "assinafy")
+          .neq("dispatch_status", "obsolete")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (activeReq) {
+          sigReq = activeReq;
+        } else {
+          sigReq = null;
+        }
+      } else {
+        sigReq = null;
+      }
     }
 
     if (["processing", "hash_conflict"].includes(decision.action))

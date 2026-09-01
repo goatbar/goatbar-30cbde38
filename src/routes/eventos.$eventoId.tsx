@@ -1059,7 +1059,10 @@ function EventoInterna() {
   const [isRefreshingSignature, setIsRefreshingSignature] = useState(false);
   const [providerDetails, setProviderDetails] = useState<any>(null);
 
-  const handleDispatchSignature = async (overrideHtml?: string) => {
+  const handleDispatchSignature = async (
+    overrideHtml?: string,
+    options?: { forceRecreate?: boolean },
+  ) => {
     if (!realContract) {
       toast.error("Nenhum contrato gerado para este evento.");
       return;
@@ -1133,6 +1136,7 @@ function EventoInterna() {
         html: compiledHtml,
         title: buildContractTitle(evento?.event_name, evento?.client_name, evento?.date),
         contractId: identifiers.contractId,
+        forceRecreate: options?.forceRecreate,
         convert: convertHtmlToPdf,
         provider,
       });
@@ -1345,10 +1349,8 @@ function EventoInterna() {
     setIsCreatingNewDispatch(true);
     setShowNewDispatchDialog(false);
     try {
-      // Trigger a full re-dispatch by calling handleDispatchSignature with current contract HTML
-      // The assinafy-create-doc will detect dispatch_status=remote_document_missing → action=recreate
-      // and retire the old row, then create a fresh document/assignment.
-      await handleDispatchSignature();
+      // Trigger a full re-dispatch by calling handleDispatchSignature with forceRecreate: true
+      await handleDispatchSignature(undefined, { forceRecreate: true });
     } catch (e: any) {
       toast.error(`Falha ao gerar novo envio: ${e.message}`);
     } finally {
@@ -1501,13 +1503,23 @@ function EventoInterna() {
     try {
       setUploadingContract(true);
       const publicUrl = await eventContractsService.uploadSignedContractFile(eventoId, file, realContract?.id);
-      await eventContractsService.saveSignedContract(eventoId, publicUrl, realContract?.id);
-      await handleStatusChange("CONFIRMADO", "Contrato assinado anexado manualmente.");
+      if (publicUrl && realContract?.id) {
+        await eventContractsService.saveSignedContract(eventoId, publicUrl, realContract?.id);
+      }
       toast.success("Contrato assinado enviado com sucesso!");
-      loadContractModule();
-      loadAllData();
+      await fetchContractDocuments();
+      await loadContractModule();
+      await loadAllData();
     } catch (e: any) {
       console.error("Erro no upload do contrato:", e);
+      console.error("Erro completo upload contrato", {
+        message: e?.message,
+        details: e?.details,
+        hint: e?.hint,
+        code: e?.code,
+        status: e?.status,
+        error: e,
+      });
       toast.error(`Erro ao fazer upload do contrato: ${e.message || "Erro desconhecido"}`);
     } finally {
       setUploadingContract(false);
@@ -4321,29 +4333,23 @@ function EventoInterna() {
                       </div>
 
                       <div className="mt-8 pt-8 border-t border-border/40">
-                        <h4 className="text-sm font-bold mb-4">Substituir Contrato Assinado</h4>
+                        <h4 className="text-sm font-bold mb-4">Adicionar Documentos Contratuais & Anexos</h4>
                         <div className="flex items-center gap-4">
-                          <label className="h-11 px-6 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl flex items-center justify-center gap-2 text-xs font-bold cursor-pointer transition-all">
+                          <Button
+                            type="button"
+                            onClick={() => setShowUploadDocumentModal(true)}
+                            className="h-11 px-6 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl flex items-center justify-center gap-2 text-xs font-bold cursor-pointer transition-all border border-primary/20"
+                          >
                             <Upload className="h-4 w-4" />
-                            {uploadingContract ? "ENVIANDO..." : "FAZER UPLOAD DE NOVO ARQUIVO"}
-                            <input
-                              type="file"
-                              accept="application/pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                              className="hidden"
-                              disabled={uploadingContract}
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleManualContractUpload(file);
-                              }}
-                            />
-                          </label>
+                            ENVIAR DOCUMENTOS OU ADITIVOS
+                          </Button>
                         </div>
                       </div>
                     </SectionCard>
                   ) : (
                     <SectionCard
-                      title="Upload do Contrato Assinado"
-                      subtitle="Faça o upload do contrato assinado pelo cliente (PDF ou Imagem) para formalizar o evento."
+                      title="Upload de Documentos Contratuais"
+                      subtitle="Faça o upload de contratos assinados, termos aditivos ou documentos anexos para o evento."
                     >
                       <div className="flex flex-col items-center justify-center p-12 bg-surface border-2 border-dashed border-border rounded-2xl text-center space-y-6">
                         <div className="h-20 w-20 bg-primary/10 rounded-full flex items-center justify-center text-primary shadow-inner">
@@ -4351,12 +4357,11 @@ function EventoInterna() {
                         </div>
                         <div className="max-w-md">
                           <h3 className="font-display font-bold text-xl mb-2">
-                            Selecione o Contrato Assinado
+                            Selecione o Documento Contratual
                           </h3>
                           <p className="text-sm text-muted-foreground">
-                            Formatos suportados: PDF, JPG, PNG, DOCX. O arquivo será armazenado com
-                            segurança no storage do Supabase e o status do evento mudará para
-                            "CONFIRMADO".
+                            Formatos suportados: PDF, JPG, PNG, DOCX. Os arquivos serão armazenados com
+                            segurança no repositório privado da GOAT Bar.
                           </p>
                         </div>
 
@@ -4365,7 +4370,7 @@ function EventoInterna() {
                           className="h-12 px-8 bg-primary text-white hover:bg-primary/90 rounded-xl flex items-center justify-center gap-2 text-sm font-bold cursor-pointer transition-all shadow-lg shadow-primary/20"
                         >
                           <Upload className="h-4 w-4" />
-                          SELECIONAR ARQUIVO DE CONTRATO
+                          SELECIONAR ARQUIVO DE CONTRATO / ANEXO
                         </Button>
                       </div>
                     </SectionCard>
@@ -4375,15 +4380,13 @@ function EventoInterna() {
                 <div className="lg:col-span-4">
                   <SectionCard title="Workflow Jurídico (Manual)" className="sticky top-6">
                     <div className="space-y-6 py-4">
-                      <StatusStep done={true} title="Upload de contrato assinado pendente" />
+                      <StatusStep done={true} title="Gestão de documentos contratuais" />
                       <StatusStep
-                        done={!!realContract?.signed_file_url}
+                        done={!!realContract?.signed_file_url || contractDocuments.some((d) => d.is_signed)}
                         title="Contrato formalizado"
                       />
                       <div className="pt-4 border-t border-border/40 text-[10px] text-muted-foreground leading-relaxed">
-                        Ao realizar o upload manual do contrato assinado, o status do evento é
-                        automaticamente alterado para <b>Confirmado</b> e a proposta de orçamento é
-                        travada para alterações futuras.
+                        Ao realizar o upload do contrato final assinado, o estado jurídico do contrato é formalizado. Documentos anexos e complementares podem ser vinculados a qualquer momento sem alterar a vigência.
                       </div>
                     </div>
                   </SectionCard>

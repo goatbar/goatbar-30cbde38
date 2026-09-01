@@ -163,13 +163,31 @@ export async function dispatchContractToAssinafy(
   pdfUrl?: string,
   pdfHash?: string,
   documentTitle?: string,
+  forceRecreate?: boolean,
 ): Promise<AssinafyRequestResponse> {
   const { data, error } = await supabase.functions.invoke("assinafy-create-doc", {
-    body: { contractId, pdfBase64, pdfUrl, pdfHash, documentTitle },
+    body: { contractId, pdfBase64, pdfUrl, pdfHash, documentTitle, forceRecreate },
   });
 
   if (error) {
     const normalized = await normalizeAssinafyInvokeError(error, contractId);
+    if (
+      (normalized.diagnostic?.assinafyResponse as any)?.dispatchOutcome === "remote_document_missing" ||
+      normalized.diagnostic?.errorMessage?.includes("não existe mais na Assinafy") ||
+      normalized.diagnostic?.httpStatus === 404
+    ) {
+      return {
+        success: false,
+        dispatchOutcome: "remote_document_missing",
+        recreationRequired: true,
+        message:
+          "O documento anterior não existe mais na Assinafy. É necessário gerar um novo envio para assinatura.",
+        externalDocumentId: (normalized.diagnostic?.assinafyResponse as any)?.externalDocumentId || null,
+        externalAssignmentId: (normalized.diagnostic?.assinafyResponse as any)?.externalAssignmentId || null,
+        status: "remote_document_missing",
+        diagnostic: normalized.diagnostic,
+      } as AssinafyRequestResponse;
+    }
     throw new AssinafyDiagnosticError(normalized.message, normalized.diagnostic);
   }
 

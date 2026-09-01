@@ -194,7 +194,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
           addendumId,
           documentType: item.documentType,
           documentName: item.documentName || item.file.name,
-          isSigned: item.documentType === "manual_signed_contract",
+          isSigned: ["manual_signed_contract", "signed_contract", "signed_addendum"].includes(item.documentType) || item.markAsFinalContract,
           manualSignatureDate: item.manualSignatureDate,
           markAsFinalContract: item.markAsFinalContract,
           source: "manual",
@@ -431,7 +431,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
                         htmlFor={`mark-final-${item.id}`}
                         className="text-xs font-semibold cursor-pointer text-foreground"
                       >
-                        Marcar este documento como o Contrato Final Assinado do Evento (Muda status para CONFIRMADO)
+                        Marcar este documento como o Contrato Final Assinado do Evento (Formaliza o estado jurídico do contrato)
                       </Label>
                     </div>
                   )}

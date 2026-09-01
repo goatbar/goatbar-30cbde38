@@ -106,9 +106,13 @@ export const contractDocumentService = {
             "Múltiplos contratos ativos encontrados para este evento. Especifique qual contrato deseja vincular ao documento.",
           );
         }
-        finalContractId = activeContracts[0]?.id || contracts[0]?.id;
-      } else {
-        // Se for um anexo genérico ou outro documento e não existir nenhum contrato, não cria contrato automático
+        if (activeContracts.length === 1) {
+          finalContractId = activeContracts[0].id;
+        }
+      }
+
+      if (!finalContractId) {
+        // Se for um anexo genérico ou outro documento e não existir nenhum contrato ativo, não cria contrato automático
         if (["attachment", "other"].includes(documentType) && !params.markAsFinalContract) {
           throw new Error(
             "Nenhum contrato existente para este evento. Crie ou envie o contrato principal antes de anexar documentos complementares.",
@@ -177,6 +181,14 @@ export const contractDocumentService = {
 
     if (uploadError) {
       console.error("[contractDocumentService] Falha no upload para o Storage:", uploadError);
+      console.error("Erro completo upload contrato", {
+        message: (uploadError as any)?.message,
+        details: (uploadError as any)?.details,
+        hint: (uploadError as any)?.hint,
+        code: (uploadError as any)?.code,
+        status: (uploadError as any)?.status,
+        error: uploadError,
+      });
       throw new Error(`Erro ao enviar arquivo para o armazenamento: ${uploadError.message}`);
     }
 
@@ -212,6 +224,14 @@ export const contractDocumentService = {
 
     if (dbError) {
       console.error("[contractDocumentService] Falha ao registrar documento no banco:", dbError);
+      console.error("Erro completo upload contrato", {
+        message: dbError.message,
+        details: dbError.details,
+        hint: dbError.hint,
+        code: dbError.code,
+        status: (dbError as any)?.status,
+        error: dbError,
+      });
       throw new Error(`Erro ao registrar documento: ${dbError.message}`);
     }
 
@@ -221,6 +241,7 @@ export const contractDocumentService = {
         .from("event_contracts")
         .update({
           status: "signed",
+          signed_file_url: storagePath,
           fully_signed_at: manualSigDate || new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })

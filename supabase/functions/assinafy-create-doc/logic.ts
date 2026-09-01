@@ -28,6 +28,7 @@ export type CreateDocPayload = {
   pdfUrl?: string;
   pdfHash: string;
   documentTitle?: string;
+  forceRecreate?: boolean;
 };
 
 export function validateCreateDocPayload(value: unknown): CreateDocPayload {
@@ -56,6 +57,7 @@ export function validateCreateDocPayload(value: unknown): CreateDocPayload {
     pdfUrl: hasUrl ? (body.pdfUrl as string) : undefined,
     pdfHash: body.pdfHash.toLowerCase(),
     documentTitle,
+    forceRecreate: Boolean(body.forceRecreate),
   };
 }
 
