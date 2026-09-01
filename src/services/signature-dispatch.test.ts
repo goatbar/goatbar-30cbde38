@@ -76,6 +76,23 @@ describe("signature PDF dispatch", () => {
     expect(documentHtml).toContain("Contrato &amp; revisão");
   });
 
+  it("adds legal-document hierarchy without changing compiled content", () => {
+    const source = `<p>CONTRATO DE PRESTAÇÃO DE SERVIÇOS</p>
+      <p>CONTRATANTE:</p><p>Nome: Mariana Campos Moreira</p>
+      <p>CLÁUSULA 1 – DO OBJETO DO CONTRATO</p>
+      <p>1.1. O presente contrato tem por objeto...</p>
+      <p>a) Montagem do bar no local do evento;</p>`;
+
+    const documentHtml = buildContractPdfDocument(source, "Contrato");
+
+    expect(documentHtml).toContain('class="contract-title"');
+    expect(documentHtml).toContain('class="contract-party-heading"');
+    expect(documentHtml).toContain('class="contract-clause-heading"');
+    expect(documentHtml).toContain('class="contract-alpha-item"');
+    expect(documentHtml).toContain("Nome: Mariana Campos Moreira");
+    expect(documentHtml).toContain("1.1. O presente contrato tem por objeto...");
+  });
+
   it("does not call assinafy-create-doc when PDF conversion fails", async () => {
     const createRequest = vi.fn();
     await expect(

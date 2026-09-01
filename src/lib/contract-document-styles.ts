@@ -179,24 +179,37 @@ export const CONTRACT_PDF_DOCUMENT_CSS = `
     min-height: 251mm;
     margin: 0;
     padding: 0;
-    overflow-wrap: break-word;
-    word-break: break-word;
+    overflow-wrap: normal;
+    word-break: normal;
     background: #ffffff !important;
     color: #000000 !important;
     font-family: Arial, Helvetica, sans-serif;
     font-size: 14.85px; /* ≈ 11pt at 96 dpi (1pt = 1.3333px) */
-    line-height: 1.42;
+    line-height: 1.5;
   }
   #contract-pdf-document, #contract-pdf-document * { color-scheme: light only; }
-  #contract-pdf-document * { color: #000000 !important; }
+  #contract-pdf-document * {
+    box-sizing: border-box;
+    color: #000000 !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+  }
   #contract-pdf-document p, #contract-pdf-document div, #contract-pdf-document span, #contract-pdf-document li { background-color: transparent !important; }
 
   /* Body paragraphs */
   #contract-pdf-document p {
-    margin: 0 0 9px;
-    line-height: 1.42;
-    text-align: justify;
+    margin: 0 0 10px !important;
+    font-size: 11pt !important;
+    line-height: 1.5 !important;
+    text-align: justify !important;
+    orphans: 3;
+    widows: 3;
   }
+
+  #contract-pdf-document > div:not(.docx-page-break),
+  #contract-pdf-document section { font-size: 11pt; line-height: 1.5; }
 
   /* Heading hierarchy — mirrors the old contract's visual weight */
   #contract-pdf-document h1, #contract-pdf-document h2, #contract-pdf-document h3,
@@ -204,45 +217,85 @@ export const CONTRACT_PDF_DOCUMENT_CSS = `
     color: #000000 !important;
     font-weight: 700;
     line-height: 1.25;
-    margin-bottom: 6px;
+    margin-bottom: 7px !important;
     break-after: avoid;
     page-break-after: avoid;
   }
 
   /* Main title: "CONTRATO DE PRESTAÇÃO DE SERVIÇOS" */
   #contract-pdf-document h1 {
-    font-size: 18.67px; /* ≈ 14pt */
-    margin-top: 0;
-    margin-bottom: 14px;
-    text-align: center;
+    font-size: 14pt !important;
+    margin-top: 0 !important;
+    margin-bottom: 18px !important;
+    text-align: center !important;
     text-transform: uppercase;
     letter-spacing: 0.02em;
   }
 
   /* Section label: "CONTRATANTE:", "CONTRATADA:" */
   #contract-pdf-document h2 {
-    font-size: 16px; /* ≈ 12pt */
-    margin-top: 18px;
-    margin-bottom: 5px;
+    font-size: 12pt !important;
+    margin-top: 18px !important;
+    margin-bottom: 7px !important;
   }
 
   /* Clause titles: "CLÁUSULA 1ª — ..." */
   #contract-pdf-document h3 {
-    font-size: 14.85px; /* ≈ 11pt, same as body but bold */
-    margin-top: 16px;
-    margin-bottom: 5px;
+    font-size: 11pt !important;
+    margin-top: 18px !important;
+    margin-bottom: 7px !important;
   }
 
   #contract-pdf-document h4 { font-size: 14.85px; margin-top: 12px; margin-bottom: 4px; }
+
+  /* Mammoth uses paragraphs when the DOCX author did not assign Word heading styles. */
+  #contract-pdf-document .contract-title {
+    display: block;
+    margin: 0 0 18px !important;
+    font-size: 14pt !important;
+    font-weight: 700 !important;
+    line-height: 1.3 !important;
+    letter-spacing: 0.02em;
+    text-align: center !important;
+    text-transform: uppercase;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  #contract-pdf-document .contract-party-heading,
+  #contract-pdf-document .contract-clause-heading {
+    display: block;
+    margin: 18px 0 7px !important;
+    font-size: 11pt !important;
+    font-weight: 700 !important;
+    line-height: 1.35 !important;
+    text-align: left !important;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  #contract-pdf-document .contract-party-heading { font-size: 12pt !important; }
 
   #contract-pdf-document strong, #contract-pdf-document b { font-weight: 700; }
 
   /* Lists */
   #contract-pdf-document ul, #contract-pdf-document ol {
-    margin: 0 0 9px;
-    padding-left: 1.6rem;
+    margin: 2px 0 10px !important;
+    padding-left: 7mm !important;
   }
-  #contract-pdf-document li { margin-bottom: 3px; line-height: 1.42; }
+  #contract-pdf-document li {
+    margin-bottom: 7px !important;
+    font-size: 11pt !important;
+    line-height: 1.5 !important;
+    text-align: justify;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  #contract-pdf-document .contract-alpha-item {
+    margin-left: 7mm !important;
+    padding-left: 0 !important;
+    text-indent: -7mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 
   /* Tables */
   #contract-pdf-document table {
@@ -259,8 +312,8 @@ export const CONTRACT_PDF_DOCUMENT_CSS = `
     text-align: left;
     vertical-align: top;
     color: #000000 !important;
-    font-size: 14.85px;
-    line-height: 1.42;
+    font-size: 11pt !important;
+    line-height: 1.45 !important;
   }
   #contract-pdf-document th { background: #f8fafc !important; font-weight: 700; }
   #contract-pdf-document td { background: #ffffff !important; }
