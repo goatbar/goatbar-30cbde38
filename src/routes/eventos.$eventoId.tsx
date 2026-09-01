@@ -1500,7 +1500,7 @@ function EventoInterna() {
   const handleManualContractUpload = async (file: File) => {
     try {
       setUploadingContract(true);
-      const publicUrl = await eventContractsService.uploadSignedContractFile(eventoId, file);
+      const publicUrl = await eventContractsService.uploadSignedContractFile(eventoId, file, realContract?.id);
       await eventContractsService.saveSignedContract(eventoId, publicUrl, realContract?.id);
       await handleStatusChange("CONFIRMADO", "Contrato assinado anexado manualmente.");
       toast.success("Contrato assinado enviado com sucesso!");
@@ -4362,20 +4362,13 @@ function EventoInterna() {
                           </p>
                         </div>
 
-                        <label className="h-12 px-8 bg-primary text-white hover:bg-primary/90 rounded-xl flex items-center justify-center gap-2 text-sm font-bold cursor-pointer transition-all shadow-lg shadow-primary/20">
+                        <Button
+                          onClick={() => setShowUploadDocumentModal(true)}
+                          className="h-12 px-8 bg-primary text-white hover:bg-primary/90 rounded-xl flex items-center justify-center gap-2 text-sm font-bold cursor-pointer transition-all shadow-lg shadow-primary/20"
+                        >
                           <Upload className="h-4 w-4" />
-                          {uploadingContract ? "ENVIANDO..." : "SELECIONAR ARQUIVO"}
-                          <input
-                            type="file"
-                            accept="application/pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                            className="hidden"
-                            disabled={uploadingContract}
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleManualContractUpload(file);
-                            }}
-                          />
-                        </label>
+                          SELECIONAR ARQUIVO DE CONTRATO
+                        </Button>
                       </div>
                     </SectionCard>
                   )}

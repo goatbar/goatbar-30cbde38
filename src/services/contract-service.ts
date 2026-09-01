@@ -577,16 +577,91 @@ export const eventContractsService = {
     if (error) throw error;
   },
 
-  async uploadSignedContractFile(eventId: string, file: File): Promise<string> {
-    // Redireciona para o serviço canônico de documentos no bucket privado contract-documents
+  /**
+   * Resolve o contrato canônico do evento. Se já existir um contrato ativo, reutiliza-o.
+   * Se houver múltiplos contratos ativos ambíguos, lança erro.
+   * Se não existir nenhum contrato para o evento, cria o registro inicial em event_contracts.
+   */
+  async getOrCreateContractForEvent(
+    eventId: string,
+    contractId?: string | null,
+  ): Promise<{ id: string; status: string | null }> {
+    if (contractId) {
+      const { data: existing, error } = await supabase
+        .from("event_contracts")
+        .select("id, status")
+        .eq("id", contractId)
+        .single();
+
+      if (error || !existing) {
+        throw new Error(`Contrato com id "${contractId}" não encontrado.`);
+      }
+
+      return existing;
+    }
+
+    const { data: contracts, error } = await supabase
+      .from("event_contracts")
+      .select("id, status, created_at")
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    if (contracts && contracts.length > 0) {
+      const activeContracts = contracts.filter((c) => c.status !== "cancelled");
+      if (activeContracts.length > 1) {
+        throw new Error(
+          "Múltiplos contratos ativos encontrados para este evento. Especifique qual contrato deseja vincular ao documento.",
+        );
+      }
+
+      return activeContracts[0] || contracts[0];
+    }
+
+    const nowStr = new Date().toISOString();
+
+    const { data: newContract, error: createError } = await supabase
+      .from("event_contracts")
+      .insert({
+        event_id: eventId,
+        status: "draft",
+        version: 1,
+        generated_at: nowStr,
+      })
+      .select("id, status")
+      .single();
+
+    if (createError || !newContract) {
+      throw new Error(`Falha ao criar contrato para o evento: ${createError?.message}`);
+    }
+
+    return newContract;
+  },
+
+  async uploadSignedContractFile(
+    eventId: string,
+    file: File,
+    contractId?: string | null,
+    options?: { manualSignatureDate?: string; markAsFinal?: boolean },
+  ): Promise<string> {
+    const resolvedContract = await this.getOrCreateContractForEvent(
+      eventId,
+      contractId,
+    );
+
     const doc = await contractDocumentService.uploadDocument({
       file,
       eventId,
+      contractId: resolvedContract.id,
       documentType: "manual_signed_contract",
       documentName: file.name,
       isSigned: true,
+      manualSignatureDate: options?.manualSignatureDate,
+      markAsFinalContract: options?.markAsFinal ?? true,
       source: "manual",
     });
+
     return doc.storage_path || "";
   },
 

@@ -72,18 +72,80 @@ export const contractDocumentService = {
   async uploadDocument(params: UploadDocumentParams): Promise<ContractDocumentRow> {
     const { file, eventId, contractId, addendumId, documentType, documentName } = params;
 
-    // 1. Validação de vínculo jurídico (impedir documentos órfãos)
-    if (!contractId && !addendumId) {
+    let finalContractId = contractId;
+    let finalAddendumId = addendumId;
+
+    // 1. Resolução automática de contract_id a partir do addendumId
+    if (finalAddendumId && !finalContractId) {
+      const { data: addendum, error: addErr } = await supabase
+        .from("contract_addendums")
+        .select("contract_id")
+        .eq("id", finalAddendumId)
+        .single();
+
+      if (addErr || !addendum?.contract_id) {
+        throw new Error(`Termo aditivo "${finalAddendumId}" não possui contrato principal vinculado.`);
+      }
+      finalContractId = addendum.contract_id;
+    }
+
+    // 2. Resolução automática de vínculo contratual para o evento se não fornecido
+    if (!finalContractId && !finalAddendumId) {
+      const { data: contracts, error: fetchErr } = await supabase
+        .from("event_contracts")
+        .select("id, status, created_at")
+        .eq("event_id", eventId)
+        .order("created_at", { ascending: false });
+
+      if (fetchErr) throw fetchErr;
+
+      if (contracts && contracts.length > 0) {
+        const activeContracts = contracts.filter((c) => c.status !== "cancelled");
+        if (activeContracts.length > 1) {
+          throw new Error(
+            "Múltiplos contratos ativos encontrados para este evento. Especifique qual contrato deseja vincular ao documento.",
+          );
+        }
+        finalContractId = activeContracts[0]?.id || contracts[0]?.id;
+      } else {
+        // Se for um anexo genérico ou outro documento e não existir nenhum contrato, não cria contrato automático
+        if (["attachment", "other"].includes(documentType) && !params.markAsFinalContract) {
+          throw new Error(
+            "Nenhum contrato existente para este evento. Crie ou envie o contrato principal antes de anexar documentos complementares.",
+          );
+        }
+
+        // Se for um documento contratual principal, cria o registro inicial seguro (status draft)
+        const nowStr = new Date().toISOString();
+        const { data: newContract, error: createError } = await supabase
+          .from("event_contracts")
+          .insert({
+            event_id: eventId,
+            status: "draft",
+            version: 1,
+            generated_at: nowStr,
+          })
+          .select("id")
+          .single();
+
+        if (createError || !newContract) {
+          throw new Error(`Falha ao criar contrato para o evento: ${createError?.message}`);
+        }
+        finalContractId = newContract.id;
+      }
+    }
+
+    if (!finalContractId && !finalAddendumId) {
       throw new Error(
         "Todo documento deve estar vinculado a um contrato ou a um termo aditivo.",
       );
     }
 
-    if (documentType === "signed_contract" && addendumId) {
+    if (documentType === "signed_contract" && finalAddendumId) {
       throw new Error("Contrato assinado deve estar vinculado diretamente ao contrato principal.");
     }
 
-    if (documentType === "signed_addendum" && (!contractId || !addendumId)) {
+    if (documentType === "signed_addendum" && (!finalContractId || !finalAddendumId)) {
       throw new Error("Termo aditivo assinado deve estar vinculado ao contrato e ao aditivo.");
     }
 
@@ -104,7 +166,7 @@ export const contractDocumentService = {
     // 3. Geração de caminho único e seguro no Storage privado
     const docId = crypto.randomUUID();
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const parentFolder = contractId ? `contracts/${contractId}` : `addendums/${addendumId}`;
+    const parentFolder = finalContractId ? `contracts/${finalContractId}` : `addendums/${finalAddendumId}`;
     const storagePath = `events/${eventId}/${parentFolder}/documents/${docId}_${sanitizedName}`;
     const bucket = "contract-documents";
 
@@ -128,8 +190,8 @@ export const contractDocumentService = {
       .insert({
         id: docId,
         event_id: eventId,
-        contract_id: contractId || null,
-        addendum_id: addendumId || null,
+        contract_id: finalContractId || null,
+        addendum_id: finalAddendumId || null,
         document_type: documentType,
         document_name: documentName,
         original_filename: file.name,
@@ -154,7 +216,7 @@ export const contractDocumentService = {
     }
 
     // 6. Atualização consciente do status do contrato (se solicitado explicitamente pelo usuário)
-    if (params.markAsFinalContract && contractId) {
+    if (params.markAsFinalContract && finalContractId) {
       await supabase
         .from("event_contracts")
         .update({
@@ -162,7 +224,7 @@ export const contractDocumentService = {
           fully_signed_at: manualSigDate || new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .eq("id", contractId);
+        .eq("id", finalContractId);
     }
 
     return newDoc as ContractDocumentRow;

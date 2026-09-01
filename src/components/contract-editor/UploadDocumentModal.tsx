@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +22,8 @@ import {
   contractDocumentService,
   DocumentType,
 } from "@/services/contract-document-service";
+import { eventContractsService } from "@/services/contract-service";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface UploadDocumentModalProps {
@@ -44,6 +46,13 @@ interface SelectedFileItem {
   errorMessage?: string;
 }
 
+interface AvailableContract {
+  id: string;
+  version: number | null;
+  status: string | null;
+  created_at: string | null;
+}
+
 export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
   open,
   onOpenChange,
@@ -54,6 +63,34 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
 }) => {
   const [fileItems, setFileItems] = useState<SelectedFileItem[]>([]);
   const [isUploadingGlobal, setIsUploadingGlobal] = useState(false);
+  const [availableContracts, setAvailableContracts] = useState<AvailableContract[]>([]);
+  const [selectedContractId, setSelectedContractId] = useState<string>("");
+
+  useEffect(() => {
+    if (open && eventId) {
+      (async () => {
+        try {
+          const { data, error } = await supabase
+            .from("event_contracts")
+            .select("id, version, status, created_at")
+            .eq("event_id", eventId)
+            .neq("status", "cancelled")
+            .order("created_at", { ascending: false });
+
+          if (!error && data) {
+            setAvailableContracts(data);
+            if (data.length === 1) {
+              setSelectedContractId(data[0].id);
+            } else if (contractId && data.some((c) => c.id === contractId)) {
+              setSelectedContractId(contractId);
+            }
+          }
+        } catch (e) {
+          console.warn("Erro ao buscar contratos do evento para o modal:", e);
+        }
+      })();
+    }
+  }, [open, eventId, contractId]);
 
   const handleSelectFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files || []);
@@ -90,7 +127,6 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
         if (item.id !== id) return item;
         const updated = { ...item, ...updates };
 
-        // Se o tipo mudar para outro que não seja contrato assinado, desativa a marcação de contrato final
         if (updates.documentType && updates.documentType !== "manual_signed_contract") {
           updated.markAsFinalContract = false;
         }
@@ -106,7 +142,40 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
       return;
     }
 
+    if (availableContracts.length > 1 && !selectedContractId && !addendumId) {
+      toast.error("Selecione qual contrato deseja vincular aos documentos.");
+      return;
+    }
+
     setIsUploadingGlobal(true);
+
+    let batchContractId: string | null = selectedContractId || contractId || null;
+
+    // Resolve ou cria o contrato UMA ÚNICA VEZ antes do lote de uploads para evitar race conditions
+    if (!batchContractId && !addendumId) {
+      try {
+        const hasMainDoc = fileItems.some(
+          (i) => ["manual_signed_contract", "signed_contract"].includes(i.documentType) || i.markAsFinalContract,
+        );
+
+        if (!hasMainDoc && availableContracts.length === 0) {
+          toast.error("Nenhum contrato existente para este evento. Envie primeiro o contrato principal antes de anexos.");
+          setIsUploadingGlobal(false);
+          return;
+        }
+
+        const resolved = await eventContractsService.getOrCreateContractForEvent(
+          eventId,
+          null,
+        );
+        batchContractId = resolved.id;
+      } catch (err: any) {
+        toast.error(`Falha ao resolver contrato para o lote: ${err.message}`);
+        setIsUploadingGlobal(false);
+        return;
+      }
+    }
+
     let successCount = 0;
 
     for (const item of fileItems) {
@@ -121,7 +190,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
         await contractDocumentService.uploadDocument({
           file: item.file,
           eventId,
-          contractId,
+          contractId: batchContractId,
           addendumId,
           documentType: item.documentType,
           documentName: item.documentName || item.file.name,
@@ -169,6 +238,35 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
         </DialogHeader>
 
         <div className="space-y-6 my-4">
+          {/* Seletor de Contrato se houver mais de um contrato ativo */}
+          {availableContracts.length > 1 && !addendumId && (
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 space-y-1.5">
+              <Label className="text-xs font-bold flex items-center gap-1.5 text-amber-800 dark:text-amber-200">
+                <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                Múltiplos Contratos Ativos Encontrados
+              </Label>
+              <p className="text-[11px] text-muted-foreground">
+                Este evento possui mais de um contrato ativo. Selecione qual contrato deseja vincular aos documentos deste lote:
+              </p>
+              <Select
+                value={selectedContractId}
+                disabled={isUploadingGlobal}
+                onValueChange={(val) => setSelectedContractId(val)}
+              >
+                <SelectTrigger className="h-9 text-xs bg-background text-foreground mt-1">
+                  <SelectValue placeholder="Selecione o contrato..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableContracts.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      Contrato v{c.version || 1} (Criado em {c.created_at ? new Date(c.created_at).toLocaleDateString("pt-BR") : "---"} — Status: {c.status?.toUpperCase() || "N/A"})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Área de Seleção de Arquivos */}
           <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-border rounded-xl bg-background/50 text-center space-y-3">
             <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center text-primary">
