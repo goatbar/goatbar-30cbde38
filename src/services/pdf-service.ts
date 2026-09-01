@@ -1,4 +1,5 @@
 import { prepareContractExportHtml } from "@/utils/prepare-contract-export-html";
+import { formatContractDocumentHtml } from "@/utils/format-contract-document-html";
 import { CONTRACT_PDF_DOCUMENT_CSS } from "@/lib/contract-document-styles";
 import html2pdf from "html2pdf.js";
 
@@ -23,7 +24,7 @@ function escapeHtmlText(value: string): string {
 
 /** Builds the exact, self-contained UTF-8 document captured for Assinafy. */
 export function buildContractPdfDocument(htmlContent: string, title: string): string {
-  const cleanHtml = prepareContractExportHtml(htmlContent);
+  const cleanHtml = formatContractDocumentHtml(prepareContractExportHtml(htmlContent));
   return `<!DOCTYPE html>
 <html lang="pt-BR" style="background:#ffffff;color:#000000;color-scheme:light">
 <head><meta charset="UTF-8"><meta name="color-scheme" content="light only"><title>${escapeHtmlText(title)}</title><style>${CONTRACT_PDF_DOCUMENT_CSS}</style></head>
