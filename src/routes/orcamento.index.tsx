@@ -63,7 +63,7 @@ function OrcamentoLandingPage() {
             <p className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">Como funciona</p>
             <div className="mt-8 grid gap-4 md:grid-cols-4">
               {[
-                ["01", "Conte sobre seu evento"],
+                ["01", "Envie as informações do seu evento"],
                 ["02", "Recebemos sua solicitação"],
                 ["03", "Montamos uma proposta personalizada"],
                 ["04", "Cuidamos da experiência no dia"],
