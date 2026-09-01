@@ -402,6 +402,18 @@ export const eventBudgetService = {
     if (error) throw error;
   },
 
+  async deletePublicBudgetRequest(eventId: string) {
+    const { data, error } = await supabase.rpc("delete_public_budget_request", {
+      p_event_id: eventId,
+    });
+    if (error) throw new Error(error.message);
+
+    const result = data as { deleted?: boolean; reason?: string; message?: string } | null;
+    if (!result?.deleted) {
+      throw new Error(result?.message || result?.reason || "A solicitação não foi excluída.");
+    }
+  },
+
   async checkEventsSameDate(date: string) {
     const { data, error } = await supabase.from("events").select("*").eq("date", date);
     if (error) throw error;

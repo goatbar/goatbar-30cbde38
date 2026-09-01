@@ -365,7 +365,9 @@ function EventosIndex() {
             ev.stopPropagation();
             if (confirm("Excluir este orçamento definitivamente?")) {
               await deleteEventFromList(e.id, {
-                deleteEvent: eventBudgetService.deleteEvent,
+                deleteRequest: eventBudgetService.deletePublicBudgetRequest,
+                removeFromList: (eventId) =>
+                  setEventos((current) => current.filter((event) => event.id !== eventId)),
                 reload: loadEvents,
                 showSuccess: toast.success,
                 showError: toast.error,
