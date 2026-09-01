@@ -11,7 +11,7 @@ import {
 } from "@/services/budget-request-service";
 import { DrinkCardImage } from "./DrinkCardImage";
 
-const EVENT_TYPES = ["Casamento", "Corporativo", "Aniversário", "Confraternização"] as const;
+const EVENT_TYPES = ["Casamento", "Corporativo", "Aniversário", "Comemoração"] as const;
 
 interface PublicBudgetRequestFormProps {
   mode: "public" | "token";

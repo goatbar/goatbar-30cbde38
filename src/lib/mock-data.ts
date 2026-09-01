@@ -1178,7 +1178,7 @@ export const tiposEvento: TipoEvento[] = [
   },
   {
     id: "t4",
-    nome: "Confraternização",
+    nome: "Comemoração",
     consumoBebidaPessoa: 4,
     geloKgPessoa: 1.1,
     insumosPessoa: 4,
