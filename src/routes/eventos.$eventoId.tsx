@@ -72,8 +72,16 @@ import {
 } from "@/services/signature-dispatch";
 import { getSignatureProvider } from "@/services/signature-provider";
 import { ContractReviewModal } from "@/components/contract-editor/ContractReviewModal";
+import { AddendumDiffPreviewModal } from "@/components/contract-editor/AddendumDiffPreviewModal";
 import {
-  eventBudgetService,
+  contractAddendumService,
+  type ContractAddendumRow,
+} from "@/services/contract-addendum-service";
+import {
+  compareContractVersions,
+  type ContractAddendumComparison,
+} from "@/lib/contract-addendum-comparator";
+import {  eventBudgetService,
   type Event as RealEvent,
   type BudgetVersion,
   type BudgetHistory,
@@ -108,6 +116,8 @@ import {
   type AssinafyDiagnostic,
 } from "@/services/assinafy-service";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import {
   deleteGeneratedProposal,
   CanvaGenerationDiagnostic,
@@ -246,6 +256,19 @@ function EventoInterna() {
   const [showContractPreviewModal, setShowContractPreviewModal] = useState(false);
   const [compiledContractText, setCompiledContractText] = useState("");
   const [compiledVariables, setCompiledVariables] = useState<Record<string, string>>({});
+
+  // --- Contract Addendum States ---
+  const [addendums, setAddendums] = useState<ContractAddendumRow[]>([]);
+  const [addendumComparison, setAddendumComparison] = useState<ContractAddendumComparison | null>(null);
+  const [showAddendumDiffModal, setShowAddendumDiffModal] = useState(false);
+  const [activeAddendumForReview, setActiveAddendumForReview] = useState<ContractAddendumRow | null>(null);
+  const [isGeneratingAddendum, setIsGeneratingAddendum] = useState(false);
+  const [addendumPendingNumber, setAddendumPendingNumber] = useState<number>(1);
+  const [legacySelectionModalOpen, setLegacySelectionModalOpen] = useState(false);
+  const [legacyAvailableVersions, setLegacyAvailableVersions] = useState<any[]>([]);
+  const [selectedLegacyBudgetId, setSelectedLegacyBudgetId] = useState<string>("");
+  const [effectiveBudgetVersion, setEffectiveBudgetVersion] = useState<any>(null);
+  const [addendumRequiresAction, setAddendumRequiresAction] = useState<boolean>(false);
 
   // --- Proposal Modal States ---
   const [showProposalModal, setShowProposalModal] = useState(false);
@@ -402,6 +425,9 @@ function EventoInterna() {
       setRealTemplates(tps);
       setRealSigners(sigs);
       setRealContract(contract);
+      if (contract?.id) {
+        fetchAddendumsAndEvaluate(contract.id, budget);
+      }
       const { data: preferences, error: preferencesError } = await (supabase as any)
         .from("event_requested_drinks")
         .select("drink_id,drinks(id,nome)")
@@ -904,6 +930,108 @@ function EventoInterna() {
           ? `Não foi possível gerar a pré-visualização. Campos pendentes: ${pendingTokens.join(", ")}.`
           : `Não foi possível gerar a pré-visualização. ${e?.message || "Verifique as configurações do modelo ou evento."}`;
       toast.error(message);
+    }
+  };
+
+  const fetchAddendumsAndEvaluate = async (contractId: string, currentB: any) => {
+    try {
+      const list = await contractAddendumService.listAddendumsByContract(contractId);
+      setAddendums(list);
+
+      for (const add of list) {
+        if (add.status === "sent" && add.external_document_id) {
+          try {
+            await contractAddendumService.syncAddendumStatus(add.id);
+          } catch (e) {
+            console.warn("Falha ao sincronizar status do aditivo:", e);
+          }
+        }
+      }
+
+      if (realContract?.status === "signed" && currentB) {
+        try {
+          const effective = await contractAddendumService.getEffectiveBudgetVersion(contractId, eventoId);
+          setEffectiveBudgetVersion(effective.budgetVersion);
+          if (effective.budgetVersion && effective.budgetVersion.id !== currentB.id) {
+            const comp = compareContractVersions(effective.budgetVersion, currentB);
+            setAddendumRequiresAction(comp.requiresAddendum);
+          } else {
+            setAddendumRequiresAction(false);
+          }
+        } catch (err: any) {
+          if (err.message === "CONTRACT_MISSING_BUDGET_VERSION") {
+            setAddendumRequiresAction(true);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar aditivos:", e);
+    }
+  };
+
+  const handleOpenAddendumFlow = async () => {
+    if (!realContract || realContract.status !== "signed") return;
+
+    try {
+      setIsGeneratingAddendum(true);
+
+      try {
+        await contractAddendumService.resolveLegacyContractBudgetVersion(
+          realContract.id,
+          selectedLegacyBudgetId || undefined,
+        );
+      } catch (err: any) {
+        if (err.message === "LEGACY_CONTRACT_REQUIRES_MANUAL_SELECTION") {
+          setLegacyAvailableVersions(err.versions || []);
+          setLegacySelectionModalOpen(true);
+          setIsGeneratingAddendum(false);
+          return;
+        }
+        throw err;
+      }
+
+      const data = await contractAddendumService.prepareAddendumData(realContract.id, eventoId);
+      setAddendumComparison(data.comparison);
+      setCompiledContractText(data.compiledHtml);
+
+      const nextNum =
+        addendums.length > 0 ? Math.max(...addendums.map((a) => a.addendum_number)) + 1 : 1;
+      setAddendumPendingNumber(nextNum);
+
+      setShowAddendumDiffModal(true);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao preparar Termo Aditivo.");
+    } finally {
+      setIsGeneratingAddendum(false);
+    }
+  };
+
+  const handleConfirmGenerateAddendum = async (paymentMethod: string, dueDate: string) => {
+    if (!realContract) return;
+
+    try {
+      setIsGeneratingAddendum(true);
+      const newAdd = await contractAddendumService.createAddendum({
+        contractId: realContract.id,
+        eventId: eventoId,
+        overridePaymentMethod: paymentMethod,
+        overrideDueDate: dueDate,
+      });
+
+      setShowAddendumDiffModal(false);
+      setActiveAddendumForReview(newAdd);
+      setCompiledContractText(newAdd.generated_html || "");
+
+      setShowContractPreviewModal(true);
+      toast.success(
+        `Rascunho do Termo Aditivo nº ${newAdd.addendum_number} gerado! Revise a minuta antes do envio.`,
+      );
+
+      await fetchAddendumsAndEvaluate(realContract.id, currentBudget);
+    } catch (err: any) {
+      toast.error(err.message || "Não foi possível criar o rascunho do aditivo.");
+    } finally {
+      setIsGeneratingAddendum(false);
     }
   };
 
@@ -3802,24 +3930,21 @@ function EventoInterna() {
                           <AlertDialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-surface border border-border p-6 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95">
                             <AlertDialog.Title className="text-xl font-bold font-display text-foreground flex items-center gap-2">
                               <AlertCircle className="h-6 w-6 text-destructive" />
-                              Cancelar Assinatura?
+                              Cancelar Solicitação de Assinatura?
                             </AlertDialog.Title>
                             <AlertDialog.Description className="mt-3 text-sm text-muted-foreground">
-                              O envio para assinatura será <strong>cancelado e deletado</strong> no
-                              provedor (Assinafy). Os links enviados anteriormente deixarão de ser
-                              válidos. Depois disso, você poderá alterar o contrato e enviar
-                              novamente.
+                              Esta ação irá cancelar o envio atual do contrato na plataforma de
+                              assinatura. O status retornará para rascunho.
                             </AlertDialog.Description>
                             <div className="mt-6 flex justify-end gap-3">
                               <AlertDialog.Cancel asChild>
-                                <GhostButton disabled={isCanceling} className="h-10">
-                                  Voltar
-                                </GhostButton>
+                                <GhostButton className="h-10">Voltar</GhostButton>
                               </AlertDialog.Cancel>
                               <AlertDialog.Action asChild>
                                 <PrimaryButton
                                   onClick={(e: any) => {
                                     e.preventDefault();
+                                    setShowCancelDialog(false);
                                     handleCancelSignature();
                                   }}
                                   disabled={isCanceling}
@@ -3839,6 +3964,154 @@ function EventoInterna() {
                           </AlertDialog.Content>
                         </AlertDialog.Portal>
                       </AlertDialog.Root>
+                    </SectionCard>
+                  )}
+
+                  {/* TERMO ADITIVO & HISTÓRICO DE DOCUMENTOS */}
+                  {realContract?.status === "signed" && (
+                    <SectionCard
+                      title="Histórico de Contrato & Termos Aditivos"
+                      subtitle="Gerenciamento de aditivos contratuais e ciclo de vida documental"
+                    >
+                      <div className="space-y-4">
+                        {/* Banner de alerta quando alteração pós-contrato é detectada */}
+                        {addendumRequiresAction && (
+                          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div className="flex items-start gap-3">
+                              <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                              <div>
+                                <h4 className="font-bold text-sm">Alteração Comercial Pós-Contrato Detectada</h4>
+                                <p className="text-xs mt-0.5 opacity-90">
+                                  A proposta comercial foi alterada após a assinatura do contrato original. Um Termo Aditivo é necessário para formalizar as alterações.
+                                </p>
+                              </div>
+                            </div>
+                            <PrimaryButton
+                              onClick={handleOpenAddendumFlow}
+                              disabled={isGeneratingAddendum}
+                              className="h-10 px-5 text-xs font-bold shrink-0 bg-amber-600 hover:bg-amber-700 text-white"
+                            >
+                              {isGeneratingAddendum ? "Carregando..." : "GERAR TERMO ADITIVO"}
+                            </PrimaryButton>
+                          </div>
+                        )}
+
+                        {/* Documento 1: Contrato Original */}
+                        <div className="p-4 rounded-xl bg-surface border border-border flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <FileTextIcon className="h-6 w-6 text-primary shrink-0" />
+                            <div>
+                              <div className="font-bold text-sm flex items-center gap-2">
+                                Contrato Original (Prestação de Serviços)
+                                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                  ASSINADO
+                                </span>
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                Firmado em {realContract.fully_signed_at ? new Date(realContract.fully_signed_at).toLocaleDateString("pt-BR") : "---"}
+                              </div>
+                            </div>
+                          </div>
+                          {realContract.signed_file_url && (
+                            <GhostButton
+                              onClick={() => window.open(realContract.signed_file_url, "_blank")}
+                              className="h-8 text-xs font-bold border"
+                            >
+                              ABRIR PDF CONTRATO
+                            </GhostButton>
+                          )}
+                        </div>
+
+                        {/* Lista de Termos Aditivos */}
+                        {addendums.map((add) => (
+                          <div
+                            key={add.id}
+                            className="p-4 rounded-xl bg-surface border border-border flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                          >
+                            <div className="flex items-center gap-3">
+                              <FileSignature className="h-6 w-6 text-amber-600 shrink-0" />
+                              <div>
+                                <div className="font-bold text-sm flex items-center gap-2">
+                                  Termo Aditivo nº {add.addendum_number}
+                                  <span
+                                    className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${
+                                      add.status === "signed"
+                                        ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                                        : add.status === "sent"
+                                          ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
+                                          : add.status === "cancelled"
+                                            ? "bg-muted text-muted-foreground border-border"
+                                            : "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                                    }`}
+                                  >
+                                    {add.status === "signed"
+                                      ? "ASSINADO"
+                                      : add.status === "sent"
+                                        ? "ENVIADO"
+                                        : add.status === "cancelled"
+                                          ? "CANCELADO"
+                                          : "RASCUNHO"}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-0.5">
+                                  Criado em {new Date(add.created_at).toLocaleDateString("pt-BR")}
+                                  {add.financial_snapshot?.previous_total !== undefined && (
+                                    <span className="ml-2 font-medium text-foreground">
+                                      ({new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(add.financial_snapshot.previous_total)} → {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(add.financial_snapshot.current_total)})
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {add.signed_file_url && (
+                                <GhostButton
+                                  onClick={() => window.open(add.signed_file_url!, "_blank")}
+                                  className="h-8 text-xs font-bold border"
+                                >
+                                  ABRIR PDF ADITIVO
+                                </GhostButton>
+                              )}
+                              {add.status === "draft" && (
+                                <PrimaryButton
+                                  onClick={() => {
+                                    setActiveAddendumForReview(add);
+                                    setCompiledContractText(add.generated_html || "");
+                                    setShowContractPreviewModal(true);
+                                  }}
+                                  className="h-8 px-3 text-xs font-bold"
+                                >
+                                  REVISAR E ENVIAR
+                                </PrimaryButton>
+                              )}
+                              {add.status === "sent" && (
+                                <GhostButton
+                                  onClick={async () => {
+                                    await contractAddendumService.syncAddendumStatus(add.id);
+                                    await fetchAddendumsAndEvaluate(realContract.id, currentBudget);
+                                    toast.success("Status do aditivo atualizado!");
+                                  }}
+                                  className="h-8 text-xs font-bold border"
+                                >
+                                  ATUALIZAR STATUS
+                                </GhostButton>
+                              )}
+                              {["draft", "sent"].includes(add.status) && (
+                                <GhostButton
+                                  onClick={async () => {
+                                    await contractAddendumService.cancelAddendum(add.id);
+                                    await fetchAddendumsAndEvaluate(realContract.id, currentBudget);
+                                    toast.success("Termo aditivo cancelado.");
+                                  }}
+                                  className="h-8 text-xs font-bold text-destructive hover:bg-destructive/10 border border-destructive/20"
+                                >
+                                  CANCELAR
+                                </GhostButton>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </SectionCard>
                   )}
                 </div>
@@ -4458,9 +4731,92 @@ function EventoInterna() {
         compiledVariables={compiledVariables}
         onConfirmSend={async (finalCleanHtml) => {
           setShowContractPreviewModal(false);
+          if (activeAddendumForReview) {
+            try {
+              toast.info("Enviando Termo Aditivo para Assinafy...");
+              await contractAddendumService.dispatchAddendumToAssinafy(
+                activeAddendumForReview.id,
+                convertHtmlToPdf,
+              );
+              toast.success("Termo Aditivo enviado com sucesso para assinatura na Assinafy!");
+              setActiveAddendumForReview(null);
+              if (realContract?.id) {
+                await fetchAddendumsAndEvaluate(realContract.id, currentBudget);
+              }
+            } catch (err: any) {
+              toast.error(err.message || "Erro ao enviar Termo Aditivo.");
+            }
+            return;
+          }
           await handleDispatchSignature(finalCleanHtml);
         }}
       />
+
+      {/* MODAL DE REVISÃO E COMPARAÇÃO DE ALTERAÇÕES DO ADITIVO (DE -> PARA) */}
+      <AddendumDiffPreviewModal
+        isOpen={showAddendumDiffModal}
+        onClose={() => setShowAddendumDiffModal(false)}
+        comparison={addendumComparison}
+        addendumNumber={addendumPendingNumber}
+        compiledHtml={compiledContractText}
+        isLoading={isGeneratingAddendum}
+        onConfirmGenerate={handleConfirmGenerateAddendum}
+      />
+
+      {/* MODAL DE RESOLUÇÃO DE PROPOSTA PARA CONTRATO LEGADO */}
+      <Dialog open={legacySelectionModalOpen} onOpenChange={setLegacySelectionModalOpen}>
+        <DialogContent className="max-w-md bg-card text-card-foreground">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">Vínculo de Contrato Legado</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            <p className="text-muted-foreground">
+              Este contrato foi assinado antes do registro automático da versão de proposta.
+              Para determinar o que mudou, selecione qual proposta originou o contrato assinado:
+            </p>
+            <div className="space-y-2">
+              {legacyAvailableVersions.map((v) => (
+                <label
+                  key={v.id}
+                  className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${selectedLegacyBudgetId === v.id ? "bg-primary/10 border-primary" : "bg-muted/20 border-border hover:bg-muted/40"}`}
+                >
+                  <div>
+                    <div className="font-bold text-sm">Proposta Versão {v.version_number}</div>
+                    <div className="text-muted-foreground text-[11px]">
+                      {new Date(v.created_at).toLocaleDateString("pt-BR")} —{" "}
+                      {new Intl.NumberFormat("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      }).format(v.final_budget_value || 0)}
+                    </div>
+                  </div>
+                  <input
+                    type="radio"
+                    name="legacyVersion"
+                    checked={selectedLegacyBudgetId === v.id}
+                    onChange={() => setSelectedLegacyBudgetId(v.id)}
+                    className="h-4 w-4 text-primary"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLegacySelectionModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!selectedLegacyBudgetId}
+              onClick={async () => {
+                setLegacySelectionModalOpen(false);
+                await handleOpenAddendumFlow();
+              }}
+            >
+              Confirmar Vínculo e Continuar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

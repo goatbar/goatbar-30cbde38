@@ -1761,8 +1761,105 @@ export type Database = {
         }
         Relationships: []
       }
+      contract_addendums: {
+        Row: {
+          addendum_date: string
+          addendum_number: number
+          base_budget_version_id: string | null
+          cancelled_at: string | null
+          contract_id: string
+          contractant_snapshot: Json
+          contracted_snapshot: Json
+          created_at: string
+          current_snapshot: Json
+          event_id: string
+          external_assignment_id: string | null
+          external_document_id: string | null
+          financial_snapshot: Json
+          fully_signed_at: string | null
+          generated_file_url: string | null
+          generated_html: string | null
+          id: string
+          original_contract_date: string
+          previous_snapshot: Json
+          sent_for_signature_at: string | null
+          signed_file_url: string | null
+          status: string
+          updated_at: string
+          updated_budget_version_id: string | null
+        }
+        Insert: {
+          addendum_date?: string
+          addendum_number?: number
+          base_budget_version_id?: string | null
+          cancelled_at?: string | null
+          contract_id: string
+          contractant_snapshot?: Json
+          contracted_snapshot?: Json
+          created_at?: string
+          current_snapshot?: Json
+          event_id: string
+          external_assignment_id?: string | null
+          external_document_id?: string | null
+          financial_snapshot?: Json
+          fully_signed_at?: string | null
+          generated_file_url?: string | null
+          generated_html?: string | null
+          id?: string
+          original_contract_date: string
+          previous_snapshot?: Json
+          sent_for_signature_at?: string | null
+          signed_file_url?: string | null
+          status?: string
+          updated_at?: string
+          updated_budget_version_id?: string | null
+        }
+        Update: {
+          addendum_date?: string
+          addendum_number?: number
+          base_budget_version_id?: string | null
+          cancelled_at?: string | null
+          contract_id?: string
+          contractant_snapshot?: Json
+          contracted_snapshot?: Json
+          created_at?: string
+          current_snapshot?: Json
+          event_id?: string
+          external_assignment_id?: string | null
+          external_document_id?: string | null
+          financial_snapshot?: Json
+          fully_signed_at?: string | null
+          generated_file_url?: string | null
+          generated_html?: string | null
+          id?: string
+          original_contract_date?: string
+          previous_snapshot?: Json
+          sent_for_signature_at?: string | null
+          signed_file_url?: string | null
+          status?: string
+          updated_at?: string
+          updated_budget_version_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_addendums_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "event_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_addendums_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_contracts: {
         Row: {
+          budget_version_id: string | null
           created_at: string | null
           event_id: string
           external_id: string | null
@@ -1785,6 +1882,7 @@ export type Database = {
           version: number | null
         }
         Insert: {
+          budget_version_id?: string | null
           created_at?: string | null
           event_id: string
           external_id?: string | null
@@ -1807,6 +1905,7 @@ export type Database = {
           version?: number | null
         }
         Update: {
+          budget_version_id?: string | null
           created_at?: string | null
           event_id?: string
           external_id?: string | null

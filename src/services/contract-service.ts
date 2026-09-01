@@ -489,12 +489,20 @@ export const eventContractsService = {
     signerId: string,
     customContent?: string,
   ) {
-    const { data, error } = await supabase
+    const { data: currentBudget } = await supabase
+      .from("event_budget_versions")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("is_current", true)
+      .maybeSingle();
+
+    const { data, error } = await (supabase as any)
       .from("event_contracts")
       .insert({
         event_id: eventId,
         template_id: templateId,
         signer_id: signerId,
+        budget_version_id: currentBudget?.id || null,
       })
       .select()
       .single();
@@ -503,19 +511,31 @@ export const eventContractsService = {
   },
 
   async updateDraftContract(contractId: string, templateId: string, signerId: string) {
-    const { data: current } = await supabase
+    const { data: current } = await (supabase as any)
       .from("event_contracts")
-      .select("version")
+      .select("version, event_id, budget_version_id")
       .eq("id", contractId)
       .single();
     const nextVersion = current ? (current.version || 1) + 1 : 2;
 
-    const { data, error } = await supabase
+    let budgetVersionId = current?.budget_version_id;
+    if (!budgetVersionId && current?.event_id) {
+      const { data: currentBudget } = await supabase
+        .from("event_budget_versions")
+        .select("id")
+        .eq("event_id", current.event_id)
+        .eq("is_current", true)
+        .maybeSingle();
+      budgetVersionId = currentBudget?.id || null;
+    }
+
+    const { data, error } = await (supabase as any)
       .from("event_contracts")
       .update({
         template_id: templateId,
         signer_id: signerId,
         version: nextVersion,
+        budget_version_id: budgetVersionId,
         generated_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
