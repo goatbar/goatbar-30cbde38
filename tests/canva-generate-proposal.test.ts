@@ -209,20 +209,20 @@ describe("resolução dos drinks versionados", () => {
     });
   });
 
-  it("preserva ordem e duplicatas, retorna nomes em vez de IDs e mantém BEBIDAS independente", async () => {
+  it("preserva ordem sem duplicar drinks e mantém BEBIDAS independente", async () => {
     const names = await resolveSelectedDrinks(
       { ids: ["drink-2", "drink-1", "drink-2"] },
       "version-1",
       successfulQuery,
     );
-    expect(names).toEqual(["Fitzgerald", "Moscow Mule", "Fitzgerald"]);
+    expect(names).toEqual(["Fitzgerald", "Moscow Mule"]);
     const data = buildAutofillData(
       [mapping("DRINKS", "package.drinks_list"), mapping("BEBIDAS", "budget.beverages")],
       ["DRINKS", "BEBIDAS"],
       event,
       { ...budget, selected_drinks: names },
     );
-    expect(data.DRINKS.text).toBe("• Fitzgerald\n• Moscow Mule\n• Fitzgerald");
+    expect(data.DRINKS.text).toBe("• Fitzgerald\n• Moscow Mule");
     expect(data.DRINKS.text).not.toContain("drink-");
     expect(data.DRINKS.text).not.toContain("[object Object]");
     expect(data.BEBIDAS.text).toBe("• Água\n• Refrigerante");
