@@ -58,7 +58,7 @@ export interface ProposalData {
   eventDate: string;
   eventTime?: string;
   clientName: string;
-  eventTypeLabel: string; // ex: "Casamento", "Aniversário de 30 Anos", "Confraternização"
+  eventTypeLabel: string; // ex: "Casamento", "Aniversário de 30 Anos", "Comemoração"
   
   // Drinks & Experiências
   selectedDrinks: string[];
