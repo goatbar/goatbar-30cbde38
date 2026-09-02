@@ -64,7 +64,7 @@ describe("signature PDF dispatch", () => {
     expect(documentHtml).toContain("background:#ffffff");
     expect(documentHtml).toContain("color:#000000");
     expect(documentHtml).toContain("color-scheme:light");
-    expect(documentHtml).toContain("width: 164mm");
+    expect(documentHtml).toContain("width: 182mm");
     expect(documentHtml).toContain("page-break-after: always");
     expect(documentHtml).toContain("<strong>essencial</strong>");
     expect(documentHtml).toContain("<p>Cláusula");
@@ -76,21 +76,21 @@ describe("signature PDF dispatch", () => {
     expect(documentHtml).toContain("Contrato &amp; revisão");
   });
 
-  it("adds legal-document hierarchy without changing compiled content", () => {
-    const source = `<p>CONTRATO DE PRESTAÇÃO DE SERVIÇOS</p>
-      <p>CONTRATANTE:</p><p>Nome: Mariana Campos Moreira</p>
-      <p>CLÁUSULA 1 – DO OBJETO DO CONTRATO</p>
-      <p>1.1. O presente contrato tem por objeto...</p>
-      <p>a) Montagem do bar no local do evento;</p>`;
+  it("uses the approved preview HTML and its canonical styles without PDF reformatting", () => {
+    const source = `<h1 style="font-family: Georgia; font-size: 19px; text-align: center; margin: 3px 0 17px">CONTRATO</h1>
+      <p style="font-family: 'Times New Roman'; font-size: 12pt; font-weight: 400; font-style: italic; text-decoration: underline; text-align: right; margin: 8px 0 13px; line-height: 1.8; padding-left: 21px; text-indent: 14px">CONTRATANTE: edição manual<br>segunda linha</p>
+      <p style="text-align: left">CLÁUSULA 1 – DO OBJETO</p>
+      <ol start="4" style="margin-left: 18px"><li><strong>Item preservado</strong></li></ol>`;
 
     const documentHtml = buildContractPdfDocument(source, "Contrato");
 
-    expect(documentHtml).toContain('class="contract-title"');
-    expect(documentHtml).toContain('class="contract-party-heading"');
-    expect(documentHtml).toContain('class="contract-clause-heading"');
-    expect(documentHtml).toContain('class="contract-alpha-item"');
-    expect(documentHtml).toContain("Nome: Mariana Campos Moreira");
-    expect(documentHtml).toContain("1.1. O presente contrato tem por objeto...");
+    expect(documentHtml).toContain(`<main id="contract-pdf-document" class="docx-canvas-paper">${source}</main>`);
+    expect(documentHtml).toContain(".docx-canvas-paper p {");
+    expect(documentHtml).toContain("font-size: 13px");
+    expect(documentHtml).toContain("line-height: 1.6");
+    expect(documentHtml).not.toMatch(/contract-(?:title|party-heading|clause-heading|alpha-item)/);
+    expect(documentHtml).not.toContain("font-family: Arial");
+    expect(documentHtml).not.toContain("text-align: justify !important");
   });
 
   it("does not call assinafy-create-doc when PDF conversion fails", async () => {

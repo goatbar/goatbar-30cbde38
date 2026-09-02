@@ -1,6 +1,7 @@
-import { prepareContractExportHtml } from "@/utils/prepare-contract-export-html";
-import { formatContractDocumentHtml } from "@/utils/format-contract-document-html";
-import { CONTRACT_PDF_DOCUMENT_CSS } from "@/lib/contract-document-styles";
+import {
+  CONTRACT_DOCUMENT_CSS,
+  CONTRACT_PDF_DOCUMENT_CSS,
+} from "@/lib/contract-document-styles";
 import html2pdf from "html2pdf.js";
 
 export interface PdfArtifacts {
@@ -24,11 +25,10 @@ function escapeHtmlText(value: string): string {
 
 /** Builds the exact, self-contained UTF-8 document captured for Assinafy. */
 export function buildContractPdfDocument(htmlContent: string, title: string): string {
-  const cleanHtml = formatContractDocumentHtml(prepareContractExportHtml(htmlContent));
   return `<!DOCTYPE html>
 <html lang="pt-BR" style="background:#ffffff;color:#000000;color-scheme:light">
-<head><meta charset="UTF-8"><meta name="color-scheme" content="light only"><title>${escapeHtmlText(title)}</title><style>${CONTRACT_PDF_DOCUMENT_CSS}</style></head>
-<body style="margin:0;background:#ffffff!important;color:#000000!important"><main id="contract-pdf-document" style="box-sizing:border-box;width:164mm;min-height:251mm;background:#ffffff!important;color:#000000!important;isolation:isolate">${cleanHtml}</main></body>
+<head><meta charset="UTF-8"><meta name="color-scheme" content="light only"><title>${escapeHtmlText(title)}</title><style>${CONTRACT_DOCUMENT_CSS}\n${CONTRACT_PDF_DOCUMENT_CSS}</style></head>
+<body><main id="contract-pdf-document" class="docx-canvas-paper">${htmlContent}</main></body>
 </html>`;
 }
 
@@ -50,9 +50,9 @@ export async function convertHtmlToPdf(
   iframe.style.position = "absolute";
   iframe.style.left = "-9999px";
   iframe.style.top = "0";
-  // A4 at 96 dpi = 794×1123px. Content area with 23mm margins:
-  // width:  210mm - 2×23mm = 164mm ≈ 620px
-  // height: 297mm - 2×23mm = 251mm ≈ 950px
+  // A4 at 96 dpi = 794×1123px.
+  // The preview's desktop paper uses 56px of padding (about 14mm) on each
+  // side. html2pdf applies that same whitespace as the physical A4 margin.
   // The iframe captures the full A4 page; html2pdf adds the @page margins.
   iframe.style.width = "794px";
   iframe.style.height = "1123px";
@@ -71,12 +71,12 @@ export async function convertHtmlToPdf(
 
   try {
     const opt = {
-      margin: [23, 23, 23, 23] as [number, number, number, number],
+      margin: [14, 14, 14, 14] as [number, number, number, number],
       filename: `${title}.pdf`,
       image: { type: "jpeg" as const, quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: "#ffffff" },
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" as const },
-      pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+      pagebreak: { mode: ["css", "legacy"] },
     };
 
     const targetElement = iframeDoc.getElementById("contract-pdf-document");
