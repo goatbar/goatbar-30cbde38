@@ -170,20 +170,68 @@ export const CONTRACT_DOCUMENT_CSS = `
 `;
 
 /**
- * Export-only page/container rules. All document typography and element
- * presentation deliberately comes from CONTRACT_DOCUMENT_CSS above, exactly
- * as it does in the review preview.
+ * Export-only page/container rules.
+ *
+ * This stylesheet is deliberately appended after the canvas stylesheet in the
+ * standalone iframe used by html2pdf.  DOCX/Mammoth HTML can contain inline
+ * presentation values (and the application may be in dark mode), neither of
+ * which may make a legal document translucent or light-on-light when printed.
+ * The targeted text-element list preserves the document structure and its
+ * spacing/typography while establishing the non-negotiable print contrast
+ * invariant.  Do not replace it with a universal selector: non-text elements,
+ * such as signature images, must retain their own presentation.
  */
 export const CONTRACT_PDF_DOCUMENT_CSS = `
   @page { size: A4; margin: 14mm; }
-  html, body { margin: 0; padding: 0; background: #ffffff; color-scheme: light only; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #ffffff !important;
+    color: #111111 !important;
+    color-scheme: light only !important;
+    opacity: 1 !important;
+    filter: none !important;
+    mix-blend-mode: normal !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   #contract-pdf-document {
     box-sizing: border-box;
     width: 182mm;
     min-height: 269mm;
     margin: 0;
     padding: 0;
-    background: #ffffff;
+    background: #ffffff !important;
+    color: #111111 !important;
+    color-scheme: light only !important;
+    opacity: 1 !important;
+    filter: none !important;
+    mix-blend-mode: normal !important;
+    isolation: isolate;
+  }
+
+  /*
+   * Mammoth can preserve a light inline color/alpha from a DOCX run.  Limit
+   * this reset to text-bearing elements so the PDF is readable without
+   * changing document structure, margins, alignment, or embedded imagery.
+   */
+  #contract-pdf-document :is(
+    p, span, div, li, dt, dd, blockquote, pre, code, caption, figcaption,
+    td, th, a, abbr, b, strong, em, i, u, s, small, sub, sup, label
+  ) {
+    color: #111111 !important;
+    opacity: 1 !important;
+    filter: none !important;
+    mix-blend-mode: normal !important;
+    color-scheme: light only !important;
+  }
+
+  #contract-pdf-document :is(h1, h2, h3, h4, h5, h6) {
+    color: #020617 !important;
+    opacity: 1 !important;
+    filter: none !important;
+    mix-blend-mode: normal !important;
+    color-scheme: light only !important;
   }
 `;
 

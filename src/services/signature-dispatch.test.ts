@@ -76,6 +76,24 @@ describe("signature PDF dispatch", () => {
     expect(documentHtml).toContain("Contrato &amp; revisão");
   });
 
+  it("establishes explicit dark-text print invariants for DOCX and theme styles", () => {
+    const source =
+      '<h2 style="color: rgba(255, 255, 255, 0.08); opacity: .08">CONTRATANTE</h2><p style="color: #f8fafc; filter: opacity(.1); mix-blend-mode: screen">Identificação preenchida</p>';
+    const documentHtml = buildContractPdfDocument(source, "Contrato");
+
+    // The compiled legal content remains byte-for-byte in the shell; only the
+    // isolated PDF stylesheet restores safe rendering properties.
+    expect(documentHtml).toContain(source);
+    expect(documentHtml).toContain("color: #111111 !important");
+    expect(documentHtml).toContain("color: #020617 !important");
+    expect(documentHtml).toContain("opacity: 1 !important");
+    expect(documentHtml).toContain("filter: none !important");
+    expect(documentHtml).toContain("mix-blend-mode: normal !important");
+    expect(documentHtml).toContain("color-scheme: light only !important");
+    expect(documentHtml).toContain("p, span, div, li");
+    expect(documentHtml).not.toContain("#contract-pdf-document * {");
+  });
+
   it("uses the approved preview HTML and its canonical styles without PDF reformatting", () => {
     const source = `<h1 style="font-family: Georgia; font-size: 19px; text-align: center; margin: 3px 0 17px">CONTRATO</h1>
       <p style="font-family: 'Times New Roman'; font-size: 12pt; font-weight: 400; font-style: italic; text-decoration: underline; text-align: right; margin: 8px 0 13px; line-height: 1.8; padding-left: 21px; text-indent: 14px">CONTRATANTE: edição manual<br>segunda linha</p>
@@ -116,6 +134,28 @@ describe("signature PDF dispatch", () => {
     expect(uploaded).toEqual(Buffer.from(source));
     expect(pdf.blob.type).toBe(CONTRACT_PDF_MIME_TYPE);
     expect(pdf.hash).toBe(createHash("sha256").update(uploaded).digest("hex"));
+  });
+
+  it("delivers the same immutable PDF bytes and hash to Assinafy", async () => {
+    const source = new TextEncoder().encode("%PDF-1.7\nexact upload bytes");
+    const pdf = await createPdfArtifacts(source.buffer);
+    const createRequest = vi.fn().mockResolvedValue({ success: true });
+
+    await convertAndDispatchSignature({
+      html: "<p>Contrato</p>",
+      title: "Contrato",
+      contractId: "contract-1",
+      convert: vi.fn().mockResolvedValue(pdf),
+      provider: { createRequest },
+    });
+
+    expect(createRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contractId: "contract-1",
+        pdfBase64: Buffer.from(source).toString("base64"),
+        pdfHash: createHash("sha256").update(source).digest("hex"),
+      }),
+    );
   });
 
   it("rejects bytes falsely declared as PDF", async () => {
