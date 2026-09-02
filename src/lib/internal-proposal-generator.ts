@@ -24,32 +24,47 @@ export async function loadProposalContext(
   eventId: string,
   budgetVersionId: string,
 ): Promise<ProposalGenerationContext> {
-  const { data: event, error: eventError } = await supabase
-    .from("events")
-    .select("*")
-    .eq("id", eventId)
-    .single();
-
-  if (eventError || !event) {
-    throw new Error("Evento não encontrado para geração da proposta.");
-  }
-
+  // The budget version is the durable link between a public request and the
+  // event created by the pipeline.  In particular, do not trust a route value
+  // (which may still contain the request/link id) as the database event id.
   const { data: budget, error: budgetError } = await supabase
     .from("event_budget_versions")
     .select("*")
     .eq("id", budgetVersionId)
-    .eq("event_id", eventId)
     .single();
 
   if (budgetError || !budget) {
     throw new Error("Versão do orçamento não encontrada.");
   }
 
+  const canonicalEventId = budget.event_id;
+  if (!canonicalEventId) {
+    throw new Error("A versão do orçamento não está vinculada a um evento.");
+  }
+
+  if (canonicalEventId !== eventId) {
+    console.warn("[loadProposalContext] Corrigindo event_id pelo vínculo da versão", {
+      received_event_id: eventId,
+      canonical_event_id: canonicalEventId,
+      budget_version_id: budgetVersionId,
+    });
+  }
+
+  const { data: event, error: eventError } = await supabase
+    .from("events")
+    .select("*")
+    .eq("id", canonicalEventId)
+    .single();
+
+  if (eventError || !event) {
+    throw new Error("Evento não encontrado para geração da proposta.");
+  }
+
   // Hidrata nomes de drinks a partir dos IDs
   let resolvedDrinkNames: string[] = [];
   try {
     const hydrated = await hydrateBudgetDrinks(budget.selected_drinks, supabase as any, {
-      event_id: eventId,
+      event_id: canonicalEventId,
       budget_version_id: budgetVersionId,
     });
     const ids = Array.isArray((budget.selected_drinks as any)?.ids)
@@ -168,6 +183,7 @@ export async function generateAndPersistProposal(params: {
   renderResult: ProposalRenderResult;
 }> {
   const context = await loadProposalContext(params.eventId, params.budgetVersionId);
+  const canonicalEventId = String(context.budget.event_id);
 
   const canonicalData = resolveCanonicalProposalData({
     event: context.event,
@@ -189,7 +205,7 @@ export async function generateAndPersistProposal(params: {
   const renderResult = await ProposalPdfRenderer.render(template, canonicalData);
   const filename = buildProposalFilename(context.event.event_name);
   const proposalId = crypto.randomUUID();
-  const storagePath = `events/${params.eventId}/budgets/${params.budgetVersionId}/proposals/${proposalId}/${filename}`;
+  const storagePath = `events/${canonicalEventId}/budgets/${params.budgetVersionId}/proposals/${proposalId}/${filename}`;
 
   // Upload para o Supabase Storage
   const { error: uploadError } = await supabase.storage
@@ -210,7 +226,7 @@ export async function generateAndPersistProposal(params: {
 
   const proposalRecord = {
     id: proposalId,
-    event_id: params.eventId,
+    event_id: canonicalEventId,
     budget_id: params.budgetVersionId,
     template_id: null, // Mantém null se for template de arquivo local ou UUID de template DB
     proposal_data: {
@@ -247,7 +263,7 @@ export async function generateAndPersistProposal(params: {
   await supabase
     .from("generated_proposals")
     .update({ status: "superseded", updated_at: new Date().toISOString() })
-    .eq("event_id", params.eventId)
+    .eq("event_id", canonicalEventId)
     .neq("id", proposalId)
     .eq("status", "ready");
 

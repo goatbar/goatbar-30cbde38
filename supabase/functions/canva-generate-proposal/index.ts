@@ -54,10 +54,37 @@ serve(async (req: Request) => {
         "Evento e versão do orçamento são obrigatórios.",
       );
 
+    // Resolve the event through the persisted budget version. The public
+    // request/link id is not necessarily the id of the event created by the
+    // ingestion pipeline, while event_budget_versions.event_id is canonical.
+    const { data: budget, error: budgetError } = await supabaseAdmin
+      .from("event_budget_versions")
+      .select("*")
+      .eq("id", budgetVersionId)
+      .single();
+    if (budgetError || !budget)
+      throw new ProposalGenerationError(
+        "mapping_incomplete",
+        "A versão do orçamento selecionada não foi encontrada.",
+        404,
+      );
+    const canonicalEventId = budget.event_id;
+    if (!canonicalEventId)
+      throw new ProposalGenerationError(
+        "mapping_incomplete",
+        "A versão do orçamento não está vinculada a um evento.",
+        409,
+      );
+    if (canonicalEventId !== eventId)
+      console.warn("[canva-generate-proposal] event_id corrigido pelo orçamento", {
+        received_event_id: eventId,
+        canonical_event_id: canonicalEventId,
+        budget_version_id: budgetVersionId,
+      });
     const { data: event, error: eventError } = await supabaseAdmin
       .from("events")
       .select("*")
-      .eq("id", eventId)
+      .eq("id", canonicalEventId)
       .single();
     if (eventError || !event)
       throw new ProposalGenerationError(
@@ -91,26 +118,14 @@ serve(async (req: Request) => {
         "O modelo não possui Brand Template ID configurado.",
       );
 
-    const { data: budget, error: budgetError } = await supabaseAdmin
-      .from("event_budget_versions")
-      .select("*")
-      .eq("id", budgetVersionId)
-      .eq("event_id", eventId)
-      .single();
-    if (budgetError || !budget)
-      throw new ProposalGenerationError(
-        "mapping_incomplete",
-        "A versão do orçamento selecionada não foi encontrada.",
-        404,
-      );
     const { resolvedDrinkNames, normalized } = await hydrateBudgetDrinks(
       budget.selected_drinks,
       supabaseAdmin,
-      { event_id: eventId, budget_version_id: budgetVersionId },
+      { event_id: canonicalEventId, budget_version_id: budgetVersionId },
     );
     console.log("[canva-generate-proposal] hydrate_selected_drinks", {
       stage: "hydrate_selected_drinks",
-      event_id: eventId,
+      event_id: canonicalEventId,
       budget_version_id: budgetVersionId,
       selected_drinks_type: normalized.rawType,
       selected_drinks_is_array: normalized.isArray,
@@ -193,7 +208,7 @@ serve(async (req: Request) => {
           : mapping.static_value;
       console.log("[canva-generate-proposal] mapping audit", {
         stage: "resolve_mappings",
-        event_id: eventId,
+        event_id: canonicalEventId,
         budget_version_id: budgetVersionId,
         template_id: template.id,
         mapping_key: mapping.canva_field_key,
@@ -207,7 +222,7 @@ serve(async (req: Request) => {
     }
     const autofillData = buildAutofillData(mappings || [], datasetKeys, event, resolvedBudget);
     console.info("[canva-generate-proposal][payload-audit]", {
-      event_id: eventId,
+      event_id: canonicalEventId,
       budget_version_id: budgetVersionId,
       fields: auditAutofillPayload(mappings || [], autofillData),
     });
@@ -245,7 +260,12 @@ serve(async (req: Request) => {
 
     const proposalId = crypto.randomUUID();
     const filename = buildProposalFilename(event.event_name);
-    const storagePath = buildDeterministicStoragePath(eventId, budget.id, proposalId, filename);
+    const storagePath = buildDeterministicStoragePath(
+      canonicalEventId,
+      budget.id,
+      proposalId,
+      filename,
+    );
 
     const { error: storageError } = await uploadPdfToStorage(
       supabaseAdmin.storage,
@@ -285,7 +305,7 @@ serve(async (req: Request) => {
 
     const record = {
       id: proposalId,
-      event_id: eventId,
+      event_id: canonicalEventId,
       budget_id: budget.id,
       template_id: template.id,
       proposal_data: proposalData,
@@ -321,7 +341,7 @@ serve(async (req: Request) => {
     await supabaseAdmin
       .from("generated_proposals")
       .update({ status: "superseded", updated_at: new Date().toISOString() })
-      .eq("event_id", eventId)
+      .eq("event_id", canonicalEventId)
       .neq("id", proposalId)
       .eq("status", "ready");
 
