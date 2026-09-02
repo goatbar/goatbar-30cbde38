@@ -101,9 +101,13 @@ export function selectProposalTemplateForEvent(
   _explicitTemplateId?: string,
 ): ProposalTemplateDefinition {
   const resolvedType = normalizeProposalEventType(eventType);
+  if (resolvedType === "aniversario") {
+    const birthday = ProposalTemplateRegistry.getTemplate("goatbar-birthday");
+    if (birthday) return birthday;
+  }
   if (resolvedType === "comemoracao") {
-    const despedida = ProposalTemplateRegistry.getTemplate("goatbar-despedida");
-    if (despedida) return despedida;
+    const celebration = ProposalTemplateRegistry.getTemplate("goatbar-celebration");
+    if (celebration) return celebration;
   }
   const standard = ProposalTemplateRegistry.getTemplate("goatbar-commercial");
   if (!standard) {
