@@ -55,6 +55,7 @@ import {
   generateAndPersistProposal,
   generateProposalPreview,
   loadProposalContext,
+  selectProposalTemplateForEvent,
 } from "./internal-proposal-generator";
 
 function savedVersion(customization?: "monogram" | "rice_paper") {
@@ -115,5 +116,30 @@ describe("proposal generation identity and drink customization regression", () =
       "Stamping Passion (com papel de arroz)",
     ]);
     expect(result.storagePath).toContain("events/event-created-by-pipeline/budgets/budget-v1/");
+  });
+});
+
+describe("capas nativas por tipo de evento", () => {
+  it.each([
+    ["Casamento", "goatbar-commercial"],
+    ["Aniversário", "goatbar-birthday"],
+    ["Comemoração", "goatbar-celebration"],
+    ["Corporativo", "goatbar-celebration"],
+    ["Despedida de Solteira", "goatbar-celebration"],
+  ])("seleciona a capa de %s", (eventType, expectedTemplateId) => {
+    expect(selectProposalTemplateForEvent(eventType).id).toBe(expectedTemplateId);
+  });
+
+  it("mantém somente nome e datas como slots dinâmicos nas capas não matrimoniais", () => {
+    for (const eventType of ["Aniversário", "Comemoração", "Corporativo"]) {
+      const cover = selectProposalTemplateForEvent(eventType).pages[0];
+      expect(cover.slots.map((slot) => slot.fieldKey)).toEqual([
+        "dataOrcamento",
+        "nomeEvento",
+        "dataEvento",
+      ]);
+      expect(cover.slots.find((slot) => slot.fieldKey === "nomeEvento")?.type).toBe("arc");
+      expect(cover.slots.find((slot) => slot.fieldKey === "dataEvento")?.type).toBe("arc");
+    }
   });
 });
