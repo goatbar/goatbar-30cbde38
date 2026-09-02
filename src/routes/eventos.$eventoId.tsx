@@ -309,14 +309,8 @@ function EventoInterna() {
     if (canvaGeneration.status === "loading" && canvaGeneration.open) {
       return; // prevent duplicate clicks
     }
-    const evType = evento?.event_type?.toLowerCase() || "";
-    const mappedType: "casamento" | "aniversario" | "comemoracao" = evType.includes("casamento")
-      ? "casamento"
-      : evType.includes("aniversario") || evType.includes("aniversário")
-        ? "aniversario"
-        : "comemoracao";
     try {
-      const template = await proposalTemplatesService.getDefaultTemplate(mappedType);
+      const template = await proposalTemplatesService.resolveTemplateForEvent(evento?.event_type);
       setProposalTemplate(template);
       if (!template) {
         throw new Error(

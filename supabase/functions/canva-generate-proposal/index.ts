@@ -19,6 +19,7 @@ import {
   uploadPdfToStorage,
   validatePdfBytes,
 } from "./logic.ts";
+import { resolveProposalTemplate } from "../../../src/lib/proposal-template-resolver.ts";
 import { resolveProposalField } from "../../../src/lib/proposal-field-resolver.ts";
 import { buildProposalFilename } from "../../../src/lib/proposal-filename.ts";
 
@@ -66,17 +67,15 @@ serve(async (req: Request) => {
         404,
       );
     const eventType = normalizeProposalEventType(event.event_type || "");
-    const { data: template, error: templateError } = await supabaseAdmin
+    const { data: activeTemplates, error: templateError } = await supabaseAdmin
       .from("proposal_templates")
       .select("*")
-      .eq("event_type", eventType)
-      .eq("is_active", true)
-      .eq("is_default", true)
-      .maybeSingle();
+      .eq("is_active", true);
+    const template = resolveProposalTemplate(event.event_type, activeTemplates || []);
     if (templateError || !template)
       throw new ProposalGenerationError(
         "proposal_template_not_found",
-        "Nenhum modelo ativo e padrão foi encontrado para este tipo de evento.",
+        `Nenhum modelo ativo foi encontrado para o tipo ${eventType}.`,
         404,
       );
     if (template.provider !== "canva")

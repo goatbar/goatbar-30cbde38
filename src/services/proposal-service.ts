@@ -6,6 +6,10 @@ import type { ProposalTemplateField } from "@/lib/proposal-template-mapper";
 import { isValidSourceFieldKey } from "@/lib/proposal-field-catalog";
 import { canonicalizeProposalSourceKey, formatDateDot, formatBulletList } from "@/lib/proposal-field-resolver";
 import { buildProposalFilename } from "@/lib/proposal-filename";
+import {
+  INTERNAL_PROPOSAL_TEMPLATE_IDS,
+  resolveProposalTemplate,
+} from "@/lib/proposal-template-resolver";
 
 export interface ProposalTemplate {
   id: string;
@@ -97,7 +101,7 @@ export const proposalTemplatesService = {
     // Modelos nativos da engine interna Goat Bar
     const internalNativeTemplates: ProposalTemplate[] = [
       {
-        id: "goatbar-commercial-casamento",
+        id: INTERNAL_PROPOSAL_TEMPLATE_IDS.casamento,
         name: "MODELO PROPOSTA COMERCIAL CASAMENTOS (GOAT BAR)",
         event_type: "casamento",
         provider: "internal",
@@ -107,7 +111,7 @@ export const proposalTemplatesService = {
         created_at: new Date().toISOString(),
       },
       {
-        id: "goatbar-commercial-aniversario",
+        id: INTERNAL_PROPOSAL_TEMPLATE_IDS.aniversario,
         name: "MODELO PROPOSTA CELEBRAÇÃO",
         event_type: "aniversario",
         provider: "internal",
@@ -117,7 +121,7 @@ export const proposalTemplatesService = {
         created_at: new Date().toISOString(),
       },
       {
-        id: "goatbar-despedida-solteira",
+        id: INTERNAL_PROPOSAL_TEMPLATE_IDS.comemoracao,
         name: "MODELO PROPOSTA DESPEDIDA DE SOLTEIRA (GOAT BAR)",
         event_type: "comemoracao",
         provider: "internal",
@@ -168,6 +172,10 @@ export const proposalTemplatesService = {
       .maybeSingle();
     if (error) throw error;
     return data as ProposalTemplate | null;
+  },
+
+  async resolveTemplateForEvent(eventType: string | null | undefined) {
+    return resolveProposalTemplate(eventType, await this.listTemplates());
   },
 
   async createTemplate(payload: Omit<ProposalTemplate, "id">) {
