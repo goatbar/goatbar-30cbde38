@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeEventName } from "@/lib/event-name";
 import { googleCalendarService } from "./google-calendar/google-calendar-service";
 import { createBudgetEventSnapshot } from "@/lib/budget-version-snapshot";
 import { logSupabaseError } from "@/lib/supabase-error";
@@ -361,9 +362,13 @@ export const eventBudgetService = {
   async createEvent(
     payload: Partial<Event> & Pick<Event, "client_name" | "date" | "event_type" | "guests">,
   ) {
+    const normalizedPayload = {
+      ...payload,
+      event_name: normalizeEventName(payload.event_name, payload.event_type),
+    };
     const { data, error } = await supabase
       .from("events")
-      .insert(payload as any)
+      .insert(normalizedPayload as any)
       .select()
       .single();
     if (error) throw error;
@@ -371,9 +376,16 @@ export const eventBudgetService = {
   },
 
   async updateEvent(id: string, payload: Partial<Event>) {
+    const normalizedPayload = {
+      ...payload,
+      event_name:
+        payload.event_name === undefined
+          ? undefined
+          : normalizeEventName(payload.event_name, payload.event_type),
+    };
     const { data, error } = await supabase
       .from("events")
-      .update({ ...payload, updated_at: new Date().toISOString() } as any)
+      .update({ ...normalizedPayload, updated_at: new Date().toISOString() } as any)
       .eq("id", id)
       .select()
       .single();
