@@ -61,6 +61,13 @@ export interface ProposalPageDefinition {
     bebidasStartY: number;
     bebidasMaxHeight: number;
   };
+  /**
+   * Identifica uma composição reutilizável do renderer.  A composição é
+   * intencionalmente uma propriedade da página, e não do template: modelos
+   * diferentes podem compartilhar a mesma grade sem duplicar a lógica de
+   * desenho.
+   */
+  composition?: "commercial-values";
 }
 
 export interface ProposalOverflowConfig {

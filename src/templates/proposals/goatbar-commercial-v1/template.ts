@@ -226,6 +226,9 @@ export const GOATBAR_COMMERCIAL_V1_TEMPLATE: ProposalTemplateDefinition = {
     {
       pageNumber: 7,
       title: "Valores e condições",
+      // Esta grade limpa os placeholders do PDF-base antes de compor textos
+      // fixos e dados variáveis. Também é usada pela família de comemoração.
+      composition: "commercial-values",
       slots: [
         {
           id: "resumo-convidados",

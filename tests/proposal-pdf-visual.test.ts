@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { ProposalPdfRenderer } from "@/lib/pdf-engine/renderer";
 import { resolveCanonicalProposalData } from "@/lib/proposal-field-resolver";
 import { GOATBAR_COMMERCIAL_V1_TEMPLATE } from "@/templates/proposals/goatbar-commercial-v1/template";
+import { GOATBAR_DESPEDIDA_V1_TEMPLATE } from "@/templates/proposals/goatbar-despedida-v1/template";
 
 const sidneyLuciaContext = {
   event: {
@@ -138,5 +139,64 @@ describe("Proposta Comercial Goat Bar - regressão visual", () => {
         expect(slot.style.fontSize, slot.id).toBeGreaterThan(0);
       }
     }
-  });
+  }, 20_000);
+
+  it("audita a proposta real de comemoração em todas as páginas, sem duplicar a grade de valores", async () => {
+    const cleanTemplate = fs.readFileSync(
+      path.resolve("src/templates/proposals/goatbar-commercial-v1/clean-template.pdf"),
+    );
+    const template = {
+      ...GOATBAR_DESPEDIDA_V1_TEMPLATE,
+      basePdfPath: undefined,
+      basePdfBytes: new Uint8Array(cleanTemplate),
+    };
+    const canonical = resolveCanonicalProposalData({
+      ...sidneyLuciaContext,
+      event: {
+        ...sidneyLuciaContext.event,
+        event_name: "Comemoração da Marina",
+        event_type: "Comemoração",
+        date: "2026-10-24",
+        guests: 80,
+        duration_hours: 5,
+      },
+      budget: {
+        ...sidneyLuciaContext.budget,
+        beverages: ["Vodka Smirnoff", "Gin Gordons ou O'gin", "Espumante Brut"],
+        payment_terms: "30% na assinatura - Restante até dia 17.10.2026",
+      },
+    });
+    const result = await ProposalPdfRenderer.render(template, canonical);
+    const document = await pdfjs.getDocument({ data: result.pdfBytes.slice() }).promise;
+    const auditDirectory = path.resolve("scratch/comemoracao-visual-audit");
+
+    expect(document.numPages).toBe(8);
+    expect(template.pages[6].composition).toBe("commercial-values");
+
+    for (let pageNumber = 0; pageNumber < 8; pageNumber++) {
+      const page = await document.getPage(pageNumber + 1);
+      const text = (await page.getTextContent()).items.map((item: any) => item.str).join(" ");
+      const raster = mupdf.Document.openDocument(result.pdfBytes, "application/pdf")
+        .loadPage(pageNumber)
+        .toPixmap(mupdf.Matrix.scale(1, 1), mupdf.ColorSpace.DeviceRGB, false);
+
+      if (process.env.SAVE_PROPOSAL_VISUAL_AUDIT === "1") {
+        fs.mkdirSync(auditDirectory, { recursive: true });
+        fs.writeFileSync(path.join(auditDirectory, `pagina-${pageNumber + 1}.png`), raster.asPNG());
+      }
+
+      expect(raster.getWidth(), `página ${pageNumber + 1}`).toBe(1440);
+      expect(raster.getHeight(), `página ${pageNumber + 1}`).toBe(810);
+      if (pageNumber === 5) {
+        expect(text).toContain("Vodka Smirnoff");
+        expect(text).toContain("Gin Gordons ou O'gin");
+      }
+      if (pageNumber === 6) {
+        expect(text).toContain("Restante até dia 17.10.2026.");
+      }
+      // A auditoria de duplicação usa o PDF sem conteúdo-base em
+      // renderer.test.ts. Aqui o PDF-base preserva sua camada de texto, mesmo
+      // quando a composição a cobre visualmente.
+    }
+  }, 20_000);
 });

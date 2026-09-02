@@ -12,6 +12,8 @@ import {
   type CanonicalProposalData,
 } from "@/lib/proposal-field-resolver";
 import { PDFDocument } from "pdf-lib";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import { GOATBAR_DESPEDIDA_V1_TEMPLATE } from "@/templates/proposals/goatbar-despedida-v1/template";
 
 const mockContext = {
   event: {
@@ -179,6 +181,42 @@ describe("ProposalPdfRenderer & Engine", () => {
 
     await expect(ProposalPdfRenderer.render(template, canonicalData)).rejects.toThrow("HTTP 404");
     fetchSpy.mockRestore();
+  });
+
+  it("usa a mesma composição de valores para comemoração sem redesenhar os slots-base", async () => {
+    const canonicalData = {
+      ...resolveCanonicalProposalData({
+      ...mockContext,
+      event: { ...mockContext.event, event_type: "Comemoração", event_name: "Festa da Marina" },
+      budget: { ...mockContext.budget, payment_terms: "30% na assinatura - Restante até dia 17.10.2026" },
+      }),
+      dataFinalPagamento: "17.10.2026",
+    };
+    const baseDoc = await PDFDocument.create();
+    for (let page = 0; page < 8; page++) {
+      const pageRef = baseDoc.addPage([1440, 810]);
+      pageRef.drawRectangle({ x: 0, y: 0, width: 1440, height: 810 });
+    }
+    const template = {
+      ...GOATBAR_DESPEDIDA_V1_TEMPLATE,
+      basePdfPath: undefined,
+      basePdfBytes: await baseDoc.save(),
+      overflow: { ...GOATBAR_DESPEDIDA_V1_TEMPLATE.overflow!, enabled: false },
+    };
+
+    const result = await ProposalPdfRenderer.render(template, canonicalData);
+    const document = await pdfjs.getDocument({ data: result.pdfBytes.slice() }).promise;
+    const valuesPage = await document.getPage(7);
+    const text = (await valuesPage.getTextContent()).items
+      .map((item: any) => item.str)
+      .join(" ");
+
+    expect(template.pages[6].composition).toBe("commercial-values");
+    expect(text).toContain("Número de convidados: 120 pessoas.");
+    expect(text).toContain("Restante até dia 17.10.2026.");
+    expect(text.match(/Número de convidados/g)).toHaveLength(1);
+    expect(text.match(/Serviço de bar completo/g)).toHaveLength(1);
+    expect(text.match(/Carta de drinks personalizada/g)).toHaveLength(1);
   });
 
   it("gerencia busca e registro no ProposalTemplateRegistry", () => {

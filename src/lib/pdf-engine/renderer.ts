@@ -345,11 +345,13 @@ export class ProposalPdfRenderer {
       this.drawBackground(page, pageDef, pageWidth, pageHeight);
     }
 
-    // Special dedicated precision grid for Page 7 of Commercial Proposal
-    if (
-      pageDef.pageNumber === 7 &&
-      (template.id === "goatbar-commercial" || template.id === "goatbar-commercial-v1")
-    ) {
+    // A página de valores é uma composição compartilhada entre os modelos de
+    // casamento e comemoração. O PDF-base já contém títulos, placeholders e
+    // parte da grade; portanto a área de conteúdo é redesenhada uma única vez
+    // antes de inserir os valores variáveis. Não condicionar pelo id do
+    // template evita que a comemoração caia no caminho genérico e desenhe seus
+    // slots por cima desses textos do PDF-base.
+    if (pageDef.composition === "commercial-values") {
       this.renderCommercialValuesAndConditionsPage(page, canonicalData, getFont);
       return;
     }
