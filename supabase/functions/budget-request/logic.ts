@@ -147,6 +147,10 @@ export function parseWeddingCoupleName(
   return null;
 }
 
+export function normalizeWeddingEventName(eventName: string): string {
+  return eventName.replace(/\s+e\s+/gi, " & ");
+}
+
 export function validatePublicLeadContext(input: unknown): PublicLeadContext {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("Contexto da sessão inválido.");
@@ -265,12 +269,15 @@ export function validatePublicBudgetPayload(input: unknown): PublicBudgetPayload
     if (!payload.event_name) {
       throw new Error("Nome do casal é obrigatório.");
     }
+    payload.event_name = normalizeWeddingEventName(payload.event_name);
     const couple = parseWeddingCoupleName(payload.event_name);
     if (!couple) {
       throw new Error("Informe o nome do casal no formato 'Nome e Nome'.");
     }
-    payload.groom_name = couple.groom_name;
-    payload.bride_name = couple.bride_name;
+    // The combined couple name does not encode gender or role. Keep only values
+    // supplied by their explicitly labelled fields instead of guessing by order.
+    payload.groom_name = payload.groom_name || "";
+    payload.bride_name = payload.bride_name || "";
   } else {
     if (!payload.event_name) {
       throw new Error("Nome do evento é obrigatório.");

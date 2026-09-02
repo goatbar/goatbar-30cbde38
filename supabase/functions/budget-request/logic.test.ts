@@ -83,14 +83,14 @@ describe("budget request backend", () => {
     });
   });
 
-  it("1. 'João e Maria' -> groom_name João e bride_name Maria", () => {
+  it("normaliza o nome e não infere noivo/noiva pela ordem dos nomes", () => {
     const payload = validatePublicBudgetPayload({
       ...valid,
       event_name: "João e Maria",
     });
-    expect(payload.event_name).toBe("João e Maria");
-    expect(payload.groom_name).toBe("João");
-    expect(payload.bride_name).toBe("Maria");
+    expect(payload.event_name).toBe("João & Maria");
+    expect(payload.groom_name).toBe("");
+    expect(payload.bride_name).toBe("");
   });
 
   it("2. 'João & Maria' -> correto", () => {
@@ -99,8 +99,8 @@ describe("budget request backend", () => {
       event_name: "João da Silva & Maria Oliveira",
     });
     expect(payload.event_name).toBe("João da Silva & Maria Oliveira");
-    expect(payload.groom_name).toBe("João da Silva");
-    expect(payload.bride_name).toBe("Maria Oliveira");
+    expect(payload.groom_name).toBe("");
+    expect(payload.bride_name).toBe("");
   });
 
   it("3. 'João / Maria' e 'João + Maria' -> correto", () => {
@@ -108,15 +108,27 @@ describe("budget request backend", () => {
       ...valid,
       event_name: "João / Maria",
     });
-    expect(slash.groom_name).toBe("João");
-    expect(slash.bride_name).toBe("Maria");
+    expect(slash.groom_name).toBe("");
+    expect(slash.bride_name).toBe("");
 
     const plus = validatePublicBudgetPayload({
       ...valid,
       event_name: "João + Maria",
     });
-    expect(plus.groom_name).toBe("João");
-    expect(plus.bride_name).toBe("Maria");
+    expect(plus.groom_name).toBe("");
+    expect(plus.bride_name).toBe("");
+  });
+
+  it("preserva noivo e noiva vindos dos campos explicitamente mapeados", () => {
+    const payload = validatePublicBudgetPayload({
+      ...valid,
+      event_name: "Larissa e Marcos",
+      groom_name: "Marcos",
+      bride_name: "Larissa",
+    });
+    expect(payload.event_name).toBe("Larissa & Marcos");
+    expect(payload.groom_name).toBe("Marcos");
+    expect(payload.bride_name).toBe("Larissa");
   });
 
   it("4. casamento com apenas um nome (ex: 'João') -> rejeita com mensagem amigável", () => {
@@ -227,9 +239,9 @@ describe("budget request backend", () => {
       expect(validated.session_id).toBe("123e4567-e89b-12d3-a456-426614174000");
       expect(validated.utm_source).toBe("instagram");
 
-      expect(() =>
-        validatePublicLeadContext({ ...validContext, visitor_id: "invalid" }),
-      ).toThrow(/Identificadores/);
+      expect(() => validatePublicLeadContext({ ...validContext, visitor_id: "invalid" })).toThrow(
+        /Identificadores/,
+      );
     });
 
     it("valida contato do lead público para captura em background", () => {
@@ -243,15 +255,15 @@ describe("budget request backend", () => {
       expect(validated.phone).toBe("(11) 98888-7777");
       expect(validated.email).toBe("mariana@example.com");
 
-      expect(() =>
-        validatePublicLeadContact({ ...validContact, client_name: "M" }),
-      ).toThrow(/Nome/);
-      expect(() =>
-        validatePublicLeadContact({ ...validContact, phone: "123" }),
-      ).toThrow(/WhatsApp/);
-      expect(() =>
-        validatePublicLeadContact({ ...validContact, email: "invalid-email" }),
-      ).toThrow(/E-mail/);
+      expect(() => validatePublicLeadContact({ ...validContact, client_name: "M" })).toThrow(
+        /Nome/,
+      );
+      expect(() => validatePublicLeadContact({ ...validContact, phone: "123" })).toThrow(
+        /WhatsApp/,
+      );
+      expect(() => validatePublicLeadContact({ ...validContact, email: "invalid-email" })).toThrow(
+        /E-mail/,
+      );
     });
   });
 });
