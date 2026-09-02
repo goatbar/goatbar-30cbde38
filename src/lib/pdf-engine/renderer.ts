@@ -348,7 +348,12 @@ export class ProposalPdfRenderer {
     // Special dedicated precision grid for Page 7 of Commercial Proposal
     if (
       pageDef.pageNumber === 7 &&
-      (template.id === "goatbar-commercial" || template.id === "goatbar-commercial-v1")
+      (template.id === "goatbar-commercial" ||
+        template.id === "goatbar-commercial-v1" ||
+        template.id === "goatbar-aniversario" ||
+        template.id === "goatbar-aniversario-v1" ||
+        template.id === "goatbar-comemoracao" ||
+        template.id === "goatbar-comemoracao-v1")
     ) {
       this.renderCommercialValuesAndConditionsPage(page, canonicalData, getFont);
       return;

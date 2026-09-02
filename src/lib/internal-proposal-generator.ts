@@ -89,6 +89,19 @@ export function selectProposalTemplateForEvent(
     if (found) return found;
   }
   const typeClean = (eventType || "").toLowerCase().trim();
+  if (typeClean === "aniversario" || typeClean.includes("aniversario")) {
+    const aniversario = ProposalTemplateRegistry.getTemplate("goatbar-aniversario");
+    if (aniversario) return aniversario;
+  }
+  if (
+    typeClean === "comemoracao" ||
+    typeClean.includes("comemoracao") ||
+    typeClean === "corporativo" ||
+    typeClean.includes("corporativo")
+  ) {
+    const comemoracao = ProposalTemplateRegistry.getTemplate("goatbar-comemoracao");
+    if (comemoracao) return comemoracao;
+  }
   if (
     typeClean === "despedida" ||
     typeClean === "despedida_solteira" ||

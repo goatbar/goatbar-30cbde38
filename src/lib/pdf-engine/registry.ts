@@ -1,5 +1,7 @@
 import type { ProposalTemplateDefinition } from "./types";
 import { GOATBAR_COMMERCIAL_V1_TEMPLATE } from "@/templates/proposals/goatbar-commercial-v1/template";
+import { GOATBAR_ANIVERSARIO_V1_TEMPLATE } from "@/templates/proposals/goatbar-aniversario-v1/template";
+import { GOATBAR_COMEMORACAO_V1_TEMPLATE } from "@/templates/proposals/goatbar-comemoracao-v1/template";
 import { GOATBAR_DESPEDIDA_V1_TEMPLATE } from "@/templates/proposals/goatbar-despedida-v1/template";
 
 /**
@@ -301,6 +303,8 @@ class ProposalTemplateRegistryClass {
   constructor() {
     // Registra os templates oficiais e o de desenvolvimento
     this.registerTemplate(GOATBAR_COMMERCIAL_V1_TEMPLATE);
+    this.registerTemplate(GOATBAR_ANIVERSARIO_V1_TEMPLATE);
+    this.registerTemplate(GOATBAR_COMEMORACAO_V1_TEMPLATE);
     this.registerTemplate(GOATBAR_DESPEDIDA_V1_TEMPLATE);
     this.registerTemplate(DEV_DEBUG_TEMPLATE);
   }
