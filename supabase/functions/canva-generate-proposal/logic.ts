@@ -7,6 +7,7 @@ import {
   formatCustomizedDrinkNames,
   getDrinkCustomizations,
 } from "../../../src/lib/drink-customization.ts";
+import { normalizeProposalEventType as normalizeEventType } from "../../../src/lib/proposal-template-resolver.ts";
 
 export type Mapping = {
   canva_field_key: string;
@@ -577,11 +578,7 @@ export function getMissingCanvaMappingKeys(mappings: Mapping[], datasetKeys: str
 }
 
 export function normalizeProposalEventType(value: string) {
-  const normalized = value.toLocaleLowerCase("pt-BR");
-  if (normalized.includes("casamento")) return "casamento";
-  if (normalized.includes("aniversario") || normalized.includes("aniversário"))
-    return "aniversario";
-  return "comemoracao";
+  return normalizeEventType(value);
 }
 
 const LABELS: Record<string, string> = {

@@ -10,6 +10,7 @@ import type { ProposalRenderResult, ProposalTemplateDefinition } from "./pdf-eng
 import { hydrateBudgetDrinks } from "../../supabase/functions/canva-generate-proposal/logic";
 import type { GeneratedProposal } from "@/services/proposal-service";
 import { formatCustomizedDrinkNames, getDrinkCustomizations } from "@/lib/drink-customization";
+import { normalizeProposalEventType } from "@/lib/proposal-template-resolver";
 
 export interface ProposalGenerationContext {
   event: Record<string, any>;
@@ -93,22 +94,14 @@ export async function loadProposalContext(
 }
 
 /**
- * Seleciona deterministicamente o template correto a partir do tipo de evento ou ID explícito.
+ * Seleciona deterministicamente o template correto exclusivamente a partir do tipo do evento.
  */
 export function selectProposalTemplateForEvent(
   eventType?: string | null,
-  explicitTemplateId?: string,
+  _explicitTemplateId?: string,
 ): ProposalTemplateDefinition {
-  if (explicitTemplateId) {
-    const found = ProposalTemplateRegistry.getTemplate(explicitTemplateId);
-    if (found) return found;
-  }
-  const typeClean = (eventType || "").toLowerCase().trim();
-  if (
-    typeClean === "despedida" ||
-    typeClean === "despedida_solteira" ||
-    typeClean.includes("despedida")
-  ) {
+  const resolvedType = normalizeProposalEventType(eventType);
+  if (resolvedType === "comemoracao") {
     const despedida = ProposalTemplateRegistry.getTemplate("goatbar-despedida");
     if (despedida) return despedida;
   }
