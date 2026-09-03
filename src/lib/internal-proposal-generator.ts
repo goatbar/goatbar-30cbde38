@@ -12,9 +12,43 @@ import type { GeneratedProposal } from "@/services/proposal-service";
 import { formatCustomizedDrinkNames, getDrinkCustomizations } from "@/lib/drink-customization";
 
 export interface ProposalGenerationContext {
-  event: Record<string, any>;
+  event: Record<string, any> & { event_type?: string | null };
   budget: Record<string, any>;
   resolvedDrinkNames?: string[];
+}
+
+export type ProposalModel = "casamento" | "aniversario" | "comemoracao";
+
+const PROPOSAL_TEMPLATE_IDS: Record<ProposalModel, string> = {
+  casamento: "goatbar-commercial",
+  aniversario: "goatbar-aniversario",
+  comemoracao: "goatbar-comemoracao",
+};
+
+/**
+ * Resolve o modelo exclusivamente a partir do tipo persistido do evento.
+ * A normalização remove somente diferenças de caixa, espaços e acentuação.
+ */
+export function resolveProposalModel(eventType?: string | null): ProposalModel {
+  const normalizedType = (eventType ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+
+  switch (normalizedType) {
+    case "casamento":
+      return "casamento";
+    case "aniversario":
+      return "aniversario";
+    case "comemoracao":
+    case "confraternizacao":
+    case "corporativo":
+      return "comemoracao";
+    default:
+      throw new Error(`Tipo de evento sem modelo de proposta vinculado: "${eventType ?? ""}".`);
+  }
 }
 
 /**
@@ -78,43 +112,26 @@ export async function loadProposalContext(
 }
 
 /**
- * Seleciona deterministicamente o template correto a partir do tipo de evento ou ID explícito.
+ * Seleciona deterministicamente o template correto a partir do tipo persistido do evento.
  */
 export function selectProposalTemplateForEvent(
   eventType?: string | null,
-  explicitTemplateId?: string,
 ): ProposalTemplateDefinition {
-  if (explicitTemplateId) {
-    const found = ProposalTemplateRegistry.getTemplate(explicitTemplateId);
-    if (found) return found;
+  const model = resolveProposalModel(eventType);
+  const templateId = PROPOSAL_TEMPLATE_IDS[model];
+  const template = ProposalTemplateRegistry.getTemplate(templateId);
+
+  if (!template) {
+    throw new Error(`Template de proposta "${templateId}" não encontrado.`);
   }
-  const typeClean = (eventType || "").toLowerCase().trim();
-  if (typeClean === "aniversario" || typeClean.includes("aniversario")) {
-    const aniversario = ProposalTemplateRegistry.getTemplate("goatbar-aniversario");
-    if (aniversario) return aniversario;
-  }
-  if (
-    typeClean === "comemoracao" ||
-    typeClean.includes("comemoracao") ||
-    typeClean === "corporativo" ||
-    typeClean.includes("corporativo")
-  ) {
-    const comemoracao = ProposalTemplateRegistry.getTemplate("goatbar-comemoracao");
-    if (comemoracao) return comemoracao;
-  }
-  if (
-    typeClean === "despedida" ||
-    typeClean === "despedida_solteira" ||
-    typeClean.includes("despedida")
-  ) {
-    const despedida = ProposalTemplateRegistry.getTemplate("goatbar-despedida");
-    if (despedida) return despedida;
-  }
-  const standard = ProposalTemplateRegistry.getTemplate("goatbar-commercial");
-  if (!standard) {
-    throw new Error('Template padrão "goatbar-commercial" não encontrado.');
-  }
-  return standard;
+
+  return template;
+}
+
+export function resolveProposalTemplateForEvent(
+  event: Pick<ProposalGenerationContext["event"], "event_type">,
+): ProposalTemplateDefinition {
+  return selectProposalTemplateForEvent(event.event_type);
 }
 
 /**
@@ -124,7 +141,6 @@ export function selectProposalTemplateForEvent(
 export async function generateProposalPreview(params: {
   eventId: string;
   budgetVersionId: string;
-  templateId?: string;
   customContext?: ProposalGenerationContext;
 }): Promise<{
   pdfBytes: Uint8Array;
@@ -148,10 +164,7 @@ export async function generateProposalPreview(params: {
     );
   }
 
-  const template = selectProposalTemplateForEvent(
-    canonicalData.tipoEvento || (context.event as any)?.event_type,
-    params.templateId,
-  );
+  const template = resolveProposalTemplateForEvent(context.event);
 
   const renderResult = await ProposalPdfRenderer.render(template, canonicalData);
   const blob = new Blob([renderResult.pdfBytes as any], { type: "application/pdf" });
@@ -172,7 +185,6 @@ export async function generateProposalPreview(params: {
 export async function generateAndPersistProposal(params: {
   eventId: string;
   budgetVersionId: string;
-  templateId?: string;
 }): Promise<{
   proposal: GeneratedProposal;
   pdfUrl: string;
@@ -194,10 +206,7 @@ export async function generateAndPersistProposal(params: {
     );
   }
 
-  const template = selectProposalTemplateForEvent(
-    canonicalData.tipoEvento || (context.event as any)?.event_type,
-    params.templateId,
-  );
+  const template = resolveProposalTemplateForEvent(context.event);
 
   const renderResult = await ProposalPdfRenderer.render(template, canonicalData);
   const filename = buildProposalFilename(context.event.event_name);
