@@ -15,6 +15,7 @@ vi.mock("@tanstack/react-router", () => {
 
 import { budgetRequestService } from "@/services/budget-request-service";
 import { Route } from "@/routes/orcamento.solicitar.$token";
+import { Route as PublicRequestRoute } from "@/routes/orcamento.solicitar.index";
 import { sanitizePublicDrinks, parseWeddingCoupleName, validatePublicBudgetPayload } from "../supabase/functions/budget-request/logic";
 
 describe("Public Budget Request Form & Drink Catalog", () => {
@@ -208,6 +209,55 @@ describe("Public Budget Request Form & Drink Catalog", () => {
 
     const submittedPublicPayload = submitPublicSpy.mock.calls[0][1];
     expect(submittedPublicPayload.event_name).toBe("Lucas e Fernanda");
+  });
+
+  it("abre a rota pública de nova solicitação com 6 horas no estado e envia 6 sem interação", async () => {
+    vi.spyOn(budgetRequestService, "startPublicJourney").mockResolvedValue({
+      state: "ACTIVE",
+      public_drinks: [],
+    });
+    const submitPublicSpy = vi.spyOn(budgetRequestService, "submitPublicLeadRequest").mockResolvedValue({
+      state: "USED",
+      idempotent: false,
+      event_id: "123e4567-e89b-42d3-a456-426614174000",
+    });
+
+    // This is the component registered for the real /orcamento/solicitar/ index route.
+    const Component = (PublicRequestRoute as any).component;
+    render(<Component />);
+
+    await screen.findByText("Solicite seu orçamento");
+    const duration = screen.getByLabelText(/Duração do evento/i) as HTMLSelectElement;
+
+    expect(duration).toHaveValue("6");
+    expect(duration.selectedOptions[0]).toHaveTextContent("6 horas");
+
+    fireEvent.change(screen.getByLabelText(/Nome do solicitante/i), { target: { value: "Cliente Nova Solicitação" } });
+    fireEvent.change(screen.getByLabelText(/WhatsApp/i), { target: { value: "(11) 97777-6666" } });
+    fireEvent.change(screen.getByLabelText(/Nome do casal/i), { target: { value: "Ana e Beto" } });
+    fireEvent.change(screen.getByLabelText(/Data do evento/i), { target: { value: "2026-12-15" } });
+    fireEvent.click(screen.getByRole("button", { name: /Solicitar orçamento/i }));
+
+    await waitFor(() => expect(submitPublicSpy).toHaveBeenCalledTimes(1));
+    expect(submitPublicSpy.mock.calls[0][1].duration_hours).toBe(6);
+  });
+
+  it("permite alterar normalmente a duração da nova solicitação", async () => {
+    vi.spyOn(budgetRequestService, "startPublicJourney").mockResolvedValue({
+      state: "ACTIVE",
+      public_drinks: [],
+    });
+
+    const Component = (PublicRequestRoute as any).component;
+    render(<Component />);
+
+    await screen.findByText("Solicite seu orçamento");
+    const duration = screen.getByLabelText(/Duração do evento/i);
+
+    fireEvent.change(duration, { target: { value: "5" } });
+    expect(duration).toHaveValue("5");
+    fireEvent.change(duration, { target: { value: "7" } });
+    expect(duration).toHaveValue("7");
   });
 
   it("não mostra falso sucesso quando a API/RLS rejeita a persistência", async () => {

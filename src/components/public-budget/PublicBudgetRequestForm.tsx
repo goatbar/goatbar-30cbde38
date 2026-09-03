@@ -47,7 +47,7 @@ export function PublicBudgetRequestForm({ mode, token }: PublicBudgetRequestForm
     notes: "",
     groom_name: "",
     bride_name: "",
-    duration_hours: 5,
+    duration_hours: 6,
     requested_drink_ids: [],
   });
 
