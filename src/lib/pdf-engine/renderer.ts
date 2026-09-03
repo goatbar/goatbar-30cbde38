@@ -341,6 +341,15 @@ export class ProposalPdfRenderer {
       const sourcePage = basePdfDoc.getPage(pageDef.pageNumber - 1);
       const embedded = await this.embedCleanPage(doc, sourcePage);
       page.drawPage(embedded, { x: 0, y: 0, width: pageWidth, height: pageHeight });
+
+      // Special precision alignment for Page 1 of Aniversário Cover:
+      // Reposition the cake illustration inside the seal to align with seal center x=282.62
+      if (
+        pageDef.pageNumber === 1 &&
+        (template.id === "goatbar-aniversario" || template.id === "goatbar-aniversario-v1")
+      ) {
+        await this.renderAniversarioCoverPage(page, sourcePage, doc, pageWidth, pageHeight);
+      }
     } else {
       this.drawBackground(page, pageDef, pageWidth, pageHeight);
     }
@@ -575,6 +584,38 @@ export class ProposalPdfRenderer {
         }
       }
     }
+  }
+
+  private static async renderAniversarioCoverPage(
+    page: PDFPage,
+    sourcePage: PDFPage,
+    doc: PDFDocument,
+    pageWidth: number,
+    pageHeight: number,
+  ) {
+    const bgColor = rgb(111 / 255, 17 / 255, 23 / 255);
+    // Erase old cake on background PDF (left: 172, bottom: 298, width: 125, height: 184)
+    page.drawRectangle({
+      x: 172,
+      y: 298,
+      width: 125,
+      height: 184,
+      color: bgColor,
+    });
+
+    // Embed cake cutout from sourcePage (left: 170, bottom: 300, right: 300, top: 485)
+    const cakeCutout = await doc.embedPage(
+      sourcePage,
+      { left: 170, bottom: 300, right: 300, top: 485 }
+    );
+
+    // Draw cake cutout centered at x=282.62, y_pdf=364.26 (left: 217.62, bottom: 271.76)
+    page.drawPage(cakeCutout, {
+      x: 217.62,
+      y: 271.76,
+      width: 130,
+      height: 185,
+    });
   }
 
   private static drawBackground(

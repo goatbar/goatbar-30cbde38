@@ -48,7 +48,7 @@ export const GOATBAR_COMEMORACAO_V1_TEMPLATE: ProposalTemplateDefinition = {
           fieldKey: "nomeEvento",
           type: "arc",
           x: 282.62,
-          y: 445.74,
+          y: 459.0,
           width: 270,
           height: 270,
           style: {
@@ -59,7 +59,7 @@ export const GOATBAR_COMEMORACAO_V1_TEMPLATE: ProposalTemplateDefinition = {
             align: "center",
           },
           arcConfig: {
-            radius: 114,
+            radius: 118,
             startDeg: 175,
             endDeg: 5,
             position: "top",
@@ -71,7 +71,7 @@ export const GOATBAR_COMEMORACAO_V1_TEMPLATE: ProposalTemplateDefinition = {
           fieldKey: "dataEvento",
           type: "arc",
           x: 282.62,
-          y: 445.74,
+          y: 459.0,
           width: 270,
           height: 270,
           style: {
@@ -82,7 +82,7 @@ export const GOATBAR_COMEMORACAO_V1_TEMPLATE: ProposalTemplateDefinition = {
             align: "center",
           },
           arcConfig: {
-            radius: 134.4,
+            radius: 138,
             startDeg: 216,
             endDeg: 324,
             position: "bottom",
