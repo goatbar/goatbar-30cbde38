@@ -10,6 +10,11 @@ export interface NotificationDependencies {
   eventUrl(eventId: string): string | undefined;
 }
 
+export const NEW_BUDGET_NOTIFICATION_RECIPIENTS = [
+  "+5531996970935",
+  "+5537999985192",
+] as const;
+
 const masked = (phone: string) => `${phone.slice(0, 4)}***${phone.slice(-4)}`;
 
 export async function notifyNewBudgetRequest(
@@ -23,12 +28,19 @@ export async function notifyNewBudgetRequest(
   try {
     const event = await deps.loadEvent(eventId);
     if (!event) throw new Error("Evento da solicitação não encontrado.");
-    const recipients = await deps.recipients();
+
+    // New-budget alerts are an operational Goat Bar notification, not a
+    // per-user WhatsApp preference. Keep the destination allowlist explicit so
+    // a newly linked GIA account can never start receiving these alerts by
+    // accident and a missing receive_new_budget_notifications flag cannot block
+    // delivery to the two approved numbers.
+    const recipients = NEW_BUDGET_NOTIFICATION_RECIPIENTS.map((phone_number) => ({
+      phone_number,
+    }));
+
     console.log(
-      `[budget-request] notification recipients=${recipients.length} event_id=${eventId}`,
+      `[budget-request] notification recipients=${recipients.length} source=fixed_allowlist event_id=${eventId}`,
     );
-    if (!recipients.length)
-      throw new Error("Nenhum destinatário habilitado para novos orçamentos.");
 
     const parameters = [
       event.client_name,
@@ -37,9 +49,10 @@ export async function notifyNewBudgetRequest(
       String(event.guests),
       event.phone,
     ];
+
     for (const recipient of recipients) {
       const phone = normalizePhoneNumber(recipient.phone_number).canonicalPlain;
-      if (!phone) throw new Error("Destinatário habilitado possui telefone inválido.");
+      if (!phone) throw new Error("Destinatário configurado possui telefone inválido.");
       console.log(
         `[budget-request] sending whatsapp recipient=${masked(phone)} event_id=${eventId}`,
       );
@@ -47,6 +60,7 @@ export async function notifyNewBudgetRequest(
         throw new Error("Meta WhatsApp API não aceitou a mensagem; consulte os logs do adapter.");
       }
     }
+
     await deps.finish(claim.id, true);
     console.log(`[budget-request] notification sent event_id=${eventId}`);
     return "SENT";
