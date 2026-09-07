@@ -91,29 +91,60 @@ export class CircuitBreakerManager {
     rec.lastStatusCode = error.status;
     const now = Date.now();
 
-    let cooldownDurationMs = 60_000; // default 60s
-
-    if (error.retryAfterSeconds && error.retryAfterSeconds > 0) {
-      cooldownDurationMs = error.retryAfterSeconds * 1000;
-    } else if (error.type === "auth_invalid" || error.status === 401) {
-      // Invalid API Key - open circuit indefinitely / 24h
-      cooldownDurationMs = 24 * 60 * 60 * 1000;
-    } else if (error.type === "quota_exhausted" || error.type === "capacity_exhausted" || error.type === "free_variant_ended") {
-      // Free quota exhausted
-      cooldownDurationMs = 5 * 60 * 1000; // 5 min cooldown
-    } else if (error.type === "timeout") {
-      cooldownDurationMs = 30_000; // 30s cooldown
-    } else if (rec.consecutiveFailures >= 3) {
-      cooldownDurationMs = Math.min(300_000, 30_000 * Math.pow(2, rec.consecutiveFailures - 3));
+    // Client/schema errors (bad_request / 400) do NOT open the provider circuit breaker
+    if (error.type === "bad_request" || error.status === 400) {
+      this.persistRecord(rec).catch(() => {});
+      return;
     }
 
-    rec.state = "open";
-    rec.openedAt = now;
-    rec.cooldownUntil = now + cooldownDurationMs;
+    // Determine if this failure warrants opening the circuit
+    const isFatal =
+      error.type === "auth_invalid" ||
+      error.status === 401 ||
+      error.type === "quota_exhausted" ||
+      error.status === 402 ||
+      error.type === "permission_denied" ||
+      error.status === 403 ||
+      error.type === "capacity_exhausted" ||
+      error.type === "free_variant_ended";
 
-    console.warn(
-      `[GOAT-AI][CIRCUIT][OPEN] provider=${providerId} status=${error.status || 0} errorType=${error.type} cooldownSec=${Math.ceil(cooldownDurationMs / 1000)} consecutiveFailures=${rec.consecutiveFailures} reason="${error.message.slice(0, 100)}"`
-    );
+    const hasSignificantRetryAfter = Boolean(error.retryAfterSeconds && error.retryAfterSeconds > 30);
+    const hasExceededFailureThreshold = rec.consecutiveFailures >= 3;
+    const isHalfOpenFailure = rec.state === "half_open";
+
+    const shouldOpen = isFatal || hasSignificantRetryAfter || hasExceededFailureThreshold || isHalfOpenFailure;
+
+    if (shouldOpen) {
+      let cooldownDurationMs = 60_000; // default 60s
+
+      if (error.retryAfterSeconds && error.retryAfterSeconds > 0) {
+        cooldownDurationMs = error.retryAfterSeconds * 1000;
+      } else if (error.type === "auth_invalid" || error.status === 401) {
+        // Invalid API Key - open circuit indefinitely / 24h
+        cooldownDurationMs = 24 * 60 * 60 * 1000;
+      } else if (error.status === 402 || error.type === "quota_exhausted") {
+        // Out of balance / payment required
+        cooldownDurationMs = 60 * 60 * 1000; // 1h cooldown
+      } else if (error.type === "capacity_exhausted" || error.type === "free_variant_ended") {
+        cooldownDurationMs = 5 * 60 * 1000; // 5 min cooldown
+      } else if (error.type === "timeout") {
+        cooldownDurationMs = 20_000; // 20s cooldown
+      } else if (rec.consecutiveFailures >= 3) {
+        cooldownDurationMs = Math.min(300_000, 30_000 * Math.pow(2, rec.consecutiveFailures - 3));
+      }
+
+      rec.state = "open";
+      rec.openedAt = now;
+      rec.cooldownUntil = now + cooldownDurationMs;
+
+      console.warn(
+        `[GOAT-AI][CIRCUIT][OPEN] provider=${providerId} status=${error.status || 0} errorType=${error.type} cooldownSec=${Math.ceil(cooldownDurationMs / 1000)} consecutiveFailures=${rec.consecutiveFailures} reason="${error.message.slice(0, 100)}"`
+      );
+    } else {
+      console.warn(
+        `[GOAT-AI][CIRCUIT][FAILURE_RECORDED] provider=${providerId} status=${error.status || 0} errorType=${error.type} consecutiveFailures=${rec.consecutiveFailures} threshold=3 state=closed`
+      );
+    }
 
     this.persistRecord(rec).catch(() => {});
   }

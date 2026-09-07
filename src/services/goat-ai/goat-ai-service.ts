@@ -58,6 +58,30 @@ export const goatAIService = {
     return count || 0;
   },
 
+  async listBudgetNotifications(): Promise<AIInboxItem[]> {
+    const { data, error } = await (supabase as any)
+      .from("ai_inbox_items")
+      .select(`
+        *,
+        events:matched_event_id (
+          id,
+          client_name,
+          event_name,
+          date,
+          event_location,
+          phone
+        )
+      `)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (error) {
+      console.warn("Erro ao buscar notificações da GIA:", error);
+      return [];
+    }
+    return (data || []) as AIInboxItem[];
+  },
+
   async getItemDetails(id: string): Promise<{
     item: AIInboxItem;
     logs: AIActionLog[];

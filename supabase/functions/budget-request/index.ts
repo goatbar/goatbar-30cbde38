@@ -146,7 +146,84 @@ serve(async (req) => {
           },
 
           eventUrl: (id) =>
-            appUrl() ? `${appUrl()}/eventos/${id}` : undefined,
+            appUrl() ? `${appUrl()}/eventos/${id}` : `https://www.goatbar.com.br/eventos/${id}`,
+
+          notifyInternal: async (event, url) => {
+            const evId = (event as any).id || eventId;
+            const linkUrl = url || `${appUrl() || "https://www.goatbar.com.br"}/eventos/${evId}`;
+            const sourceMsgId = `budget_request:${evId}`;
+
+            // Idempotency: avoid duplicate notification if already created
+            const { data: existing } = await supabase
+              .from("ai_inbox_items")
+              .select("id")
+              .eq("source", "api")
+              .eq("source_message_id", sourceMsgId)
+              .maybeSingle();
+
+            if (existing) {
+              console.log(`[budget-request] internal notification already exists for event ${evId}, skipping duplicate.`);
+              return true;
+            }
+
+            const rawText = `Novo pedido de orçamento recebido de ${event.client_name} para ${event.event_name || event.event_type} em ${event.date} (${event.guests} convidados). Telefone: ${event.phone || 'Não informado'}. ID: ${evId}. Link: ${linkUrl}`;
+
+            const structuredData = {
+              type: "new_budget_request",
+              event_id: evId,
+              client_name: event.client_name,
+              event_name: event.event_name || event.event_type,
+              event_type: event.event_type,
+              date: event.date,
+              guests: event.guests,
+              phone: event.phone || null,
+              email: (event as any).email || null,
+              event_location: (event as any).event_location || null,
+              city: (event as any).city || null,
+              event_url: linkUrl,
+              origin: "public_budget_form",
+              notified_at: new Date().toISOString(),
+            };
+
+            const { data: inboxItem, error: inboxErr } = await supabase
+              .from("ai_inbox_items")
+              .insert({
+                source: "api",
+                source_message_id: sourceMsgId,
+                source_sender_name: event.client_name,
+                source_sender_id: event.phone || null,
+                message_type: "text",
+                raw_text: rawText,
+                classification: "event_note",
+                classification_confidence: 1.0,
+                processing_status: "processed",
+                processing_mode: "heuristic",
+                approval_status: "pending",
+                matched_event_id: evId,
+                structured_data: structuredData,
+                received_at: new Date().toISOString(),
+                processed_at: new Date().toISOString(),
+              })
+              .select("id")
+              .maybeSingle();
+
+            if (inboxErr) {
+              console.error(`[budget-request] error recording ai_inbox_items for event ${evId}:`, inboxErr);
+            }
+
+            if (inboxItem?.id) {
+              await supabase.from("ai_action_logs").insert({
+                ai_inbox_item_id: inboxItem.id,
+                event_id: evId,
+                action: "new_budget_request_notification",
+                automatic: true,
+                performer_name: "Sistema / Formulário Público",
+                new_data: structuredData,
+              });
+            }
+
+            return true;
+          },
         },
         retry,
       );
@@ -700,7 +777,7 @@ serve(async (req) => {
     const message =
       error instanceof Error ? error.message : String(error);
 
-    const validation = /inválid|obrigatório|permitidos/i.test(message);
+    const validation = /inválid|obrigatório|permitidos|informe|casal/i.test(message);
 
     console.error("[budget-request]", message);
 

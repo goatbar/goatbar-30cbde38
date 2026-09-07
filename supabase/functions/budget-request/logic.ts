@@ -4,6 +4,7 @@ export const ALLOWED_EVENT_TYPES = [
   "Corporativo",
   "Aniversário",
   "Comemoração",
+  "Confraternização",
 ] as const;
 export const ALLOWED_LEAD_SOURCES = [
   "",

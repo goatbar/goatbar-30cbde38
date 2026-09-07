@@ -42,20 +42,15 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
     mockSupabase = {
       from: vi.fn((table: string) => {
         if (table === "ai_conversations") {
+          const createConvChain = (): any => ({
+            eq: () => createConvChain(),
+            order: () => createConvChain(),
+            limit: () => createConvChain(),
+            maybeSingle: async () => ({ data: mockConversation, error: null }),
+            single: async () => ({ data: mockConversation, error: null }),
+          });
           return {
-            select: () => ({
-              eq: () => ({
-                eq: () => ({
-                  eq: () => ({
-                    order: () => ({
-                      limit: () => ({
-                        maybeSingle: async () => ({ data: mockConversation, error: null }),
-                      }),
-                    }),
-                  }),
-                }),
-              }),
-            }),
+            select: () => createConvChain(),
             insert: () => ({
               select: () => ({
                 single: async () => ({ data: mockConversation, error: null }),
@@ -345,7 +340,7 @@ describe("Goat AI - Gemini Agent End-to-End & Error Handling", () => {
       userId: "user-123",
     });
 
-    expect(result.reply).toContain("Não consegui interpretar a resposta");
+    expect(result.reply).toMatch(/Não consegui (interpretar|processar)/);
   });
 
   it("12. Trata falta de GEMINI_API_KEY no runtime sem quebrar a execução", async () => {

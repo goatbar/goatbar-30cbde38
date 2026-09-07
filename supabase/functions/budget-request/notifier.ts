@@ -3,11 +3,12 @@ import { type PublicBudgetPayload } from "./logic.ts";
 
 export interface NotificationDependencies {
   claim(eventId: string, retry: boolean): Promise<{ id: string } | null>;
-  loadEvent(eventId: string): Promise<PublicBudgetPayload | null>;
+  loadEvent(eventId: string): Promise<(PublicBudgetPayload & { id?: string }) | null>;
   recipients(): Promise<Array<{ phone_number: string }>>;
   send(phone: string, parameters: string[], correlationId: string): Promise<boolean>;
   finish(linkId: string, sent: boolean, error?: string): Promise<void>;
   eventUrl(eventId: string): string | undefined;
+  notifyInternal?(event: PublicBudgetPayload & { id?: string }, eventUrl?: string): Promise<boolean>;
 }
 
 const masked = (phone: string) => `${phone.slice(0, 4)}***${phone.slice(-4)}`;
@@ -23,6 +24,19 @@ export async function notifyNewBudgetRequest(
   try {
     const event = await deps.loadEvent(eventId);
     if (!event) throw new Error("Evento da solicitação não encontrado.");
+
+    const eventUrl = deps.eventUrl(eventId);
+
+    // 1. Internal system notification for GIA & panel (Idempotent & separate from user messages)
+    if (deps.notifyInternal) {
+      try {
+        await deps.notifyInternal({ ...event, id: eventId }, eventUrl);
+        console.log(`[budget-request] internal notification recorded event_id=${eventId}`);
+      } catch (internalErr: any) {
+        console.error(`[budget-request] internal notification error event_id=${eventId}:`, internalErr);
+      }
+    }
+
     const recipients = await deps.recipients();
     console.log(
       `[budget-request] notification recipients=${recipients.length} event_id=${eventId}`,

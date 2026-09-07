@@ -123,8 +123,42 @@ export function PublicBudgetRequestForm({ mode, token }: PublicBudgetRequestForm
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setSubmitting(true);
     setError("");
+
+    if (form.client_name.trim().length < 2) {
+      setError("Por favor, informe seu nome completo (mínimo 2 caracteres).");
+      return;
+    }
+
+    const digits = form.phone.replace(/\D/g, "");
+    if (digits.length < 10) {
+      setError("Por favor, informe um WhatsApp válido com DDD.");
+      return;
+    }
+
+    if (form.event_type === "Casamento") {
+      const trimmed = (form.event_name || "").trim();
+      const hasSeparator = /\s+[eE]\s+|\s*[/+&]\s*/.test(trimmed);
+      if (!hasSeparator) {
+        setError("Para casamentos, informe o nome do casal (Ex.: João e Maria).");
+        return;
+      }
+    } else if (!form.event_name?.trim()) {
+      setError("Por favor, informe o nome do evento.");
+      return;
+    }
+
+    if (!form.date) {
+      setError("Por favor, informe a data do evento.");
+      return;
+    }
+
+    if (!form.guests || form.guests < 1) {
+      setError("Por favor, informe a quantidade estimada de convidados.");
+      return;
+    }
+
+    setSubmitting(true);
 
     try {
       if (mode === "public") {

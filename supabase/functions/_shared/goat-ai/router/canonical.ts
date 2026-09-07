@@ -133,9 +133,14 @@ export function fromOpenAIResponse(
       }
     : undefined;
 
+  const hasText = Boolean(text && text.trim().length > 0);
+  const hasToolCalls = Boolean(toolCalls.length > 0);
+
   return {
     text,
-    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+    toolCalls: hasToolCalls ? toolCalls : undefined,
+    hasText,
+    hasToolCalls,
     usage,
     finishReason: choice?.finish_reason || "stop",
     providerId,
@@ -251,9 +256,14 @@ export function fromGeminiResponse(
       }
     : undefined;
 
+  const hasText = Boolean(text && text.trim().length > 0);
+  const hasToolCalls = Boolean(toolCalls.length > 0);
+
   return {
     text,
-    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+    toolCalls: hasToolCalls ? toolCalls : undefined,
+    hasText,
+    hasToolCalls,
     usage,
     finishReason: candidate?.finishReason || "STOP",
     providerId: "gemini",

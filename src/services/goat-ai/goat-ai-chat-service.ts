@@ -1,5 +1,27 @@
 import { supabase } from "@/integrations/supabase/client";
 
+export type TurnStatus = "processing" | "completed" | "partial" | "failed" | "cancelled";
+
+export interface TurnRecord {
+  id: string;
+  requestId: string;
+  conversationId: string;
+  userMessageId?: string;
+  assistantMessageId?: string;
+  status: TurnStatus;
+  currentStage: string;
+  providerId?: string;
+  modelId?: string;
+  toolsExecuted: string[];
+  reply?: string;
+  errorType?: string;
+  errorMessage?: string;
+  timings?: Record<string, number>;
+  startedAt: string;
+  completedAt?: string;
+  failedAt?: string;
+}
+
 export interface ChatMessage {
   id: string;
   conversation_id: string;
@@ -9,6 +31,9 @@ export interface ChatMessage {
   attachment_url?: string | null;
   sender_name?: string | null;
   created_at: string;
+  turn_id?: string;
+  turn_status?: TurnStatus;
+  is_error?: boolean;
 }
 
 export interface ChatConversation {
@@ -35,6 +60,8 @@ export interface ToolCallAudit {
 
 export interface SendMessagePayload {
   conversationId?: string;
+  turnId?: string;
+  requestId?: string;
   message: string;
   attachments?: Array<{
     mimeType: string;
@@ -46,11 +73,16 @@ export interface SendMessagePayload {
     currentEventId?: string;
     currentPage?: string;
   };
+  timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 export interface SendMessageResponse {
   success: boolean;
   conversationId: string;
+  turnId?: string;
+  requestId?: string;
+  turnStatus?: TurnStatus;
   messageId: string;
   reply: string;
   toolCallsExecuted?: Array<{
@@ -66,26 +98,82 @@ export interface SendMessageResponse {
     missingFields: string[];
     summary?: string | null;
   } | null;
+  timings?: {
+    totalMs: number;
+    llmMs: number;
+    toolsMs: number;
+    dbMs: number;
+    retriesMs: number;
+    failoverMs: number;
+  };
   error?: string;
 }
 
 export const goatAIChatService = {
   async sendMessage(payload: SendMessagePayload): Promise<SendMessageResponse> {
-    const { data, error } = await supabase.functions.invoke("goat-ai-chat", {
-      body: {
-        action: "chat",
-        conversationId: payload.conversationId,
-        message: payload.message,
-        attachments: payload.attachments || [],
-        pageContext: payload.pageContext,
-      },
-    });
+    const turnId = payload.turnId || `turn_web_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const requestId = payload.requestId || `req_web_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-    if (error) {
-      throw new Error(error.message || "Erro na comunicação com a GIA");
+    console.log(`[GIA:UI] turn_started turnId=${turnId} reqId=${requestId} convId=${payload.conversationId || "new"}`);
+
+    const timeoutMs = payload.timeoutMs || 50000;
+    const controller = new AbortController();
+    const timeoutTimer = setTimeout(() => {
+      controller.abort(new Error(`Timeout de transporte (${timeoutMs / 1000}s) aguardando resposta da GIA`));
+    }, timeoutMs);
+
+    if (payload.signal) {
+      payload.signal.addEventListener("abort", () => controller.abort(payload.signal?.reason));
     }
 
-    return data as SendMessageResponse;
+    try {
+      const { data, error } = await supabase.functions.invoke("goat-ai-chat", {
+        body: {
+          action: "chat",
+          turnId,
+          requestId,
+          conversationId: payload.conversationId,
+          message: payload.message,
+          attachments: payload.attachments || [],
+          pageContext: payload.pageContext,
+        },
+      });
+
+      if (error) {
+        console.warn(`[GIA:UI] transport_error turnId=${turnId} error=${error.message}`);
+        throw new Error(error.message || "Erro na comunicação com a GIA");
+      }
+
+      console.log(`[GIA:UI] turn_response turnId=${turnId} status=${data?.turnStatus || "completed"} duration=${data?.timings?.totalMs || 0}ms`);
+      return data as SendMessageResponse;
+    } finally {
+      clearTimeout(timeoutTimer);
+    }
+  },
+
+  async reconcileTurn(turnId: string, conversationId?: string): Promise<TurnRecord | null> {
+    console.log(`[GIA:UI] reconcile_turn_request turnId=${turnId} convId=${conversationId || "none"}`);
+    try {
+      const { data, error } = await supabase.functions.invoke("goat-ai-chat", {
+        body: {
+          action: "reconcile_turn",
+          turnId,
+          conversationId,
+        },
+      });
+
+      if (error || !data?.success) {
+        console.warn(`[GIA:UI] reconcile_turn_failed turnId=${turnId} error=${error?.message || "unknown"}`);
+        return null;
+      }
+
+      const turn = data.turn as TurnRecord | null;
+      console.log(`[GIA:UI] reconcile_turn_result turnId=${turnId} found=${data.found} status=${turn?.status || "null"}`);
+      return turn;
+    } catch (err: any) {
+      console.warn(`[GIA:UI] reconcile_turn_exception turnId=${turnId}:`, err);
+      return null;
+    }
   },
 
   async listConversations(): Promise<ChatConversation[]> {

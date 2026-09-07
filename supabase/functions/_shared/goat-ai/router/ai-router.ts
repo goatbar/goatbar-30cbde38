@@ -91,7 +91,7 @@ export class AIRouter {
         name: "OpenRouter Free",
         apiKey: openrouterSec.apiKey,
         baseUrl: openrouterSec.baseUrl || "https://openrouter.ai/api/v1",
-        model: openrouterSec.model || "meta-llama/llama-3.1-8b-instruct:free",
+        model: openrouterSec.model || "openrouter/free",
       }),
       new OpenAICompatibleProvider({
         id: "cerebras",
@@ -110,7 +110,7 @@ export class AIRouter {
       }),
       new GeminiRouterAdapter({
         apiKey: geminiSec.apiKey,
-        model: geminiSec.model || "gemini-3.6-flash",
+        model: geminiSec.model || "gemini-2.5-flash",
       }),
     ];
 
@@ -211,7 +211,7 @@ export class AIRouter {
 
     if (candidateProviders.length === 0) {
       console.error(
-        `[GOAT-AI][ROUTER][EXHAUSTED] correlationId=${correlationId} reason="No eligible providers available" skipped=${JSON.stringify(skippedProviders)}`
+        `[GOAT-AI][ALERT][CRITICAL] all_providers_unavailable correlationId=${correlationId} reason="No eligible providers available" skipped=${JSON.stringify(skippedProviders)}`
       );
       this.recordTelemetry({
         correlationId,
@@ -221,7 +221,7 @@ export class AIRouter {
         status: "exhausted",
         durationMs: 0,
         errorType: "all_providers_unavailable",
-        errorMessage: "No eligible providers available",
+        errorMessage: `All providers unavailable. Skipped: ${skippedProviders.map((s) => `${s.id}:${s.reason}`).join(", ")}`,
       });
 
       return {
@@ -234,6 +234,13 @@ export class AIRouter {
 
     let attempt = 0;
     let lastError: any = null;
+    const attemptedProviders: Array<{
+      id: string;
+      model: string;
+      status: number;
+      errorType: string;
+      retries: number;
+    }> = [];
 
     for (let i = 0; i < candidateProviders.length; i++) {
       const provider = candidateProviders[i];
@@ -244,13 +251,85 @@ export class AIRouter {
         `[GOAT-AI][ROUTER][ATTEMPT] correlationId=${correlationId} attempt=${attempt} provider=${provider.id} model=${provider.getModel()}`
       );
 
-      try {
-        const response = await provider.generate(request);
+      let response: NormalizedAIResponse | null = null;
+      let providerError: ProviderError | null = null;
+      let retriesExecuted = 0;
 
+      // 1. Initial attempt
+      try {
+        response = await provider.generate(request);
+      } catch (err: any) {
+        lastError = err;
+        providerError = err?.providerError || provider.classifyError(err);
+      }
+
+      // Check for empty_response (HTTP 200 without text and without tool calls)
+      if (response) {
+        const hasText = Boolean(response.text && response.text.trim().length > 0);
+        const hasToolCalls = Boolean(response.toolCalls && response.toolCalls.length > 0);
+        if (!hasText && !hasToolCalls) {
+          providerError = {
+            type: "empty_response",
+            status: 200,
+            message: `Provedor ${provider.id} retornou HTTP 200 com resposta vazia (empty_response)`,
+            raw: response,
+          };
+          response = null;
+        }
+      }
+
+      // 2. Controlled retry ONLY for appropriate transient errors (timeout, empty_response, 502/503/504, or short 429 <= 2s)
+      const isTransientRetryable =
+        !response &&
+        providerError &&
+        (providerError.type === "timeout" ||
+          providerError.type === "empty_response" ||
+          (providerError.status && [502, 503, 504].includes(providerError.status)) ||
+          (providerError.type === "rate_limit" && (providerError.retryAfterSeconds === undefined || providerError.retryAfterSeconds <= 2)));
+
+      if (!response && isTransientRetryable) {
+        retriesExecuted = 1;
+        const backoffMs =
+          providerError?.retryAfterSeconds && providerError.retryAfterSeconds > 0
+            ? Math.min(providerError.retryAfterSeconds * 1000, 2000)
+            : 500;
+
+        console.warn(
+          `[GOAT-AI][ROUTER][RETRY] correlationId=${correlationId} provider=${provider.id} errorType=${providerError?.type} status=${providerError?.status || 0} backoffMs=${backoffMs}`
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+
+        try {
+          response = await provider.generate(request);
+          providerError = null;
+        } catch (retryErr: any) {
+          lastError = retryErr;
+          providerError = retryErr?.providerError || provider.classifyError(retryErr);
+        }
+
+        // Re-check for empty_response after retry
+        if (response) {
+          const hasText = Boolean(response.text && response.text.trim().length > 0);
+          const hasToolCalls = Boolean(response.toolCalls && response.toolCalls.length > 0);
+          if (!hasText && !hasToolCalls) {
+            providerError = {
+              type: "empty_response",
+              status: 200,
+              message: `Provedor ${provider.id} retornou resposta vazia (empty_response) no retry`,
+              raw: response,
+            };
+            response = null;
+          }
+        }
+      }
+
+      // 3. Handle success (ONLY if response is non-null and not empty)
+      if (response) {
         this.circuitBreaker.recordSuccess(provider.id);
 
         console.log(
-          `[GOAT-AI][ROUTER][SUCCESS] correlationId=${correlationId} provider=${provider.id} model=${response.modelId} durationMs=${response.durationMs} hasToolCalls=${Boolean(response.toolCalls && response.toolCalls.length > 0)} inputTokens=${response.usage?.inputTokens || 0} outputTokens=${response.usage?.outputTokens || 0}`
+          `[GOAT-AI][ROUTER][SUCCESS] correlationId=${correlationId} provider=${provider.id} model=${response.modelId} durationMs=${response.durationMs} retries=${retriesExecuted} hasToolCalls=${Boolean(response.toolCalls && response.toolCalls.length > 0)} inputTokens=${response.usage?.inputTokens || 0} outputTokens=${response.usage?.outputTokens || 0}`
         );
 
         this.recordTelemetry({
@@ -266,18 +345,19 @@ export class AIRouter {
         });
 
         return response;
-      } catch (err: any) {
-        lastError = err;
-        const providerError: ProviderError = err?.providerError || provider.classifyError(err);
+      }
+
+      // 4. Handle failure and record fallback
+      if (providerError) {
         this.circuitBreaker.recordFailure(provider.id, providerError);
 
         const safeErrMsg = sanitizeLogText(providerError.message);
         console.error(
-          `[GOAT-AI][PROVIDER][ERROR] correlationId=${correlationId} provider=${provider.id} model=${provider.getModel()} status=${providerError.status || 0} error=${JSON.stringify({ name: providerError.type, message: safeErrMsg, status: providerError.status })}`
+          `[GOAT-AI][PROVIDER][ERROR] correlationId=${correlationId} provider=${provider.id} model=${provider.getModel()} status=${providerError.status || 0} retries=${retriesExecuted} error=${JSON.stringify({ name: providerError.type, message: safeErrMsg, status: providerError.status })}`
         );
 
         console.warn(
-          `[GOAT-AI][ROUTER][FALLBACK] correlationId=${correlationId} fromProvider=${provider.id} toProvider=${nextProvider ? nextProvider.id : "NONE"} errorType=${providerError.type} status=${providerError.status || 0} reason="${safeErrMsg}"`
+          `[GOAT-AI][ROUTER][FALLBACK] correlationId=${correlationId} fromProvider=${provider.id} toProvider=${nextProvider ? nextProvider.id : "NONE"} errorType=${providerError.type} status=${providerError.status || 0} retries=${retriesExecuted} reason="${safeErrMsg}"`
         );
 
         this.recordTelemetry({
@@ -291,13 +371,20 @@ export class AIRouter {
           errorMessage: safeErrMsg,
         });
 
-        // Continue loop to try next provider
+        attemptedProviders.push({
+          id: provider.id,
+          model: provider.getModel(),
+          status: providerError.status || 0,
+          errorType: providerError.type,
+          retries: retriesExecuted,
+        });
       }
     }
 
     // If reached here, all candidate providers failed
+    const safeLastError = sanitizeLogText(lastError?.message || String(lastError));
     console.error(
-      `[GOAT-AI][ROUTER][EXHAUSTED] correlationId=${correlationId} totalAttempts=${attempt} allCandidateProvidersFailed=true lastError="${sanitizeLogText(lastError?.message || String(lastError))}"`
+      `[GOAT-AI][ALERT][CRITICAL] all_providers_failed correlationId=${correlationId} totalAttempts=${attempt} attempted=${JSON.stringify(attemptedProviders)} lastError="${safeLastError}"`
     );
 
     this.recordTelemetry({
@@ -308,12 +395,12 @@ export class AIRouter {
       status: "exhausted",
       durationMs: 0,
       errorType: "all_providers_failed",
-      errorMessage: sanitizeLogText(lastError?.message || "All providers failed"),
+      errorMessage: `All candidate providers failed (${attemptedProviders.map((p) => `${p.id}:${p.status || p.errorType}`).join(", ")}). Last error: ${safeLastError}`,
     });
 
     return {
       text: FRIENDLY_EXHAUSTED_MESSAGE,
-      providerId: "gemini",
+      providerId: "all_failed",
       modelId: "exhausted",
       durationMs: 0,
     };

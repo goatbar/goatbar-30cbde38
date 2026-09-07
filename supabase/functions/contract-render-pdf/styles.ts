@@ -1,13 +1,29 @@
-/**
- * contract-document-styles.ts
- *
- * Estilos compartilhados e canônicos para visualização do canvas A4 e impressão/exportação em PDF.
- * Garante 100% de paridade visual entre o editor/prévia de contrato e o documento gerado final.
- */
+// supabase/functions/contract-render-pdf/styles.ts
+// Shared canonical styles and deterministic embedded font for PDF rendering
 
-import { CANONICAL_FONT_FACE_CSS, CANONICAL_FONT_FAMILY } from "./canonical-contract-font";
+import {
+  CANONICAL_FONT_FAMILY,
+  CANONICAL_FONT_REGULAR_BASE64,
+  CANONICAL_FONT_BOLD_BASE64,
+} from "./font.ts";
 
-export { CANONICAL_FONT_FACE_CSS, CANONICAL_FONT_FAMILY };
+export const CANONICAL_FONT_FACE_CSS = `
+@font-face {
+  font-family: "${CANONICAL_FONT_FAMILY}";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url(data:font/woff2;base64,${CANONICAL_FONT_REGULAR_BASE64}) format("woff2");
+}
+
+@font-face {
+  font-family: "${CANONICAL_FONT_FAMILY}";
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url(data:font/woff2;base64,${CANONICAL_FONT_BOLD_BASE64}) format("woff2");
+}
+`;
 
 export const CANONICAL_CONTRACT_DOCUMENT_CSS = `
   ${CANONICAL_FONT_FACE_CSS}
@@ -33,9 +49,7 @@ export const CANONICAL_CONTRACT_DOCUMENT_CSS = `
     print-color-adjust: exact;
   }
 
-  #contract-root,
-  #contract-pdf-document,
-  .docx-canvas-paper {
+  #contract-root {
     width: 100%;
     max-width: 180mm;
     margin: 0 auto;
@@ -46,16 +60,7 @@ export const CANONICAL_CONTRACT_DOCUMENT_CSS = `
     line-height: 1.6;
   }
 
-  /* Forçar isolamento de cor contra override de Tema Escuro */
-  #contract-root p, #contract-root div, #contract-root span, #contract-root td, #contract-root li,
-  .docx-canvas-paper p, .docx-canvas-paper div, .docx-canvas-paper span, .docx-canvas-paper td, .docx-canvas-paper li {
-    color: #0f172a !important;
-  }
-
-  /* Parágrafos e Espaçamentos */
-  p,
-  .docx-canvas-paper p,
-  #contract-root p {
+  p {
     margin-top: 0;
     margin-bottom: 0.75rem;
     line-height: 1.6;
@@ -64,12 +69,7 @@ export const CANONICAL_CONTRACT_DOCUMENT_CSS = `
     widows: 3;
   }
 
-  /* Títulos e Hierarquia */
-  h1, h2, h3, h4, h5, h6,
-  .docx-canvas-paper h1, .docx-canvas-paper h2, .docx-canvas-paper h3,
-  .docx-canvas-paper h4, .docx-canvas-paper h5, .docx-canvas-paper h6,
-  #contract-root h1, #contract-root h2, #contract-root h3,
-  #contract-root h4, #contract-root h5, #contract-root h6 {
+  h1, h2, h3, h4, h5, h6 {
     font-family: '${CANONICAL_FONT_FAMILY}', sans-serif;
     font-weight: 700;
     color: #020617 !important;
@@ -80,12 +80,11 @@ export const CANONICAL_CONTRACT_DOCUMENT_CSS = `
     page-break-after: avoid;
   }
 
-  h1, .docx-canvas-paper h1, #contract-root h1 { font-size: 20px; }
-  h2, .docx-canvas-paper h2, #contract-root h2 { font-size: 16px; }
-  h3, .docx-canvas-paper h3, #contract-root h3 { font-size: 14px; }
-  h4, .docx-canvas-paper h4, #contract-root h4 { font-size: 13px; }
+  h1 { font-size: 20px; }
+  h2 { font-size: 16px; }
+  h3 { font-size: 14px; }
+  h4 { font-size: 13px; }
 
-  /* Classes semânticas adicionais */
   .contract-title {
     font-size: 20px !important;
     font-weight: 700 !important;
@@ -122,10 +121,7 @@ export const CANONICAL_CONTRACT_DOCUMENT_CSS = `
     font-weight: 700;
   }
 
-  /* Tabelas */
-  table,
-  .docx-canvas-paper table,
-  #contract-root table {
+  table {
     width: 100%;
     border-collapse: collapse;
     margin: 1rem 0;
@@ -134,9 +130,7 @@ export const CANONICAL_CONTRACT_DOCUMENT_CSS = `
     background-color: #ffffff !important;
   }
 
-  th, td,
-  .docx-canvas-paper th, .docx-canvas-paper td,
-  #contract-root th, #contract-root td {
+  th, td {
     border: 1px solid #cbd5e1 !important;
     padding: 8px 12px;
     text-align: left;
@@ -145,34 +139,28 @@ export const CANONICAL_CONTRACT_DOCUMENT_CSS = `
     font-size: 12px;
   }
 
-  th, .docx-canvas-paper th, #contract-root th {
+  th {
     background-color: #f8fafc !important;
     color: #020617 !important;
     font-weight: 700;
   }
 
-  td, .docx-canvas-paper td, #contract-root td {
+  td {
     background-color: #ffffff !important;
   }
 
-  /* Listas */
-  ul, ol,
-  .docx-canvas-paper ul, .docx-canvas-paper ol,
-  #contract-root ul, #contract-root ol {
+  ul, ol {
     margin-top: 0;
     margin-bottom: 0.75rem;
     padding-left: 1.5rem;
   }
 
-  li,
-  .docx-canvas-paper li,
-  #contract-root li {
+  li {
     margin-bottom: 0.25rem;
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  /* Quebra de página explícita */
   .docx-page-break,
   [style*="page-break-after"],
   [style*="break-after"] {
@@ -185,7 +173,6 @@ export const CANONICAL_CONTRACT_DOCUMENT_CSS = `
     break-after: page !important;
   }
 
-  /* Bloco de Assinaturas Semântico e Inseparável */
   .contract-signature-block,
   .signature-block,
   .signature-grid {
@@ -194,35 +181,4 @@ export const CANONICAL_CONTRACT_DOCUMENT_CSS = `
     margin-top: 2rem !important;
     padding-top: 0.5rem;
   }
-
-  /* Chips visuais do editor (apenas no modo de edição) */
-  .docx-field-chip {
-    background-color: rgba(99, 102, 241, 0.15) !important;
-    color: #4f46e5 !important;
-    border-radius: 4px;
-    padding: 1px 4px;
-    font-family: monospace;
-    font-weight: 700;
-  }
-`;
-
-export const CONTRACT_DOCUMENT_CSS = CANONICAL_CONTRACT_DOCUMENT_CSS;
-export const CONTRACT_PDF_DOCUMENT_CSS = CANONICAL_CONTRACT_DOCUMENT_CSS;
-
-export const CONTRACT_PRINT_HTML_SHELL = (title: string, bodyHtml: string): string => `
-<!DOCTYPE html>
-<html lang="pt-BR" style="background:#ffffff; color:#0f172a;">
-  <head>
-    <meta charset="UTF-8">
-    <title>${title}</title>
-    <style>
-      ${CANONICAL_CONTRACT_DOCUMENT_CSS}
-    </style>
-  </head>
-  <body style="margin:0; background:#ffffff !important; color:#0f172a !important;">
-    <main id="contract-root" class="docx-canvas-paper">
-      ${bodyHtml}
-    </main>
-  </body>
-</html>
 `;

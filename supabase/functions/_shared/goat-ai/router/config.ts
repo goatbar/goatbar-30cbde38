@@ -93,10 +93,10 @@ export const PROVIDER_CONFIGS: Record<AIProviderId, ProviderStaticConfig> = {
   openrouter: {
     id: "openrouter",
     name: "OpenRouter Free",
-    priority: 50,
+    priority: 25,
     freeType: "FREE",
     defaultBaseUrl: "https://openrouter.ai/api/v1",
-    defaultModel: "meta-llama/llama-3.1-8b-instruct:free",
+    defaultModel: "openrouter/free",
     capabilities: {
       supportsText: true,
       supportsTools: true,
@@ -147,7 +147,7 @@ export const PROVIDER_CONFIGS: Record<AIProviderId, ProviderStaticConfig> = {
     priority: 80,
     freeType: "FREE",
     defaultBaseUrl: "https://generativelanguage.googleapis.com",
-    defaultModel: "gemini-3.6-flash",
+    defaultModel: "gemini-2.5-flash",
     capabilities: {
       supportsText: true,
       supportsTools: true,
@@ -211,12 +211,14 @@ export function getProviderSecrets(providerId: AIProviderId): {
         baseUrl: getEnv("NVIDIA_BASE_URL") || PROVIDER_CONFIGS.nvidia.defaultBaseUrl,
         model: getEnv("NVIDIA_MODEL") || "", // Do not assume or invent model
       };
-    case "gemini":
+    case "gemini": {
+      const gModel = getEnv("GEMINI_MODEL");
       return {
         apiKey: getEnv("GEMINI_API_KEY") || getEnv("GOOGLE_AI_API_KEY") || getEnv("GOOGLE_API_KEY"),
         baseUrl: PROVIDER_CONFIGS.gemini.defaultBaseUrl,
-        model: getEnv("GEMINI_MODEL") || PROVIDER_CONFIGS.gemini.defaultModel,
+        model: gModel || PROVIDER_CONFIGS.gemini.defaultModel,
       };
+    }
     default:
       return { apiKey: "" };
   }

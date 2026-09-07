@@ -75,11 +75,36 @@ export abstract class BaseAIProvider implements AIProvider {
       };
     }
 
+    if (status === 400) {
+      return {
+        type: "bad_request",
+        status: 400,
+        message: `Requisição inválida ou erro de schema (HTTP 400): ${rawMsg || bodyText.slice(0, 150)}`,
+        isFatalForModel: true,
+        raw: error,
+      };
+    }
+
     if (status === 401) {
       return {
         type: "auth_invalid",
         status: 401,
         message: `Chave de API inválida ou não autorizada (HTTP 401): ${rawMsg || bodyText.slice(0, 150)}`,
+        isFatalForProvider: true,
+        raw: error,
+      };
+    }
+
+    if (
+      status === 402 ||
+      bodyText.includes("payment_required") ||
+      bodyText.includes("payment method is required") ||
+      bodyText.includes("balance_units")
+    ) {
+      return {
+        type: "quota_exhausted",
+        status: 402,
+        message: `Saldo insuficiente / Pagamento obrigatório no provedor (HTTP 402): ${rawMsg || bodyText.slice(0, 150)}`,
         isFatalForProvider: true,
         raw: error,
       };

@@ -1,7 +1,18 @@
+/**
+ * pdf-service.ts
+ *
+ * Serviço de geração de PDFs oficiais do GOAT Bar.
+ * Substitui o mecanismo legado html2pdf.js/html2canvas pelo mecanismo nativo Chromium
+ * via Supabase Edge Function `contract-render-pdf` e Cloudflare Browser Run Quick Action.
+ *
+ * Produz PDF vetorial leve, pesquisável e de alta fidelidade visual,
+ * gerando um artefato imutável com hash SHA-256 consumido pelo fluxo da Assinafy.
+ */
+
+import { supabase } from "@/integrations/supabase/client";
 import { prepareContractExportHtml } from "@/utils/prepare-contract-export-html";
 import { formatContractDocumentHtml } from "@/utils/format-contract-document-html";
-import { CONTRACT_PDF_DOCUMENT_CSS } from "@/lib/contract-document-styles";
-import html2pdf from "html2pdf.js";
+import { CANONICAL_CONTRACT_DOCUMENT_CSS } from "@/lib/contract-document-styles";
 
 export interface PdfArtifacts {
   blob: Blob;
@@ -11,6 +22,12 @@ export interface PdfArtifacts {
 
 export const CONTRACT_PDF_MIME_TYPE = "application/pdf";
 
+export type PdfTransportFn = (payload: {
+  html: string;
+  title: string;
+  contractId?: string;
+}) => Promise<ArrayBuffer>;
+
 function escapeHtmlText(value: string): string {
   const entities: Record<string, string> = {
     "&": "&amp;",
@@ -19,16 +36,27 @@ function escapeHtmlText(value: string): string {
     '"': "&quot;",
     "'": "&#39;",
   };
-  return value.replace(/[&<>"']/g, (character) => entities[character]);
+  return (value || "").replace(/[&<>"']/g, (character) => entities[character] || character);
 }
 
-/** Builds the exact, self-contained UTF-8 document captured for Assinafy. */
+/** Builds the exact, self-contained UTF-8 canonical document. */
 export function buildContractPdfDocument(htmlContent: string, title: string): string {
   const cleanHtml = formatContractDocumentHtml(prepareContractExportHtml(htmlContent));
   return `<!DOCTYPE html>
-<html lang="pt-BR" style="background:#ffffff;color:#000000;color-scheme:light">
-<head><meta charset="UTF-8"><meta name="color-scheme" content="light only"><title>${escapeHtmlText(title)}</title><style>${CONTRACT_PDF_DOCUMENT_CSS}</style></head>
-<body style="margin:0;background:#ffffff!important;color:#000000!important"><main id="contract-pdf-document" style="box-sizing:border-box;width:164mm;min-height:251mm;background:#ffffff!important;color:#000000!important;isolation:isolate">${cleanHtml}</main></body>
+<html lang="pt-BR" style="background:#ffffff; color:#0f172a; color-scheme: light;">
+<head>
+  <meta charset="UTF-8">
+  <meta name="color-scheme" content="light only">
+  <title>${escapeHtmlText(title)}</title>
+  <style>
+${CANONICAL_CONTRACT_DOCUMENT_CSS}
+  </style>
+</head>
+<body style="margin:0; background:#ffffff !important; color:#0f172a !important;">
+  <main id="contract-root">
+${cleanHtml}
+  </main>
+</body>
 </html>`;
 }
 
@@ -39,66 +67,67 @@ export async function calculateSha256(data: ArrayBuffer): Promise<string> {
     .join("");
 }
 
+/**
+ * Converte HTML do contrato compilado em PDF vetorial oficial via Cloudflare Browser Run.
+ */
 export async function convertHtmlToPdf(
   htmlContent: string,
   title: string = "Contrato_GOAT_Bar",
-  pdfRenderer: typeof html2pdf = html2pdf,
+  contractIdOrTransport?: string | PdfTransportFn,
 ): Promise<PdfArtifacts> {
-  const exportDocument = buildContractPdfDocument(htmlContent, title);
+  const preparedHtml = formatContractDocumentHtml(prepareContractExportHtml(htmlContent));
 
-  const iframe = document.createElement("iframe");
-  iframe.style.position = "absolute";
-  iframe.style.left = "-9999px";
-  iframe.style.top = "0";
-  // A4 at 96 dpi = 794×1123px. Content area with 23mm margins:
-  // width:  210mm - 2×23mm = 164mm ≈ 620px
-  // height: 297mm - 2×23mm = 251mm ≈ 950px
-  // The iframe captures the full A4 page; html2pdf adds the @page margins.
-  iframe.style.width = "794px";
-  iframe.style.height = "1123px";
-  iframe.style.border = "none";
-  document.body.appendChild(iframe);
+  let pdfArrayBuffer: ArrayBuffer;
 
-  const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-  if (!iframeDoc) {
-    document.body.removeChild(iframe);
-    throw new Error("Não foi possível inicializar iframe para geração do PDF.");
-  }
-
-  iframeDoc.open();
-  iframeDoc.write(exportDocument);
-  iframeDoc.close();
-
-  try {
-    const opt = {
-      margin: [23, 23, 23, 23] as [number, number, number, number],
-      filename: `${title}.pdf`,
-      image: { type: "jpeg" as const, quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: "#ffffff" },
-      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" as const },
-      pagebreak: { mode: ["avoid-all", "css", "legacy"] },
-    };
-
-    const targetElement = iframeDoc.getElementById("contract-pdf-document");
-    if (!targetElement) throw new Error("Documento isolado de exportação não foi criado.");
-    await iframeDoc.fonts?.ready;
-    const pdfArrayBuffer: ArrayBuffer = await pdfRenderer()
-      .set(opt)
-      .from(targetElement)
-      .outputPdf("arraybuffer");
-
-    document.body.removeChild(iframe);
-
-    return createPdfArtifacts(pdfArrayBuffer);
-  } catch (err: unknown) {
-    if (document.body.contains(iframe)) {
-      document.body.removeChild(iframe);
+  if (typeof contractIdOrTransport === "function") {
+    // Transporte customizado / injetado (ex: suíte de testes unitários)
+    pdfArrayBuffer = await contractIdOrTransport({
+      html: preparedHtml,
+      title,
+    });
+  } else {
+    const contractId = typeof contractIdOrTransport === "string" ? contractIdOrTransport : undefined;
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      throw new Error("Sessão expirada ou usuário não autenticado para emissão do contrato.");
     }
-    console.error("Erro ao converter HTML para PDF:", err);
-    throw new Error(
-      `Não foi possível converter a minuta compilada para formato PDF: ${err instanceof Error ? err.message : String(err)}`,
-    );
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/contract-render-pdf`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: anonKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        html: preparedHtml,
+        title,
+        contractId,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMsg = `Falha na geração do PDF (${response.status}): ${response.statusText}`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMsg = errorJson.error || errorJson.message || errorMsg;
+      } catch {
+        if (errorText) errorMsg = errorText.slice(0, 300);
+      }
+      throw new Error(errorMsg);
+    }
+
+    pdfArrayBuffer = await response.arrayBuffer();
   }
+
+  return createPdfArtifacts(pdfArrayBuffer);
 }
 
 /** Builds every representation from one immutable buffer, so hash and upload cannot diverge. */

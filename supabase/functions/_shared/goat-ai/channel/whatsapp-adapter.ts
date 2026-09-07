@@ -291,10 +291,14 @@ export class WhatsAppChannelAdapter {
     }
 
     // 3. Process with Gemini Agent
-    console.log(`[GOAT-AI][WHATSAPP][AGENT_STARTED] correlationId=${correlationId} messageTextLength=${messageText.length} attachmentsCount=${attachments.length}`);
+    const turnId = `wa_turn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const requestId = `wa_req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    console.log(`[GOAT-AI][WHATSAPP][AGENT_STARTED] correlationId=${correlationId} turnId=${turnId} messageTextLength=${messageText.length} attachmentsCount=${attachments.length}`);
     const agent = new GoatAIGeminiAgent(this.supabaseAdmin);
     const turnResult = await agent.processTurn({
       correlationId,
+      turnId,
+      requestId,
       channel: "whatsapp",
       message: messageText,
       userId: resolvedUser.userId,
@@ -305,7 +309,7 @@ export class WhatsAppChannelAdapter {
       attachments,
     });
 
-    console.log(`[GOAT-AI][WHATSAPP][AGENT_COMPLETED] correlationId=${correlationId} toolsExecuted=${turnResult.toolCallsExecuted?.length || 0} replyLength=${turnResult.reply?.length || 0}`);
+    console.log(`[GOAT-AI][WHATSAPP][AGENT_COMPLETED] correlationId=${correlationId} turnId=${turnResult.turnId} status=${turnResult.turnStatus} toolsExecuted=${turnResult.toolCallsExecuted?.length || 0} replyLength=${turnResult.reply?.length || 0}`);
 
     // 4. Send EXACTLY ONE final reply back to WhatsApp
     if (turnResult.reply) {

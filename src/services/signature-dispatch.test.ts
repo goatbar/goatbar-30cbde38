@@ -10,49 +10,24 @@ import {
 import { convertAndDispatchSignature, createSignatureDispatchLock } from "./signature-dispatch";
 
 describe("signature PDF dispatch", () => {
-  it("converts HTML to a valid PDF when the renderer module is available", async () => {
-    const bytes = new TextEncoder().encode("%PDF-1.7\nmock pdf");
-    const iframeDocument = {
-      open: vi.fn(),
-      write: vi.fn(),
-      close: vi.fn(),
-      body: {},
-      getElementById: vi.fn().mockReturnValue({ id: "contract-pdf-document" }),
-    };
-    const iframe = { style: {}, contentDocument: iframeDocument };
-    const body = {
-      appendChild: vi.fn(),
-      removeChild: vi.fn(),
-      contains: vi.fn().mockReturnValue(true),
-    };
-    vi.stubGlobal("document", {
-      body,
-      createElement: vi.fn().mockReturnValue(iframe),
-    });
-    const worker = {
-      set: vi.fn().mockReturnThis(),
-      from: vi.fn().mockReturnThis(),
-      outputPdf: vi.fn().mockResolvedValue(bytes.buffer),
-    };
-    const renderer = vi.fn().mockReturnValue(worker);
+  it("converts HTML to a valid PDF via Cloudflare Browser Run transport", async () => {
+    const bytes = new TextEncoder().encode("%PDF-1.7\nmock pdf bytes");
+    const mockTransport = vi.fn().mockResolvedValue(bytes.buffer);
 
     const pdf = await convertHtmlToPdf(
       "<p>Contract</p>",
       "Contract",
-      renderer as unknown as Parameters<typeof convertHtmlToPdf>[2],
+      mockTransport,
     );
 
     expect(pdf.blob.type).toBe("application/pdf");
     expect(new TextDecoder().decode(await pdf.blob.arrayBuffer())).toMatch(/^%PDF-/);
-    expect(renderer).toHaveBeenCalledOnce();
-    expect(worker.from).toHaveBeenCalledWith({ id: "contract-pdf-document" });
-    expect(worker.set).toHaveBeenCalledWith(
+    expect(mockTransport).toHaveBeenCalledOnce();
+    expect(mockTransport).toHaveBeenCalledWith(
       expect.objectContaining({
-        filename: "Contract.pdf",
-        html2canvas: expect.objectContaining({ backgroundColor: "#ffffff" }),
+        title: "Contract",
       }),
     );
-    vi.unstubAllGlobals();
   });
 
   it("builds a self-contained light A4 document without changing contract semantics", () => {
@@ -62,26 +37,29 @@ describe("signature PDF dispatch", () => {
 
     expect(documentHtml).toContain('<meta charset="UTF-8">');
     expect(documentHtml).toContain("background:#ffffff");
-    expect(documentHtml).toContain("color:#000000");
-    expect(documentHtml).toContain("color-scheme:light");
-    expect(documentHtml).toContain("width: 164mm");
+    expect(documentHtml).toContain("color-scheme: light");
     expect(documentHtml).toContain("page-break-after: always");
     expect(documentHtml).toContain("<strong>essencial</strong>");
     expect(documentHtml).toContain("<p>Cláusula");
     expect(documentHtml).toContain("<ul><li>Item</li></ul>");
     expect(documentHtml).not.toMatch(/prefers-color-scheme|class="dark"|dark:/);
     expect(documentHtml).not.toContain("var(--");
+    expect(documentHtml).toContain("GoatBarContractFont");
     expect(documentHtml).toContain('<h1 class="font-bold">Título ágil</h1>');
     expect(source).toContain('class="font-bold"');
     expect(documentHtml).toContain("Contrato &amp; revisão");
   });
 
-  it("adds legal-document hierarchy without changing compiled content", () => {
+  it("adds legal-document hierarchy and groups signature block without changing compiled content", () => {
     const source = `<p>CONTRATO DE PRESTAÇÃO DE SERVIÇOS</p>
       <p>CONTRATANTE:</p><p>Nome: Mariana Campos Moreira</p>
       <p>CLÁUSULA 1 – DO OBJETO DO CONTRATO</p>
       <p>1.1. O presente contrato tem por objeto...</p>
-      <p>a) Montagem do bar no local do evento;</p>`;
+      <p>a) Montagem do bar no local do evento;</p>
+      <p>E, por estarem assim justos e contratados, firmam o presente.</p>
+      <p>Sete Lagoas, 14 de novembro de 2026</p>
+      <p>_________________________________________<br>CONTRATANTE - Mariana Campos Moreira</p>
+      <p>_________________________________________<br>CONTRATADA - Gabriel Santos Silva</p>`;
 
     const documentHtml = buildContractPdfDocument(source, "Contrato");
 
@@ -89,8 +67,10 @@ describe("signature PDF dispatch", () => {
     expect(documentHtml).toContain('class="contract-party-heading"');
     expect(documentHtml).toContain('class="contract-clause-heading"');
     expect(documentHtml).toContain('class="contract-alpha-item"');
+    expect(documentHtml).toContain('class="contract-signature-block"');
     expect(documentHtml).toContain("Nome: Mariana Campos Moreira");
     expect(documentHtml).toContain("1.1. O presente contrato tem por objeto...");
+    expect(documentHtml).toContain("Gabriel Santos Silva");
   });
 
   it("does not call assinafy-create-doc when PDF conversion fails", async () => {

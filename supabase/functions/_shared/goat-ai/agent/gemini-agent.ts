@@ -39,6 +39,9 @@ import {
 import { AIRouter } from "../router/ai-router.ts";
 import { NormalizedAIRequest, NormalizedMessage } from "../router/types.ts";
 import { CircuitBreakerManager } from "../router/circuit-breaker.ts";
+import { FRIENDLY_EXHAUSTED_MESSAGE } from "../router/ai-router.ts";
+import { TurnManager, TurnTimings, TurnStatus } from "../turn/turn-manager.ts";
+import { compactToolResultForAgent } from "../tools/dto.ts";
 import {
   formatConfirmedEventsReply,
   resolveExplicitConfirmedEventsIntent,
@@ -47,6 +50,41 @@ import {
 import { resolveBudgetRequestLinkIntent } from "../events/budget-request-intent.ts";
 
 const MAX_TOOL_CALLS_PER_TURN = 8;
+const TURN_BUDGET_MS = 42000; // 42s budget deadline to ensure client receives structured JSON
+
+function formatPartialEmergencyReply(toolsExecuted: any[]): string {
+  const lines: string[] = [
+    "⚠️ *[Resposta Parcial]*: A consulta levou mais tempo que o esperado para sintetizar todos os detalhes com a IA, mas recuperei com sucesso os seguintes dados diretamente do sistema:\n",
+  ];
+
+  for (const t of toolsExecuted) {
+    if (t.toolName === "get_event_details" && t.result?.event) {
+      const ev = t.result.event;
+      lines.push(`📋 *Evento:* ${ev.event_name || ev.client_name || "Evento"}`);
+      if (ev.date) lines.push(`📅 *Data:* ${ev.date}`);
+      if (ev.location || ev.city) lines.push(`📍 *Local:* ${ev.location || ev.city}`);
+      if (Array.isArray(ev.drinks) && ev.drinks.length > 0) {
+        lines.push(`\n🍸 *Drinks do Cardápio:*`);
+        ev.drinks.forEach((d: any) => {
+          lines.push(`• *${d.name}*${d.description ? ` - ${d.description}` : ""}`);
+        });
+      }
+    } else if (t.toolName === "search_events" && Array.isArray(t.result?.events)) {
+      lines.push(`📋 *Eventos Encontrados:*`);
+      t.result.events.slice(0, 8).forEach((ev: any) => {
+        lines.push(`• *${ev.event_name || ev.client_name}* (${ev.date || "sem data"}) - ${ev.status || ""}`);
+      });
+    } else if (t.toolName === "get_drinks_catalog" && Array.isArray(t.result?.drinks)) {
+      lines.push(`🍸 *Catálogo de Drinks:*`);
+      t.result.drinks.slice(0, 10).forEach((d: any) => {
+        lines.push(`• *${d.name}*${d.description ? ` - ${d.description}` : ""}`);
+      });
+    }
+  }
+
+  lines.push("\n_Nota: A solicitação não pôde ser integralmente sintetizada pela IA devido ao limite de tempo do turno._");
+  return lines.join("\n");
+}
 
 export function determinePrivacyClass(input: AgentInput): PrivacyClassification {
   const text = (input.message || "").toLowerCase();
@@ -123,56 +161,97 @@ export class GoatAIGeminiAgent {
   }
 
   public async processTurn(input: AgentInput): Promise<AgentTurnResponse> {
-    const correlationId =
-      input.correlationId || `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const turnStartTime = Date.now();
+    const turnId = input.turnId || `turn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const requestId = input.requestId || `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const correlationId = input.correlationId || turnId;
+
+    let llmMs = 0;
+    let toolsMs = 0;
+    let dbMs = 0;
+    let retriesMs = 0;
+    let failoverMs = 0;
+    let turnStatus: TurnStatus = "completed";
 
     const externalConvIdentifier =
       input.conversationId ||
       input.externalSenderId ||
       (input.channel === "whatsapp" && input.userId ? `wa_user_${input.userId}` : undefined);
 
+    const tDbStart = Date.now();
     const conversation = await this.conversationManager.getOrCreateConversation(
       input.channel,
       input.userId,
       externalConvIdentifier,
       input.message.slice(0, 40) || "Conversa com a GIA",
     );
+    dbMs += (Date.now() - tDbStart);
 
-    console.log(`[GOAT-AI][CONVERSATION][CONVERSATION_LOADED] correlationId=${correlationId} conversationId=${conversation.id} channel=${input.channel} userId=${input.userId || "anonymous"}`);
+    console.log(`[GOAT-AI][CONVERSATION][CONVERSATION_LOADED] correlationId=${correlationId} turnId=${turnId} conversationId=${conversation.id} channel=${input.channel} userId=${input.userId || "anonymous"}`);
 
-    const context: ToolContext = {
-      supabaseAdmin: this.supabaseAdmin,
-      userId: input.userId,
-      userName: input.userName || "Usuário",
-      userRole: input.userRole || "socio",
-      conversationId: conversation.id,
-      channel: input.channel,
-      correlationId,
-    };
+    const turnManager = new TurnManager(this.supabaseAdmin, turnId, conversation.id, requestId);
 
-    // 1. Record user message
-    let messageType: "text" | "image" | "document" | "audio" = "text";
-    if (input.attachments && input.attachments.length > 0) {
-      const mime = input.attachments[0].mimeType.toLowerCase();
-      if (mime.startsWith("image/")) messageType = "image";
-      else if (mime.startsWith("audio/")) messageType = "audio";
-      else if (mime.includes("pdf") || mime.includes("document")) messageType = "document";
+    // Mutual Exclusion: Acquire conversation lock (Directive 6)
+    const lock = await turnManager.acquireConversationLock(8000);
+    if (!lock.acquired) {
+      console.warn(`[GOAT-AI][LOCK][BLOCKED] conversationId=${conversation.id} turnId=${turnId} reason="${lock.reason}"`);
+      const busyReply = "A GIA está processando sua mensagem anterior nesta conversa. Por favor, aguarde alguns instantes.";
+      return {
+        turnId,
+        requestId,
+        conversationId: conversation.id,
+        messageId: "busy",
+        reply: busyReply,
+        turnStatus: "processing",
+        toolCallsExecuted: [],
+        timings: {
+          totalMs: Date.now() - turnStartTime,
+          llmMs: 0,
+          toolsMs: 0,
+          dbMs,
+          retriesMs: 0,
+          failoverMs: 0,
+        },
+      };
     }
 
-    const userMessage = await this.conversationManager.saveMessage(
-      conversation.id,
-      "user",
-      input.message,
-      messageType,
-      input.attachments?.[0]?.url,
-      input.externalMessageId,
-      input.userName,
-    );
+    try {
+      const context: ToolContext = {
+        supabaseAdmin: this.supabaseAdmin,
+        userId: input.userId,
+        userName: input.userName || "Usuário",
+        userRole: input.userRole || "socio",
+        conversationId: conversation.id,
+        channel: input.channel,
+        correlationId,
+      };
 
-    console.log(
-      `[GOAT-AI][CONVERSATION] correlationId=${correlationId} conversationId=${conversation.id} userMessageId=${userMessage.id} messageType=${messageType}`,
-    );
+      // 1. Record user message
+      let messageType: "text" | "image" | "document" | "audio" = "text";
+      if (input.attachments && input.attachments.length > 0) {
+        const mime = input.attachments[0].mimeType.toLowerCase();
+        if (mime.startsWith("image/")) messageType = "image";
+        else if (mime.startsWith("audio/")) messageType = "audio";
+        else if (mime.includes("pdf") || mime.includes("document")) messageType = "document";
+      }
+
+      const tMsgStart = Date.now();
+      const userMessage = await this.conversationManager.saveMessage(
+        conversation.id,
+        "user",
+        input.message,
+        messageType,
+        input.attachments?.[0]?.url,
+        input.externalMessageId,
+        input.userName,
+      );
+      dbMs += (Date.now() - tMsgStart);
+
+      console.log(
+        `[GOAT-AI][CONVERSATION] correlationId=${correlationId} turnId=${turnId} conversationId=${conversation.id} userMessageId=${userMessage.id} messageType=${messageType}`,
+      );
+
+      await turnManager.initTurn(userMessage.id);
 
     // A URL real nunca é inventada pelo provider: frases explícitas passam
     // diretamente pela tool determinística e auditável.
@@ -419,7 +498,9 @@ export class GoatAIGeminiAgent {
           const loaded = await loadDrinkCatalogAndAliases(this.supabaseAdmin, draftArgs.unit_name);
           catalog = loaded.catalog;
           aliases = loaded.aliases;
-        } catch {}
+        } catch (catErr: any) {
+          console.warn(`[GOAT-AI][SALES_DRAFT][WARN] Falha ao carregar catalogo de drinks: ${catErr?.message || catErr}`);
+        }
 
         const validation = validateSalesSessionDraft(draftArgs, catalog, aliases);
         if (validation.isValid && validation.normalized) {
@@ -1027,6 +1108,21 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
     while (turnCount < MAX_TOOL_CALLS_PER_TURN) {
       turnCount++;
 
+      const elapsed = Date.now() - turnStartTime;
+      if (elapsed >= TURN_BUDGET_MS) {
+        console.warn(`[GOAT-AI][AGENT][BUDGET_EXCEEDED] turnId=${turnId} elapsedMs=${elapsed} toolsCount=${toolsExecuted.length}`);
+        if (toolsExecuted.length > 0) {
+          finalReply = formatPartialEmergencyReply(toolsExecuted);
+          turnStatus = "partial";
+        } else {
+          finalReply = "A consulta demorou mais que o esperado para responder. Por favor, tente novamente.";
+          turnStatus = "failed";
+        }
+        break;
+      }
+
+      await turnManager.updateStage(turnCount === 1 ? "llm_call" : "synthesis");
+
       const routerRequest: NormalizedAIRequest = {
         correlationId,
         messages: normalizedMessages,
@@ -1041,39 +1137,42 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
         privacyClassification,
       };
 
+      const tLlm = Date.now();
       const response = await this.router.generate(routerRequest);
+      llmMs += (Date.now() - tLlm);
 
       // Detect empty response without tools
       if (!response.text && (!response.toolCalls || response.toolCalls.length === 0)) {
-        finalReply = "Não consegui interpretar a resposta no momento. Pode reformular?";
+        if (toolsExecuted.length > 0) {
+          finalReply = formatPartialEmergencyReply(toolsExecuted);
+          turnStatus = "partial";
+        } else {
+          finalReply = "Não consegui interpretar a resposta no momento. Pode reformular?";
+          turnStatus = "failed";
+        }
         break;
       }
 
       // Detect mid-turn provider switch
       if (lastActiveProvider && lastActiveProvider !== response.providerId) {
+        failoverMs += 500;
         console.log(
-          `[GOAT-AI][ROUTER][PROVIDER_SWITCH] correlationId=${correlationId} fromProvider=${lastActiveProvider} toProvider=${response.providerId} reason="mid_turn_switch" toolsAlreadyExecuted=${Array.from(executedToolNamesSet).join(",")} turnStep=${turnCount}`,
+          `[GOAT-AI][ROUTER][PROVIDER_SWITCH] correlationId=${correlationId} turnId=${turnId} fromProvider=${lastActiveProvider} toProvider=${response.providerId} reason="mid_turn_switch" toolsAlreadyExecuted=${Array.from(executedToolNamesSet).join(",")} turnStep=${turnCount}`,
         );
       }
       lastActiveProvider = response.providerId;
 
       // Check if response contains tool calls
       if (response.toolCalls && response.toolCalls.length > 0) {
+        await turnManager.updateStage("tool_execution");
         let hasPendingOrBreak = false;
 
+        // Check if tool requires user confirmation / validation before mutation
         for (const toolCall of response.toolCalls) {
           const toolName = toolCall.name;
           const args = toolCall.arguments || {};
           const toolDef = this.toolRegistry.getTool(toolName);
 
-          // Prevent duplicate execution of the same tool in the same turn
-          const toolExecKey = `${toolName}:${JSON.stringify(args)}`;
-          if (executedToolNamesSet.has(toolExecKey)) {
-            console.warn(`[GOAT-AI][ROUTER] Duplicate tool execution blocked: ${toolExecKey}`);
-            continue;
-          }
-
-          // Check if tool requires user confirmation / validation before mutation
           if (toolDef?.requiresConfirmation) {
             if (toolName === "create_sales_session") {
               const priorArgs =
@@ -1098,8 +1197,8 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                 );
                 catalog = loaded.catalog;
                 aliases = loaded.aliases;
-              } catch {
-                // catalog optional
+              } catch (catErr: any) {
+                console.warn(`[GOAT-AI][SALES_DRAFT][WARN] Falha ao carregar catalogo: ${catErr?.message || catErr}`);
               }
 
               const validation = validateSalesSessionDraft(mergedArgs, catalog, aliases);
@@ -1291,13 +1390,39 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
               break;
             }
           }
+        }
 
-          // Execute read tool
+        if (hasPendingOrBreak) {
+          break;
+        }
+
+        // Canonical Multi-Tool Format (Directive 9): Exactly ONE assistant message with all toolCalls
+        normalizedMessages.push({
+          role: "assistant",
+          content: response.text || undefined,
+          toolCalls: response.toolCalls,
+        });
+
+        // Execute read tools and append individual tool messages with semantic compacting (Directive 8)
+        for (const toolCall of response.toolCalls) {
+          const toolName = toolCall.name;
+          const args = toolCall.arguments || {};
+          const toolExecKey = `${toolName}:${JSON.stringify(args)}`;
+
+          // Prevent duplicate execution of the same tool in the same turn
+          if (executedToolNamesSet.has(toolExecKey)) {
+            console.warn(`[GOAT-AI][ROUTER] Duplicate tool execution blocked: ${toolExecKey}`);
+            continue;
+          }
+
+          const tTool = Date.now();
           const toolResult = await this.toolRegistry.executeTool(toolName, args, {
             ...context,
             correlationId,
             toolCallId: toolCall.id,
           });
+          toolsMs += (Date.now() - tTool);
+
           executedToolNamesSet.add(toolExecKey);
           toolsExecuted.push({
             toolName,
@@ -1305,6 +1430,8 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
             result: toolResult.data,
             status: toolResult.success ? "success" : "error",
           });
+
+          await turnManager.recordToolExecution(toolName);
 
           // Persist contextual events when events tools execute
           if (toolResult.success && toolResult.data) {
@@ -1362,25 +1489,27 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
             }
           }
 
-          // Append assistant toolCall and user toolResult to canonical messages
-          normalizedMessages.push({
-            role: "assistant",
-            content: response.text,
-            toolCalls: [toolCall],
-          });
+          // Compact semantic payload for LLM (Directive 8)
+          const rawPayload = toolResult.success
+            ? (toolResult.data ?? {})
+            : { error: toolResult.error || "Erro na ferramenta" };
 
-          normalizedMessages.push({
+          const compacted = compactToolResultForAgent(toolName, rawPayload);
+          console.log(
+            `[GOAT-AI][TOOL][COMPACTED] tool=${toolName} rawBytes=${compacted.metrics.rawBytes} compactedBytes=${compacted.metrics.compactedBytes} tokensSaved=${compacted.metrics.estimatedTokensSaved}`
+          );
+
+          const thoughtSig = (toolCall as any).thoughtSignature;
+          const toolMessage: any = {
             role: "tool",
             toolCallId: toolCall.id,
             toolName,
-            toolResult: toolResult.success
-              ? (toolResult.data ?? {})
-              : { error: toolResult.error || "Erro na ferramenta" },
-          });
-        }
-
-        if (hasPendingOrBreak) {
-          break;
+            toolResult: compacted.data,
+          };
+          if (thoughtSig) {
+            toolMessage.thoughtSignature = thoughtSig;
+          }
+          normalizedMessages.push(toolMessage);
         }
       } else {
         // Model provided final text response
@@ -1390,18 +1519,71 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
     }
 
     if (!finalReply) {
-      finalReply = "Processamento concluído.";
+      if (toolsExecuted.length > 0) {
+        finalReply = formatPartialEmergencyReply(toolsExecuted);
+        turnStatus = "partial";
+      } else {
+        finalReply = "Processamento concluído.";
+      }
     }
 
+    if (finalReply === FRIENDLY_EXHAUSTED_MESSAGE && toolsExecuted.length > 0) {
+      finalReply = formatPartialEmergencyReply(toolsExecuted);
+      turnStatus = "partial";
+    }
+
+    await turnManager.updateStage("persisting");
+
     // 5. Save assistant message
+    const tMsgSave = Date.now();
     const assistantMsg = await this.conversationManager.saveMessage(
       conversation.id,
       "assistant",
       finalReply,
       "text",
     );
+    dbMs += (Date.now() - tMsgSave);
+
+    const totalMs = Date.now() - turnStartTime;
+    const timings: TurnTimings = {
+      totalMs,
+      llmMs,
+      toolsMs,
+      dbMs,
+      retriesMs,
+      failoverMs,
+    };
+
+    if (turnStatus === "partial") {
+      await turnManager.partialTurn({
+        assistantMessageId: assistantMsg.id,
+        reply: finalReply,
+        providerId: lastActiveProvider || undefined,
+        reason: "partial_tool_synthesis",
+        timings,
+      });
+    } else if (turnStatus === "failed") {
+      await turnManager.failTurn({
+        errorType: "agent_processing_failed",
+        errorMessage: finalReply,
+        stage: "done",
+        timings,
+      });
+    } else {
+      await turnManager.completeTurn({
+        assistantMessageId: assistantMsg.id,
+        reply: finalReply,
+        providerId: lastActiveProvider || undefined,
+        timings,
+      });
+    }
 
     return {
+      turnId,
+      requestId,
+      turnStatus,
+      timings,
+      providerId: lastActiveProvider || undefined,
       conversationId: conversation.id,
       messageId: assistantMsg.id,
       reply: finalReply,
@@ -1427,6 +1609,9 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
             }
           : null,
     };
+    } finally {
+      await turnManager.releaseConversationLock();
+    }
   }
 }
 

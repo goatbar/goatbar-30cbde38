@@ -115,14 +115,69 @@ export const GoatAIChatView: React.FC<GoatAIChatViewProps> = ({
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSendMessage = async (customText?: string) => {
-    const textToSend = customText || inputText;
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const handleCheckTurnStatus = async (turnId: string) => {
+    setLoading(true);
+    setOperationalStatus("Consultando status do turno no servidor...");
+    try {
+      const reconciled = await goatAIChatService.reconcileTurn(turnId, conversationId);
+      if (reconciled?.status === "completed" && reconciled.reply) {
+        toast.success("Resposta recuperada do servidor!");
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.turn_id === turnId && m.role === "assistant"
+              ? {
+                  ...m,
+                  content: reconciled.reply!,
+                  turn_status: "completed",
+                  is_error: false,
+                }
+              : m
+          )
+        );
+      } else if (reconciled?.status === "partial" && reconciled.reply) {
+        toast.warning("Resposta parcial recuperada!");
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.turn_id === turnId && m.role === "assistant"
+              ? {
+                  ...m,
+                  content: reconciled.reply!,
+                  turn_status: "partial",
+                  is_error: false,
+                }
+              : m
+          )
+        );
+      } else if (reconciled?.status === "processing") {
+        toast.info("A GIA ainda está processando esse turno no servidor. Tente novamente em alguns segundos.");
+      } else {
+        toast.error("Turno não concluído no servidor. Tente reenviar a mensagem.");
+      }
+    } catch {
+      toast.error("Erro ao verificar status do turno.");
+    } finally {
+      setLoading(false);
+      setOperationalStatus(null);
+    }
+  };
+
+  const handleSendMessage = async (customText?: string, retryUserContent?: string) => {
+    const textToSend = customText || retryUserContent || inputText;
     if (!textToSend.trim() && attachments.length === 0) return;
     if (loading) return;
 
     const currentAttachments = [...attachments];
-    setInputText("");
-    setAttachments([]);
+    if (!retryUserContent) {
+      setInputText("");
+      setAttachments([]);
+    }
+
+    const turnId = `turn_web_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const requestId = `req_web_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    console.log(`[GIA:UI] turn_started turnId=${turnId} reqId=${requestId} convId=${conversationId || "new"}`);
 
     // Optimistic user message
     const tempUserMsg: ChatMessage = {
@@ -132,6 +187,7 @@ export const GoatAIChatView: React.FC<GoatAIChatViewProps> = ({
       content: textToSend,
       message_type: currentAttachments.length > 0 ? "document" : "text",
       created_at: new Date().toISOString(),
+      turn_id: turnId,
     };
 
     setMessages((prev) => [...prev, tempUserMsg]);
@@ -141,6 +197,8 @@ export const GoatAIChatView: React.FC<GoatAIChatViewProps> = ({
     try {
       const response: SendMessageResponse = await goatAIChatService.sendMessage({
         conversationId,
+        turnId,
+        requestId,
         message: textToSend,
         attachments: currentAttachments.map((a) => ({
           mimeType: a.mimeType,
@@ -149,19 +207,44 @@ export const GoatAIChatView: React.FC<GoatAIChatViewProps> = ({
         })),
       });
 
+      const effectiveConvId = response.conversationId || conversationId || "new";
       if (!conversationId && response.conversationId) {
         setConversationId(response.conversationId);
         onConversationCreated?.(response.conversationId);
       }
 
+      const replyText = (response.reply || "").trim();
+      const isEmptyReply = !replyText;
+
+      console.log(`[GIA:UI] turn_completed turnId=${turnId} status=${response.turnStatus || "completed"} duration=${response.timings?.totalMs || 0}ms empty=${isEmptyReply}`);
+
+      if (isEmptyReply) {
+        // Prevent blank bubble rendering
+        const assistantMsg: ChatMessage = {
+          id: response.messageId || `err_${Date.now()}`,
+          conversation_id: effectiveConvId,
+          role: "assistant",
+          content: "A GIA não retornou uma resposta válida neste momento. Por favor, tente novamente.",
+          message_type: "text",
+          created_at: new Date().toISOString(),
+          turn_id: turnId,
+          turn_status: "failed",
+          is_error: true,
+        };
+        setMessages((prev) => [...prev.filter((m) => m.id !== tempUserMsg.id), tempUserMsg, assistantMsg]);
+        return;
+      }
+
       // Append assistant reply
       const assistantMsg: ChatMessage = {
         id: response.messageId,
-        conversation_id: response.conversationId,
+        conversation_id: effectiveConvId,
         role: "assistant",
         content: response.reply,
         message_type: "text",
         created_at: new Date().toISOString(),
+        turn_id: turnId,
+        turn_status: response.turnStatus || "completed",
       };
 
       setMessages((prev) => [...prev.filter((m) => m.id !== tempUserMsg.id), tempUserMsg, assistantMsg]);
@@ -172,18 +255,95 @@ export const GoatAIChatView: React.FC<GoatAIChatViewProps> = ({
         setPendingAction(null);
       }
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao comunicar com a GIA");
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `err_${Date.now()}`,
-          conversation_id: conversationId || "new",
-          role: "assistant",
-          content: "Não consegui processar sua solicitação agora. Por favor, tente novamente.",
-          message_type: "text",
-          created_at: new Date().toISOString(),
-        },
-      ]);
+      console.warn(`[GIA:UI] transport_error turnId=${turnId} error=${err?.message}. Iniciando reconciliação...`);
+      setOperationalStatus("Conexão interrompida. Verificando processamento da GIA no servidor...");
+
+      // Directive 1: Reconcile turn by turnId after transport error
+      let reconciled: any = null;
+      const pollDelays = [2000, 3500, 5000, 7000];
+
+      for (let attempt = 0; attempt < pollDelays.length; attempt++) {
+        setOperationalStatus(`A GIA ainda está processando seus dados no servidor... (tentativa ${attempt + 1}/${pollDelays.length})`);
+        await sleep(pollDelays[attempt]);
+
+        console.log(`[GIA:UI] reconciling turnId=${turnId} attempt=${attempt + 1}`);
+        reconciled = await goatAIChatService.reconcileTurn(turnId, conversationId);
+
+        if (reconciled) {
+          console.log(`[GIA:UI] reconcile_status turnId=${turnId} status=${reconciled.status}`);
+          if (reconciled.status === "completed" && reconciled.reply) {
+            toast.success("Resposta recuperada do servidor!");
+            const assistantMsg: ChatMessage = {
+              id: reconciled.assistantMessageId || `rec_${Date.now()}`,
+              conversation_id: reconciled.conversationId || conversationId || "new",
+              role: "assistant",
+              content: reconciled.reply,
+              message_type: "text",
+              created_at: new Date().toISOString(),
+              turn_id: turnId,
+              turn_status: "completed",
+            };
+            setMessages((prev) => [...prev.filter((m) => m.id !== tempUserMsg.id), tempUserMsg, assistantMsg]);
+            if (!conversationId && reconciled.conversationId) {
+              setConversationId(reconciled.conversationId);
+              onConversationCreated?.(reconciled.conversationId);
+            }
+            return;
+          }
+
+          if (reconciled.status === "partial" && reconciled.reply) {
+            toast.warning("Resposta parcial recuperada!");
+            const assistantMsg: ChatMessage = {
+              id: reconciled.assistantMessageId || `rec_${Date.now()}`,
+              conversation_id: reconciled.conversationId || conversationId || "new",
+              role: "assistant",
+              content: reconciled.reply,
+              message_type: "text",
+              created_at: new Date().toISOString(),
+              turn_id: turnId,
+              turn_status: "partial",
+            };
+            setMessages((prev) => [...prev.filter((m) => m.id !== tempUserMsg.id), tempUserMsg, assistantMsg]);
+            return;
+          }
+
+          if (reconciled.status === "failed") {
+            const assistantMsg: ChatMessage = {
+              id: `err_${Date.now()}`,
+              conversation_id: conversationId || "new",
+              role: "assistant",
+              content: reconciled.errorMessage || "Não foi possível concluir o processamento no servidor.",
+              message_type: "text",
+              created_at: new Date().toISOString(),
+              turn_id: turnId,
+              turn_status: "failed",
+              is_error: true,
+            };
+            setMessages((prev) => [...prev.filter((m) => m.id !== tempUserMsg.id), tempUserMsg, assistantMsg]);
+            return;
+          }
+
+          if (reconciled.status === "cancelled") {
+            toast.info("Turno cancelado.");
+            return;
+          }
+        }
+      }
+
+      // If after all polling attempts the turn was still processing or unresolved:
+      toast.error("O processamento da GIA está demorando mais que o esperado.");
+      const unconfirmedMsg: ChatMessage = {
+        id: `timeout_${Date.now()}`,
+        conversation_id: conversationId || "new",
+        role: "assistant",
+        content: "A resposta da GIA demorou mais que o esperado na conexão HTTP. O servidor pode ainda estar processando.",
+        message_type: "text",
+        created_at: new Date().toISOString(),
+        turn_id: turnId,
+        turn_status: "processing",
+        is_error: true,
+      };
+      setMessages((prev) => [...prev.filter((m) => m.id !== tempUserMsg.id), tempUserMsg, unconfirmedMsg]);
     } finally {
       setLoading(false);
       setOperationalStatus(null);
@@ -297,6 +457,46 @@ export const GoatAIChatView: React.FC<GoatAIChatViewProps> = ({
                     }`}
                   >
                     <ChatMessageContent content={msg.content} isUser={isUser} />
+
+                    {/* Partial Response Banner */}
+                    {!isUser && msg.turn_status === "partial" && (
+                      <div className="mt-2.5 pt-2 border-t border-amber-500/30 flex items-center gap-1.5 text-[11px] text-amber-500 font-medium">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                        <span>Resposta parcial: limite de tempo atingido antes da síntese completa. Os dados exibidos foram validados no sistema.</span>
+                      </div>
+                    )}
+
+                    {/* Error / Reconcile Controls */}
+                    {!isUser && msg.is_error && (
+                      <div className="mt-3 pt-2.5 border-t border-destructive/20 flex flex-wrap items-center gap-3">
+                        {msg.turn_id && (
+                          <button
+                            type="button"
+                            onClick={() => handleCheckTurnStatus(msg.turn_id!)}
+                            disabled={loading}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline cursor-pointer"
+                          >
+                            <Clock className="h-3 w-3" />
+                            Verificar status do turno
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const idx = messages.findIndex((m) => m.id === msg.id);
+                            const prevUserMsg = idx > 0 ? messages[idx - 1] : null;
+                            if (prevUserMsg && prevUserMsg.role === "user") {
+                              handleSendMessage(undefined, prevUserMsg.content);
+                            }
+                          }}
+                          disabled={loading}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-destructive hover:underline cursor-pointer ml-auto"
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          Tentar novamente
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {isUser && (

@@ -57,10 +57,27 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    const adapter = new WhatsAppChannelAdapter(supabaseAdmin);
-    const result = await adapter.processIncomingWebhook(body);
+    // Directive 7: Decouple WhatsApp webhook.
+    // Respond immediately (< 1s) with HTTP 200 ACK to Meta to avoid 15s webhook timeout retries.
+    // Process AI turn asynchronously in the background.
+    const backgroundProcessing = async () => {
+      try {
+        const adapter = new WhatsAppChannelAdapter(supabaseAdmin);
+        await adapter.processIncomingWebhook(body);
+      } catch (bgError: any) {
+        console.error("[whatsapp-webhook] Erro no processamento assíncrono:", bgError);
+      }
+    };
 
-    return new Response(JSON.stringify(result), {
+    if (typeof (globalThis as any).EdgeRuntime !== "undefined" && (globalThis as any).EdgeRuntime?.waitUntil) {
+      (globalThis as any).EdgeRuntime.waitUntil(backgroundProcessing());
+    } else {
+      backgroundProcessing().catch((err) => {
+        console.error("[whatsapp-webhook] Erro em backgroundProcessing:", err);
+      });
+    }
+
+    return new Response(JSON.stringify({ status: "acknowledged", received: true }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -250,16 +250,33 @@ export class ConversationManager {
 
     // Web or API channels
     if (externalConvId) {
-      // First check by direct conversation UUID or external_conversation_id
-      const { data: existing } = await this.supabaseAdmin
-        .from("ai_conversations")
-        .select("*")
-        .eq("channel", channel)
-        .eq("external_conversation_id", externalConvId)
-        .eq("status", "active")
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      let existing: any = null;
+      const cleanId = String(externalConvId).trim();
+      const isUUIDOrId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId) || cleanId.startsWith("conv_");
+
+      // 1. Direct lookup by primary key ID
+      if (isUUIDOrId) {
+        const { data: byId } = await this.supabaseAdmin
+          .from("ai_conversations")
+          .select("*")
+          .eq("id", cleanId)
+          .maybeSingle();
+        if (byId) existing = byId;
+      }
+
+      // 2. Secondary lookup by external_conversation_id
+      if (!existing) {
+        const { data: byExtId } = await this.supabaseAdmin
+          .from("ai_conversations")
+          .select("*")
+          .eq("channel", channel)
+          .eq("external_conversation_id", cleanId)
+          .eq("status", "active")
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (byExtId) existing = byExtId;
+      }
 
       if (existing) {
         await this.supabaseAdmin

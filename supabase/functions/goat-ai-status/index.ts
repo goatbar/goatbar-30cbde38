@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  const url = new URL(req.url);
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -56,9 +57,7 @@ serve(async (req) => {
     gemini: {
       provider: "Google Gemini",
       googleProject: "321790958376",
-      model: (Deno.env.get("GEMINI_MODEL")?.includes("1.5") || Deno.env.get("GEMINI_MODEL")?.includes("2.0") || Deno.env.get("GEMINI_MODEL")?.includes("2.5"))
-        ? "gemini-3.6-flash"
-        : (Deno.env.get("GEMINI_MODEL") || "gemini-3.6-flash"),
+      model: Deno.env.get("GEMINI_MODEL") || "gemini-3.6-flash",
     },
     whatsapp: {
       configured: Boolean(whatsappToken && whatsappPhoneId),

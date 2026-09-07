@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.budget-request]
 verify_jwt = false
+
+[functions.contract-render-pdf]
+verify_jwt = true

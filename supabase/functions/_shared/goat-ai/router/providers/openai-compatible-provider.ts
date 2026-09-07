@@ -82,10 +82,15 @@ export class OpenAICompatibleProvider extends BaseAIProvider {
 
     // Zero-paid policy check for OpenRouter
     if (this.id === "openrouter") {
-      if (!this.model.endsWith(":free")) {
+      const isFreeModel =
+        this.model.endsWith(":free") ||
+        this.model.endsWith("/free") ||
+        this.model === "openrouter/free" ||
+        this.model === "openrouter/auto:free";
+      if (!isFreeModel) {
         return {
           available: false,
-          reason: `PAID_NOT_ALLOWED: Modelo OpenRouter '${this.model}' não possui o sufixo ':free'`,
+          reason: `PAID_NOT_ALLOWED: Modelo OpenRouter '${this.model}' não possui o sufixo ':free' ou '/free'`,
         };
       }
     }
@@ -104,8 +109,15 @@ export class OpenAICompatibleProvider extends BaseAIProvider {
     }
 
     // Strict Zero-Paid Runtime Guard
-    if (this.id === "openrouter" && !this.model.endsWith(":free")) {
-      throw new Error(`PAID_NOT_ALLOWED: Chamada abortada pois modelo OpenRouter '${this.model}' não é gratuito.`);
+    if (this.id === "openrouter") {
+      const isFreeModel =
+        this.model.endsWith(":free") ||
+        this.model.endsWith("/free") ||
+        this.model === "openrouter/free" ||
+        this.model === "openrouter/auto:free";
+      if (!isFreeModel) {
+        throw new Error(`PAID_NOT_ALLOWED: Chamada abortada pois modelo OpenRouter '${this.model}' não é gratuito.`);
+      }
     }
 
     const startTime = Date.now();

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
 import { GoatAIGeminiAgent } from "../_shared/goat-ai/agent/gemini-agent.ts";
 import { ConversationManager } from "../_shared/goat-ai/conversation/manager.ts";
+import { TurnManager } from "../_shared/goat-ai/turn/turn-manager.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.goatbar.com.br",
@@ -71,6 +72,25 @@ serve(async (req) => {
     const body = await req.json();
     const action = body.action || "chat";
 
+    if (action === "reconcile_turn") {
+      const turnRecord = await TurnManager.reconcileTurn(
+        supabaseAdmin,
+        body.turnId,
+        body.conversationId
+      );
+      return new Response(
+        JSON.stringify({
+          success: true,
+          found: !!turnRecord,
+          turn: turnRecord || null,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     if (action === "list_conversations") {
       const { data: convs, error: cErr } = await supabaseAdmin
         .from("ai_conversations")
@@ -115,11 +135,15 @@ serve(async (req) => {
     }
 
     // Default chat turn
-    console.log(`[GOAT-AI-CHAT] correlationId=${correlationId} stage=process_turn conversationId=${body.conversationId || "new"} messageLength=${body.message?.length || 0}`);
+    const turnId = body.turnId;
+    const requestId = body.requestId;
+    console.log(`[GOAT-AI-CHAT] correlationId=${correlationId} turnId=${turnId || "new"} requestId=${requestId || "none"} stage=process_turn conversationId=${body.conversationId || "new"} messageLength=${body.message?.length || 0}`);
 
     const agent = new GoatAIGeminiAgent(supabaseAdmin);
     const turnResult = await agent.processTurn({
-      correlationId,
+      correlationId: requestId || correlationId,
+      turnId,
+      requestId,
       conversationId: body.conversationId,
       message: body.message || "",
       channel: "web",
@@ -130,7 +154,7 @@ serve(async (req) => {
       pageContext: body.pageContext,
     });
 
-    console.log(`[GOAT-AI-CHAT] correlationId=${correlationId} stage=agent_complete conversationId=${turnResult.conversationId} toolsCount=${turnResult.toolCallsExecuted?.length || 0}`);
+    console.log(`[GOAT-AI-CHAT] correlationId=${correlationId} turnId=${turnResult.turnId} stage=agent_complete conversationId=${turnResult.conversationId} status=${turnResult.turnStatus} toolsCount=${turnResult.toolCallsExecuted?.length || 0}`);
 
     return new Response(JSON.stringify({ success: true, ...turnResult }), {
       status: 200,

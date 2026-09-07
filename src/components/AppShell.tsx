@@ -302,32 +302,127 @@ export function PageHeader({ title, subtitle, breadcrumb, action, periodo }: Pag
 
 function NotificationsDropdown() {
   const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<any[]>([]);
+
+  const loadNotifications = async () => {
+    try {
+      const list = await goatAIService.listBudgetNotifications();
+      setItems(list);
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const pendingCount = items.filter((i) => i.approval_status === "pending").length;
 
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen(!open)}
-        onBlur={() => setTimeout(() => setOpen(false), 200)}
-        className="relative h-10 w-10 inline-flex items-center justify-center rounded-lg border border-border bg-surface hover:border-border-strong transition-colors"
+        type="button"
+        onClick={() => {
+          setOpen(!open);
+          if (!open) loadNotifications();
+        }}
+        className="relative h-10 w-10 inline-flex items-center justify-center rounded-lg border border-border bg-surface hover:border-border-strong transition-colors cursor-pointer"
+        aria-label="Abrir notificações"
       >
         <Bell className="h-4 w-4 text-muted-foreground" />
+        {pendingCount > 0 && (
+          <span className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 rounded-full bg-primary text-[10px] font-bold text-primary-foreground flex items-center justify-center animate-pulse">
+            {pendingCount}
+          </span>
+        )}
       </button>
 
       {open && (
-        <div className="absolute top-full right-0 mt-2 w-80 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-top-2 fade-in">
-          <div className="p-4 border-b border-border bg-background/50">
-            <h3 className="font-semibold text-sm">Notificações</h3>
-          </div>
-          <div className="p-8 flex flex-col items-center justify-center text-center">
-            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
-              <Inbox className="h-5 w-5 text-primary" />
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute top-full right-0 mt-2 w-84 bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-top-2 fade-in">
+            <div className="p-4 border-b border-border bg-background/50 flex items-center justify-between">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                Notificações
+                {pendingCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-primary/20 text-primary">
+                    {pendingCount} nova{pendingCount > 1 ? "s" : ""}
+                  </span>
+                )}
+              </h3>
+              <button
+                type="button"
+                onClick={loadNotifications}
+                className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                Atualizar
+              </button>
             </div>
-            <p className="text-sm font-medium">Nenhuma notificação</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Você ainda não possui notificações pendentes.
-            </p>
+
+            <div className="max-h-96 overflow-y-auto divide-y divide-border/40">
+              {items.length === 0 ? (
+                <div className="p-8 flex flex-col items-center justify-center text-center">
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                    <Inbox className="h-5 w-5 text-primary" />
+                  </div>
+                  <p className="text-sm font-medium">Nenhuma notificação</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Você ainda não possui notificações pendentes.
+                  </p>
+                </div>
+              ) : (
+                items.map((item) => {
+                  const data = item.structured_data || {};
+                  const eventId = item.matched_event_id || data.event_id;
+                  const clientName = data.client_name || item.source_sender_name || "Cliente";
+                  const eventType = data.event_type || data.event_name || "Orçamento";
+                  const guests = data.guests;
+                  const date = data.date;
+                  const phone = data.phone || item.source_sender_id;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-3.5 hover:bg-surface-hover/80 transition-colors flex flex-col gap-1.5 text-xs"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-foreground truncate flex items-center gap-1.5">
+                          <span className="h-2 w-2 rounded-full bg-primary shrink-0" />
+                          {clientName}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground shrink-0 font-medium">
+                          {eventType}
+                        </span>
+                      </div>
+
+                      <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                        {date && <span>📅 {date}</span>}
+                        {guests && <span>👥 {guests} pax</span>}
+                        {phone && <span>📞 {phone}</span>}
+                      </div>
+
+                      {eventId && (
+                        <Link
+                          to={`/eventos/${eventId}` as any}
+                          onClick={() => setOpen(false)}
+                          className="mt-1 text-[11px] font-semibold text-primary hover:underline flex items-center gap-1 w-fit"
+                        >
+                          Abrir solicitação no sistema →
+                        </Link>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

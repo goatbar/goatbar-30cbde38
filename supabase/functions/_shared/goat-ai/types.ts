@@ -141,6 +141,8 @@ export interface AgentAttachment {
 }
 
 export interface AgentInput {
+  turnId?: string;
+  requestId?: string;
   correlationId?: string;
   conversationId?: string;
   message: string;
@@ -158,10 +160,23 @@ export interface AgentInput {
 }
 
 export interface AgentTurnResponse {
+  turnId?: string;
+  requestId?: string;
   conversationId: string;
   messageId: string;
   reply: string;
   statusUpdates?: string[];
+  turnStatus?: "processing" | "completed" | "partial" | "failed" | "cancelled";
+  providerId?: string;
+  modelId?: string;
+  timings?: {
+    totalMs: number;
+    llmMs: number;
+    toolsMs: number;
+    dbMs: number;
+    retriesMs: number;
+    failoverMs: number;
+  };
   toolCallsExecuted: {
     toolName: string;
     arguments: any;

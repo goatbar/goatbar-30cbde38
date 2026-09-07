@@ -41,6 +41,8 @@ export type ProviderErrorType =
   | "config_incomplete"
   | "paid_not_allowed"
   | "privacy_violation"
+  | "bad_request"
+  | "empty_response"
   | "unknown";
 
 export interface ProviderCapabilities {
@@ -112,6 +114,8 @@ export interface NormalizedAIRequest {
 export interface NormalizedAIResponse {
   text?: string;
   toolCalls?: NormalizedToolCall[];
+  hasText?: boolean;
+  hasToolCalls?: boolean;
   usage?: {
     inputTokens: number;
     outputTokens: number;

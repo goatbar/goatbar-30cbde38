@@ -37,10 +37,7 @@ export class GeminiRouterAdapter extends BaseAIProvider {
   constructor(options?: GeminiAdapterOptions) {
     super();
     this.apiKey = options?.apiKey || "";
-    const rawModel = options?.model || PROVIDER_CONFIGS.gemini.defaultModel || "gemini-3.6-flash";
-    this.model = (rawModel.includes("1.5") || rawModel.includes("2.0") || rawModel.includes("2.5"))
-      ? "gemini-3.6-flash"
-      : rawModel;
+    this.model = options?.model || PROVIDER_CONFIGS.gemini.defaultModel || "gemini-2.5-flash";
     this.defaultModel = this.model;
     this.baseUrl = options?.baseUrl || PROVIDER_CONFIGS.gemini.defaultBaseUrl || "https://generativelanguage.googleapis.com";
   }

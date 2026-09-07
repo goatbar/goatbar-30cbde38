@@ -214,6 +214,17 @@ export const createSalesSessionTool: GoatAIToolDefinition = {
       labor_details: {
         type: "array",
         description: "Detalhamento de mão de obra por dia da semana (opcional).",
+        items: {
+          type: "object",
+          properties: {
+            data: { type: "string", description: "Data específica da diária (YYYY-MM-DD)." },
+            dia: { type: "string", description: "Dia da semana (ex: 'quinta', 'sexta', 'sabado', 'domingo')." },
+            valor: { type: "number", description: "Valor pago na diária." },
+            qtdPessoas: { type: "number", description: "Quantidade de pessoas na equipe." },
+            nomes: { type: "string", description: "Nomes dos profissionais." },
+          },
+          required: ["valor"],
+        },
       },
       reposicao_restaurante: {
         type: "number",
@@ -222,6 +233,14 @@ export const createSalesSessionTool: GoatAIToolDefinition = {
       custos_restaurante_detalhes: {
         type: "array",
         description: "Detalhamento das reposições do restaurante (opcional, 7 Steakhouse).",
+        items: {
+          type: "object",
+          properties: {
+            descricao: { type: "string", description: "Descrição do insumo ou custo de reposição." },
+            valor: { type: "number", description: "Valor do custo." },
+          },
+          required: ["descricao", "valor"],
+        },
       },
       notes: {
         type: "string",
