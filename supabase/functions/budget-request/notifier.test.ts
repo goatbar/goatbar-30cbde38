@@ -52,11 +52,99 @@ describe("notifyNewBudgetRequest", () => {
     expect(deps.send).not.toHaveBeenCalled();
   });
 
-  it("garante notificação interna mesmo quando não há destinatários de WhatsApp", async () => {
+  it("garante notificação interna mesmo quando não há destinatários de WhatsApp e registra NO_RECIPIENTS", async () => {
     const deps = makeDeps([]);
     expect(await notifyNewBudgetRequest("event-1", deps)).toBe("FAILED");
     expect(deps.notifyInternal).toHaveBeenCalledOnce();
-    expect(deps.finish).toHaveBeenCalledWith("link-1", false, expect.stringContaining("Nenhum"));
+    expect(deps.finish).toHaveBeenCalledWith(
+      "link-1",
+      false,
+      expect.stringContaining("NO_RECIPIENTS: Nenhum destinatário WhatsApp verificado"),
+    );
+  });
+
+  it("envia para múltiplos destinatários (ex: 2 sócios) e registra SENT apenas se todos passarem", async () => {
+    const deps = makeDeps([
+      { phone_number: "+55 (31) 96970-0935" },
+      { phone_number: "5537999985192" },
+    ]);
+    expect(await notifyNewBudgetRequest("event-multi", deps)).toBe("SENT");
+    expect(deps.send).toHaveBeenCalledTimes(2);
+    expect(deps.send).toHaveBeenNthCalledWith(
+      1,
+      "5531969700935",
+      expect.any(Array),
+      "budget_event-multi",
+    );
+    expect(deps.send).toHaveBeenNthCalledWith(
+      2,
+      "5537999985192",
+      expect.any(Array),
+      "budget_event-multi",
+    );
+    expect(deps.finish).toHaveBeenCalledWith("link-1", true);
+  });
+
+  it("registra erro detalhado com categoria META_REJECTED quando a Meta API rejeita o envio", async () => {
+    const deps = makeDeps();
+    (deps.send as any).mockResolvedValue({
+      success: false,
+      errorCategory: "META_REJECTED",
+      httpStatus: 400,
+      metaErrorCode: 131051,
+      metaErrorMessage: "Unsupported message type",
+    });
+
+    expect(await notifyNewBudgetRequest("event-1", deps)).toBe("FAILED");
+    expect(deps.finish).toHaveBeenCalledWith(
+      "link-1",
+      false,
+      expect.stringContaining("META_REJECTED: HTTP 400 code=131051 message=\"Unsupported message type\""),
+    );
+  });
+
+  it("registra WHATSAPP_NOT_CONFIGURED quando as credenciais da Meta estão ausentes", async () => {
+    const deps = makeDeps();
+    (deps.send as any).mockResolvedValue({
+      success: false,
+      errorCategory: "WHATSAPP_NOT_CONFIGURED",
+      errorReason: "WhatsApp credentials not configured",
+    });
+
+    expect(await notifyNewBudgetRequest("event-1", deps)).toBe("FAILED");
+    expect(deps.finish).toHaveBeenCalledWith(
+      "link-1",
+      false,
+      expect.stringContaining("WHATSAPP_NOT_CONFIGURED: WhatsApp credentials not configured"),
+    );
+  });
+
+  it("sanitiza parâmetros ausentes ou nulos para não quebrar a chamada de template da Meta", async () => {
+    const deps = makeDeps();
+    (deps.loadEvent as any).mockResolvedValue({
+      client_name: "",
+      phone: null,
+      date: undefined,
+      event_type: "Formatura",
+      guests: null,
+    });
+
+    expect(await notifyNewBudgetRequest("event-empty-params", deps)).toBe("SENT");
+    expect(deps.send).toHaveBeenCalledWith(
+      "5531999999999",
+      ["Cliente", "Formatura", "A definir", "A definir", "Não informado"],
+      "budget_event-empty-params",
+    );
+  });
+
+  it("registra INVALID_RECIPIENT quando o número do destinatário não puder ser normalizado", async () => {
+    const deps = makeDeps([{ phone_number: "invalid" }]);
+    expect(await notifyNewBudgetRequest("event-1", deps)).toBe("FAILED");
+    expect(deps.finish).toHaveBeenCalledWith(
+      "link-1",
+      false,
+      expect.stringContaining("INVALID_RECIPIENT"),
+    );
   });
 
   it("preserva erro do envio e permite retry de FAILED sem duplicar se idempotente", async () => {

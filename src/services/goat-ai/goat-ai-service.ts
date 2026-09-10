@@ -331,6 +331,7 @@ export const goatAIService = {
     display_name?: string;
     external_user_id?: string;
     provider?: "whatsapp" | "telegram";
+    receive_new_budget_notifications?: boolean;
   }): Promise<UserMessagingAccountItem> {
     const cleanPhone = payload.phone_number.replace(/[^0-9+]/g, "");
     const { data, error } = await (supabase as any)
@@ -342,6 +343,7 @@ export const goatAIService = {
         external_user_id: payload.external_user_id || cleanPhone.replace("+", ""),
         provider: payload.provider || "whatsapp",
         verified: true,
+        receive_new_budget_notifications: payload.receive_new_budget_notifications ?? false,
         updated_at: new Date().toISOString(),
       }, { onConflict: "provider,phone_number" })
       .select()
@@ -364,6 +366,18 @@ export const goatAIService = {
     const { error } = await (supabase as any)
       .from("user_messaging_accounts")
       .update({ verified, updated_at: new Date().toISOString() })
+      .eq("id", id);
+
+    if (error) throw error;
+  },
+
+  async toggleReceiveNewBudgetNotifications(id: string, receive: boolean): Promise<void> {
+    const { error } = await (supabase as any)
+      .from("user_messaging_accounts")
+      .update({
+        receive_new_budget_notifications: receive,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", id);
 
     if (error) throw error;

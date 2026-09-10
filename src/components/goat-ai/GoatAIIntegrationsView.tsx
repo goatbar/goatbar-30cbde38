@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { IntegrationStatus, UserMessagingAccountItem } from "@/services/goat-ai/types";
 import { goatAIService } from "@/services/goat-ai/goat-ai-service";
 import { supabase } from "@/integrations/supabase/client";
+import { Switch } from "@/components/ui/switch";
 import {
   Sparkles,
   MessageSquare,
@@ -38,6 +39,7 @@ export function GoatAIIntegrationsView() {
   const [selectedUserId, setSelectedUserId] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [newDisplayName, setNewDisplayName] = useState("");
+  const [newReceiveBudget, setNewReceiveBudget] = useState(true);
   const [savingAccount, setSavingAccount] = useState(false);
 
   const fetchStatusAndAccounts = async () => {
@@ -88,12 +90,14 @@ export function GoatAIIntegrationsView() {
         phone_number: newPhone,
         display_name: newDisplayName || undefined,
         external_user_id: newPhone.replace(/[^0-9]/g, ""),
+        receive_new_budget_notifications: newReceiveBudget,
       });
       toast.success("WhatsApp vinculado com sucesso ao usuário!");
       setShowAddModal(false);
       setSelectedUserId("");
       setNewPhone("");
       setNewDisplayName("");
+      setNewReceiveBudget(true);
       await fetchStatusAndAccounts();
     } catch (err: any) {
       toast.error(`Erro ao vincular WhatsApp: ${err?.message || String(err)}`);
@@ -120,6 +124,29 @@ export function GoatAIIntegrationsView() {
       await fetchStatusAndAccounts();
     } catch (err: any) {
       toast.error(`Erro ao alterar status: ${err?.message || String(err)}`);
+    }
+  };
+
+  const handleToggleReceiveBudget = async (id: string, current: boolean) => {
+    const previousAccounts = [...accounts];
+    // Optimistic update
+    setAccounts((prev) =>
+      prev.map((acc) =>
+        acc.id === id ? { ...acc, receive_new_budget_notifications: !current } : acc
+      )
+    );
+
+    try {
+      await goatAIService.toggleReceiveNewBudgetNotifications(id, !current);
+      toast.success(
+        !current
+          ? "Notificações de novo orçamento ativadas para este número."
+          : "Notificações de novo orçamento desativadas."
+      );
+    } catch (err: any) {
+      // Revert on error
+      setAccounts(previousAccounts);
+      toast.error(`Erro ao alterar notificações de orçamento: ${err?.message || String(err)}`);
     }
   };
 
@@ -308,6 +335,7 @@ export function GoatAIIntegrationsView() {
                   <th className="pb-2">Número WhatsApp</th>
                   <th className="pb-2">WhatsApp ID (wa_id)</th>
                   <th className="pb-2">Status</th>
+                  <th className="pb-2">Notificar Orçamentos</th>
                   <th className="pb-2 text-right">Ações</th>
                 </tr>
               </thead>
@@ -331,6 +359,31 @@ export function GoatAIIntegrationsView() {
                           Pendente
                         </span>
                       )}
+                    </td>
+                    <td className="py-2.5">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={!!acc.receive_new_budget_notifications && acc.verified}
+                          disabled={!acc.verified}
+                          onCheckedChange={() =>
+                            handleToggleReceiveBudget(acc.id, !!acc.receive_new_budget_notifications)
+                          }
+                          title={
+                            !acc.verified
+                              ? "A conta precisa estar autorizada para receber orçamentos."
+                              : acc.receive_new_budget_notifications
+                              ? "Recebendo notificações de novos orçamentos no WhatsApp."
+                              : "Clique para ativar notificações de novos orçamentos."
+                          }
+                        />
+                        <span className="text-[11px] text-muted-foreground hidden sm:inline">
+                          {!acc.verified
+                            ? "Não autorizado"
+                            : acc.receive_new_budget_notifications
+                            ? "Ativo"
+                            : "Inativo"}
+                        </span>
+                      </div>
                     </td>
                     <td className="py-2.5 text-right space-x-2">
                       <button
@@ -408,6 +461,22 @@ export function GoatAIIntegrationsView() {
                   value={newDisplayName}
                   onChange={(e) => setNewDisplayName(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-muted border border-border text-foreground focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border border-border">
+                <div className="space-y-0.5">
+                  <label htmlFor="modal-receive-budget" className="text-xs font-semibold text-foreground block cursor-pointer">
+                    Receber notificações de novos orçamentos
+                  </label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Enviar mensagem no WhatsApp quando chegar solicitação de orçamento
+                  </p>
+                </div>
+                <Switch
+                  id="modal-receive-budget"
+                  checked={newReceiveBudget}
+                  onCheckedChange={setNewReceiveBudget}
                 />
               </div>
 

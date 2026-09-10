@@ -14,6 +14,23 @@ export interface WhatsAppConfig {
   verifyToken: string;
 }
 
+export type WhatsAppSendErrorCategory =
+  | "NO_RECIPIENTS"
+  | "WHATSAPP_NOT_CONFIGURED"
+  | "META_REJECTED"
+  | "NETWORK_ERROR"
+  | "INVALID_RECIPIENT";
+
+export interface WhatsAppSendResult {
+  success: boolean;
+  metaMessageId?: string;
+  errorCategory?: WhatsAppSendErrorCategory;
+  httpStatus?: number;
+  metaErrorCode?: number | string;
+  metaErrorMessage?: string;
+  errorReason?: string;
+}
+
 function maskPhone(phone: string): string {
   if (!phone || phone.length <= 6) return phone || "";
   return phone.slice(0, 4) + "*".repeat(Math.max(2, phone.length - 8)) + phone.slice(-4);
@@ -106,36 +123,68 @@ export class WhatsAppChannelAdapter {
     languageCode: string,
     parameters: string[],
     correlationId?: string,
-  ): Promise<boolean> {
+  ): Promise<WhatsAppSendResult> {
     const cleanTo = to.replace(/[^0-9]/g, "");
     if (!this.config.accessToken || !this.config.phoneNumberId) {
-      console.warn(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_ERROR] correlationId=${correlationId || "none"} mechanism=template template=${templateName} status=skipped error="WhatsApp credentials not configured" recipient=${maskPhone(cleanTo)}`);
-      return false;
+      const reason = "WhatsApp credentials not configured (WHATSAPP_ACCESS_TOKEN or WHATSAPP_PHONE_NUMBER_ID missing)";
+      console.warn(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_ERROR] correlationId=${correlationId || "none"} mechanism=template template=${templateName} status=skipped error="${reason}" recipient=${maskPhone(cleanTo)}`);
+      return {
+        success: false,
+        errorCategory: "WHATSAPP_NOT_CONFIGURED",
+        errorReason: reason,
+      };
     }
-    const res = await fetch(getWhatsAppMessagesUrl(this.config.phoneNumberId), {
-      method: "POST",
-      headers: { Authorization: `Bearer ${this.config.accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to: cleanTo,
-        type: "template",
-        template: {
-          name: templateName,
-          language: { code: languageCode },
-          components: [{ type: "body", parameters: parameters.map((text) => ({ type: "text", text })) }],
-        },
-      }),
-    });
-    const body = await res.json().catch(() => ({}));
-    const metaId = body?.messages?.[0]?.id || null;
-    const metaError = body?.error || {};
-    if (!res.ok) {
-      console.error(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_ERROR] correlationId=${correlationId || "none"} mechanism=template template=${templateName} success=false httpStatus=${res.status} metaErrorCode=${metaError.code ?? "none"} metaErrorMessage=${String(metaError.message || "Unknown error").slice(0, 200)} recipient=${maskPhone(cleanTo)}`);
-      return false;
+
+    try {
+      const res = await fetch(getWhatsAppMessagesUrl(this.config.phoneNumberId), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.config.accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: cleanTo,
+          type: "template",
+          template: {
+            name: templateName,
+            language: { code: languageCode },
+            components: [{ type: "body", parameters: parameters.map((text) => ({ type: "text", text })) }],
+          },
+        }),
+      });
+
+      const body = await res.json().catch(() => ({}));
+      const metaId = body?.messages?.[0]?.id || undefined;
+      const metaError = body?.error || {};
+
+      if (!res.ok) {
+        const metaErrorCode = metaError.code ?? undefined;
+        const metaErrorMessage = String(metaError.message || "Unknown error").slice(0, 300);
+        console.error(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_ERROR] correlationId=${correlationId || "none"} mechanism=template template=${templateName} success=false httpStatus=${res.status} metaErrorCode=${metaErrorCode ?? "none"} metaErrorMessage="${metaErrorMessage}" recipient=${maskPhone(cleanTo)}`);
+        return {
+          success: false,
+          errorCategory: "META_REJECTED",
+          httpStatus: res.status,
+          metaErrorCode,
+          metaErrorMessage,
+          errorReason: `Meta rejected: HTTP ${res.status} code=${metaErrorCode ?? "none"} message="${metaErrorMessage}"`,
+        };
+      }
+
+      console.log(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_SUCCESS] correlationId=${correlationId || "none"} mechanism=template template=${templateName} success=true httpStatus=${res.status} metaMessageId=${metaId || "none"} recipient=${maskPhone(cleanTo)}`);
+      return {
+        success: true,
+        metaMessageId: metaId,
+        httpStatus: res.status,
+      };
+    } catch (err: any) {
+      const reason = err?.message || String(err);
+      console.error(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_ERROR] correlationId=${correlationId || "none"} mechanism=template template=${templateName} success=false error="${reason}" recipient=${maskPhone(cleanTo)}`);
+      return {
+        success: false,
+        errorCategory: "NETWORK_ERROR",
+        errorReason: reason,
+      };
     }
-    console.log(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_SUCCESS] correlationId=${correlationId || "none"} mechanism=template template=${templateName} success=true httpStatus=${res.status} metaMessageId=${metaId || "none"} recipient=${maskPhone(cleanTo)}`);
-    return true;
   }
 
   public async markMessageAsRead(messageId: string): Promise<boolean> {

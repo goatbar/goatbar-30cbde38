@@ -132,6 +132,7 @@ export interface UserMessagingAccountItem {
   phone_number: string;
   display_name?: string | null;
   verified: boolean;
+  receive_new_budget_notifications?: boolean;
   created_at: string;
   updated_at: string;
   profile?: {
