@@ -160,7 +160,16 @@ export const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
         file_type: fileType,
         is_default: isDefault,
         status: "active",
-        variables_schema: { content: cleanHtmlToSave } as any /* tipagem legada */,
+        variables_schema: {
+          ...(
+            template?.variables_schema &&
+            typeof template.variables_schema === "object" &&
+            !Array.isArray(template.variables_schema)
+              ? template.variables_schema
+              : {}
+          ),
+          content: cleanHtmlToSave,
+        } as any /* tipagem legada */,
       };
 
 
