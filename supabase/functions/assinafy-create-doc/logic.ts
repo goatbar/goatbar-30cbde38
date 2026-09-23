@@ -24,6 +24,8 @@ export function authenticatedClientOptions(authHeader: string) {
 
 export type CreateDocPayload = {
   contractId: string;
+  documentKind: "contract" | "addendum";
+  addendumId?: string;
   pdfBase64?: string;
   pdfUrl?: string;
   pdfHash: string;
@@ -43,6 +45,30 @@ export function validateCreateDocPayload(value: unknown): CreateDocPayload {
       "pdf_hash_invalid",
       "pdfHash deve ser um SHA-256 hexadecimal.",
     );
+  const documentKind = body.documentKind === undefined ? "contract" : body.documentKind;
+  if (documentKind !== "contract" && documentKind !== "addendum")
+    throw new CreateDocHttpError(
+      422,
+      "document_kind_invalid",
+      "documentKind deve ser contract ou addendum.",
+    );
+  const addendumId =
+    typeof body.addendumId === "string" && body.addendumId.trim()
+      ? body.addendumId.trim()
+      : undefined;
+  if (documentKind === "addendum" && !addendumId)
+    throw new CreateDocHttpError(
+      422,
+      "addendum_id_required",
+      "addendumId é obrigatório para Termo Aditivo.",
+    );
+  if (documentKind === "contract" && addendumId)
+    throw new CreateDocHttpError(
+      422,
+      "addendum_id_not_allowed",
+      "addendumId não deve ser enviado para o contrato original.",
+    );
+
   const hasBase64 = typeof body.pdfBase64 === "string" && body.pdfBase64.length > 0;
   const hasUrl = typeof body.pdfUrl === "string" && body.pdfUrl.length > 0;
   if (!hasBase64 && !hasUrl)
@@ -53,6 +79,8 @@ export function validateCreateDocPayload(value: unknown): CreateDocPayload {
       : undefined;
   return {
     contractId: body.contractId,
+    documentKind,
+    addendumId,
     pdfBase64: hasBase64 ? (body.pdfBase64 as string) : undefined,
     pdfUrl: hasUrl ? (body.pdfUrl as string) : undefined,
     pdfHash: body.pdfHash.toLowerCase(),
