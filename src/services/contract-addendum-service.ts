@@ -59,65 +59,6 @@ export function assertAddendumReadyForSignature(addendum: Pick<ContractAddendumR
   if (/Não informado|A definir|\{\{|\[[A-Z0-9_]+\]/i.test(html)) throw new Error("ADDENDUM_HAS_UNRESOLVED_PLACEHOLDERS");
 }
 
-/** Modelo Oficial do Termo Aditivo ao Contrato */
-export function buildAddendumTemplateHtml(vars: Record<string, string>): string {
-  const clauses: string[] = [];
-  if (vars.clausula_drinks) clauses.push(`<h3>CLÁUSULA — DOS DRINKS E BEBIDAS</h3><p>${vars.clausula_drinks}</p>`);
-  if (vars.clausula_valor) clauses.push(`<h3>CLÁUSULA — DO VALOR E PAGAMENTO</h3><p>${vars.clausula_valor}</p>`);
-  if (vars.clausula_convidados) clauses.push(`<h3>CLÁUSULA — DOS CONVIDADOS</h3><p>${vars.clausula_convidados}</p>`);
-  if (vars.clausula_demais) clauses.push(`<h3>CLÁUSULA — DAS DEMAIS ALTERAÇÕES</h3><p>${vars.clausula_demais}</p>`);
-  return `
-<h1 style="text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 16px; text-transform: uppercase;">
-  TERMO ADITIVO AO CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE BAR PARA EVENTOS
-</h1>
-
-<p style="text-align: justify; margin-bottom: 12px;">
-  Pelo presente instrumento particular de Termo Aditivo ao Contrato de Prestação de Serviços de Bar para Eventos, de um lado:
-</p>
-
-<p style="text-align: justify; margin-bottom: 8px;">
-  <strong>CONTRATANTE:</strong> ${vars.contratante_nome || ""}${vars.contratante_documento ? `, inscrita(o) no CPF/CNPJ sob o nº ${vars.contratante_documento}` : ""}.
-</p>
-
-<p style="text-align: justify; margin-bottom: 12px;">
-  E, de outro lado, <strong>CONTRATADA:</strong> ${vars.contratada_nome || "GOAT BAR EVENTOS LTDA"}${vars.contratada_documento ? `, inscrita no CNPJ sob o nº ${vars.contratada_documento}` : ""}.
-</p>
-
-<p style="text-align: justify; margin-bottom: 16px;">
-  As partes acima qualificadas têm entre si justo e acertado o presente <strong>TERMO ADITIVO</strong> ao Contrato de Prestação de Serviços de Bar para Eventos firmado em <strong>${vars.data_contrato_original || ""}</strong>, mediante as seguintes cláusulas:
-</p>
-
-${clauses.join("\n")}
-
-<h3 style="font-size: 14px; font-weight: bold; margin-top: 16px; margin-bottom: 6px;">
-  CLÁUSULA QUARTA — DA RATIFICAÇÃO
-</h3>
-<p style="text-align: justify; margin-bottom: 24px;">
-  4.1. Permanecem inalteradas e ratificadas todas as demais cláusulas e condições do Contrato de Prestação de Serviços de Bar para Eventos original que não tenham sido expressamente modificadas por este Termo Aditivo.
-</p>
-
-<p style="text-align: right; margin-bottom: 32px;">
-  ${vars.cidade_assinatura || "São Paulo/SP"}, ${vars.data_aditivo || new Date().toLocaleDateString("pt-BR")}.
-</p>
-
-<div class="signature-block" style="margin-top: 40px; page-break-inside: avoid;">
-  <table style="width: 100%; border: none;">
-    <tr>
-      <td style="width: 48%; border: none; text-align: center; vertical-align: top;">
-        _____________________________________<br />
-        <strong>CONTRATANTE: ${vars.contratante_nome || ""}</strong>
-      </td>
-      <td style="width: 4%;"></td>
-      <td style="width: 48%; border: none; text-align: center; vertical-align: top;">
-        _____________________________________<br />
-        <strong>CONTRATADA: ${vars.contratada_nome || "GOAT BAR EVENTOS LTDA"}</strong>
-      </td>
-    </tr>
-  </table>
-</div>
-`.trim();
-}
-
 const fmtBRL = (value: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
 
@@ -606,7 +547,7 @@ export const contractAddendumService = {
         original_contract_date: data.originalContractDate,
         generated_html: finalHtml,
         status: "draft",
-      })
+      } as any)
       .select()
       .single();
 
