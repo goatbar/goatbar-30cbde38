@@ -705,6 +705,17 @@ function EventoInterna() {
         discount_description: JSON.stringify({ descontos: descontosValidos }),
       };
 
+      // Preserva o valor monetário efetivamente recebido quando apenas o total do orçamento muda.
+      // Se o usuário alterar explicitamente o percentual recebido, recalculamos o valor canônico.
+      const paymentPercentChanged =
+        !currentBudget ||
+        Number(currentBudget.paid_percentage || 0) !== Number(draft.pagamento.percentualPago || 0);
+      const canonicalPaidAmount = paymentPercentChanged
+        ? calc.valorPago
+        : (evento?.paid_amount_received ??
+          currentBudget?.paid_value ??
+          calc.valorPago);
+
       // Atualiza evento base com totais financeiros para integração com dashboard/financeiro
       
       if (!evento) throw new Error("Evento não carregado.");
@@ -733,6 +744,7 @@ function EventoInterna() {
         current_profit_value: calc.lucro,
         payment_due_date: draft.pagamento.dataPagamento,
         payment_percent_received: draft.pagamento.percentualPago,
+        paid_amount_received: canonicalPaidAmount,
       });
 
       // Salva orçamento
