@@ -1126,6 +1126,14 @@ function EventoInterna() {
         compiledHtml = renderContractTemplate(templateContent, vars, mapping);
       }
 
+      // Captura uma única vez os dados jurídicos efetivamente usados no contrato original.
+      // Esse snapshot será a fonte prioritária dos futuros Termos Aditivos.
+      await eventContractsService.captureLegalSnapshotForSignature(
+        realContract.id,
+        eventoId,
+        selectedSigner || realContract.signer_id || undefined,
+      );
+
       // 2. Converte o resultado compilado existente para PDF imutável (etapa adicional única)
       // 3. Dispara para o Provedor Ativo somente depois que o PDF estiver pronto
       const provider = getSignatureProvider(
