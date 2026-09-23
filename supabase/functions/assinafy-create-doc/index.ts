@@ -616,21 +616,39 @@ serve(async (req) => {
         });
       }
 
-      stage = "persisting_contract_status";
-      const contractSaved = await admin
-        .from("event_contracts")
-        .update({ status: "sent", sent_for_signature_at: new Date().toISOString() })
-        .eq("id", contractId)
-        .select("id")
-        .single();
-      if (contractSaved.error || !contractSaved.data)
-        throw contractSaved.error || new Error("Status do contrato não pôde ser persistido.");
+      stage = "persisting_document_status";
+      if (documentKind === "contract") {
+        const contractSaved = await admin
+          .from("event_contracts")
+          .update({ status: "sent", sent_for_signature_at: new Date().toISOString() })
+          .eq("id", contractId)
+          .select("id")
+          .single();
+        if (contractSaved.error || !contractSaved.data)
+          throw contractSaved.error || new Error("Status do contrato não pôde ser persistido.");
+      } else {
+        const addendumSaved = await admin
+          .from("contract_addendums")
+          .update({
+            status: "sent",
+            external_document_id: provider.documentId,
+            external_assignment_id: provider.assignmentId,
+            sent_for_signature_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", addendumId!)
+          .eq("contract_id", contractId)
+          .select("id")
+          .single();
+        if (addendumSaved.error || !addendumSaved.data)
+          throw addendumSaved.error || new Error("Status do Termo Aditivo não pôde ser persistido.");
+      }
       stage = "complete";
       return json(
         {
           success: true,
           dispatchOutcome: "new_dispatch",
-          message: "Contrato enviado para assinatura com sucesso.",
+          message: documentKind === "addendum" ? "Termo Aditivo enviado para assinatura com sucesso." : "Contrato enviado para assinatura com sucesso.",
           remoteCreated: true,
           reconciliationRequired: false,
           signatureRequestId: sigReq.id,
