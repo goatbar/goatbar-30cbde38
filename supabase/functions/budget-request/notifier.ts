@@ -7,7 +7,9 @@ export interface NotificationDependencies {
   loadEvent(eventId: string): Promise<(PublicBudgetPayload & { id?: string }) | null>;
   recipients(): Promise<Array<{ phone_number: string }>>;
   send(phone: string, parameters: string[], correlationId: string): Promise<boolean | WhatsAppSendResult>;
-  finish(linkId: string, sent: boolean, error?: string): Promise<void>;
+  finish(linkId: string, sent: boolean, error?: string, errorCategory?: string): Promise<void>;
+  recipientWasSent?(linkId: string, phone: string): Promise<boolean>;
+  finishRecipient?(linkId: string, phone: string, result: WhatsAppSendResult): Promise<void>;
   eventUrl(eventId: string): string | undefined;
   notifyInternal?(event: PublicBudgetPayload & { id?: string }, eventUrl?: string): Promise<boolean>;
 }
@@ -66,12 +68,23 @@ export async function notifyNewBudgetRequest(
         throw new Error(`INVALID_RECIPIENT: Telefone '${masked(recipient.phone_number)}' inválido após normalização.`);
       }
 
+      if (deps.recipientWasSent && await deps.recipientWasSent(claim.id, phone)) {
+        console.log(`[budget-request] recipient already accepted; skipping retry recipient=${masked(phone)} event_id=${eventId}`);
+        continue;
+      }
+
       console.log(
         `[budget-request] sending whatsapp recipient=${masked(phone)} event_id=${eventId}`,
       );
 
       const sendResult = await deps.send(phone, parameters, correlationId);
       const isSuccess = typeof sendResult === "boolean" ? sendResult : sendResult?.success;
+
+      if (deps.finishRecipient) {
+        await deps.finishRecipient(claim.id, phone, typeof sendResult === "boolean"
+          ? { success: sendResult, ...(!sendResult ? { errorCategory: "META_REJECTED" as const, errorReason: "Meta não aceitou a mensagem." } : {}) }
+          : sendResult);
+      }
 
       if (!isSuccess) {
         if (typeof sendResult === "object" && sendResult !== null) {
@@ -97,7 +110,8 @@ export async function notifyNewBudgetRequest(
     return "SENT";
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await deps.finish(claim.id, false, message.slice(0, 1000));
+    const errorCategory = message.match(/^([A-Z_]+):/)?.[1] || "UNKNOWN";
+    await deps.finish(claim.id, false, message.slice(0, 1000), errorCategory);
     console.error(`[budget-request] notification failed event_id=${eventId} error=${message}`);
     return "FAILED";
   }

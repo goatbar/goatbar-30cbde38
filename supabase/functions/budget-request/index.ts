@@ -121,7 +121,34 @@ serve(async (req) => {
               correlationId,
             ),
 
-          finish: async (linkId, sent, error) => {
+          recipientWasSent: async (linkId, phone) => {
+            const { data, error } = await supabase
+              .from("budget_request_notification_deliveries")
+              .select("status")
+              .eq("notification_id", linkId)
+              .eq("recipient_phone", phone)
+              .maybeSingle();
+            if (error) throw error;
+            return data?.status === "SENT";
+          },
+
+          finishRecipient: async (linkId, phone, result) => {
+            const { error } = await supabase
+              .from("budget_request_notification_deliveries")
+              .upsert({
+                notification_id: linkId,
+                recipient_phone: phone,
+                status: result.success ? "SENT" : "FAILED",
+                provider_message_id: result.metaMessageId || null,
+                error_category: result.errorCategory || null,
+                error_message: result.metaErrorMessage || result.errorReason || null,
+                sent_at: result.success ? new Date().toISOString() : null,
+                updated_at: new Date().toISOString(),
+              }, { onConflict: "notification_id,recipient_phone" });
+            if (error) throw error;
+          },
+
+          finish: async (linkId, sent, error, errorCategory) => {
             const { error: updateError } = await supabase
               .from("budget_request_notifications")
               .update(
@@ -130,11 +157,13 @@ serve(async (req) => {
                       status: "SENT",
                       sent_at: new Date().toISOString(),
                       error: null,
+                      error_category: null,
                       updated_at: new Date().toISOString(),
                     }
                   : {
                       status: "FAILED",
                       error: error || "Falha desconhecida.",
+                      error_category: errorCategory || "UNKNOWN",
                       updated_at: new Date().toISOString(),
                     },
               )

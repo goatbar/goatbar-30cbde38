@@ -170,6 +170,18 @@ export class WhatsAppChannelAdapter {
         };
       }
 
+      if (!metaId) {
+        const reason = "Meta returned a successful HTTP status without a messages[0].id acceptance receipt";
+        console.error(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_ERROR] correlationId=${correlationId || "none"} mechanism=template template=${templateName} success=false httpStatus=${res.status} error="${reason}" recipient=${maskPhone(cleanTo)}`);
+        return {
+          success: false,
+          errorCategory: "META_REJECTED",
+          httpStatus: res.status,
+          metaErrorMessage: reason,
+          errorReason: reason,
+        };
+      }
+
       console.log(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_SUCCESS] correlationId=${correlationId || "none"} mechanism=template template=${templateName} success=true httpStatus=${res.status} metaMessageId=${metaId || "none"} recipient=${maskPhone(cleanTo)}`);
       return {
         success: true,

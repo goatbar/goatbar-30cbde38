@@ -60,6 +60,7 @@ describe("notifyNewBudgetRequest", () => {
       "link-1",
       false,
       expect.stringContaining("NO_RECIPIENTS: Nenhum destinatário WhatsApp verificado"),
+      "NO_RECIPIENTS",
     );
   });
 
@@ -100,6 +101,7 @@ describe("notifyNewBudgetRequest", () => {
       "link-1",
       false,
       expect.stringContaining("META_REJECTED: HTTP 400 code=131051 message=\"Unsupported message type\""),
+      "META_REJECTED",
     );
   });
 
@@ -116,6 +118,7 @@ describe("notifyNewBudgetRequest", () => {
       "link-1",
       false,
       expect.stringContaining("WHATSAPP_NOT_CONFIGURED: WhatsApp credentials not configured"),
+      "WHATSAPP_NOT_CONFIGURED",
     );
   });
 
@@ -144,6 +147,7 @@ describe("notifyNewBudgetRequest", () => {
       "link-1",
       false,
       expect.stringContaining("INVALID_RECIPIENT"),
+      "INVALID_RECIPIENT",
     );
   });
 
@@ -155,6 +159,20 @@ describe("notifyNewBudgetRequest", () => {
     (deps.send as any).mockResolvedValue(true);
     expect(await notifyNewBudgetRequest("event-1", deps, true)).toBe("SENT");
     expect(deps.claim).toHaveBeenLastCalledWith("event-1", true);
+  });
+
+  it("no retry não reenvia para destinatário que a Meta já aceitou", async () => {
+    const deps = makeDeps([
+      { phone_number: "31999999999" },
+      { phone_number: "37999999999" },
+    ]);
+    deps.recipientWasSent = vi.fn(async (_id, phone) => phone === "5531999999999");
+    deps.finishRecipient = vi.fn().mockResolvedValue(undefined);
+
+    expect(await notifyNewBudgetRequest("event-1", deps, true)).toBe("SENT");
+    expect(deps.send).toHaveBeenCalledOnce();
+    expect(deps.send).toHaveBeenCalledWith("5537999999999", expect.any(Array), "budget_event-1");
+    expect(deps.finishRecipient).toHaveBeenCalledOnce();
   });
 
   it("não envia quando o claim recusa USED/SENT", async () => {

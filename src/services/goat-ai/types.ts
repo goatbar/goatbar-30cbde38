@@ -65,6 +65,8 @@ export interface AIInboxItem {
   approved_by?: string | null;
   created_at: string;
   updated_at: string;
+  is_read?: boolean;
+  ai_notification_reads?: Array<{ read_at: string }>;
   // Joins
   events?: {
     id: string;
