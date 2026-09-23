@@ -27,6 +27,7 @@ export interface Event {
   payment_due_date?: string;
   payment_method?: string;
   payment_percent_received?: number;
+  paid_amount_received?: number | null;
   current_budget_value?: number;
   current_profit_value?: number;
   /** Derived from persisted event_budget_versions rows; never stored on events. */
