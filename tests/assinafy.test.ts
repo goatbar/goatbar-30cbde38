@@ -152,6 +152,43 @@ describe("assinafy-create-doc request validation", () => {
     expect(decoded).toEqual(pdfBytes);
     await expect(validatePdfHash(decoded, hash)).resolves.toBeUndefined();
   });
+  it("defaults the original contract to documentKind=contract", async () => {
+    const hash = await sha256(pdfBytes);
+    const payload = validateCreateDocPayload({
+      contractId: "contract-1",
+      pdfBase64,
+      pdfHash: hash,
+    });
+    expect(payload.documentKind).toBe("contract");
+    expect(payload.addendumId).toBeUndefined();
+  });
+
+  it("accepts an addendum only when addendumId is supplied", async () => {
+    const hash = await sha256(pdfBytes);
+    const payload = validateCreateDocPayload({
+      contractId: "contract-1",
+      documentKind: "addendum",
+      addendumId: "addendum-1",
+      pdfBase64,
+      pdfHash: hash,
+    });
+    expect(payload.documentKind).toBe("addendum");
+    expect(payload.addendumId).toBe("addendum-1");
+  });
+
+  it("rejects addendum dispatch without addendumId", () =>
+    expectHttpError(
+      () =>
+        validateCreateDocPayload({
+          contractId: "contract-1",
+          documentKind: "addendum",
+          pdfBase64,
+          pdfHash: "a".repeat(64),
+        }),
+      422,
+      "addendum_id_required",
+    ));
+
   it("requires contractId with a semantic 422", () =>
     expectHttpError(
       () => validateCreateDocPayload({ pdfBase64, pdfHash: "a".repeat(64) }),
