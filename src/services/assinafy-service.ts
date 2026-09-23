@@ -166,7 +166,15 @@ export async function dispatchContractToAssinafy(
   forceRecreate?: boolean,
 ): Promise<AssinafyRequestResponse> {
   const { data, error } = await supabase.functions.invoke("assinafy-create-doc", {
-    body: { contractId, pdfBase64, pdfUrl, pdfHash, documentTitle, forceRecreate },
+    body: {
+      contractId,
+      documentKind: "contract",
+      pdfBase64,
+      pdfUrl,
+      pdfHash,
+      documentTitle,
+      forceRecreate,
+    },
   });
 
   if (error) {
@@ -213,6 +221,8 @@ export async function syncAssinafyStatus(contractId: string): Promise<Record<str
     .select("id, dispatch_status, external_document_id, external_assignment_id, signature_url")
     .eq("contract_id", contractId)
     .eq("signature_provider", "assinafy")
+    .eq("document_kind", "contract")
+    .is("addendum_id", null)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(1)
@@ -298,6 +308,8 @@ export async function reconcileAssinafySigners(contractId: string): Promise<any[
     .select("id, external_document_id, external_assignment_id")
     .eq("contract_id", contractId)
     .eq("signature_provider", "assinafy")
+    .eq("document_kind", "contract")
+    .is("addendum_id", null)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
