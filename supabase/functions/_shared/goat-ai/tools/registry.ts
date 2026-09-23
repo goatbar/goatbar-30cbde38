@@ -17,7 +17,7 @@ import {
 } from "./definitions/financial.ts";
 import { upsertDrinkAliasTool } from "./definitions/drink-aliases.ts";
 import { getDrinksCatalogTool } from "./definitions/drinks.ts";
-import { createBudgetRequestLinkTool } from "./definitions/budget-request.ts";
+import { createBudgetRequestLinkTool, listPendingBudgetRequestsTool } from "./definitions/budget-request.ts";
 
 function sanitizeToolArguments(args: any): string {
   if (!args || typeof args !== "object") return String(args ?? "");
@@ -58,6 +58,7 @@ export class GoatAIToolRegistry {
     this.register(upsertDrinkAliasTool);
     this.register(getDrinksCatalogTool);
     this.register(createBudgetRequestLinkTool);
+    this.register(listPendingBudgetRequestsTool);
   }
 
   public register(tool: GoatAIToolDefinition) {

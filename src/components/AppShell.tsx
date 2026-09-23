@@ -1,4 +1,4 @@
-import { Link, Outlet, useLocation, Navigate } from "@tanstack/react-router";
+import { Link, Outlet, useLocation, Navigate, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -53,6 +53,12 @@ export function AppShell({ children }: { children?: ReactNode }) {
     if (!user) return;
     goatAIService.getPendingCount().then((cnt) => setPendingAiCount(cnt)).catch(() => {});
   }, [user, location.pathname]);
+
+  useEffect(() => {
+    const handleRead = () => setPendingAiCount((count) => Math.max(0, count - 1));
+    window.addEventListener("budget-notification-read", handleRead);
+    return () => window.removeEventListener("budget-notification-read", handleRead);
+  }, []);
 
   if (loading) {
     return (
@@ -301,6 +307,7 @@ export function PageHeader({ title, subtitle, breadcrumb, action, periodo }: Pag
 }
 
 function NotificationsDropdown() {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<any[]>([]);
 
@@ -319,7 +326,24 @@ function NotificationsDropdown() {
     return () => clearInterval(interval);
   }, []);
 
-  const pendingCount = items.filter((i) => i.approval_status === "pending").length;
+  const pendingCount = items.filter((i) => !i.is_read).length;
+
+  const markRead = async (itemId: string) => {
+    const item = items.find((candidate) => candidate.id === itemId);
+    if (!item || item.is_read) return;
+    setItems((current) => current.map((candidate) =>
+      candidate.id === itemId ? { ...candidate, is_read: true } : candidate
+    ));
+    window.dispatchEvent(new Event("budget-notification-read"));
+    try {
+      await goatAIService.markBudgetNotificationRead(itemId);
+    } catch {
+      setItems((current) => current.map((candidate) =>
+        candidate.id === itemId ? { ...candidate, is_read: false } : candidate
+      ));
+      window.dispatchEvent(new Event("budget-notifications-refresh"));
+    }
+  };
 
   return (
     <div className="relative">
@@ -389,11 +413,16 @@ function NotificationsDropdown() {
                   return (
                     <div
                       key={item.id}
+                      onClick={() => {
+                        void markRead(item.id);
+                        setOpen(false);
+                        if (eventId) void navigate({ to: `/eventos/${eventId}` as any });
+                      }}
                       className="p-3.5 hover:bg-surface-hover/80 transition-colors flex flex-col gap-1.5 text-xs"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-bold text-foreground truncate flex items-center gap-1.5">
-                          <span className="h-2 w-2 rounded-full bg-primary shrink-0" />
+                          {!item.is_read && <span className="h-2 w-2 rounded-full bg-primary shrink-0" />}
                           {clientName}
                         </span>
                         <span className="text-[10px] text-muted-foreground shrink-0 font-medium">
@@ -410,7 +439,11 @@ function NotificationsDropdown() {
                       {eventId && (
                         <Link
                           to={`/eventos/${eventId}` as any}
-                          onClick={() => setOpen(false)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void markRead(item.id);
+                            setOpen(false);
+                          }}
                           className="mt-1 text-[11px] font-semibold text-primary hover:underline flex items-center gap-1 w-fit"
                         >
                           Abrir solicitação no sistema →

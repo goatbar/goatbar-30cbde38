@@ -48,6 +48,10 @@ import {
   toContextualEvent,
 } from "../events/confirmed-events.ts";
 import { resolveBudgetRequestLinkIntent } from "../events/budget-request-intent.ts";
+import {
+  formatPendingBudgetRequestsReply,
+  resolvePendingBudgetRequestsIntent,
+} from "../events/pending-budget-requests.ts";
 
 const MAX_TOOL_CALLS_PER_TURN = 8;
 const TURN_BUDGET_MS = 42000; // 42s budget deadline to ensure client receives structured JSON
@@ -285,6 +289,30 @@ export class GoatAIGeminiAgent {
             status: result.success ? "success" : "error",
           },
         ],
+        pendingAction: null,
+      };
+    }
+
+    const pendingBudgetIntent = resolvePendingBudgetRequestsIntent(input.message);
+    if (pendingBudgetIntent.matched) {
+      const result = await this.toolRegistry.executeTool("list_pending_budget_requests", {}, {
+        ...context,
+        toolCallId: `${correlationId}_pending_budget_requests`,
+      });
+      const requests = result.success && Array.isArray(result.data?.requests) ? result.data.requests : [];
+      const reply = result.success
+        ? formatPendingBudgetRequestsReply(requests)
+        : `Não foi possível consultar as solicitações de orçamento: ${result.error || "erro desconhecido"}.`;
+      const assistantMsg = await this.conversationManager.saveMessage(conversation.id, "assistant", reply, "text");
+      return {
+        conversationId: conversation.id,
+        messageId: assistantMsg.id,
+        reply,
+        toolCallsExecuted: [{
+          toolName: "list_pending_budget_requests",
+          arguments: {}, result: result.data,
+          status: result.success ? "success" : "error",
+        }],
         pendingAction: null,
       };
     }

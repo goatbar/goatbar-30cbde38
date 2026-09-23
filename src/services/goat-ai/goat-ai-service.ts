@@ -46,16 +46,8 @@ export const goatAIService = {
   },
 
   async getPendingCount(): Promise<number> {
-    const { count, error } = await (supabase as any)
-      .from("ai_inbox_items")
-      .select("id", { count: "exact", head: true })
-      .eq("approval_status", "pending");
-
-    if (error) {
-      console.warn("Erro ao buscar contagem de itens pendentes na Goat AI:", error);
-      return 0;
-    }
-    return count || 0;
+    const notifications = await this.listBudgetNotifications();
+    return notifications.filter((item) => !item.is_read).length;
   },
 
   async listBudgetNotifications(): Promise<AIInboxItem[]> {
@@ -70,16 +62,32 @@ export const goatAIService = {
           date,
           event_location,
           phone
-        )
+        ),
+        ai_notification_reads (read_at)
       `)
+      .contains("structured_data", { type: "new_budget_request" })
       .order("created_at", { ascending: false })
-      .limit(10);
+      .limit(50);
 
     if (error) {
       console.warn("Erro ao buscar notificações da GIA:", error);
       return [];
     }
-    return (data || []) as AIInboxItem[];
+    return (data || []).map((item: AIInboxItem) => ({
+      ...item,
+      is_read: (item.ai_notification_reads?.length || 0) > 0,
+    }));
+  },
+
+  async markBudgetNotificationRead(itemId: string): Promise<void> {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) throw authError || new Error("Usuário não autenticado.");
+    const { error } = await (supabase as any)
+      .from("ai_notification_reads")
+      .upsert({ ai_inbox_item_id: itemId, user_id: user.id }, {
+        onConflict: "ai_inbox_item_id,user_id",
+      });
+    if (error) throw error;
   },
 
   async getItemDetails(id: string): Promise<{
