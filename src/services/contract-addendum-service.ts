@@ -469,10 +469,20 @@ export const contractAddendumService = {
     }
 
     if (data.comparison.valor_ja_pago === null) throw new Error("PENDING_PAID_AMOUNT");
-    const condition=params.paymentCondition||data.comparison.forma_pagamento_saldo;
-    const method=params.paymentMethod||data.comparison.meio_pagamento_saldo;
-    const dueDates=params.dueDates?.filter(Boolean).length?params.dueDates:data.comparison.datas_vencimento;
-    if (data.comparison.novo_saldo_restante! > 0 && (!condition || !method || !dueDates.length)) throw new Error("PENDING_BALANCE_PAYMENT_TERMS");
+    const hasRemainingBalance = (data.comparison.novo_saldo_restante || 0) > 0;
+    const condition = hasRemainingBalance
+      ? params.paymentCondition || data.comparison.forma_pagamento_saldo
+      : "Não se aplica";
+    const method = hasRemainingBalance
+      ? params.paymentMethod || data.comparison.meio_pagamento_saldo
+      : "Não se aplica";
+    const dueDates = hasRemainingBalance
+      ? (params.dueDates?.filter(Boolean).length
+          ? params.dueDates
+          : data.comparison.datas_vencimento)
+      : ["Não se aplica"];
+    if (hasRemainingBalance && (!condition || !method || !dueDates.length))
+      throw new Error("PENDING_BALANCE_PAYMENT_TERMS");
     data.templateVars["aditivo.forma_pagamento_saldo"] = condition || "";
     data.templateVars["aditivo.meio_pagamento_saldo"] = method || "";
     data.templateVars["aditivo.datas_vencimento"] = dueDates.join(" e ");
