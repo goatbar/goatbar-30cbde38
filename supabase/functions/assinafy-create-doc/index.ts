@@ -75,6 +75,8 @@ serve(async (req) => {
     }
     const payload = validateCreateDocPayload(body);
     contractId = payload.contractId;
+    const documentKind = payload.documentKind;
+    const addendumId = payload.addendumId;
 
     stage = "loading_contract";
     const existenceLookup = () =>
@@ -121,14 +123,25 @@ serve(async (req) => {
     });
 
     stage = "resolving_idempotency";
-    const { data: foundRequest, error: lookupError } = await admin
-      .from("contract_signature_requests")
-      .select("*")
-      .eq("contract_id", contractId)
-      .eq("signature_provider", "assinafy")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const findLatestScopedRequest = async () => {
+      let query = admin
+        .from("contract_signature_requests")
+        .select("*")
+        .eq("contract_id", contractId)
+        .eq("signature_provider", "assinafy")
+        .eq("document_kind", documentKind)
+        .neq("dispatch_status", "obsolete");
+      query =
+        documentKind === "addendum"
+          ? query.eq("addendum_id", addendumId!)
+          : query.is("addendum_id", null);
+      return query
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    };
+
+    const { data: foundRequest, error: lookupError } = await findLatestScopedRequest();
     if (lookupError) throw lookupError;
     let sigReq = foundRequest;
     const decision = decideDispatch(sigReq, payload.pdfHash);
@@ -183,15 +196,7 @@ serve(async (req) => {
             if (retireErr) throw retireErr;
 
             if (!retired) {
-              const { data: activeReq } = await admin
-                .from("contract_signature_requests")
-                .select("*")
-                .eq("contract_id", contractId)
-                .eq("signature_provider", "assinafy")
-                .neq("dispatch_status", "obsolete")
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .maybeSingle();
+              const { data: activeReq } = await findLatestScopedRequest();
 
               if (activeReq) {
                 sigReq = activeReq;
@@ -281,7 +286,11 @@ serve(async (req) => {
                 : "reuse_healthy"
             : "reconciliation_required";
 
-        if (contract.status === "draft" && sigReq.dispatch_status === "pending_signature") {
+        if (
+          documentKind === "contract" &&
+          contract.status === "draft" &&
+          sigReq.dispatch_status === "pending_signature"
+        ) {
           await admin
             .from("event_contracts")
             .update({ status: "sent", sent_for_signature_at: sigReq.sent_at || new Date().toISOString() })
@@ -294,10 +303,14 @@ serve(async (req) => {
             dispatchOutcome: outcome,
             message:
               outcome === "already_signed"
-                ? "Este contrato já foi assinado por todas as partes."
+                ? documentKind === "addendum"
+                  ? "Este Termo Aditivo já foi assinado por todas as partes."
+                  : "Este contrato já foi assinado por todas as partes."
                 : outcome === "reconciliation_required"
                   ? "Este contrato já havia sido enviado, mas possui pendências de conciliação de signatários/notificações."
-                  : "Este contrato já está aguardando assinatura. O documento existente foi reaproveitado.",
+                  : documentKind === "addendum"
+                    ? "Este Termo Aditivo já está aguardando assinatura. O documento existente foi reaproveitado."
+                    : "Este contrato já está aguardando assinatura. O documento existente foi reaproveitado.",
             remoteCreated: Boolean(sigReq.external_document_id),
             reconciliationRequired: outcome === "reconciliation_required",
             signatureRequestId: sigReq.id,
@@ -338,15 +351,7 @@ serve(async (req) => {
       if (retireErr) throw retireErr;
 
       if (!retired) {
-        const { data: activeReq } = await admin
-          .from("contract_signature_requests")
-          .select("*")
-          .eq("contract_id", contractId)
-          .eq("signature_provider", "assinafy")
-          .neq("dispatch_status", "obsolete")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        const { data: activeReq } = await findLatestScopedRequest();
 
         if (activeReq) {
           sigReq = activeReq;
@@ -389,6 +394,8 @@ serve(async (req) => {
           dispatch_status: "idle",
           internal_status: "pending_signature",
           original_file_hash: payload.pdfHash,
+          document_kind: documentKind,
+          addendum_id: documentKind === "addendum" ? addendumId : null,
         })
         .select()
         .single();
