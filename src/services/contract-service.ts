@@ -70,6 +70,7 @@ export interface EventContract {
   generated_at?: string;
   sent_for_signature_at?: string;
   fully_signed_at?: string;
+  legal_snapshot?: Record<string, unknown> | null;
 }
 
 /**
@@ -643,6 +644,92 @@ export const eventContractsService = {
     }
 
     return newContract;
+  },
+
+  async captureLegalSnapshotForSignature(
+    contractId: string,
+    eventId: string,
+    signerId?: string,
+  ): Promise<Record<string, unknown>> {
+    const { data: existing, error: existingError } = await (supabase as any)
+      .from("event_contracts")
+      .select("id, event_id, signer_id, legal_snapshot")
+      .eq("id", contractId)
+      .eq("event_id", eventId)
+      .single();
+
+    if (existingError || !existing) {
+      throw existingError || new Error("Contrato não encontrado para captura do snapshot jurídico.");
+    }
+
+    if (existing.legal_snapshot && Object.keys(existing.legal_snapshot).length > 0) {
+      return existing.legal_snapshot as Record<string, unknown>;
+    }
+
+    const effectiveSignerId = signerId || existing.signer_id || undefined;
+    const vars = await this.compileContractVariables(eventId, effectiveSignerId);
+
+    const snapshot: Record<string, unknown> = {
+      captured_at: new Date().toISOString(),
+      cliente: {
+        nome: vars["cliente.nome"] || "",
+        documento: vars["cliente.documento"] || "",
+        documento_com_rotulo: vars["cliente.documento_com_rotulo"] || "",
+        email: vars["cliente.email"] || "",
+        telefone: vars["cliente.telefone"] || "",
+        endereco: vars["cliente.endereco"] || "",
+      },
+      empresa: {
+        nome: vars["empresa.nome"] || "",
+        cnpj: vars["empresa.cnpj"] || "",
+        endereco: vars["empresa.endereco"] || "",
+        responsavel: vars["empresa.responsavel"] || "",
+        cpf_responsavel: vars["empresa.cpf_responsavel"] || "",
+        cargo_responsavel: vars["empresa.cargo_responsavel"] || "",
+      },
+      evento: {
+        nome: vars["evento.nome"] || "",
+        tipo: vars["evento.tipo"] || "",
+        data: vars["evento.data"] || "",
+        local: vars["evento.local"] || "",
+        cidade: vars["evento.cidade"] || "",
+        convidados: vars["evento.convidados"] || "",
+        valor_por_pessoa: vars["evento.valor_por_pessoa"] || "",
+        valor_por_pessoa_extenso: vars["evento.valor_por_pessoa_extenso"] || "",
+      },
+      financeiro: {
+        valor_total: vars["financeiro.valor_total"] || "",
+        valor_entrada: vars["financeiro.valor_entrada"] || "",
+        saldo_restante: vars["financeiro.saldo_restante"] || "",
+        forma_pagamento: vars["financeiro.forma_pagamento"] || "",
+        meio_pagamento: vars["financeiro.meio_pagamento"] || "",
+        data_vencimento: vars["financeiro.data_vencimento"] || "",
+      },
+      cardapio: {
+        drinks: vars["cardapio.drinks"] || "",
+      },
+    };
+
+    const { data: saved, error: saveError } = await (supabase as any)
+      .from("event_contracts")
+      .update({ legal_snapshot: snapshot, updated_at: new Date().toISOString() })
+      .eq("id", contractId)
+      .is("legal_snapshot", null)
+      .select("legal_snapshot")
+      .maybeSingle();
+
+    if (saveError) throw saveError;
+    if (saved?.legal_snapshot) return saved.legal_snapshot as Record<string, unknown>;
+
+    const { data: concurrent, error: concurrentError } = await (supabase as any)
+      .from("event_contracts")
+      .select("legal_snapshot")
+      .eq("id", contractId)
+      .single();
+    if (concurrentError || !concurrent?.legal_snapshot) {
+      throw concurrentError || new Error("Não foi possível persistir o snapshot jurídico do contrato.");
+    }
+    return concurrent.legal_snapshot as Record<string, unknown>;
   },
 
   async uploadSignedContractFile(

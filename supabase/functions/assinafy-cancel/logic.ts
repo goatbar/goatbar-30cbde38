@@ -7,6 +7,8 @@ export async function processCancellation(contractId: string, supabaseAdmin: any
     .update({ dispatch_status: "canceling", updated_at: new Date().toISOString() })
     .eq("contract_id", contractId)
     .eq("signature_provider", "assinafy")
+    .eq("document_kind", "contract")
+    .is("addendum_id", null)
     .in("dispatch_status", ["pending_signature", "active", "idle"])
     .select()
     .order("created_at", { ascending: false })
@@ -19,6 +21,8 @@ export async function processCancellation(contractId: string, supabaseAdmin: any
       .select("dispatch_status")
       .eq("contract_id", contractId)
       .eq("signature_provider", "assinafy")
+      .eq("document_kind", "contract")
+      .is("addendum_id", null)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();

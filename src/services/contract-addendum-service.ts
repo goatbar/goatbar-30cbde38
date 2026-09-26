@@ -4,6 +4,14 @@ import {
   ContractAddendumComparison,
   BudgetVersionData,
 } from "@/lib/contract-addendum-comparator";
+import {
+  eventContractsService,
+  getTemplateContent,
+  getTemplateMapping,
+  renderContractPreview,
+  renderContractTemplate,
+  type ContractTemplate,
+} from "@/services/contract-service";
 
 export interface ContractAddendumRow {
   id: string;
@@ -26,7 +34,8 @@ export interface ContractAddendumRow {
   generated_html: string | null;
   generated_file_url: string | null;
   signed_file_url: string | null;
-  status: "draft" | "sent" | "signed" | "cancelled";
+  status: "draft" | "sent" | "signed" | "rejected" | "cancelled";
+  template_id?: string | null;
   external_document_id?: string | null;
   external_assignment_id?: string | null;
   sent_for_signature_at?: string | null;
@@ -50,63 +59,39 @@ export function assertAddendumReadyForSignature(addendum: Pick<ContractAddendumR
   if (/Não informado|A definir|\{\{|\[[A-Z0-9_]+\]/i.test(html)) throw new Error("ADDENDUM_HAS_UNRESOLVED_PLACEHOLDERS");
 }
 
-/** Modelo Oficial do Termo Aditivo ao Contrato */
-export function buildAddendumTemplateHtml(vars: Record<string, string>): string {
-  const clauses: string[] = [];
-  if (vars.clausula_drinks) clauses.push(`<h3>CLÁUSULA — DOS DRINKS E BEBIDAS</h3><p>${vars.clausula_drinks}</p>`);
-  if (vars.clausula_valor) clauses.push(`<h3>CLÁUSULA — DO VALOR E PAGAMENTO</h3><p>${vars.clausula_valor}</p>`);
-  if (vars.clausula_convidados) clauses.push(`<h3>CLÁUSULA — DOS CONVIDADOS</h3><p>${vars.clausula_convidados}</p>`);
-  if (vars.clausula_demais) clauses.push(`<h3>CLÁUSULA — DAS DEMAIS ALTERAÇÕES</h3><p>${vars.clausula_demais}</p>`);
-  return `
-<h1 style="text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 16px; text-transform: uppercase;">
-  TERMO ADITIVO AO CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE BAR PARA EVENTOS
-</h1>
+const fmtBRL = (value: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
 
-<p style="text-align: justify; margin-bottom: 12px;">
-  Pelo presente instrumento particular de Termo Aditivo ao Contrato de Prestação de Serviços de Bar para Eventos, de um lado:
-</p>
+const formatDateLongPtBR = (value: Date) => {
+  const months = [
+    "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+  ];
+  return `${value.getDate()} de ${months[value.getMonth()]} de ${value.getFullYear()}`;
+};
 
-<p style="text-align: justify; margin-bottom: 8px;">
-  <strong>CONTRATANTE:</strong> ${vars.contratante_nome || ""}${vars.contratante_documento ? `, inscrita(o) no CPF/CNPJ sob o nº ${vars.contratante_documento}` : ""}.
-</p>
+function isAddendumTemplate(template: ContractTemplate): boolean {
+  const schema = template.variables_schema as any;
+  return Boolean(
+    schema &&
+      typeof schema === "object" &&
+      !Array.isArray(schema) &&
+      (schema.template_kind === "addendum" ||
+        schema.model_key === "goatbar-official-addendum-v1"),
+  );
+}
 
-<p style="text-align: justify; margin-bottom: 12px;">
-  E, de outro lado, <strong>CONTRATADA:</strong> ${vars.contratada_nome || "GOAT BAR EVENTOS LTDA"}${vars.contratada_documento ? `, inscrita no CNPJ sob o nº ${vars.contratada_documento}` : ""}.
-</p>
+async function getOfficialAddendumTemplate(): Promise<ContractTemplate> {
+  const { data, error } = await supabase
+    .from("contract_templates")
+    .select("*")
+    .eq("status", "active")
+    .order("created_at", { ascending: false });
 
-<p style="text-align: justify; margin-bottom: 16px;">
-  As partes acima qualificadas têm entre si justo e acertado o presente <strong>TERMO ADITIVO</strong> ao Contrato de Prestação de Serviços de Bar para Eventos firmado em <strong>${vars.data_contrato_original || ""}</strong>, mediante as seguintes cláusulas:
-</p>
-
-${clauses.join("\n")}
-
-<h3 style="font-size: 14px; font-weight: bold; margin-top: 16px; margin-bottom: 6px;">
-  CLÁUSULA QUARTA — DA RATIFICAÇÃO
-</h3>
-<p style="text-align: justify; margin-bottom: 24px;">
-  4.1. Permanecem inalteradas e ratificadas todas as demais cláusulas e condições do Contrato de Prestação de Serviços de Bar para Eventos original que não tenham sido expressamente modificadas por este Termo Aditivo.
-</p>
-
-<p style="text-align: right; margin-bottom: 32px;">
-  ${vars.cidade_assinatura || "São Paulo/SP"}, ${vars.data_aditivo || new Date().toLocaleDateString("pt-BR")}.
-</p>
-
-<div class="signature-block" style="margin-top: 40px; page-break-inside: avoid;">
-  <table style="width: 100%; border: none;">
-    <tr>
-      <td style="width: 48%; border: none; text-align: center; vertical-align: top;">
-        _____________________________________<br />
-        <strong>CONTRATANTE: ${vars.contratante_nome || ""}</strong>
-      </td>
-      <td style="width: 4%;"></td>
-      <td style="width: 48%; border: none; text-align: center; vertical-align: top;">
-        _____________________________________<br />
-        <strong>CONTRATADA: ${vars.contratada_nome || "GOAT BAR EVENTOS LTDA"}</strong>
-      </td>
-    </tr>
-  </table>
-</div>
-`.trim();
+  if (error) throw error;
+  const template = ((data || []) as ContractTemplate[]).find(isAddendumTemplate);
+  if (!template) throw new Error("ADDENDUM_TEMPLATE_NOT_CONFIGURED");
+  return template;
 }
 
 export const contractAddendumService = {
@@ -269,23 +254,42 @@ export const contractAddendumService = {
    * Prepara o payload completo para revisão prévia do Aditivo.
    */
   async prepareAddendumData(contractId: string, eventId: string) {
-    // 1. Valida contrato e data de assinatura oficial
-    const { data: contract } = await supabase
+    // 1. Valida contrato e resolve a data jurídica do documento assinado.
+    const { data: contract } = await (supabase as any)
       .from("event_contracts")
       .select("*, contract_signers(*)")
       .eq("id", contractId)
       .single();
 
     if (!contract) throw new Error("Contrato não encontrado.");
-    if (contract.status !== "signed" || !contract.fully_signed_at) {
+    if (contract.status !== "signed") {
       throw new Error("CONTRACT_NOT_FULLY_SIGNED");
     }
 
-    // 2. Resolve a versão contratual vigente (base)
+    const { data: signedDocument } = await (supabase as any)
+      .from("contract_documents")
+      .select("signed_at, manual_signature_date, document_type, created_at")
+      .eq("contract_id", contractId)
+      .in("document_type", ["signed_contract", "manual_signed_contract"])
+      .eq("is_signed", true)
+      .order("signed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const originalContractDate =
+      signedDocument?.manual_signature_date ||
+      signedDocument?.signed_at ||
+      contract.fully_signed_at;
+
+    if (!originalContractDate) {
+      throw new Error("PENDING_ORIGINAL_SIGNATURE_DATE");
+    }
+
+    // 2. Resolve a versão contratual vigente (último aditivo assinado ou contrato original).
     const effective = await this.getEffectiveBudgetVersion(contractId, eventId);
     const baseVersion: BudgetVersionData = effective.budgetVersion;
 
-    // 3. Busca a proposta atual aprovada (is_current = true)
+    // 3. Busca a proposta atual.
     const { data: updatedVersionRaw } = await supabase
       .from("event_budget_versions")
       .select("*")
@@ -300,60 +304,131 @@ export const contractAddendumService = {
       throw new Error("NO_PROPOSAL_CHANGES_DETECTED");
     }
 
-    // 4. Executa o comparador determinístico
+    // 4. Compara a versão contratual vigente com a proposta atual.
     const comparison = compareContractVersions(baseVersion, updatedVersion);
 
-    // 5. Dados do Contratante e da Empresa
-    const { data: clientData } = await supabase
-      .from("event_contract_client_data")
-      .select("*")
-      .eq("event_id", eventId)
-      .maybeSingle();
+    const [{ data: clientData }, { data: evento }] = await Promise.all([
+      supabase
+        .from("event_contract_client_data")
+        .select("*")
+        .eq("event_id", eventId)
+        .maybeSingle(),
+      (supabase as any)
+        .from("events")
+        .select("*")
+        .eq("id", eventId)
+        .single(),
+    ]);
 
-    const { data: evento } = await supabase
-      .from("events")
-      .select("*")
-      .eq("id", eventId)
-      .single();
+    // Valor pago é monetário e histórico. Prioriza o valor canônico do evento,
+    // que não é recalculado quando o valor total da proposta muda.
+    const canonicalPaidAmount =
+      evento?.paid_amount_received !== null && evento?.paid_amount_received !== undefined
+        ? Number(evento.paid_amount_received)
+        : comparison.financial.paidAmount;
 
-    const contratanteNome = clientData?.client_name || evento?.client_name || "";
-    const contratanteDoc = clientData?.cpf_cnpj || (clientData?.notes as any)?.cpf_cnpj || "";
-    const contratadaNome = "GOAT BAR EVENTOS LTDA";
-    const contratadaDoc = "42.123.456/0001-99";
-    const dataContratoOriginal = new Date(contract.fully_signed_at).toLocaleDateString("pt-BR");
+    comparison.financial.paidAmount = canonicalPaidAmount;
+    comparison.valor_ja_pago = canonicalPaidAmount;
+    comparison.financial.remainingBalance =
+      canonicalPaidAmount === null ? null : Math.max(comparison.totalValue.current - canonicalPaidAmount, 0);
+    comparison.novo_saldo_restante = comparison.financial.remainingBalance;
+    comparison.financial.previousBalance =
+      canonicalPaidAmount === null ? null : Math.max(comparison.totalValue.previous - canonicalPaidAmount, 0);
+    comparison.saldo_anterior = comparison.financial.previousBalance;
+    comparison.financial.creditAmount =
+      canonicalPaidAmount === null ? 0 : Math.max(canonicalPaidAmount - comparison.totalValue.current, 0);
+    comparison.financial.hasExcessPaymentCredit = comparison.financial.creditAmount > 0;
+    comparison.credito_cliente =
+      canonicalPaidAmount === null ? null : comparison.financial.creditAmount;
 
+    // 5. Partes: snapshot jurídico do contrato original é a fonte prioritária.
+    // Para contratos legados sem snapshot, recompila as variáveis do contrato e sinaliza a origem.
+    const legalSnapshot = (contract.legal_snapshot || null) as any;
+    let historicalSource: "legal_snapshot" | "legacy_contract_variables" = "legal_snapshot";
+    let contractVariables: Record<string, string> | null = null;
+
+    if (!legalSnapshot) {
+      historicalSource = "legacy_contract_variables";
+      contractVariables = await eventContractsService.compileContractVariables(
+        eventId,
+        contract.signer_id || undefined,
+      );
+    }
+
+    const contratanteNome =
+      legalSnapshot?.cliente?.nome ||
+      contractVariables?.["cliente.nome"] ||
+      clientData?.client_name ||
+      evento?.client_name ||
+      "";
+    const contratanteDoc =
+      legalSnapshot?.cliente?.documento ||
+      contractVariables?.["cliente.documento"] ||
+      clientData?.cpf_cnpj ||
+      (clientData?.notes as any)?.cpf_cnpj ||
+      "";
+    const contratadaNome =
+      legalSnapshot?.empresa?.nome ||
+      contractVariables?.["empresa.nome"] ||
+      "";
+    const contratadaDoc =
+      legalSnapshot?.empresa?.cnpj ||
+      contractVariables?.["empresa.cnpj"] ||
+      "";
+
+    if (!contratanteNome || !contratanteDoc || !contratadaNome || !contratadaDoc) {
+      throw new Error("ADDENDUM_LEGAL_PARTIES_INCOMPLETE");
+    }
+
+    const signedAt = new Date(originalContractDate);
+    const now = new Date();
     const templateVars: Record<string, string> = {
+      "cliente.nome": contratanteNome,
+      "cliente.documento": contratanteDoc,
+      "empresa.nome": contratadaNome,
+      "empresa.cnpj": contratadaDoc,
+      "contrato.data_assinatura_original": signedAt.toLocaleDateString("pt-BR"),
+      "aditivo.drinks_atuais": comparison.drinks.finalListText,
+      "aditivo.valor_total_novo": comparison.totalValue.currentFormatted,
+      "aditivo.valor_total_novo_extenso": comparison.totalValue.currentWords,
+      "aditivo.valor_ja_pago":
+        canonicalPaidAmount === null ? "" : fmtBRL(canonicalPaidAmount),
+      "aditivo.novo_saldo_restante":
+        comparison.financial.remainingBalance === null
+          ? ""
+          : fmtBRL(comparison.financial.remainingBalance),
+      "aditivo.forma_pagamento_saldo": comparison.financial.paymentCondition || "",
+      "aditivo.meio_pagamento_saldo": comparison.financial.paymentMethod || "",
+      "aditivo.datas_vencimento": comparison.financial.dueDate,
+      "aditivo.valor_convidado_excedente": comparison.extraGuestValue.currentFormatted,
+      "aditivo.valor_convidado_excedente_extenso": comparison.extraGuestValue.currentWords,
+      "aditivo.data_extenso": formatDateLongPtBR(now),
+
+      // aliases preservados para compatibilidade com registros antigos.
       contratante_nome: contratanteNome,
       contratante_documento: contratanteDoc,
       contratada_nome: contratadaNome,
       contratada_documento: contratadaDoc,
-      data_contrato_original: dataContratoOriginal,
+      data_contrato_original: signedAt.toLocaleDateString("pt-BR"),
       drinks_atuais: comparison.drinks.finalListText,
       novo_valor_total: comparison.totalValue.currentFormatted,
       novo_valor_total_extenso: comparison.totalValue.currentWords,
-      valor_ja_pago: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-        comparison.financial.paidAmount || 0,
-      ),
-      saldo_restante: new Intl.NumberFormat("pt-BR", {
-        style: "currency",
-        currency: "BRL",
-      }).format(comparison.financial.remainingBalance || 0),
+      valor_ja_pago: canonicalPaidAmount === null ? "" : fmtBRL(canonicalPaidAmount),
+      saldo_restante:
+        comparison.financial.remainingBalance === null
+          ? ""
+          : fmtBRL(comparison.financial.remainingBalance),
       forma_pagamento_saldo: comparison.financial.paymentCondition || "",
       meio_pagamento_saldo: comparison.financial.paymentMethod || "",
       datas_vencimento: comparison.financial.dueDate,
       valor_convidado_excedente: comparison.extraGuestValue.currentFormatted,
       valor_convidado_excedente_extenso: comparison.extraGuestValue.currentWords,
-      cidade_assinatura: evento?.city || "São Paulo/SP",
-      data_aditivo: new Date().toLocaleDateString("pt-BR"),
-      resumo_alteracoes: comparison.resumo_alteracoes,
     };
-    if (comparison.drinks.changed) templateVars.clausula_drinks = `Os drinks e bebidas passam a ser: <em>“${comparison.drinks.finalListText}”</em>.`;
-    if (comparison.totalValue.changed) templateVars.clausula_valor = "As condições financeiras serão detalhadas após a confirmação das condições do saldo.";
-    if (comparison.guestCount.changed || comparison.extraGuestValue.changed) templateVars.clausula_convidados = `${comparison.guestCount.changed ? `A quantidade de convidados passa de ${comparison.guestCount.previous} para ${comparison.guestCount.current}. ` : ""}${comparison.extraGuestValue.changed ? `O valor por convidado excedente passa a ser ${comparison.extraGuestValue.currentFormatted} (${comparison.extraGuestValue.currentWords}).` : ""}`;
-    const otherChanges=comparison.changes.filter((c)=>!["drinks","total_value","guest_count","extra_guest_value"].includes(c.key));
-    if (otherChanges.length) templateVars.clausula_demais=otherChanges.map((c)=>`${c.label}: de ${JSON.stringify(c.previous)} para ${JSON.stringify(c.current)}.`).join(" ");
 
-    const compiledHtml = buildAddendumTemplateHtml(templateVars);
+    const addendumTemplate = await getOfficialAddendumTemplate();
+    const templateContent = getTemplateContent(addendumTemplate);
+    const mapping = getTemplateMapping(addendumTemplate);
+    const compiledHtml = renderContractPreview(templateContent, templateVars, mapping);
 
     return {
       contract,
@@ -362,7 +437,9 @@ export const contractAddendumService = {
       comparison,
       templateVars,
       compiledHtml,
-      originalContractDate: contract.fully_signed_at,
+      template: addendumTemplate,
+      historicalSource,
+      originalContractDate,
     };
   },
 
@@ -392,14 +469,32 @@ export const contractAddendumService = {
     }
 
     if (data.comparison.valor_ja_pago === null) throw new Error("PENDING_PAID_AMOUNT");
-    const condition=params.paymentCondition||data.comparison.forma_pagamento_saldo;
-    const method=params.paymentMethod||data.comparison.meio_pagamento_saldo;
-    const dueDates=params.dueDates?.filter(Boolean).length?params.dueDates:data.comparison.datas_vencimento;
-    if (data.comparison.novo_saldo_restante! > 0 && (!condition || !method || !dueDates.length)) throw new Error("PENDING_BALANCE_PAYMENT_TERMS");
-    data.templateVars.forma_pagamento_saldo=condition||""; data.templateVars.meio_pagamento_saldo=method||""; data.templateVars.datas_vencimento=dueDates.join(" e ");
-    if (data.comparison.totalValue.changed) data.templateVars.clausula_valor=`O valor total passa a ser de <strong>${data.templateVars.novo_valor_total}</strong> (${data.templateVars.novo_valor_total_extenso}). O CONTRATANTE já pagou <strong>${data.templateVars.valor_ja_pago}</strong>, restando <strong>${data.templateVars.saldo_restante}</strong>, que será pago ${condition?.toLowerCase()}, via ${method}, com vencimento em ${dueDates.join(" e ")}.`;
+    const hasRemainingBalance = (data.comparison.novo_saldo_restante || 0) > 0;
+    const condition = hasRemainingBalance
+      ? params.paymentCondition || data.comparison.forma_pagamento_saldo
+      : "Não se aplica";
+    const method = hasRemainingBalance
+      ? params.paymentMethod || data.comparison.meio_pagamento_saldo
+      : "Não se aplica";
+    const dueDates = hasRemainingBalance
+      ? (params.dueDates?.filter(Boolean).length
+          ? params.dueDates
+          : data.comparison.datas_vencimento)
+      : ["Não se aplica"];
+    if (hasRemainingBalance && (!condition || !method || !dueDates.length))
+      throw new Error("PENDING_BALANCE_PAYMENT_TERMS");
+    data.templateVars["aditivo.forma_pagamento_saldo"] = condition || "";
+    data.templateVars["aditivo.meio_pagamento_saldo"] = method || "";
+    data.templateVars["aditivo.datas_vencimento"] = dueDates.join(" e ");
+    data.templateVars.forma_pagamento_saldo = condition || "";
+    data.templateVars.meio_pagamento_saldo = method || "";
+    data.templateVars.datas_vencimento = dueDates.join(" e ");
 
-    const finalHtml = buildAddendumTemplateHtml(data.templateVars);
+    const finalHtml = renderContractTemplate(
+      getTemplateContent(data.template),
+      data.templateVars,
+      getTemplateMapping(data.template),
+    );
 
     // Calcula próximo addendum_number
     const { data: existing } = await supabase
@@ -443,6 +538,7 @@ export const contractAddendumService = {
         addendum_number: nextNumber,
         base_budget_version_id: data.baseVersion.id,
         updated_budget_version_id: data.updatedVersion.id,
+        template_id: data.template.id,
         contractant_snapshot: {
           nome: data.templateVars.contratante_nome,
           documento: data.templateVars.contratante_documento,
@@ -461,7 +557,7 @@ export const contractAddendumService = {
         original_contract_date: data.originalContractDate,
         generated_html: finalHtml,
         status: "draft",
-      })
+      } as any)
       .select()
       .single();
 
@@ -502,6 +598,8 @@ export const contractAddendumService = {
     const { data: res, error } = await supabase.functions.invoke("assinafy-create-doc", {
       body: {
         contractId: addendum.contract_id,
+        documentKind: "addendum",
+        addendumId: addendum.id,
         pdfBase64: pdf.base64,
         pdfHash: pdf.hash,
         documentTitle: docTitle,
