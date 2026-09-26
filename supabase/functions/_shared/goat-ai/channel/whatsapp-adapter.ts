@@ -431,10 +431,12 @@ export class WhatsAppChannelAdapter {
 
     // 4. Se o turno gerou explicitamente um PDF, tente entregar o arquivo real.
     // Se a Meta não conseguir buscar o documento, caia para texto com URL clicável.
+    // Somente documentos solicitados para ENTREGA ao usuário são anexados.
+    // Contrato enviado para assinatura é uma ação jurídica: o PDF vai para a
+    // Assinafy e não deve ser anexado automaticamente na conversa da GIA.
     const documentToolNames = new Set([
       "generate_event_menu_pdf",
       "generate_commercial_proposal_pdf",
-      "generate_contract_and_send_signature",
     ]);
     const generatedDocumentCall = (turnResult.toolCallsExecuted || []).find(
       (call: any) =>
@@ -450,9 +452,7 @@ export class WhatsAppChannelAdapter {
       const caption =
         generatedDocumentCall.toolName === "generate_event_menu_pdf"
           ? "Cardápio em PDF"
-          : generatedDocumentCall.toolName === "generate_commercial_proposal_pdf"
-            ? "Proposta comercial em PDF"
-            : "Contrato em PDF";
+          : "Proposta comercial em PDF";
       deliveredAsDocument = await this.sendDocumentMessage(
         senderPhone,
         result.pdf_url,
