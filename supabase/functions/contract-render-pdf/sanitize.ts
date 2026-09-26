@@ -51,7 +51,15 @@ export function sanitizeAndPrepareContractHtml(rawHtml: string): string {
     "$1",
   );
 
-  // 6. Agrupamento tolerante e não-destrutivo do bloco de assinaturas
+  // 6. Marca semanticamente cada linha de assinatura, inclusive em minutas
+  // geradas antes da atualização do template. Isso garante espaço suficiente para
+  // o selo/assinatura eletrônica no PDF oficial.
+  clean = clean.replace(
+    /<p(?![^>]*class=)([^>]*)>(\s*_{3,}[\s\S]*?\b(?:CONTRATANTE|CONTRATADA|TESTEMUNHA)\b[\s\S]*?)<\/p>/gi,
+    '<p class="contract-signature-line"$1>$2</p>',
+  );
+
+  // 7. Agrupamento tolerante e não-destrutivo do bloco de assinaturas
   if (!clean.includes("contract-signature-block")) {
     const contratanteIdx = clean.lastIndexOf("CONTRATANTE");
     const contratadaIdx = clean.lastIndexOf("CONTRATADA");
