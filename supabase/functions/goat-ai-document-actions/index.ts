@@ -333,8 +333,11 @@ async function contractAndSend(admin: any, url: string, key: string, userId: str
     .eq("signature_provider", "assinafy").eq("document_kind", "contract").neq("dispatch_status", "obsolete")
     .order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (active.data && ["pending_signature","signed","completed"].includes(active.data.dispatch_status)) {
-    let link = contract.signed_file_url || contract.generated_file_url || null;
-    if (!link && contract.generated_file_path) { try { link = await signedUrl(admin, "contract-documents", contract.generated_file_path); } catch {} }
+    let link = contract.signed_file_url || null;
+    if (!link && contract.generated_file_path) {
+      try { link = await signedUrl(admin, "contract-documents", contract.generated_file_path); } catch {}
+    }
+    if (!link) link = contract.generated_file_url || null;
     return { success: true, action: "generate_contract_and_send", reused: true, contract_id: contract.id,
       signature_request_id: active.data.id, signature_status: active.data.dispatch_status, pdf_url: link,
       message: "O contrato já havia sido enviado para assinatura; o envio existente foi reutilizado." + (link ? "\n\nPDF: " + link : "") };
