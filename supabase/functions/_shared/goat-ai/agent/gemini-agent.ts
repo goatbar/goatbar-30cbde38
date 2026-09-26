@@ -2170,8 +2170,9 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
               "[REVISÃO OBRIGATÓRIA DE EVIDÊNCIAS] A resposta anterior contém uma afirmação de ausência. " +
               "Revise a conclusão com os dados abaixo antes de responder ao usuário. " +
               "Procure evidências positivas em TODAS as seções relevantes, não apenas no primeiro campo/tabela. " +
-              "Se houver qualquer dado que responda à pergunta, corrija a resposta e apresente esse dado. " +
-              "Se a ausência for confirmada, explique brevemente quais fontes foram verificadas.\n\n" +
+              "Se houver qualquer dado que responda à pergunta, corrija a resposta e apresente SOMENTE o que foi pedido, com o mínimo de contexto necessário. " +
+              "Não transforme a revisão em relatório e não exponha dados irrelevantes só porque foram consultados. " +
+              "Se a ausência for confirmada, explique brevemente apenas as fontes relevantes que foram verificadas.\n\n" +
               JSON.stringify(evidencePayload),
           });
           continue;
