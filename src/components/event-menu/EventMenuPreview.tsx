@@ -68,9 +68,8 @@ function BirthdayPersonalization() {
         alt="Happy Birthday"
         className="block object-contain"
         style={{
-          width: "clamp(145px, 30cqw, 180px)",
-          maxHeight: "94%",
-          mixBlendMode: "multiply",
+          width: "clamp(180px, 38cqw, 220px)",
+          maxHeight: "100%",
         }}
       />
     </div>
@@ -215,12 +214,15 @@ function MenuPageView({
       >
         {page.drinks.map((drink) => (
           <div key={drink.id} className="w-full text-center">
-            {/* Nome do drink: Neue Montreal Medium, tamanho 20 */}
-            <h3
-              className="font-normal text-[#701117]"
+            {/* Nome do drink: Neue Montreal Regular, tamanho 20, sem peso sintético */}
+            <div
+              className="text-[#701117]"
               style={{
-                fontFamily: '"Neue Montreal", Helvetica, Arial, sans-serif',
+                fontFamily: '"Neue Montreal Regular", "Neue Montreal", Helvetica, Arial, sans-serif',
                 fontWeight: 400,
+                fontStyle: "normal",
+                fontSynthesis: "none",
+                WebkitFontSmoothing: "antialiased",
                 fontSize: "clamp(13px, 3.53cqw, 20px)",
                 lineHeight: "1.2",
                 margin: 0,
@@ -228,15 +230,18 @@ function MenuPageView({
               }}
             >
               {drink.name}
-            </h3>
+            </div>
 
             {/* Descrição: Neue Montreal Regular, tamanho 16 */}
             {drink.description ? (
               <p
                 className="mx-auto font-normal text-[#0f1414]"
                 style={{
-                  fontFamily: '"Neue Montreal", Helvetica, Arial, sans-serif',
+                  fontFamily: '"Neue Montreal Regular", "Neue Montreal", Helvetica, Arial, sans-serif',
                   fontWeight: 400,
+                  fontStyle: "normal",
+                  fontSynthesis: "none",
+                  WebkitFontSmoothing: "antialiased",
                   fontSize: "clamp(10px, 2.82cqw, 16px)",
                   lineHeight: "1.25",
                   marginTop: "clamp(2px, 0.7cqw, 4px)",
