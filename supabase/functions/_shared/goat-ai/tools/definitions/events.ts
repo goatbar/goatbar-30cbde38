@@ -319,9 +319,9 @@ export const searchEventsTool: GoatAIToolDefinition = {
 export const getEventDetailsTool: GoatAIToolDefinition = {
   name: "get_event_details",
   domain: "EVENTS",
-  sourceTable: "events, event_budget_versions",
+  sourceTable: "events,event_budget_versions,generated_proposals,event_contracts,contract_signature_requests,event_contract_client_data,event_menu_settings,event_planning_items,event_closings,event_closing_items",
   description:
-    "Obtém detalhes completos de um evento pelo ID, incluindo convidados, drinks, local e a composição comercial do orçamento atual: valores, equipe orçada (bartenders, keepers e copeiras), bebidas, gelo, logística, adicionais e pagamentos.",
+    "Investiga o contexto completo de um evento no sistema. Cruza cadastro do evento, orçamento atual, proposta mais recente, contrato/assinatura, coleta de dados contratuais, configuração de cardápio, planejamento e fechamento operacional. Use esta ferramenta como fonte ampla antes de concluir que uma informação de evento não existe.",
   parameters: {
     type: "object",
     properties: {
@@ -348,13 +348,87 @@ export const getEventDetailsTool: GoatAIToolDefinition = {
       return { success: false, error: `Evento não encontrado para o ID: ${args.event_id}` };
     }
 
-    // Fetch active budget version if exists
-    const { data: budget } = await ctx.supabaseAdmin
-      .from("event_budget_versions")
-      .select("*")
-      .eq("event_id", args.event_id)
-      .eq("is_current", true)
-      .maybeSingle();
+    // Investigação ampla: o objetivo desta ferramenta é reproduzir a visão
+    // factual do sistema, sem depender de uma única tela/tabela.
+    const [
+      budgetResult,
+      proposalResult,
+      contractResult,
+      signatureResult,
+      contractDataResult,
+      menuSettingsResult,
+      planningResult,
+      closingResult,
+      closingItemsResult,
+    ] = await Promise.all([
+      ctx.supabaseAdmin
+        .from("event_budget_versions")
+        .select("*")
+        .eq("event_id", args.event_id)
+        .eq("is_current", true)
+        .maybeSingle(),
+      ctx.supabaseAdmin
+        .from("generated_proposals")
+        .select("id,event_id,budget_id,template_id,status,generated_at,created_at,updated_at,storage_path,final_pdf_url")
+        .eq("event_id", args.event_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      ctx.supabaseAdmin
+        .from("event_contracts")
+        .select("id,event_id,budget_version_id,status,version,generated_at,sent_for_signature_at,fully_signed_at,created_at,updated_at,generated_file_path,signed_file_path,provider,provider_document_id")
+        .eq("event_id", args.event_id)
+        .neq("status", "cancelled")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      ctx.supabaseAdmin
+        .from("contract_signature_requests")
+        .select("id,event_id,contract_id,signature_provider,dispatch_status,internal_status,provider_status,sent_at,viewed_at,signed_at,completed_at,cancelled_at,expires_at,last_synced_at,last_error,document_kind")
+        .eq("event_id", args.event_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      ctx.supabaseAdmin
+        .from("event_contract_client_data")
+        .select("id,event_id,client_name,email,address,submitted_at,token_expires_at,updated_at,cpf_cnpj,phone,legal_representative_name,legal_representative_cpf")
+        .eq("event_id", args.event_id)
+        .maybeSingle(),
+      ctx.supabaseAdmin
+        .from("event_menu_settings")
+        .select("event_id,artwork_mode,artwork_url,custom_label,created_at,updated_at")
+        .eq("event_id", args.event_id)
+        .maybeSingle(),
+      ctx.supabaseAdmin
+        .from("event_planning_items")
+        .select("id,item_name,category,planned_quantity,unit,estimated_unit_cost,estimated_total_cost,origin,notes,updated_at")
+        .eq("event_id", args.event_id)
+        .order("created_at", { ascending: true })
+        .limit(100),
+      ctx.supabaseAdmin
+        .from("event_closings")
+        .select("id,event_id,closing_date,revenue_amount,total_purchase_cost,total_team_cost,total_logistics_cost,total_consumed_cost,total_lost_cost,total_event_cost,event_profit,event_margin,general_notes,improvement_points,status,updated_at")
+        .eq("event_id", args.event_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      ctx.supabaseAdmin
+        .from("event_closing_items")
+        .select("id,item_name,category,quantity_taken,quantity_used,quantity_returned,quantity_lost_or_broken,unit,unit_cost,consumed_cost,lost_cost,notes,updated_at")
+        .eq("event_id", args.event_id)
+        .order("created_at", { ascending: true })
+        .limit(100),
+    ]);
+
+    const budget = budgetResult.data || null;
+    const latestProposal = proposalResult.data || null;
+    const latestContract = contractResult.data || null;
+    const latestSignatureRequest = signatureResult.data || null;
+    const contractData = contractDataResult.data || null;
+    const menuSettings = menuSettingsResult.data || null;
+    const planningItems = planningResult.data || [];
+    const closing = closingResult.data || null;
+    const closingItems = closingItemsResult.data || [];
 
     const drinksList = await resolveEventDrinks(
       ctx,
@@ -369,14 +443,96 @@ export const getEventDetailsTool: GoatAIToolDefinition = {
       drinks: drinksList,
     };
 
+    // Dados sensíveis não precisam ser enviados integralmente ao modelo para
+    // responder perguntas comuns. Expomos presença/completude em vez de CPF.
+    const contractDataSummary = contractData
+      ? {
+          id: contractData.id,
+          client_name: contractData.client_name,
+          email: contractData.email || null,
+          address: contractData.address || null,
+          submitted_at: contractData.submitted_at || null,
+          token_expires_at: contractData.token_expires_at || null,
+          updated_at: contractData.updated_at || null,
+          has_document: Boolean(contractData.cpf_cnpj),
+          has_phone: Boolean(contractData.phone),
+          has_legal_representative: Boolean(
+            contractData.legal_representative_name ||
+              contractData.legal_representative_cpf,
+          ),
+        }
+      : null;
+
+    const sourceCoverage = {
+      event: { checked: true, found: true },
+      current_budget: {
+        checked: true,
+        found: Boolean(budget),
+        error: budgetResult.error?.message || null,
+      },
+      latest_proposal: {
+        checked: true,
+        found: Boolean(latestProposal),
+        error: proposalResult.error?.message || null,
+      },
+      contract: {
+        checked: true,
+        found: Boolean(latestContract),
+        error: contractResult.error?.message || null,
+      },
+      signature_request: {
+        checked: true,
+        found: Boolean(latestSignatureRequest),
+        error: signatureResult.error?.message || null,
+      },
+      contract_client_data: {
+        checked: true,
+        found: Boolean(contractData),
+        error: contractDataResult.error?.message || null,
+      },
+      menu_settings: {
+        checked: true,
+        found: Boolean(menuSettings),
+        error: menuSettingsResult.error?.message || null,
+      },
+      planning_items: {
+        checked: true,
+        found: planningItems.length > 0,
+        count: planningItems.length,
+        error: planningResult.error?.message || null,
+      },
+      closing: {
+        checked: true,
+        found: Boolean(closing),
+        error: closingResult.error?.message || null,
+      },
+      closing_items: {
+        checked: true,
+        found: closingItems.length > 0,
+        count: closingItems.length,
+        error: closingItemsResult.error?.message || null,
+      },
+    };
+
     return {
       success: true,
       data: {
         event: detailedEvent,
-        current_budget: budget || null,
+        current_budget: budget,
         drinks: drinksList,
+        latest_proposal: latestProposal,
+        contract: latestContract,
+        signature_request: latestSignatureRequest,
+        contract_client_data: contractDataSummary,
+        menu_settings: menuSettings,
+        planning_items: planningItems,
+        closing,
+        closing_items: closingItems,
+        source_coverage: sourceCoverage,
       },
-      message: `Detalhes do evento ${event.event_name || event.client_name} obtidos com sucesso.`,
+      message:
+        `Contexto completo do evento ${event.event_name || event.client_name} investigado em ` +
+        `${Object.keys(sourceCoverage).length} fontes do sistema.`,
     };
   },
 };
