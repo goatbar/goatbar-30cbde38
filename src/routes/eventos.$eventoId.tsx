@@ -2085,6 +2085,11 @@ function EventoInterna() {
             selectedDrinks: currentBudget?.selected_drinks ?? evento?.drinks ?? [],
             catalog: allDrinks,
             eventName: evento?.event_name || evento?.client_name,
+            eventType: evento?.event_type,
+            clientName: evento?.client_name,
+            brideName: evento?.bride_name,
+            groomName: evento?.groom_name,
+            date: evento?.date,
           });
           return (
             <div className="animate-in fade-in duration-300">
