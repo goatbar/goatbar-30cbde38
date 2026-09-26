@@ -33,12 +33,23 @@ export function sanitizeAndPrepareContractHtml(rawHtml: string): string {
   // 4. Bloquear links externos não autorizados (substitui por href="#")
   clean = clean.replace(/\s+href\s*=\s*["'](?:\s*(?:https?:|\/\/)[^"']*)["']/gi, ' href="#"');
 
-  // 5. Bloquear url(...) externas em atributos style="" (ex: style="background: url(...)")
+  // 5. Normalizar estilos inline para o documento oficial.
+  // O editor pode carregar cores/opacidade do DOCX; na emissão oficial o texto precisa
+  // permanecer preto sobre branco, exatamente como na prévia canônica.
   clean = clean.replace(/style\s*=\s*(["'])([\s\S]*?)\1/gi, (_match, quote, styleContent) => {
-    // Remove url(...) a menos que seja data:image/
-    const sanitizedStyle = styleContent.replace(/url\(\s*(?!['"]?data:image\/)[^)]*\)/gi, "none");
+    let sanitizedStyle = styleContent.replace(/url\(\s*(?!['"]?data:image\/)[^)]*\)/gi, "none");
+    sanitizedStyle = sanitizedStyle.replace(
+      /(?:^|;)\s*(?:color|-webkit-text-fill-color|opacity|filter|mix-blend-mode)\s*:[^;]*/gi,
+      "",
+    );
     return `style=${quote}${sanitizedStyle}${quote}`;
   });
+
+  // Remove também o atributo HTML legado <font color="..."> importado de DOCX.
+  clean = clean.replace(
+    /(<font\b[^>]*?)\s+color\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi,
+    "$1",
+  );
 
   // 6. Agrupamento tolerante e não-destrutivo do bloco de assinaturas
   if (!clean.includes("contract-signature-block")) {
