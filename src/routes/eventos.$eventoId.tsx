@@ -1503,7 +1503,14 @@ function EventoInterna() {
   // Webhooks continuam sendo a fonte principal; este polling cobre atraso/falha de entrega
   // do webhook e mantém a tela atualizada sem exigir clique em "Atualizar status".
   useEffect(() => {
-    if (!realContract?.id || !["active", "sending"].includes(integrationState)) return;
+    const needsFinalArchive =
+      integrationState === "completed" && !finalSignedContractDoc;
+    if (
+      !realContract?.id ||
+      (!["active", "sending"].includes(integrationState) && !needsFinalArchive)
+    ) {
+      return;
+    }
 
     let cancelled = false;
     const sync = async () => {
@@ -1535,6 +1542,7 @@ function EventoInterna() {
     realContract?.signature_provider,
     realContract?.provider,
     integrationState,
+    finalSignedContractDoc?.id,
   ]);
 
   const handleDeleteContract = async () => {
