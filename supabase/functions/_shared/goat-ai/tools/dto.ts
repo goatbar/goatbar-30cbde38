@@ -101,6 +101,97 @@ export function compactToolResultForAgent(toolName: string, rawData: any): ToolC
             discount_value: budget.discount_value,
             payment_method: budget.payment_method,
           },
+          latest_proposal: rawData.latest_proposal
+            ? {
+                id: rawData.latest_proposal.id,
+                budget_id: rawData.latest_proposal.budget_id,
+                status: rawData.latest_proposal.status,
+                generated_at:
+                  rawData.latest_proposal.generated_at ||
+                  rawData.latest_proposal.created_at,
+              }
+            : null,
+          contract: rawData.contract
+            ? {
+                id: rawData.contract.id,
+                budget_version_id: rawData.contract.budget_version_id,
+                status: rawData.contract.status,
+                version: rawData.contract.version,
+                generated_at: rawData.contract.generated_at,
+                sent_for_signature_at: rawData.contract.sent_for_signature_at,
+                fully_signed_at: rawData.contract.fully_signed_at,
+                provider: rawData.contract.provider,
+              }
+            : null,
+          signature_request: rawData.signature_request
+            ? {
+                id: rawData.signature_request.id,
+                signature_provider: rawData.signature_request.signature_provider,
+                dispatch_status: rawData.signature_request.dispatch_status,
+                internal_status: rawData.signature_request.internal_status,
+                provider_status: rawData.signature_request.provider_status,
+                sent_at: rawData.signature_request.sent_at,
+                viewed_at: rawData.signature_request.viewed_at,
+                signed_at: rawData.signature_request.signed_at,
+                completed_at: rawData.signature_request.completed_at,
+                last_synced_at: rawData.signature_request.last_synced_at,
+                last_error: rawData.signature_request.last_error,
+                document_kind: rawData.signature_request.document_kind,
+              }
+            : null,
+          contract_client_data: rawData.contract_client_data || null,
+          menu_settings: rawData.menu_settings
+            ? {
+                artwork_mode: rawData.menu_settings.artwork_mode,
+                custom_label: rawData.menu_settings.custom_label,
+                updated_at: rawData.menu_settings.updated_at,
+              }
+            : null,
+          planning_items: Array.isArray(rawData.planning_items)
+            ? rawData.planning_items.slice(0, 50).map((item: any) => ({
+                item_name: item.item_name,
+                category: item.category,
+                planned_quantity: item.planned_quantity,
+                unit: item.unit,
+                estimated_unit_cost: item.estimated_unit_cost,
+                estimated_total_cost: item.estimated_total_cost,
+                origin: item.origin,
+                notes: item.notes,
+              }))
+            : [],
+          closing: rawData.closing
+            ? {
+                closing_date: rawData.closing.closing_date,
+                revenue_amount: rawData.closing.revenue_amount,
+                total_purchase_cost: rawData.closing.total_purchase_cost,
+                total_team_cost: rawData.closing.total_team_cost,
+                total_logistics_cost: rawData.closing.total_logistics_cost,
+                total_consumed_cost: rawData.closing.total_consumed_cost,
+                total_lost_cost: rawData.closing.total_lost_cost,
+                total_event_cost: rawData.closing.total_event_cost,
+                event_profit: rawData.closing.event_profit,
+                event_margin: rawData.closing.event_margin,
+                status: rawData.closing.status,
+                general_notes: rawData.closing.general_notes,
+                improvement_points: rawData.closing.improvement_points,
+              }
+            : null,
+          closing_items: Array.isArray(rawData.closing_items)
+            ? rawData.closing_items.slice(0, 50).map((item: any) => ({
+                item_name: item.item_name,
+                category: item.category,
+                quantity_taken: item.quantity_taken,
+                quantity_used: item.quantity_used,
+                quantity_returned: item.quantity_returned,
+                quantity_lost_or_broken: item.quantity_lost_or_broken,
+                unit: item.unit,
+                unit_cost: item.unit_cost,
+                consumed_cost: item.consumed_cost,
+                lost_cost: item.lost_cost,
+                notes: item.notes,
+              }))
+            : [],
+          source_coverage: rawData.source_coverage || {},
         };
       }
       break;
