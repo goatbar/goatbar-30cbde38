@@ -49,20 +49,25 @@ serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const isInternalGiaCall = Boolean(serviceRoleKey && authHeader === "Bearer " + serviceRoleKey);
 
-    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-      auth: { persistSession: false },
-    });
+    const authClient = isInternalGiaCall
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } })
+      : createClient(supabaseUrl, supabaseAnonKey, {
+          global: { headers: { Authorization: authHeader } },
+          auth: { persistSession: false },
+        });
 
-    const { data: userData, error: userError } = await authClient.auth.getUser();
-    if (userError || !userData?.user) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "Sessão inválida ou expirada. Efetue login novamente." }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (!isInternalGiaCall) {
+      const { data: userData, error: userError } = await authClient.auth.getUser();
+      if (userError || !userData?.user) {
+        return new Response(
+          JSON.stringify({ ok: false, error: "Sessão inválida ou expirada. Efetue login novamente." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
-    const user = userData.user;
 
     // 3. Obter Credenciais da Cloudflare (secret exclusivo do Browser Run)
     const accountId = Deno.env.get("CLOUDFLARE_ACCOUNT_ID");
