@@ -3,7 +3,8 @@ import type { GoatAIToolDefinition, ToolContext, ToolExecutionResult } from "../
 type DocumentAction =
   | "generate_proposal"
   | "generate_menu"
-  | "generate_contract_and_send";
+  | "generate_contract_and_send"
+  | "get_signed_contract";
 
 function getEnv(name: string): string {
   try {
@@ -205,6 +206,24 @@ export const generateEventMenuPdfTool: GoatAIToolDefinition = {
   requiresConfirmation: false,
   execute: (context, args) =>
     runDocumentAction(context, "generate_menu", eventIdFromArgs(args)),
+};
+
+export const getSignedContractPdfTool: GoatAIToolDefinition = {
+  name: "get_signed_contract_pdf",
+  domain: "EVENTS",
+  sourceTable: "events,contract_documents,event_contracts",
+  description:
+    "Recupera o PDF final já assinado de um contrato existente no repositório do evento, incluindo contratos assinados manualmente ou pela Assinafy. Use quando o usuário pedir para ver, baixar ou receber o contrato ASSINADO já existente. NÃO gera nova minuta e NÃO envia novamente para assinatura.",
+  parameters: {
+    type: "object",
+    properties: {
+      event_id: { type: "string", description: "UUID do evento já resolvido." },
+    },
+    required: ["event_id"],
+  },
+  requiresConfirmation: false,
+  execute: (context, args) =>
+    runDocumentAction(context, "get_signed_contract", eventIdFromArgs(args)),
 };
 
 export const generateContractAndSendSignatureTool: GoatAIToolDefinition = {
