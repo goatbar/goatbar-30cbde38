@@ -171,13 +171,56 @@ export const contractAddendumService = {
   ): Promise<{ budgetVersionId: string; autoResolved: boolean }> {
     const { data: contract } = await supabase
       .from("event_contracts")
-      .select("id, event_id, budget_version_id")
+      .select("id, event_id, budget_version_id, created_at, generated_at")
       .eq("id", contractId)
       .single();
 
     if (!contract) throw new Error("Contrato não encontrado.");
 
+    // Alguns contratos legados receberam, posteriormente, o budget_version_id da
+    // proposta que estava vigente no momento da migração/upload. Isso pode apontar
+    // para uma proposta criada DEPOIS do próprio contrato, o que é impossível como
+    // origem contratual. Nesses casos, corrige a proveniência pela última versão que
+    // já existia quando o contrato foi gerado/criado.
     if (contract.budget_version_id) {
+      const { data: linkedBudget } = await supabase
+        .from("event_budget_versions")
+        .select("id, created_at")
+        .eq("id", contract.budget_version_id)
+        .maybeSingle();
+
+      const contractAnchor = contract.generated_at || contract.created_at;
+      const linkedCreatedAt = linkedBudget?.created_at;
+
+      if (
+        contractAnchor &&
+        linkedCreatedAt &&
+        new Date(linkedCreatedAt).getTime() > new Date(contractAnchor).getTime()
+      ) {
+        const { data: historicalVersions } = await supabase
+          .from("event_budget_versions")
+          .select("id, version_number, final_budget_value, created_at")
+          .eq("event_id", contract.event_id)
+          .lte("created_at", contractAnchor)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        const historical = historicalVersions?.[0];
+        if (historical?.id) {
+          const { error: repairError } = await supabase
+            .from("event_contracts")
+            .update({ budget_version_id: historical.id, updated_at: new Date().toISOString() })
+            .eq("id", contractId);
+          if (repairError) throw repairError;
+
+          return { budgetVersionId: historical.id, autoResolved: true };
+        }
+
+        const err = new Error("LEGACY_CONTRACT_REQUIRES_MANUAL_SELECTION") as any;
+        err.versions = [];
+        throw err;
+      }
+
       return { budgetVersionId: contract.budget_version_id, autoResolved: true };
     }
 
