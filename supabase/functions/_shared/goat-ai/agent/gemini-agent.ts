@@ -50,6 +50,7 @@ import {
 import { resolveBudgetRequestLinkIntent } from "../events/budget-request-intent.ts";
 import { resolveContractDataRequestLinkIntent } from "../events/contract-data-request-intent.ts";
 import { resolveEventDocumentCommandIntent } from "../events/document-command-intent.ts";
+import { formatEventReadReply, resolveEventReadIntent } from "../events/event-read-intent.ts";
 import {
   formatPendingBudgetRequestsReply,
   resolvePendingBudgetRequestsIntent,
@@ -121,6 +122,53 @@ function maskPhone(phone?: string | null): string {
   const digits = phone.replace(/\D/g, "");
   if (digits.length <= 6) return phone;
   return digits.slice(0, 4) + "*".repeat(Math.max(2, digits.length - 8)) + digits.slice(-4);
+}
+
+function extractUrlsFromString(value: string): string[] {
+  if (!value) return [];
+  return value.match(/https?:\/\/[^\s<>\])]+/g) || [];
+}
+
+function collectUrlsFromValue(value: any, output = new Set<string>(), depth = 0): Set<string> {
+  if (depth > 6 || value == null) return output;
+  if (typeof value === "string") {
+    for (const url of extractUrlsFromString(value)) output.add(url);
+    return output;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectUrlsFromValue(item, output, depth + 1);
+    return output;
+  }
+  if (typeof value === "object") {
+    for (const item of Object.values(value)) {
+      collectUrlsFromValue(item, output, depth + 1);
+    }
+  }
+  return output;
+}
+
+function enforceCurrentTurnUrlProvenance(
+  reply: string,
+  toolsExecuted: any[],
+  userMessage: string,
+): string {
+  if (!reply || !reply.includes("http")) return reply;
+
+  const allowed = new Set<string>(extractUrlsFromString(userMessage));
+  for (const tool of toolsExecuted) {
+    collectUrlsFromValue(tool?.result, allowed);
+  }
+
+  let sanitized = reply.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    (_match, label, url) => (allowed.has(url) ? url : String(label || "").replace(/^https?:\/\//, "")),
+  );
+
+  sanitized = sanitized.replace(/https?:\/\/[^\s<>\])]+/g, (url) => {
+    return allowed.has(url) ? url : "[link não gerado nesta solicitação]";
+  });
+
+  return sanitized;
 }
 
 export class GoatAIGeminiAgent {
@@ -573,6 +621,179 @@ export class GoatAIGeminiAgent {
         "assistant",
         reply,
         result.success ? "action_result" : "text",
+      );
+      return {
+        conversationId: conversation.id,
+        messageId: assistantMsg.id,
+        reply,
+        toolCallsExecuted: deterministicCalls,
+        pendingAction: null,
+      };
+    }
+
+    // Consultas de dados do evento respondem no chat. Não geram PDF.
+    const eventReadIntent = resolveEventReadIntent(input.message);
+    if (eventReadIntent.matched) {
+      const deterministicCalls: any[] = [];
+      let resolvedEvent: any = null;
+      let candidates: any[] = [];
+      const recentEntities = await this.conversationManager.getRecentEntities(conversation.id);
+
+      if (!eventReadIntent.dateHint) {
+        const contextualMatch = matchContextualEventReference(input.message, recentEntities);
+        if (contextualMatch.matched && contextualMatch.eventId) {
+          const lookupArgs = { event_id: contextualMatch.eventId };
+          const lookup = await this.toolRegistry.executeTool(
+            "search_events",
+            lookupArgs,
+            { ...context, toolCallId: `${correlationId}_event_read_context` },
+          );
+          deterministicCalls.push({
+            toolName: "search_events",
+            arguments: lookupArgs,
+            result: lookup.data,
+            status: lookup.success ? "success" : "error",
+          });
+          resolvedEvent =
+            lookup.success && Array.isArray(lookup.data?.events)
+              ? lookup.data.events[0] || null
+              : null;
+        }
+      }
+
+      if (!resolvedEvent) {
+        const primaryArgs = eventReadIntent.dateHint
+          ? { query: "", date: eventReadIntent.dateHint, limit: 20 }
+          : { query: input.message, limit: 10 };
+        const primary = await this.toolRegistry.executeTool(
+          "search_events",
+          primaryArgs,
+          { ...context, toolCallId: `${correlationId}_event_read_search` },
+        );
+        deterministicCalls.push({
+          toolName: "search_events",
+          arguments: primaryArgs,
+          result: primary.data,
+          status: primary.success ? "success" : "error",
+        });
+        candidates =
+          primary.success && Array.isArray(primary.data?.events) ? primary.data.events : [];
+
+        if (eventReadIntent.dateHint && candidates.length > 1) {
+          const refinedArgs = {
+            query: input.message,
+            date: eventReadIntent.dateHint,
+            limit: 10,
+          };
+          const refined = await this.toolRegistry.executeTool(
+            "search_events",
+            refinedArgs,
+            { ...context, toolCallId: `${correlationId}_event_read_refine` },
+          );
+          deterministicCalls.push({
+            toolName: "search_events",
+            arguments: refinedArgs,
+            result: refined.data,
+            status: refined.success ? "success" : "error",
+          });
+          const refinedCandidates =
+            refined.success && Array.isArray(refined.data?.events)
+              ? refined.data.events
+              : [];
+          if (refinedCandidates.length > 0) candidates = refinedCandidates;
+        }
+
+        if (candidates.length === 1) resolvedEvent = candidates[0];
+      }
+
+      if (!resolvedEvent && candidates.length > 1) {
+        const options = candidates.slice(0, 5).map((event: any, index: number) => {
+          const name = event.event_name || event.client_name || "Evento";
+          const date = event.date
+            ? String(event.date).slice(0, 10).split("-").reverse().join("/")
+            : "sem data";
+          return `${index + 1}. ${name} — ${date}`;
+        });
+        const reply =
+          "Encontrei mais de um evento compatível. Qual deles você quer consultar?\n\n" +
+          options.join("\n");
+        const assistantMsg = await this.conversationManager.saveMessage(
+          conversation.id,
+          "assistant",
+          reply,
+          "text",
+        );
+        return {
+          conversationId: conversation.id,
+          messageId: assistantMsg.id,
+          reply,
+          toolCallsExecuted: deterministicCalls,
+          pendingAction: null,
+        };
+      }
+
+      if (!resolvedEvent?.id) {
+        const reply =
+          "Não encontrei com segurança o evento. Informe o nome do evento/cliente ou a data.";
+        const assistantMsg = await this.conversationManager.saveMessage(
+          conversation.id,
+          "assistant",
+          reply,
+          "text",
+        );
+        return {
+          conversationId: conversation.id,
+          messageId: assistantMsg.id,
+          reply,
+          toolCallsExecuted: deterministicCalls,
+          pendingAction: null,
+        };
+      }
+
+      const detailArgs = { event_id: resolvedEvent.id };
+      const detailResult = await this.toolRegistry.executeTool(
+        "get_event_details",
+        detailArgs,
+        { ...context, toolCallId: `${correlationId}_event_read_details` },
+      );
+      deterministicCalls.push({
+        toolName: "get_event_details",
+        arguments: detailArgs,
+        result: detailResult.data,
+        status: detailResult.success ? "success" : "error",
+      });
+
+      if (!detailResult.success || !detailResult.data?.event) {
+        const reply =
+          `Não foi possível consultar os dados do evento: ${detailResult.error || "erro desconhecido"}.`;
+        const assistantMsg = await this.conversationManager.saveMessage(
+          conversation.id,
+          "assistant",
+          reply,
+          "text",
+        );
+        return {
+          conversationId: conversation.id,
+          messageId: assistantMsg.id,
+          reply,
+          toolCallsExecuted: deterministicCalls,
+          pendingAction: null,
+        };
+      }
+
+      await this.conversationManager.saveRecentEvents(
+        conversation.id,
+        [toContextualEvent(detailResult.data.event)],
+        [resolvedEvent.id],
+      );
+      await this.conversationManager.setLastFocusedEvent(conversation.id, resolvedEvent.id);
+
+      const reply = formatEventReadReply(eventReadIntent, detailResult.data);
+      const assistantMsg = await this.conversationManager.saveMessage(
+        conversation.id,
+        "assistant",
+        reply,
+        "text",
       );
       return {
         conversationId: conversation.id,
@@ -1885,6 +2106,12 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
       finalReply = formatPartialEmergencyReply(toolsExecuted);
       turnStatus = "partial";
     }
+
+    finalReply = enforceCurrentTurnUrlProvenance(
+      finalReply,
+      toolsExecuted,
+      input.message,
+    );
 
     await turnManager.updateStage("persisting");
 
