@@ -515,9 +515,33 @@ describe("Assinafy Stage 12 & Stage 13 Persistence & Schema Tests", () => {
   });
 });
 
-import { validateRequiredSigners, buildRequiredAssignment } from "../supabase/functions/assinafy-create-doc/logic";
+import { validateRequiredSigners, buildRequiredAssignment, resolveClientSignerInput } from "../supabase/functions/assinafy-create-doc/logic";
 
 describe("Assinafy End-to-End Audit & Edge Cases", () => {
+  it("prioriza nome e e-mail do snapshot jurídico do contrato sobre o cadastro geral do evento", () => {
+    expect(
+      resolveClientSignerInput(
+        { client_name: "Nome antigo", email: "" },
+        { cliente: { nome: "Natália Andrade Correia", email: "nataliaandradecor@gmail.com" } },
+      ),
+    ).toEqual({
+      name: "Natália Andrade Correia",
+      email: "nataliaandradecor@gmail.com",
+    });
+  });
+
+  it("usa os dados do evento como fallback quando o snapshot jurídico não existe", () => {
+    expect(
+      resolveClientSignerInput(
+        { client_name: "Cliente do Evento", email: "cliente@evento.com" },
+        null,
+      ),
+    ).toEqual({
+      name: "Cliente do Evento",
+      email: "cliente@evento.com",
+    });
+  });
+
   it("valida obrigatoriedade do signatário da empresa Goat Bar antes do envio", () => {
     expect(() =>
       validateRequiredSigners(
