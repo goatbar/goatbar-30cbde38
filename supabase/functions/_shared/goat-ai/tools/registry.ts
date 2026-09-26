@@ -22,6 +22,7 @@ import {
   createContractDataRequestLinkTool,
   generateCommercialProposalPdfTool,
   generateEventMenuPdfTool,
+  getSignedContractPdfTool,
   generateContractAndSendSignatureTool,
 } from "./definitions/documents.ts";
 
@@ -68,6 +69,7 @@ export class GoatAIToolRegistry {
     this.register(createContractDataRequestLinkTool);
     this.register(generateCommercialProposalPdfTool);
     this.register(generateEventMenuPdfTool);
+    this.register(getSignedContractPdfTool);
     this.register(generateContractAndSendSignatureTool);
   }
 
