@@ -59,21 +59,51 @@ serve(async (req) => {
     if (!authHeader)
       throw new CreateDocHttpError(401, "authentication_required", "Usuário não autenticado.");
     const url = Deno.env.get("SUPABASE_URL") ?? "";
-    const auth = createClient(
-      url,
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      authenticatedClientOptions(authHeader),
-    );
-    const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "");
-    const access = await requireContractSignatureAccess(auth, "create");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const admin = createClient(url, serviceRoleKey);
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    const isInternalGiaCall = Boolean(serviceRoleKey && token === serviceRoleKey);
 
     stage = "validating_payload";
-    let body: unknown;
+    let body: any;
     try {
       body = await req.json();
     } catch {
       throw new CreateDocHttpError(400, "invalid_json", "JSON malformado.");
     }
+
+    const auth = isInternalGiaCall
+      ? admin
+      : createClient(
+          url,
+          Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+          authenticatedClientOptions(authHeader),
+        );
+
+    let access: any;
+    if (isInternalGiaCall) {
+      const requestedUserId =
+        typeof body?.requested_by_user_id === "string"
+          ? body.requested_by_user_id.trim()
+          : "";
+      if (!requestedUserId)
+        throw new CreateDocHttpError(
+          422,
+          "requested_user_required",
+          "Usuário solicitante não informado.",
+        );
+      const lookup = await admin.auth.admin.getUserById(requestedUserId);
+      if (lookup.error || !lookup.data?.user)
+        throw new CreateDocHttpError(
+          403,
+          "requested_user_invalid",
+          "Usuário solicitante não encontrado.",
+        );
+      access = { user: lookup.data.user, isAdmin: true, role: "internal_gia" };
+    } else {
+      access = await requireContractSignatureAccess(auth, "create");
+    }
+
     const payload = validateCreateDocPayload(body);
     contractId = payload.contractId;
     const documentKind = payload.documentKind;
