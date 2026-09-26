@@ -31,14 +31,14 @@ export const MENU_SAFE_HEIGHT_OTHER_PAGES = MENU_FOOTER_TOP - MENU_DRINKS_TOP - 
 
 export const MENU_TYPOGRAPHY = {
   drinkName: {
-    fontFamily: '"Neue Montreal", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+    fontFamily: '"Neue Montreal Regular", "Neue Montreal", Helvetica, Arial, sans-serif',
     fontSize: 20, // pt (exact Canva standard)
     lineHeight: 24, // pt
     fontWeight: 400,
     color: "#701117", // official wine color
   },
   drinkDescription: {
-    fontFamily: '"Neue Montreal", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+    fontFamily: '"Neue Montreal Regular", "Neue Montreal", Helvetica, Arial, sans-serif',
     fontSize: 16, // pt (exact Canva standard)
     lineHeight: 20, // pt
     fontWeight: 400,
