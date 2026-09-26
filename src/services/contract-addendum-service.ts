@@ -458,21 +458,19 @@ export const contractAddendumService = {
       selectedSignerId,
     );
 
-    // A data final de pagamento do saldo do aditivo é SEMPRE a mesma
-    // prevista no contrato original. Não é uma condição renegociável do aditivo.
-    const originalFinalPaymentDate =
-      String(
-        legalSnapshot?.financeiro?.data_vencimento ||
-          originalContractVariables?.["financeiro.data_vencimento"] ||
-          calculateFinalPaymentDate(evento?.date) ||
-          "",
-      ).trim();
+    // REGRA CANÔNICA GOAT BAR:
+    // a data final de pagamento é SEMPRE 7 dias antes da data do evento.
+    // Não reutiliza snapshot/valor legado porque essa data é derivada da data atual
+    // do evento e não é uma condição livre do Termo Aditivo.
+    const originalFinalPaymentDate = calculateFinalPaymentDate(evento?.date);
+
+    if (!originalFinalPaymentDate) {
+      throw new Error("ADDENDUM_EVENT_DATE_REQUIRED");
+    }
 
     comparison.financial.dueDate = originalFinalPaymentDate;
-    comparison.financial.dueDates = originalFinalPaymentDate
-      ? [originalFinalPaymentDate]
-      : [];
-    comparison.datas_vencimento = comparison.financial.dueDates;
+    comparison.financial.dueDates = [originalFinalPaymentDate];
+    comparison.datas_vencimento = [originalFinalPaymentDate];
 
     const contratanteNome =
       legalSnapshot?.cliente?.nome ||
