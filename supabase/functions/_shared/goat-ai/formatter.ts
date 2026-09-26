@@ -26,11 +26,18 @@ export function formatWhatsAppMessage(text: string): string {
     return `*${noStars}*`;
   });
 
-  // 3. Convert double asterisks (**bold**) to single asterisks (*bold*)
+  // 3. WhatsApp não suporta links Markdown [texto](url).
+  // Sempre transforma em URL nua, que o WhatsApp torna clicável.
+  formatted = formatted.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    (_match, _label, url) => url,
+  );
+
+  // 4. Convert double asterisks (**bold**) to single asterisks (*bold*)
   // Be careful to avoid leaving quadruple or unclosed asterisks
   formatted = formatted.replace(/\*\*(.*?)\*\*/g, "*$1*");
 
-  // 4. Clean up bullet lists: lines starting with "- ", "* ", "· " -> "• "
+  // 5. Clean up bullet lists: lines starting with "- ", "* ", "· " -> "• "
   formatted = formatted.replace(/^[ \t]*[-*·][ \t]+(.*)$/gm, (_match, item) => {
     // If the bullet item itself was wrapped in single asterisks like "*Caipi Limão*", unwrap if it's purely italic markup
     let cleanItem = item.trim();
@@ -40,10 +47,10 @@ export function formatWhatsAppMessage(text: string): string {
     return `• ${cleanItem}`;
   });
 
-  // 5. Clean up redundant/unmatched asterisks like '****' or dangling '**'
+  // 6. Clean up redundant/unmatched asterisks like '****' or dangling '**'
   formatted = formatted.replace(/\*{3,}/g, "*");
 
-  // 6. Clean up spacing and excessive consecutive newlines
+  // 7. Clean up spacing and excessive consecutive newlines
   formatted = formatted.replace(/\n{3,}/g, "\n\n");
 
   return formatted.trim();
