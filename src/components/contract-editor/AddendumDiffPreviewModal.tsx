@@ -28,7 +28,7 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
 
   const [condition, setCondition] = useState(comparison.financial.paymentCondition || "");
   const [paymentMethod, setPaymentMethod] = useState(comparison.financial.paymentMethod || "");
-  const [dueDate, setDueDate] = useState(comparison.financial.dueDate);
+  const dueDate = comparison.financial.dueDate;
   const [showHtmlPreview, setShowHtmlPreview] = useState(false);
 
   const fmt = (v: number) =>
@@ -182,13 +182,18 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-1">
-                Data(s) de Vencimento do Saldo *
+                Data Final de Pagamento
               </label>
               <Input
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                placeholder="Ex: 10/09/2026 ou 10/09/2026 e 10/10/2026"
+                readOnly
+                aria-readonly="true"
+                className="bg-muted/40 cursor-not-allowed"
+                title="A data final de pagamento permanece a mesma prevista no contrato original."
               />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Mesma data prevista no contrato original.
+              </p>
             </div>
           </div>
         </div>
