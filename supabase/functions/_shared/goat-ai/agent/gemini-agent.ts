@@ -2117,33 +2117,56 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
         if (
           !evidenceEscalationPerformed &&
           focusedEventId &&
-          looksLikeNegativeSystemClaim(candidateReply) &&
-          !hasComprehensiveEventEvidence(toolsExecuted, focusedEventId)
+          looksLikeNegativeSystemClaim(candidateReply)
         ) {
           evidenceEscalationPerformed = true;
-          const evidenceArgs = { event_id: focusedEventId };
-          const evidenceStartedAt = Date.now();
-          const evidenceResult = await this.toolRegistry.executeTool(
-            "get_event_details",
-            evidenceArgs,
-            {
-              ...context,
-              correlationId,
-              toolCallId: `${correlationId}_auto_evidence_escalation`,
-            },
-          );
-          toolsMs += Date.now() - evidenceStartedAt;
-          toolsExecuted.push({
-            toolName: "get_event_details",
-            arguments: evidenceArgs,
-            result: evidenceResult.data,
-            status: evidenceResult.success ? "success" : "error",
-          });
-          await turnManager.recordToolExecution("get_event_details");
 
-          const evidencePayload = evidenceResult.success
-            ? compactToolResultForAgent("get_event_details", evidenceResult.data || {}).data
-            : { error: evidenceResult.error || "Falha ao investigar o contexto completo do evento." };
+          const existingEvidence = toolsExecuted.find(
+            (tool) =>
+              tool?.toolName === "get_event_details" &&
+              tool?.status === "success" &&
+              (tool?.result?.event?.id || tool?.arguments?.event_id) === focusedEventId,
+          );
+
+          let evidencePayload: any = null;
+
+          if (existingEvidence?.result) {
+            evidencePayload = compactToolResultForAgent(
+              "get_event_details",
+              existingEvidence.result,
+            ).data;
+          } else {
+            const evidenceArgs = { event_id: focusedEventId };
+            const evidenceStartedAt = Date.now();
+            const evidenceResult = await this.toolRegistry.executeTool(
+              "get_event_details",
+              evidenceArgs,
+              {
+                ...context,
+                correlationId,
+                toolCallId: `${correlationId}_auto_evidence_escalation`,
+              },
+            );
+            toolsMs += Date.now() - evidenceStartedAt;
+            toolsExecuted.push({
+              toolName: "get_event_details",
+              arguments: evidenceArgs,
+              result: evidenceResult.data,
+              status: evidenceResult.success ? "success" : "error",
+            });
+            await turnManager.recordToolExecution("get_event_details");
+
+            evidencePayload = evidenceResult.success
+              ? compactToolResultForAgent(
+                  "get_event_details",
+                  evidenceResult.data || {},
+                ).data
+              : {
+                  error:
+                    evidenceResult.error ||
+                    "Falha ao investigar o contexto completo do evento.",
+                };
+          }
 
           normalizedMessages.push({
             role: "assistant",
@@ -2152,10 +2175,11 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
           normalizedMessages.push({
             role: "user",
             content:
-              "[VERIFICAÇÃO AUTOMÁTICA DE EVIDÊNCIAS] Sua resposta anterior continha uma afirmação de ausência. " +
-              "Antes de concluir, revise-a usando o contexto completo do sistema abaixo. " +
-              "Se os dados existirem em qualquer fonte verificada, corrija a resposta. " +
-              "Se realmente não existirem, diga quais fontes relevantes foram verificadas.\n\n" +
+              "[REVISÃO OBRIGATÓRIA DE EVIDÊNCIAS] A resposta anterior contém uma afirmação de ausência. " +
+              "Revise a conclusão com os dados abaixo antes de responder ao usuário. " +
+              "Procure evidências positivas em TODAS as seções relevantes, não apenas no primeiro campo/tabela. " +
+              "Se houver qualquer dado que responda à pergunta, corrija a resposta e apresente esse dado. " +
+              "Se a ausência for confirmada, explique brevemente quais fontes foram verificadas.\n\n" +
               JSON.stringify(evidencePayload),
           });
           continue;
