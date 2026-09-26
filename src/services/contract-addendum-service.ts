@@ -12,6 +12,7 @@ import {
   renderContractTemplate,
   type ContractTemplate,
 } from "@/services/contract-service";
+import { calculateFinalPaymentDate } from "@/lib/date-utils";
 
 export interface ContractAddendumRow {
   id: string;
@@ -443,6 +444,24 @@ export const contractAddendumService = {
       );
     }
 
+    // A data final de pagamento do saldo do aditivo é SEMPRE a mesma
+    // prevista no contrato original. Não é uma condição renegociável do aditivo.
+    // Prioriza o snapshot jurídico imutável; para contratos legados, usa as
+    // variáveis recompiladas e, por último, a regra canônica de 7 dias antes do evento.
+    const originalFinalPaymentDate =
+      String(
+        legalSnapshot?.financeiro?.data_vencimento ||
+          contractVariables?.["financeiro.data_vencimento"] ||
+          calculateFinalPaymentDate(evento?.date) ||
+          "",
+      ).trim();
+
+    comparison.financial.dueDate = originalFinalPaymentDate;
+    comparison.financial.dueDates = originalFinalPaymentDate
+      ? [originalFinalPaymentDate]
+      : [];
+    comparison.datas_vencimento = comparison.financial.dueDates;
+
     const contratanteNome =
       legalSnapshot?.cliente?.nome ||
       contractVariables?.["cliente.nome"] ||
@@ -564,10 +583,10 @@ export const contractAddendumService = {
     const method = hasRemainingBalance
       ? params.paymentMethod || data.comparison.meio_pagamento_saldo
       : "Não se aplica";
+    // A data de vencimento final não pode ser alterada pelo aditivo:
+    // deve permanecer exatamente a mesma do contrato original.
     const dueDates = hasRemainingBalance
-      ? (params.dueDates?.filter(Boolean).length
-          ? params.dueDates
-          : data.comparison.datas_vencimento)
+      ? data.comparison.datas_vencimento.filter(Boolean)
       : ["Não se aplica"];
     if (hasRemainingBalance && (!condition || !method || !dueDates.length))
       throw new Error("PENDING_BALANCE_PAYMENT_TERMS");
