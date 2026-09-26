@@ -136,7 +136,9 @@ import {
 import { formatDateDot } from "@/lib/proposal-field-resolver";
 import { buildProposalFilename } from "@/lib/proposal-filename";
 import { InternalProposalPreviewModal } from "@/components/InternalProposalPreviewModal";
-import { Eye } from "lucide-react";
+import { Eye, UtensilsCrossed } from "lucide-react";
+import { buildEventMenuModel } from "@/lib/event-menu";
+import { EventMenuPreview } from "@/components/event-menu/EventMenuPreview";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
   component: EventoInterna,
@@ -2006,6 +2008,7 @@ function EventoInterna() {
             { id: "Orçamento", icon: <Save className="h-4 w-4" /> },
             { id: "Contatos & Negociação", icon: <MessageCircle className="h-4 w-4" /> },
             { id: "Contrato", icon: <FileSignature className="h-4 w-4" /> },
+            { id: "Cardápio", icon: <UtensilsCrossed className="h-4 w-4" /> },
             { id: "Compras e Notinhas", icon: <FileTextIcon className="h-4 w-4" /> },
             { id: "Insumos Levados", icon: <Download className="h-4 w-4" /> },
             { id: "Fechamento do Evento", icon: <CheckCircle2 className="h-4 w-4" /> },
@@ -2075,6 +2078,27 @@ function EventoInterna() {
             </SectionCard>
           </div>
         )}
+
+        {activeTab === "Cardápio" && (() => {
+          const menu = buildEventMenuModel({
+            selectedDrinks: currentBudget?.selected_drinks ?? evento?.drinks ?? [],
+            catalog: allDrinks,
+            eventName: evento?.event_name || evento?.client_name,
+          });
+          return (
+            <div className="animate-in fade-in duration-300">
+              <SectionCard title="Cardápio do Evento" subtitle="Prévia gerada a partir dos drinks do orçamento atual.">
+                {menu.drinks.length > 0 ? (
+                  <EventMenuPreview menu={menu} />
+                ) : (
+                  <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                    Nenhum drink selecionado no orçamento atual.
+                  </div>
+                )}
+              </SectionCard>
+            </div>
+          );
+        })()}
 
         {/* TAB ORÇAMENTO */}
         {activeTab === "Orçamento" && (
