@@ -204,8 +204,22 @@ export const CANONICAL_CONTRACT_DOCUMENT_CSS = `
   .signature-grid {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
-    margin-top: 2rem !important;
-    padding-top: 0.5rem;
+    margin-top: 3rem !important;
+    padding-top: 0.75rem;
+  }
+
+  /* Reserva espaço vertical real para a assinatura eletrônica ficar acima da linha,
+     sem comprimir o nome do signatário ou encostar no texto anterior. */
+  .contract-signature-line {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    min-height: 4.5rem;
+    padding-top: 3rem !important;
+    margin: 0 0 1.25rem 0 !important;
+  }
+
+  .contract-signature-line + .contract-signature-line {
+    margin-top: 0.75rem !important;
   }
 
   /* Chips visuais do editor (apenas no modo de edição) */
