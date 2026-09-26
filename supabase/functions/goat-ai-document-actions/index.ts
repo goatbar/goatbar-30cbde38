@@ -254,8 +254,30 @@ async function createDocumentShareLink(
   });
   if (error) throw error;
 
+  const shareUrl =
+    supabaseUrl + "/functions/v1/goat-ai-document-share?token=" + encodeURIComponent(token);
+
+  // Nunca devolve um link sem validá-lo de ponta a ponta.
+  const verification = await fetch(shareUrl, { method: "GET" });
+  if (!verification.ok) {
+    await admin.from("document_share_links").delete().eq("token_hash", tokenHash);
+    throw new Error(
+      "O arquivo foi gerado, mas o link de compartilhamento falhou na validação (HTTP " +
+        verification.status +
+        ").",
+    );
+  }
+  const verificationBytes = new Uint8Array(await verification.arrayBuffer());
+  if (
+    verificationBytes.length < 5 ||
+    new TextDecoder().decode(verificationBytes.slice(0, 5)) !== "%PDF-"
+  ) {
+    await admin.from("document_share_links").delete().eq("token_hash", tokenHash);
+    throw new Error("O link de compartilhamento não retornou um PDF válido.");
+  }
+
   return {
-    url: supabaseUrl + "/functions/v1/goat-ai-document-share?token=" + encodeURIComponent(token),
+    url: shareUrl,
     expiresAt,
   };
 }
