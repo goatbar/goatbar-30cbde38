@@ -22,6 +22,15 @@ describe("roteamento determinístico de documentos da GIA", () => {
     expect(result.dateHint).toBe("2027-01-23");
   });
 
+
+  it("recupera contrato assinado existente sem gerar nova minuta", () => {
+    const result = resolveEventDocumentCommandIntent(
+      "me envie aqui o contrato assinado da Lucia e do Sydney",
+    );
+    expect(result.matched).toBe(true);
+    expect(result.action).toBe("get_signed_contract");
+  });
+
   it("só envia contrato quando assinatura é explícita", () => {
     expect(
       resolveEventDocumentCommandIntent(
