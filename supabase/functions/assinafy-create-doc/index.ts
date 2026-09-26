@@ -125,18 +125,52 @@ serve(async (req) => {
         .eq("id", result.data.event_id)
         .maybeSingle();
       if (event.error) return { data: null, error: event.error };
+      let signerId = result.data.signer_id;
+
+      // Contratos e Termos Aditivos possuem escolha independente de sócio assinante.
+      // Para aditivos, a fonte de verdade é contract_addendums.signer_id.
+      if (documentKind === "addendum") {
+        if (!addendumId) {
+          throw new CreateDocHttpError(
+            422,
+            "addendum_id_required",
+            "Termo Aditivo sem identificação.",
+          );
+        }
+        const addendum = await auth
+          .from("contract_addendums")
+          .select("id,contract_id,signer_id")
+          .eq("id", addendumId)
+          .eq("contract_id", result.data.id)
+          .maybeSingle();
+
+        if (addendum.error) return { data: null, error: addendum.error };
+        if (!addendum.data) {
+          throw new CreateDocHttpError(
+            404,
+            "addendum_not_found",
+            "Termo Aditivo não encontrado para este contrato.",
+          );
+        }
+        signerId = addendum.data.signer_id;
+      }
+
       let companySigner = null;
-      if (result.data.signer_id) {
+      if (signerId) {
         const company = await auth
           .from("contract_signers")
           .select("name,email")
-          .eq("id", result.data.signer_id)
+          .eq("id", signerId)
           .eq("is_active", true)
           .maybeSingle();
         if (company.error) return { data: null, error: company.error };
         companySigner = company.data;
       }
-      return { data: { ...result.data, event: event.data, companySigner }, error: null };
+
+      return {
+        data: { ...result.data, event: event.data, companySigner, effective_signer_id: signerId },
+        error: null,
+      };
     };
     const contract = await resolveContractAccess(existenceLookup, authorizedLookup);
     if (!contract)

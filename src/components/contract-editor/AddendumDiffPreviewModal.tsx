@@ -4,14 +4,22 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ContractAddendumComparison } from "@/lib/contract-addendum-comparator";
+import type { ContractSigner } from "@/services/contract-service";
 
 interface AddendumDiffPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   comparison: ContractAddendumComparison | null;
   addendumNumber: number;
-  compiledHtml: string;
-  onConfirmGenerate: (condition: string, paymentMethod: string, dueDate: string) => Promise<void>;
+  signers: ContractSigner[];
+  selectedSignerId: string;
+  onSignerChange: (signerId: string) => void;
+  onConfirmGenerate: (
+    condition: string,
+    paymentMethod: string,
+    dueDate: string,
+    signerId: string,
+  ) => Promise<void>;
   isLoading?: boolean;
 }
 
@@ -20,7 +28,9 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
   onClose,
   comparison,
   addendumNumber,
-  compiledHtml,
+  signers,
+  selectedSignerId,
+  onSignerChange,
   onConfirmGenerate,
   isLoading = false,
 }) => {
@@ -29,13 +39,12 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
   const [condition, setCondition] = useState(comparison.financial.paymentCondition || "");
   const [paymentMethod, setPaymentMethod] = useState(comparison.financial.paymentMethod || "");
   const dueDate = comparison.financial.dueDate;
-  const [showHtmlPreview, setShowHtmlPreview] = useState(false);
 
   const fmt = (v: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 
   const handleConfirm = async () => {
-    await onConfirmGenerate(condition, paymentMethod, dueDate);
+    await onConfirmGenerate(condition, paymentMethod, dueDate, selectedSignerId);
   };
 
   return (
@@ -166,10 +175,39 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
           </div>
         </div>
 
-        {/* 4. Formulário de Condição de Pagamento do Saldo */}
+        {/* 4. Seleção do sócio assinante — mesmo fluxo do contrato */}
         <div className="space-y-3 my-2">
           <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b pb-1">
-            3. Condições de Pagamento do Saldo Remanescente
+            3. Sócio Assinante da GOAT Bar
+          </h3>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground block mb-1">
+              Responsável que assinará o Termo Aditivo *
+            </label>
+            <select
+              className="w-full h-10 rounded-md border bg-background px-3"
+              value={selectedSignerId}
+              onChange={(e) => onSignerChange(e.target.value)}
+            >
+              <option value="">-- Selecione o responsável --</option>
+              {signers
+                .filter((signer) => signer.is_active)
+                .map((signer) => (
+                  <option key={signer.id} value={signer.id}>
+                    {signer.name} {signer.role ? `(${signer.role})` : ""}
+                  </option>
+                ))}
+            </select>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Os dados da CONTRATADA serão preenchidos com o mesmo cadastro de sócios usado no contrato.
+            </p>
+          </div>
+        </div>
+
+        {/* 5. Formulário de Condição de Pagamento do Saldo */}
+        <div className="space-y-3 my-2">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground border-b pb-1">
+            4. Condições de Pagamento do Saldo Remanescente
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -198,24 +236,8 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
           </div>
         </div>
 
-        {/* 5. Alternador para Pré-visualização da Minuta */}
-        <div className="pt-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowHtmlPreview(!showHtmlPreview)}
-            className="text-xs text-muted-foreground hover:text-foreground"
-          >
-            {showHtmlPreview ? "Ocultar pré-visualização da minuta" : "Ver pré-visualização da minuta gerada"}
-          </Button>
-
-          {showHtmlPreview && (
-            <div
-              className="mt-2 p-6 rounded border bg-white text-black font-sans text-xs max-h-60 overflow-y-auto"
-              dangerouslySetInnerHTML={{ __html: compiledHtml }}
-            />
-          )}
+        <div className="pt-2 text-[11px] text-muted-foreground">
+          A minuta final será gerada com os dados do sócio selecionado e abrirá para revisão antes do envio à assinatura.
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0 mt-4">
@@ -224,7 +246,14 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={comparison.financial.paidAmount === null || !condition || !paymentMethod || !dueDate.trim() || isLoading}
+            disabled={
+              comparison.financial.paidAmount === null ||
+              !selectedSignerId ||
+              !condition ||
+              !paymentMethod ||
+              !dueDate.trim() ||
+              isLoading
+            }
           >
             {isLoading ? "Gerando Aditivo..." : "Gerar Rascunho do Termo Aditivo"}
           </Button>

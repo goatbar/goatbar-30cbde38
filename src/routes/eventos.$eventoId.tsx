@@ -284,6 +284,7 @@ function EventoInterna() {
   const [addendumComparison, setAddendumComparison] = useState<ContractAddendumComparison | null>(null);
   const [showAddendumDiffModal, setShowAddendumDiffModal] = useState(false);
   const [activeAddendumForReview, setActiveAddendumForReview] = useState<ContractAddendumRow | null>(null);
+  const [addendumSignerId, setAddendumSignerId] = useState<string>("");
   const [isGeneratingAddendum, setIsGeneratingAddendum] = useState(false);
   const [addendumPendingNumber, setAddendumPendingNumber] = useState<number>(1);
   const [legacySelectionModalOpen, setLegacySelectionModalOpen] = useState(false);
@@ -1168,6 +1169,7 @@ function EventoInterna() {
         addendums.length > 0 ? Math.max(...addendums.map((a) => a.addendum_number)) + 1 : 1;
       setAddendumPendingNumber(nextNum);
 
+      setAddendumSignerId("");
       setShowAddendumDiffModal(true);
     } catch (err: any) {
       const knownMessages: Record<string, string> = {
@@ -1184,14 +1186,24 @@ function EventoInterna() {
     }
   };
 
-  const handleConfirmGenerateAddendum = async (condition: string, paymentMethod: string, dueDate: string) => {
+  const handleConfirmGenerateAddendum = async (
+    condition: string,
+    paymentMethod: string,
+    dueDate: string,
+    signerId: string,
+  ) => {
     if (!realContract) return;
+    if (!signerId) {
+      toast.error("Selecione o sócio da GOAT Bar que assinará o Termo Aditivo.");
+      return;
+    }
 
     try {
       setIsGeneratingAddendum(true);
       const newAdd = await contractAddendumService.createAddendum({
         contractId: realContract.id,
         eventId: eventoId,
+        signerId,
         paymentCondition: condition,
         paymentMethod,
         dueDates: dueDate.split(/\s*(?:,|;|\se\s)\s*/).filter(Boolean),
@@ -1199,6 +1211,7 @@ function EventoInterna() {
 
       setShowAddendumDiffModal(false);
       setActiveAddendumForReview(newAdd);
+      setAddendumSignerId(newAdd.signer_id || signerId);
       setCompiledContractText(newAdd.generated_html || "");
 
       setShowContractPreviewModal(true);
@@ -4673,6 +4686,7 @@ function EventoInterna() {
                                     <PrimaryButton
                                       onClick={() => {
                                         setActiveAddendumForReview(add);
+                                        setAddendumSignerId(add.signer_id || "");
                                         setCompiledContractText(add.generated_html || "");
                                         setShowContractPreviewModal(true);
                                       }}
@@ -5299,26 +5313,36 @@ function EventoInterna() {
         isOpen={showContractPreviewModal}
         onClose={() => setShowContractPreviewModal(false)}
         template={
-          realTemplates.find((t) => t.id === selectedTemplate) ||
-          realTemplates.find((t) => t.is_default) ||
-          realTemplates[0] ||
-          null
+          activeAddendumForReview
+            ? realTemplates.find((t) => t.id === activeAddendumForReview.template_id) || null
+            : realTemplates.find((t) => t.id === selectedTemplate) ||
+              realTemplates.find((t) => t.is_default) ||
+              realTemplates[0] ||
+              null
         }
         signer={
-          realSigners.find((s) => s.id === selectedSigner) ||
-          realSigners.find((s) => s.is_active) ||
-          null
+          activeAddendumForReview
+            ? realSigners.find(
+                (s) => s.id === (activeAddendumForReview.signer_id || addendumSignerId),
+              ) || null
+            : realSigners.find((s) => s.id === selectedSigner) ||
+              realSigners.find((s) => s.is_active) ||
+              null
         }
         
         eventName={evento?.event_name || evento?.client_name || "Evento"}
         compiledHtml={compiledContractText}
-        rawTemplateContent={getTemplateContent(
-          realTemplates.find((t) => t.id === selectedTemplate) ||
-            realTemplates.find((t) => t.is_default) ||
-            realTemplates[0] ||
-            null,
-        )}
-        compiledVariables={compiledVariables}
+        rawTemplateContent={
+          activeAddendumForReview
+            ? activeAddendumForReview.generated_html || compiledContractText
+            : getTemplateContent(
+                realTemplates.find((t) => t.id === selectedTemplate) ||
+                  realTemplates.find((t) => t.is_default) ||
+                  realTemplates[0] ||
+                  null,
+              )
+        }
+        compiledVariables={activeAddendumForReview ? {} : compiledVariables}
         onConfirmSend={async (finalCleanHtml) => {
           setShowContractPreviewModal(false);
           if (activeAddendumForReview) {
@@ -5327,6 +5351,7 @@ function EventoInterna() {
               await contractAddendumService.dispatchAddendumToAssinafy(
                 activeAddendumForReview.id,
                 convertHtmlToPdf,
+                finalCleanHtml,
               );
               toast.success("Termo Aditivo enviado com sucesso para assinatura na Assinafy!");
               setActiveAddendumForReview(null);
@@ -5348,7 +5373,9 @@ function EventoInterna() {
         onClose={() => setShowAddendumDiffModal(false)}
         comparison={addendumComparison}
         addendumNumber={addendumPendingNumber}
-        compiledHtml={compiledContractText}
+        signers={realSigners}
+        selectedSignerId={addendumSignerId}
+        onSignerChange={setAddendumSignerId}
         isLoading={isGeneratingAddendum}
         onConfirmGenerate={handleConfirmGenerateAddendum}
       />
