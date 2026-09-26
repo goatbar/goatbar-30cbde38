@@ -11,7 +11,6 @@ interface AddendumDiffPreviewModalProps {
   onClose: () => void;
   comparison: ContractAddendumComparison | null;
   addendumNumber: number;
-  compiledHtml: string;
   signers: ContractSigner[];
   selectedSignerId: string;
   onSignerChange: (signerId: string) => void;
@@ -29,7 +28,6 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
   onClose,
   comparison,
   addendumNumber,
-  compiledHtml,
   signers,
   selectedSignerId,
   onSignerChange,
