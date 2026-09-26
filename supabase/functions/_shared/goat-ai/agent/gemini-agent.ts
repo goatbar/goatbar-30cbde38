@@ -554,7 +554,9 @@ export class GoatAIGeminiAgent {
             ? "gerar o cardápio"
             : documentIntent.action === "generate_proposal"
               ? "gerar a proposta comercial"
-              : "gerar o contrato e enviar para assinatura";
+              : documentIntent.action === "get_signed_contract"
+                ? "enviar o contrato assinado existente"
+                : "gerar o contrato e enviar para assinatura";
         const options = candidates.slice(0, 5).map((event: any, index: number) => {
           const name = event.event_name || event.client_name || "Evento";
           const date = event.date
@@ -610,7 +612,9 @@ export class GoatAIGeminiAgent {
           ? "generate_event_menu_pdf"
           : documentIntent.action === "generate_proposal"
             ? "generate_commercial_proposal_pdf"
-            : "generate_contract_and_send_signature";
+            : documentIntent.action === "get_signed_contract"
+              ? "get_signed_contract_pdf"
+              : "generate_contract_and_send_signature";
       const toolArgs = { event_id: resolvedEvent.id };
       const result = await this.toolRegistry.executeTool(
         toolName,
