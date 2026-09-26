@@ -37,6 +37,7 @@ export interface ContractAddendumRow {
   signed_file_url: string | null;
   status: "draft" | "sent" | "signed" | "rejected" | "cancelled";
   template_id?: string | null;
+  signer_id?: string | null;
   external_document_id?: string | null;
   external_assignment_id?: string | null;
   sent_for_signature_at?: string | null;
@@ -297,7 +298,7 @@ export const contractAddendumService = {
   /**
    * Prepara o payload completo para revisão prévia do Aditivo.
    */
-  async prepareAddendumData(contractId: string, eventId: string) {
+  async prepareAddendumData(contractId: string, eventId: string, signerId?: string) {
     // 1. Valida contrato e resolve a data jurídica do documento assinado.
     const { data: contract } = await (supabase as any)
       .from("event_contracts")
@@ -430,28 +431,39 @@ export const contractAddendumService = {
     comparison.credito_cliente =
       canonicalPaidAmount === null ? null : comparison.financial.creditAmount;
 
-    // 5. Partes: snapshot jurídico do contrato original é a fonte prioritária.
-    // Para contratos legados sem snapshot, recompila as variáveis do contrato e sinaliza a origem.
+    // 5. Partes.
+    // O CONTRATANTE preserva os dados jurídicos do contrato original.
+    // A CONTRATADA segue EXATAMENTE a mesma lógica da emissão de contrato:
+    // o usuário escolhe um sócio de contract_signers e os dados dele são
+    // compilados pelas mesmas variáveis empresa.responsavel / cpf / endereço / cargo.
     const legalSnapshot = (contract.legal_snapshot || null) as any;
     let historicalSource: "legal_snapshot" | "legacy_contract_variables" = "legal_snapshot";
-    let contractVariables: Record<string, string> | null = null;
+    let originalContractVariables: Record<string, string> | null = null;
 
     if (!legalSnapshot) {
       historicalSource = "legacy_contract_variables";
-      contractVariables = await eventContractsService.compileContractVariables(
+      originalContractVariables = await eventContractsService.compileContractVariables(
         eventId,
         contract.signer_id || undefined,
       );
     }
 
+    const selectedSignerId = signerId || contract.signer_id || undefined;
+    if (!selectedSignerId) {
+      throw new Error("ADDENDUM_SIGNER_REQUIRED");
+    }
+
+    const selectedSignerVariables = await eventContractsService.compileContractVariables(
+      eventId,
+      selectedSignerId,
+    );
+
     // A data final de pagamento do saldo do aditivo é SEMPRE a mesma
     // prevista no contrato original. Não é uma condição renegociável do aditivo.
-    // Prioriza o snapshot jurídico imutável; para contratos legados, usa as
-    // variáveis recompiladas e, por último, a regra canônica de 7 dias antes do evento.
     const originalFinalPaymentDate =
       String(
         legalSnapshot?.financeiro?.data_vencimento ||
-          contractVariables?.["financeiro.data_vencimento"] ||
+          originalContractVariables?.["financeiro.data_vencimento"] ||
           calculateFinalPaymentDate(evento?.date) ||
           "",
       ).trim();
@@ -464,24 +476,21 @@ export const contractAddendumService = {
 
     const contratanteNome =
       legalSnapshot?.cliente?.nome ||
-      contractVariables?.["cliente.nome"] ||
+      originalContractVariables?.["cliente.nome"] ||
       clientData?.client_name ||
       evento?.client_name ||
       "";
     const contratanteDoc =
       legalSnapshot?.cliente?.documento ||
-      contractVariables?.["cliente.documento"] ||
+      originalContractVariables?.["cliente.documento"] ||
       clientData?.cpf_cnpj ||
       (clientData?.notes as any)?.cpf_cnpj ||
       "";
-    const contratadaNome =
-      legalSnapshot?.empresa?.nome ||
-      contractVariables?.["empresa.nome"] ||
-      "";
-    const contratadaDoc =
-      legalSnapshot?.empresa?.cnpj ||
-      contractVariables?.["empresa.cnpj"] ||
-      "";
+
+    const contratadaNome = selectedSignerVariables["empresa.responsavel"] || "";
+    const contratadaDoc = selectedSignerVariables["empresa.cpf_responsavel"] || "";
+    const contratadaEndereco = selectedSignerVariables["empresa.endereco_responsavel"] || "";
+    const contratadaCargo = selectedSignerVariables["empresa.cargo_responsavel"] || "";
 
     if (!contratanteNome || !contratanteDoc || !contratadaNome || !contratadaDoc) {
       throw new Error("ADDENDUM_LEGAL_PARTIES_INCOMPLETE");
@@ -492,8 +501,18 @@ export const contractAddendumService = {
     const templateVars: Record<string, string> = {
       "cliente.nome": contratanteNome,
       "cliente.documento": contratanteDoc,
+
+      // Mesmas chaves usadas no contrato principal para o sócio assinante.
+      "empresa.responsavel": contratadaNome,
+      "empresa.cpf_responsavel": contratadaDoc,
+      "empresa.endereco_responsavel": contratadaEndereco,
+      "empresa.cargo_responsavel": contratadaCargo,
+
+      // Compatibilidade com modelos de aditivo antigos. Nunca usa dados fictícios:
+      // se o modelo ainda pedir empresa.nome/cnpj, recebe o mesmo sócio selecionado.
       "empresa.nome": contratadaNome,
       "empresa.cnpj": contratadaDoc,
+
       "contrato.data_assinatura_original": signedAt.toLocaleDateString("pt-BR"),
       "aditivo.drinks_atuais": comparison.drinks.finalListText,
       "aditivo.valor_total_novo": comparison.totalValue.currentFormatted,
@@ -556,6 +575,7 @@ export const contractAddendumService = {
   async createAddendum(params: {
     contractId: string;
     eventId: string;
+    signerId: string;
     paymentCondition?: string;
     paymentMethod?: string;
     dueDates?: string[];
@@ -567,7 +587,12 @@ export const contractAddendumService = {
       );
     }
 
-    const data = await this.prepareAddendumData(params.contractId, params.eventId);
+    if (!params.signerId) throw new Error("ADDENDUM_SIGNER_REQUIRED");
+    const data = await this.prepareAddendumData(
+      params.contractId,
+      params.eventId,
+      params.signerId,
+    );
 
     if (!data.comparison.requiresAddendum) {
       throw new Error(
@@ -646,6 +671,7 @@ export const contractAddendumService = {
         base_budget_version_id: data.baseVersion.id,
         updated_budget_version_id: data.updatedVersion.id,
         template_id: data.template.id,
+        signer_id: params.signerId,
         contractant_snapshot: {
           nome: data.templateVars.contratante_nome,
           documento: data.templateVars.contratante_documento,
@@ -653,6 +679,9 @@ export const contractAddendumService = {
         contracted_snapshot: {
           nome: data.templateVars.contratada_nome,
           documento: data.templateVars.contratada_documento,
+          endereco: data.templateVars["empresa.endereco_responsavel"] || "",
+          cargo: data.templateVars["empresa.cargo_responsavel"] || "",
+          signer_id: params.signerId,
         },
         previous_snapshot: previousSnapshot,
         current_snapshot: currentSnapshot,
@@ -678,6 +707,7 @@ export const contractAddendumService = {
   async dispatchAddendumToAssinafy(
     addendumId: string,
     convertPdfFn: (html: string, title: string) => Promise<{ base64: string; hash: string }>,
+    reviewedHtml?: string,
   ): Promise<{ success: boolean; externalDocumentId?: string; message?: string }> {
     const { data: addendum } = await supabase
       .from("contract_addendums")
@@ -688,7 +718,21 @@ export const contractAddendumService = {
     if (!addendum || !addendum.generated_html) {
       throw new Error("Aditivo não encontrado ou sem minuta gerada.");
     }
-    assertAddendumReadyForSignature(addendum as ContractAddendumRow);
+
+    const htmlToSend = reviewedHtml?.trim() || addendum.generated_html;
+    assertAddendumReadyForSignature({
+      ...(addendum as ContractAddendumRow),
+      generated_html: htmlToSend,
+    });
+
+    // A revisão visual é a versão efetivamente enviada e precisa ser preservada.
+    if (reviewedHtml?.trim() && reviewedHtml.trim() !== addendum.generated_html.trim()) {
+      const { error: saveReviewedError } = await supabase
+        .from("contract_addendums")
+        .update({ generated_html: htmlToSend, updated_at: new Date().toISOString() })
+        .eq("id", addendumId);
+      if (saveReviewedError) throw saveReviewedError;
+    }
 
     const eventName = (addendum.events as any)?.event_name || (addendum.events as any)?.client_name || "Evento";
     const rawDate = ((addendum.events as any)?.date || "").slice(0, 10);
@@ -699,7 +743,7 @@ export const contractAddendumService = {
     const docTitle = `Termo Aditivo ${addendum.addendum_number} Goat Bar - ${eventName}${formattedDate ? ` - ${formattedDate}` : ""}`;
 
     // 1. Converte o HTML do aditivo em PDF imutável
-    const pdf = await convertPdfFn(addendum.generated_html, docTitle);
+    const pdf = await convertPdfFn(htmlToSend, docTitle);
 
     // 2. Invoca Edge Function assinafy-create-doc
     const { data: res, error } = await supabase.functions.invoke("assinafy-create-doc", {
