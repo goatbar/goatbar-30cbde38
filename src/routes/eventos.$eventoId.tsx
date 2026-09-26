@@ -286,6 +286,7 @@ function EventoInterna() {
   const [activeAddendumForReview, setActiveAddendumForReview] = useState<ContractAddendumRow | null>(null);
   const [addendumSignerId, setAddendumSignerId] = useState<string>("");
   const [isGeneratingAddendum, setIsGeneratingAddendum] = useState(false);
+  const [isDispatchingAddendum, setIsDispatchingAddendum] = useState(false);
   const [addendumPendingNumber, setAddendumPendingNumber] = useState<number>(1);
   const [legacySelectionModalOpen, setLegacySelectionModalOpen] = useState(false);
   const [legacyAvailableVersions, setLegacyAvailableVersions] = useState<any[]>([]);
@@ -5345,26 +5346,34 @@ function EventoInterna() {
               )
         }
         compiledVariables={activeAddendumForReview ? {} : compiledVariables}
+        isSubmitting={activeAddendumForReview ? isDispatchingAddendum : isDispatchingSignature}
         onConfirmSend={async (finalCleanHtml) => {
-          setShowContractPreviewModal(false);
           if (activeAddendumForReview) {
+            if (isDispatchingAddendum) return;
+
             try {
-              toast.info("Enviando Termo Aditivo para Assinafy...");
+              setIsDispatchingAddendum(true);
+              toast.info("Gerando PDF e enviando Termo Aditivo para Assinafy...");
               await contractAddendumService.dispatchAddendumToAssinafy(
                 activeAddendumForReview.id,
                 convertHtmlToPdf,
                 finalCleanHtml,
               );
               toast.success("Termo Aditivo enviado com sucesso para assinatura na Assinafy!");
+              setShowContractPreviewModal(false);
               setActiveAddendumForReview(null);
               if (realContract?.id) {
                 await fetchAddendumsAndEvaluate(realContract.id, currentBudget);
               }
             } catch (err: any) {
               toast.error(err.message || "Erro ao enviar Termo Aditivo.");
+            } finally {
+              setIsDispatchingAddendum(false);
             }
             return;
           }
+
+          setShowContractPreviewModal(false);
           await handleDispatchSignature(finalCleanHtml);
         }}
       />
