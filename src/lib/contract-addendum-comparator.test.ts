@@ -194,12 +194,104 @@ describe("compareContractVersions", () => {
     expect(formatPortugueseList(["A", "B", "C"])).toBe("A, B e C");
   });
 
-  it("11. extrai drinks e bebidas unificados", () => {
+  it("11. prioriza selected_drinks e não mistura bebidas-base na carta de coquetéis", () => {
     const budget = {
       selected_drinks: ["Moscow Mule", "Gin Tônica"],
-      beverages: ["Cerveja Heineken", "Refrigerante"],
+      beverages: ["Gin Gordons", "Vodka Smirnoff"],
     };
     const list = extractDrinksList(budget);
-    expect(list).toEqual(["Moscow Mule", "Gin Tônica", "Cerveja Heineken", "Refrigerante"]);
+    expect(list).toEqual(["Moscow Mule", "Gin Tônica"]);
+  });
+
+  it("12. hidrata selected_drinks.ids com nomes canônicos do catálogo", () => {
+    const budget = {
+      selected_drinks: {
+        ids: ["bramble", "london-mule", "stamping"],
+      },
+      beverages: ["Gin Gordons", "Vodka Smirnoff"],
+    };
+    const list = extractDrinksList(budget, {
+      bramble: "Bramble",
+      "london-mule": "London Mule",
+      stamping: "Stamping Passion",
+    });
+    expect(list).toEqual(["Bramble", "London Mule", "Stamping Passion"]);
+  });
+
+  it("13. compara corretamente a troca real de drinks entre as propostas V3 e V4", () => {
+    const base = {
+      final_budget_value: 3507.36,
+      selected_drinks: {
+        ids: [
+          "caipi-limao-cravo-mel",
+          "old-fashioned",
+          "london-mule",
+          "stamping",
+          "caipivodka-maracuja",
+          "fitzgerald",
+          "caipivodka-abacaxi",
+        ],
+      },
+      beverages: [],
+    };
+    const current = {
+      final_budget_value: 3941.13,
+      selected_drinks: {
+        ids: [
+          "caipi-limao-cravo-mel",
+          "london-mule",
+          "stamping",
+          "paloma",
+          "sex-on-the-beach",
+          "whisky-sour",
+          "bramble",
+        ],
+      },
+      beverages: [
+        "Gin Gordons ou O'gin",
+        "Vodka Smirnoff",
+        "Cachaça Artesanal",
+        "Whisky Red Label",
+        "Tequila",
+      ],
+    };
+    const names = {
+      "caipi-limao-cravo-mel": "Caipi Limão, Cravo e Mel",
+      "old-fashioned": "Old Fashioned",
+      "london-mule": "London Mule",
+      stamping: "Stamping Passion",
+      "caipivodka-maracuja": "Caipi Maracujá & Baunilha",
+      fitzgerald: "Fitzgerald",
+      "caipivodka-abacaxi": "Caipi Abacaxi com Raspas de Limão Siciliano",
+      paloma: "Paloma",
+      "sex-on-the-beach": "Sex on The Beach",
+      "whisky-sour": "Whisky Sour",
+      bramble: "Bramble",
+    };
+
+    const result = compareContractVersions(base, current, names);
+
+    expect(result.drinks.added).toEqual([
+      "Paloma",
+      "Sex on The Beach",
+      "Whisky Sour",
+      "Bramble",
+    ]);
+    expect(result.drinks.removed).toEqual([
+      "Old Fashioned",
+      "Caipi Maracujá & Baunilha",
+      "Fitzgerald",
+      "Caipi Abacaxi com Raspas de Limão Siciliano",
+    ]);
+    expect(result.drinks.currentDrinks).toEqual([
+      "Caipi Limão, Cravo e Mel",
+      "London Mule",
+      "Stamping Passion",
+      "Paloma",
+      "Sex on The Beach",
+      "Whisky Sour",
+      "Bramble",
+    ]);
+    expect(result.drinks.currentDrinks).not.toContain("Gin Gordons ou O'gin");
   });
 });
