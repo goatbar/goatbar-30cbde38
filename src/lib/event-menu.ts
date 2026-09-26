@@ -8,6 +8,9 @@ export interface EventMenuDrink {
   category?: string;
 }
 
+export type EventMenuLayout = "compact" | "standard" | "expanded";
+export type EventMenuArtworkMode = "automatic" | "library" | "ai" | "upload";
+
 export type EventMenuPersonalization =
   | { kind: "wedding"; initials: string; label: string; date?: string }
   | { kind: "birthday"; label: string }
@@ -19,9 +22,26 @@ export interface EventMenuModel {
   title: string;
   subtitle?: string;
   drinks: EventMenuDrink[];
-  layout: "compact" | "standard" | "expanded";
-  columns: 1 | 2;
+  layout: EventMenuLayout;
+  columns: 1;
+  pages: EventMenuDrink[][];
   personalization: EventMenuPersonalization;
+  artworkMode: EventMenuArtworkMode;
+  artworkUrl?: string | null;
+  warnings: string[];
+}
+
+export interface EventMenuContext {
+  selectedDrinks: SelectedDrinksPayload | string[] | null | undefined;
+  catalog: Drink[];
+  eventName?: string | null;
+  eventType?: string | null;
+  clientName?: string | null;
+  brideName?: string | null;
+  groomName?: string | null;
+  date?: string | null;
+  artworkMode?: EventMenuArtworkMode;
+  artworkUrl?: string | null;
 }
 
 function normalize(value: string) {
@@ -65,15 +85,60 @@ export function resolveEventMenuDrinks(
   });
 }
 
-export function getEventMenuLayout(drinkCount: number): Pick<EventMenuModel, "layout" | "columns"> {
-  if (drinkCount <= 5) return { layout: "expanded", columns: 1 };
-  if (drinkCount <= 9) return { layout: "standard", columns: 2 };
-  return { layout: "compact", columns: 2 };
+function drinkWeight(drink: EventMenuDrink) {
+  const nameLines = Math.max(1, Math.ceil(drink.name.length / 30));
+  const descriptionLines = drink.description ? Math.max(1, Math.ceil(drink.description.length / 58)) : 0;
+  return 1.15 + (nameLines - 1) * 0.35 + descriptionLines * 0.72;
 }
 
+function totalWeight(drinks: EventMenuDrink[]) {
+  return drinks.reduce((sum, drink) => sum + drinkWeight(drink), 0);
+}
+
+export function getEventMenuLayout(
+  drinkCount: number,
+  estimatedWeight = drinkCount * 1.9,
+): Pick<EventMenuModel, "layout" | "columns"> {
+  if (drinkCount <= 5 && estimatedWeight <= 10) return { layout: "expanded", columns: 1 };
+  if (drinkCount <= 8 && estimatedWeight <= 15) return { layout: "standard", columns: 1 };
+  return { layout: "compact", columns: 1 };
+}
+
+export function paginateEventMenuDrinks(drinks: EventMenuDrink[], maxWeight = 18.5): EventMenuDrink[][] {
+  if (drinks.length === 0) return [[]];
+
+  const pages: EventMenuDrink[][] = [];
+  let current: EventMenuDrink[] = [];
+  let weight = 0;
+
+  for (const drink of drinks) {
+    const nextWeight = drinkWeight(drink);
+    if (current.length > 0 && weight + nextWeight > maxWeight) {
+      pages.push(current);
+      current = [];
+      weight = 0;
+    }
+    current.push(drink);
+    weight += nextWeight;
+  }
+
+  if (current.length) pages.push(current);
+  return pages;
+}
 
 function initialsFromNames(names: string[]) {
-  return names.filter(Boolean).slice(0, 2).map(name => name.trim().charAt(0).toUpperCase()).join("");
+  return names
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((name) => name.trim().charAt(0).toUpperCase())
+    .join("");
+}
+
+function formatMenuDate(value?: string | null) {
+  if (!value) return undefined;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return value;
+  return `${match[3]}.${match[2]}.${match[1]}`;
 }
 
 export function resolveEventMenuPersonalization(input: {
@@ -89,31 +154,63 @@ export function resolveEventMenuPersonalization(input: {
 
   if (type.includes("casamento")) {
     const names = [input.groomName || "", input.brideName || ""].filter(Boolean);
-    const label = names.length === 2 ? names.join(" & ") : eventName;
-    return { kind: "wedding", initials: initialsFromNames(names.length ? names : eventName.split(/\s*(?:&| e )\s*/i)), label, date: input.date || undefined };
+    const fallbackNames = eventName.split(/\s*(?:&| e )\s*/i).filter(Boolean);
+    const resolvedNames = names.length ? names : fallbackNames;
+    const label = resolvedNames.length >= 2 ? resolvedNames.slice(0, 2).join(" & ") : eventName;
+    return {
+      kind: "wedding",
+      initials: initialsFromNames(resolvedNames),
+      label,
+      date: formatMenuDate(input.date),
+    };
   }
+
   if (type.includes("anivers")) return { kind: "birthday", label: "Happy Birthday" };
-  if (type.includes("corporat") || type.includes("confratern")) return { kind: "corporate", label: eventName || "Cheers!" };
-  if (type.includes("despedida") || type.includes("solteir")) return { kind: "bachelor", label: "Game Over" };
+  if (type.includes("corporat") || type.includes("confratern")) {
+    return { kind: "corporate", label: eventName || "Cheers!" };
+  }
+  if (type.includes("despedida") || type.includes("solteir")) {
+    return { kind: "bachelor", label: "Game Over" };
+  }
   return { kind: "generic", label: eventName };
 }
 
-export function buildEventMenuModel(input: {
-  selectedDrinks: SelectedDrinksPayload | string[] | null | undefined;
-  catalog: Drink[];
-  eventName?: string | null;
-  eventType?: string | null;
-  clientName?: string | null;
-  brideName?: string | null;
-  groomName?: string | null;
-  date?: string | null;
-}): EventMenuModel {
+export function validateEventMenuModel(menu: Pick<EventMenuModel, "drinks" | "pages">) {
+  const warnings: string[] = [];
+  if (menu.drinks.length === 0) warnings.push("Nenhum drink selecionado no orçamento atual.");
+
+  const missingDescriptions = menu.drinks.filter((drink) => !drink.description.trim());
+  if (missingDescriptions.length) {
+    warnings.push(
+      `${missingDescriptions.length} drink(s) sem descrição cadastrada no módulo de Drinks.`,
+    );
+  }
+
+  if (menu.pages.length > 1) {
+    warnings.push(`O cardápio será gerado em ${menu.pages.length} páginas para evitar sobreposição.`);
+  }
+  return warnings;
+}
+
+export function buildEventMenuModel(input: EventMenuContext): EventMenuModel {
   const drinks = resolveEventMenuDrinks(input.selectedDrinks, input.catalog);
-  return {
-    title: "Carta de Drinks",
+  const weight = totalWeight(drinks);
+  const pages = paginateEventMenuDrinks(drinks);
+  const layout = getEventMenuLayout(drinks.length, pages.length > 1 ? 99 : weight);
+
+  const base = {
+    title: "Menu",
     subtitle: input.eventName?.trim() || undefined,
     drinks,
-    ...getEventMenuLayout(drinks.length),
+    ...layout,
+    pages,
     personalization: resolveEventMenuPersonalization(input),
+    artworkMode: input.artworkMode || "automatic",
+    artworkUrl: input.artworkUrl || null,
+  } satisfies Omit<EventMenuModel, "warnings">;
+
+  return {
+    ...base,
+    warnings: validateEventMenuModel(base),
   };
 }
