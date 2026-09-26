@@ -213,7 +213,7 @@ export const generateContractAndSendSignatureTool: GoatAIToolDefinition = {
   sourceTable:
     "events,event_contracts,contract_templates,contract_signers,event_contract_client_data,event_budget_versions,contract_signature_requests",
   description:
-    "Gera o contrato oficial do evento em PDF e o envia para assinatura eletrônica pela Assinafy. Acione esta ferramenta SOMENTE quando o usuário pedir explicitamente para gerar E enviar o contrato para assinatura. Se faltarem dados obrigatórios, a ferramenta interrompe antes da Assinafy e informa as pendências. Retorna o link real do PDF e o status do envio.",
+    "Gera o contrato oficial do evento e o envia para assinatura eletrônica pela Assinafy. Acione SOMENTE quando o usuário pedir explicitamente envio para assinatura. O objetivo desta ferramenta é o DISPARO JURÍDICO, não entregar o PDF ao solicitante no WhatsApp. Se faltarem dados obrigatórios, interrompe antes da Assinafy. Retorna o status do envio; não exponha o PDF ao usuário salvo se ele pedir uma cópia em solicitação separada.",
   parameters: {
     type: "object",
     properties: {
