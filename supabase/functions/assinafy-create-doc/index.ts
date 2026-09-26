@@ -21,6 +21,7 @@ import {
   validateCreateDocPayload,
   validatePdfHash,
   validateRequiredSigners,
+  resolveClientSignerInput,
   type RequiredSigner,
 } from "./logic.ts";
 
@@ -110,8 +111,9 @@ serve(async (req) => {
     const contract = await resolveContractAccess(existenceLookup, authorizedLookup);
     if (!contract)
       throw new CreateDocHttpError(404, "contract_not_found", "Contrato não encontrado.");
+    const clientSigner = resolveClientSignerInput(contract.event, contract.legal_snapshot);
     const requiredSigners = validateRequiredSigners(
-      { name: contract.event?.client_name, email: contract.event?.email },
+      clientSigner,
       contract.companySigner,
     );
     console.info("[assinafy-create-doc] validated", {
