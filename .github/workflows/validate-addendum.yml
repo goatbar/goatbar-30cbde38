@@ -1,0 +1,31 @@
+name: Validate Addendum Flow
+
+on:
+  push:
+    branches:
+      - feat/addendum-official-template-flow
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Tests
+        run: npx vitest run
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
