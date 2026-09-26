@@ -227,10 +227,10 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
                 readOnly
                 aria-readonly="true"
                 className="bg-muted/40 cursor-not-allowed"
-                title="A data final de pagamento permanece a mesma prevista no contrato original."
+                title="A data final de pagamento é calculada automaticamente: 7 dias antes da data do evento."
               />
               <p className="text-[10px] text-muted-foreground mt-1">
-                Mesma data prevista no contrato original.
+                Calculada automaticamente: 7 dias antes da data do evento.
               </p>
             </div>
           </div>
