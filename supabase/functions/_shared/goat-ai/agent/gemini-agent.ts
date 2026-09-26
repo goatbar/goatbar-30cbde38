@@ -48,6 +48,7 @@ import {
   toContextualEvent,
 } from "../events/confirmed-events.ts";
 import { resolveBudgetRequestLinkIntent } from "../events/budget-request-intent.ts";
+import { resolveContractDataRequestLinkIntent } from "../events/contract-data-request-intent.ts";
 import {
   formatPendingBudgetRequestsReply,
   resolvePendingBudgetRequestsIntent,
@@ -256,6 +257,140 @@ export class GoatAIGeminiAgent {
       );
 
       await turnManager.initTurn(userMessage.id);
+
+    // Link de coleta de dados contratuais tem prioridade explícita sobre
+    // qualquer atalho de orçamento. Resolve o evento antes de criar o token.
+    const contractDataLinkIntent = resolveContractDataRequestLinkIntent(input.message);
+    if (contractDataLinkIntent.matched) {
+      const deterministicCalls: any[] = [];
+      let resolvedEvent: any = null;
+
+      const recentEntities = await this.conversationManager.getRecentEntities(conversation.id);
+      const contextualMatch = matchContextualEventReference(input.message, recentEntities);
+
+      if (contextualMatch.matched && contextualMatch.eventId) {
+        const lookup = await this.toolRegistry.executeTool(
+          "search_events",
+          { event_id: contextualMatch.eventId },
+          { ...context, toolCallId: `${correlationId}_contract_data_context_event` },
+        );
+        deterministicCalls.push({
+          toolName: "search_events",
+          arguments: { event_id: contextualMatch.eventId },
+          result: lookup.data,
+          status: lookup.success ? "success" : "error",
+        });
+        resolvedEvent = lookup.success && Array.isArray(lookup.data?.events)
+          ? lookup.data.events[0] || null
+          : null;
+      }
+
+      if (!resolvedEvent) {
+        const search = await this.toolRegistry.executeTool(
+          "search_events",
+          { query: input.message, limit: 10 },
+          { ...context, toolCallId: `${correlationId}_contract_data_event_search` },
+        );
+        deterministicCalls.push({
+          toolName: "search_events",
+          arguments: { query: input.message, limit: 10 },
+          result: search.data,
+          status: search.success ? "success" : "error",
+        });
+
+        let candidates = search.success && Array.isArray(search.data?.events)
+          ? search.data.events
+          : [];
+
+        if (contractDataLinkIntent.dateHint) {
+          const exactDate = candidates.filter(
+            (event: any) => String(event.date || "").slice(0, 10) === contractDataLinkIntent.dateHint,
+          );
+          if (exactDate.length > 0) candidates = exactDate;
+        }
+
+        if (candidates.length === 1) {
+          resolvedEvent = candidates[0];
+        } else if (candidates.length > 1) {
+          const options = candidates.slice(0, 5).map((event: any, index: number) => {
+            const name = event.event_name || event.client_name || "Evento";
+            const date = event.date ? String(event.date).slice(0, 10).split("-").reverse().join("/") : "sem data";
+            return `${index + 1}. ${name} — ${date}`;
+          });
+          const reply =
+            "Encontrei mais de um evento compatível. Qual deles devo usar para gerar o link de dados do contrato?\n\n" +
+            options.join("\n");
+          const assistantMsg = await this.conversationManager.saveMessage(
+            conversation.id,
+            "assistant",
+            reply,
+            "text",
+          );
+          return {
+            conversationId: conversation.id,
+            messageId: assistantMsg.id,
+            reply,
+            toolCallsExecuted: deterministicCalls,
+            pendingAction: null,
+          };
+        }
+      }
+
+      if (!resolvedEvent?.id) {
+        const reply =
+          "Não encontrei com segurança o evento para gerar o link de dados do contrato. Informe o nome do evento/cliente e, se possível, a data.";
+        const assistantMsg = await this.conversationManager.saveMessage(
+          conversation.id,
+          "assistant",
+          reply,
+          "text",
+        );
+        return {
+          conversationId: conversation.id,
+          messageId: assistantMsg.id,
+          reply,
+          toolCallsExecuted: deterministicCalls,
+          pendingAction: null,
+        };
+      }
+
+      await this.conversationManager.saveRecentEvents(
+        conversation.id,
+        [toContextualEvent(resolvedEvent)],
+        [resolvedEvent.id],
+      );
+      await this.conversationManager.setLastFocusedEvent(conversation.id, resolvedEvent.id);
+
+      const linkArgs = { event_id: resolvedEvent.id };
+      const linkResult = await this.toolRegistry.executeTool(
+        "create_contract_data_request_link",
+        linkArgs,
+        { ...context, toolCallId: `${correlationId}_contract_data_link` },
+      );
+      deterministicCalls.push({
+        toolName: "create_contract_data_request_link",
+        arguments: linkArgs,
+        result: linkResult.data,
+        status: linkResult.success ? "success" : "error",
+      });
+
+      const reply = linkResult.success
+        ? linkResult.message!
+        : `Não foi possível criar o link de dados do contrato: ${linkResult.error || "erro desconhecido"}.`;
+      const assistantMsg = await this.conversationManager.saveMessage(
+        conversation.id,
+        "assistant",
+        reply,
+        linkResult.success ? "action_result" : "text",
+      );
+      return {
+        conversationId: conversation.id,
+        messageId: assistantMsg.id,
+        reply,
+        toolCallsExecuted: deterministicCalls,
+        pendingAction: null,
+      };
+    }
 
     // A URL real nunca é inventada pelo provider: frases explícitas passam
     // diretamente pela tool determinística e auditável.
