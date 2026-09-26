@@ -1406,6 +1406,37 @@ function EventoInterna() {
     }
   };
 
+  // Enquanto houver assinatura em andamento, sincroniza silenciosamente o workflow.
+  // Webhooks continuam sendo a fonte principal; este polling cobre atraso/falha de entrega
+  // do webhook e mantém a tela atualizada sem exigir clique em "Atualizar status".
+  useEffect(() => {
+    if (!realContract?.id || !["active", "sending"].includes(integrationState)) return;
+
+    let cancelled = false;
+    const sync = async () => {
+      try {
+        const provider = getSignatureProvider(
+          realContract.signature_provider || realContract.provider,
+        );
+        const next = await provider.syncStatus(realContract.id);
+        if (!cancelled) setProviderDetails(next);
+      } catch (error) {
+        console.warn("[signature-auto-sync] Falha temporária ao sincronizar status:", error);
+      }
+    };
+
+    const timer = window.setInterval(sync, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [
+    realContract?.id,
+    realContract?.signature_provider,
+    realContract?.provider,
+    integrationState,
+  ]);
+
   const handleDeleteContract = async () => {
     if (isProcessingContract) return;
     if (!realContract || realContract.status !== "draft") return;
@@ -3662,9 +3693,11 @@ function EventoInterna() {
                             },
                             {
                               label: "Convite por e-mail",
-                              done: providerDetails?.signers?.some(
-                                (s: any) => s.notification_status === "sent",
-                              ),
+                              done:
+                                Boolean(providerDetails?.sent_at) ||
+                                providerDetails?.signers?.some(
+                                  (s: any) => s.notification_status === "sent",
+                                ),
                               detail:
                                 providerDetails?.signers?.[0]?.email ||
                                 realClientData?.email ||
@@ -3676,7 +3709,9 @@ function EventoInterna() {
                               detail:
                                 integrationState === "completed"
                                   ? "Assinatura concluída"
-                                  : "Aguardando assinatura",
+                                  : providerDetails?.signers?.length
+                                    ? `${providerDetails.signers.filter((s: any) => s.status === "signed").length} de ${providerDetails.signers.length} assinatura(ões) concluída(s)`
+                                    : "Aguardando assinatura",
                             },
                           ].map((step) => (
                             <div
@@ -4332,16 +4367,18 @@ function EventoInterna() {
                       <StatusStep done={!!realClientData} title="Coleta de dados concluída" />
                       <StatusStep done={!!realContract} title="Documento base gerado" />
                       <StatusStep
-                        done={
-                          realContract?.status === "sent" ||
-                          realContract?.status === "partially_signed" ||
-                          realContract?.status === "signed"
-                        }
+                        done={["active", "completed"].includes(integrationState)}
                         title="Disparo de e-mails realizado"
                       />
                       <StatusStep
-                        done={realContract?.status === "signed"}
-                        title="Assinatura das partes colhida"
+                        done={integrationState === "completed"}
+                        title={
+                          integrationState === "completed"
+                            ? "Assinatura das partes colhida"
+                            : providerDetails?.signers?.length
+                              ? `Assinaturas: ${providerDetails.signers.filter((s: any) => s.status === "signed").length}/${providerDetails.signers.length}`
+                              : "Assinatura das partes colhida"
+                        }
                       />
                     </div>
                   </SectionCard>
