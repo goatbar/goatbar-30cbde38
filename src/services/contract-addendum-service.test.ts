@@ -118,7 +118,67 @@ describe("contractAddendumService", () => {
     expect(updateFn).toHaveBeenCalledWith({ budget_version_id: "b-single" });
   });
 
-  it("4. resolveLegacyContractBudgetVersion exige seleção manual quando existem múltiplas propostas", async () => {
+  it("4. corrige vínculo legado impossível quando a proposta vinculada é posterior ao contrato", async () => {
+    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    const updateFn = vi.fn().mockReturnValue({ eq: updateEq });
+
+    const mockSelect = vi.fn().mockImplementation((table: string) => {
+      if (table === "event_contracts") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: {
+              id: "contract-legacy",
+              event_id: "event-legacy",
+              budget_version_id: "budget-future",
+              created_at: "2026-08-11T12:26:59.000Z",
+              generated_at: null,
+            },
+          }),
+          update: updateFn,
+        };
+      }
+      if (table === "event_budget_versions") {
+        const query: any = {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          lte: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue({
+            data: [
+              {
+                id: "budget-historical",
+                version_number: 3,
+                created_at: "2026-08-07T16:21:00.000Z",
+              },
+            ],
+          }),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              id: "budget-future",
+              created_at: "2026-08-26T17:48:49.000Z",
+            },
+          }),
+        };
+        return query;
+      }
+      return {};
+    });
+
+    (supabase.from as any) = mockSelect;
+
+    const res =
+      await contractAddendumService.resolveLegacyContractBudgetVersion("contract-legacy");
+
+    expect(res).toEqual({ budgetVersionId: "budget-historical", autoResolved: true });
+    expect(updateFn).toHaveBeenCalledWith(
+      expect.objectContaining({ budget_version_id: "budget-historical" }),
+    );
+    expect(updateEq).toHaveBeenCalledWith("id", "contract-legacy");
+  });
+
+  it("5. resolveLegacyContractBudgetVersion exige seleção manual quando existem múltiplas propostas", async () => {
     const mockSelect = vi.fn().mockImplementation((table: string) => {
       if (table === "event_contracts") {
         return {
