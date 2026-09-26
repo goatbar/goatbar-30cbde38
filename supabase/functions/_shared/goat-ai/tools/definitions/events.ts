@@ -321,7 +321,7 @@ export const getEventDetailsTool: GoatAIToolDefinition = {
   domain: "EVENTS",
   sourceTable: "events, event_budget_versions",
   description:
-    "Obtém detalhes completos de um evento específico pelo ID (UUID), incluindo convidados, cardápio de drinks, local e orçamento.",
+    "Obtém detalhes completos de um evento pelo ID, incluindo convidados, drinks, local e a composição comercial do orçamento atual: valores, equipe orçada (bartenders, keepers e copeiras), bebidas, gelo, logística, adicionais e pagamentos.",
   parameters: {
     type: "object",
     properties: {
