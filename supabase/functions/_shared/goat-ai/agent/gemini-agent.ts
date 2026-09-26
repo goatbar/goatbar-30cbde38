@@ -171,6 +171,25 @@ function enforceCurrentTurnUrlProvenance(
   return sanitized;
 }
 
+
+function looksLikeNegativeSystemClaim(value: string): boolean {
+  const normalized = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return /\b(nao (?:existe|ha|possui|consta|esta registrado|esta cadastr|foi encontrad)|nao encontrei|sem (?:informacao|informacoes|dados|registro)|nenhum(?:a)? (?:informacao|dado|registro)|inexistente)\b/.test(
+    normalized,
+  );
+}
+
+function hasComprehensiveEventEvidence(toolsExecuted: any[], eventId?: string | null): boolean {
+  return toolsExecuted.some((tool) => {
+    if (tool?.toolName !== "get_event_details" || tool?.status !== "success") return false;
+    const resultEventId = tool?.result?.event?.id || tool?.arguments?.event_id;
+    return !eventId || resultEventId === eventId;
+  });
+}
+
 export class GoatAIGeminiAgent {
   private apiKey: string;
   private model: string;
@@ -1677,6 +1696,7 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
     let finalReply = "";
     let finalPendingAction: any = null;
     let lastActiveProvider: string | null = null;
+    let evidenceEscalationPerformed = false;
 
     const privacyClassification = determinePrivacyClass(input);
 
@@ -2087,8 +2107,61 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
           normalizedMessages.push(toolMessage);
         }
       } else {
-        // Model provided final text response
-        finalReply = response.text || "Entendido.";
+        // Model provided final text response. Negative claims about event data
+        // require comprehensive evidence before the turn may finish.
+        const candidateReply = response.text || "Entendido.";
+        const focusedEventId =
+          contextualEventMatch?.eventId ||
+          (recentEntities?.events?.length === 1 ? recentEntities.events[0]?.eventId : null);
+
+        if (
+          !evidenceEscalationPerformed &&
+          focusedEventId &&
+          looksLikeNegativeSystemClaim(candidateReply) &&
+          !hasComprehensiveEventEvidence(toolsExecuted, focusedEventId)
+        ) {
+          evidenceEscalationPerformed = true;
+          const evidenceArgs = { event_id: focusedEventId };
+          const evidenceStartedAt = Date.now();
+          const evidenceResult = await this.toolRegistry.executeTool(
+            "get_event_details",
+            evidenceArgs,
+            {
+              ...context,
+              correlationId,
+              toolCallId: `${correlationId}_auto_evidence_escalation`,
+            },
+          );
+          toolsMs += Date.now() - evidenceStartedAt;
+          toolsExecuted.push({
+            toolName: "get_event_details",
+            arguments: evidenceArgs,
+            result: evidenceResult.data,
+            status: evidenceResult.success ? "success" : "error",
+          });
+          await turnManager.recordToolExecution("get_event_details");
+
+          const evidencePayload = evidenceResult.success
+            ? compactToolResultForAgent("get_event_details", evidenceResult.data || {}).data
+            : { error: evidenceResult.error || "Falha ao investigar o contexto completo do evento." };
+
+          normalizedMessages.push({
+            role: "assistant",
+            content: candidateReply,
+          });
+          normalizedMessages.push({
+            role: "user",
+            content:
+              "[VERIFICAÇÃO AUTOMÁTICA DE EVIDÊNCIAS] Sua resposta anterior continha uma afirmação de ausência. " +
+              "Antes de concluir, revise-a usando o contexto completo do sistema abaixo. " +
+              "Se os dados existirem em qualquer fonte verificada, corrija a resposta. " +
+              "Se realmente não existirem, diga quais fontes relevantes foram verificadas.\n\n" +
+              JSON.stringify(evidencePayload),
+          });
+          continue;
+        }
+
+        finalReply = candidateReply;
         break;
       }
     }
