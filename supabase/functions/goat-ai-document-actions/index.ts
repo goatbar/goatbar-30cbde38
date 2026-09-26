@@ -332,6 +332,132 @@ async function menu(admin: any, url: string, key: string, userId: string, event:
     message: "Cardápio gerado com sucesso.\n\nPDF: " + share.url,
   };
 }
+async function getSignedContract(
+  admin: any,
+  url: string,
+  userId: string,
+  event: any,
+) {
+  const { data: archived, error: archivedError } = await admin
+    .from("contract_documents")
+    .select(
+      "id,event_id,contract_id,document_type,document_name,original_filename,storage_bucket,storage_path,external_url,mime_type,file_size,source,is_signed,is_final,archive_status,manual_signature_date,signed_at,created_at",
+    )
+    .eq("event_id", event.id)
+    .eq("is_signed", true)
+    .eq("is_final", true)
+    .is("deleted_at", null)
+    .in("document_type", ["signed_contract", "manual_signed_contract"])
+    .order("signed_at", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (archivedError) throw archivedError;
+
+  if (archived) {
+    const filename =
+      String(
+        archived.original_filename ||
+          archived.document_name ||
+          "contrato-assinado-" + slug(event.event_name || event.client_name) + ".pdf",
+      ).trim();
+
+    if (archived.storage_bucket && archived.storage_path) {
+      const share = await createDocumentShareLink(admin, url, {
+        eventId: event.id,
+        documentKind: "contract",
+        bucket: archived.storage_bucket,
+        path: archived.storage_path,
+        filename: filename.toLowerCase().endsWith(".pdf") ? filename : filename + ".pdf",
+        createdBy: userId,
+        expiresInSeconds: 60 * 60 * 24,
+      });
+
+      return {
+        success: true,
+        action: "get_signed_contract",
+        document_id: archived.id,
+        document_type: archived.document_type,
+        source: archived.source,
+        signed_at: archived.signed_at || archived.manual_signature_date || null,
+        pdf_url: share.url,
+        filename: filename.toLowerCase().endsWith(".pdf") ? filename : filename + ".pdf",
+        delivery_mode: "direct_document",
+        message: "Contrato assinado encontrado.",
+      };
+    }
+
+    if (archived.external_url) {
+      return {
+        success: true,
+        action: "get_signed_contract",
+        document_id: archived.id,
+        document_type: archived.document_type,
+        source: archived.source,
+        signed_at: archived.signed_at || archived.manual_signature_date || null,
+        pdf_url: archived.external_url,
+        filename: filename.toLowerCase().endsWith(".pdf") ? filename : filename + ".pdf",
+        delivery_mode: "direct_document",
+        message: "Contrato assinado encontrado.",
+      };
+    }
+  }
+
+  const { data: contract, error: contractError } = await admin
+    .from("event_contracts")
+    .select("id,signed_file_path,signed_file_url,fully_signed_at")
+    .eq("event_id", event.id)
+    .not("fully_signed_at", "is", null)
+    .order("fully_signed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (contractError) throw contractError;
+
+  if (contract?.signed_file_path) {
+    const filename = "contrato-assinado-" + slug(event.event_name || event.client_name) + ".pdf";
+    const share = await createDocumentShareLink(admin, url, {
+      eventId: event.id,
+      documentKind: "contract",
+      bucket: "contract-documents",
+      path: contract.signed_file_path,
+      filename,
+      createdBy: userId,
+      expiresInSeconds: 60 * 60 * 24,
+    });
+    return {
+      success: true,
+      action: "get_signed_contract",
+      contract_id: contract.id,
+      signed_at: contract.fully_signed_at,
+      pdf_url: share.url,
+      filename,
+      delivery_mode: "direct_document",
+      message: "Contrato assinado encontrado.",
+    };
+  }
+
+  if (contract?.signed_file_url) {
+    return {
+      success: true,
+      action: "get_signed_contract",
+      contract_id: contract.id,
+      signed_at: contract.fully_signed_at,
+      pdf_url: contract.signed_file_url,
+      filename: "contrato-assinado-" + slug(event.event_name || event.client_name) + ".pdf",
+      delivery_mode: "direct_document",
+      message: "Contrato assinado encontrado.",
+    };
+  }
+
+  const e: any = new Error(
+    "Não encontrei um PDF final assinado arquivado para este evento.",
+  );
+  e.status = 404;
+  throw e;
+}
+
 async function contractRecords(admin: any, event: any) {
   const cr = await admin.from("event_contracts").select("*").eq("event_id", event.id).neq("status", "cancelled").order("created_at", { ascending: false });
   if (cr.error) throw cr.error;
@@ -505,6 +631,7 @@ serve(async (req) => {
     console.info("[goat-ai-document-actions]", { requestId, action, eventId, userId, channel: body?.channel || null });
     if (action === "generate_proposal") return responseJson(await proposal(admin, url, key, userId, eventId, requestId));
     if (action === "generate_menu") return responseJson(await menu(admin, url, key, userId, ev.data, requestId));
+    if (action === "get_signed_contract") return responseJson(await getSignedContract(admin, url, userId, ev.data));
     if (action === "generate_contract_and_send") return responseJson(await contractAndSend(admin, url, key, userId, ev.data, requestId));
     return responseJson({ success: false, error: "Ação de documento desconhecida." }, 400);
   } catch (error: any) {
