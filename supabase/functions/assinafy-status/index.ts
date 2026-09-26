@@ -49,7 +49,7 @@ serve(async (req) => {
       return new Response(res.buffer, { headers: { ...corsHeaders, "Content-Type": res.headers?.get("Content-Type") || "application/pdf" } });
     }
 
-    const { data: signers } = await admin.from("contract_signature_signers").select("full_name,email,status,signature_url,notification_status,notified_at,signed_at").eq("signature_request_id", sigReq.id);
+    const { data: signers } = await admin.from("contract_signature_signers").select("id,full_name,email,status,signature_url,notification_status,notified_at,signed_at,external_signer_id").eq("signature_request_id", sigReq.id);
     const local = { ...sigReq, externalDocumentId: sigReq.external_document_id, externalAssignmentId: sigReq.external_assignment_id, signers: signers || [] };
     if (!sigReq.external_document_id || ["failed", "remote_document_missing", "canceled"].includes(sigReq.dispatch_status)) return json({ ...local, status: sigReq.dispatch_status });
 
