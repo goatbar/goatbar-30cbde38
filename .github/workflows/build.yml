@@ -3,6 +3,8 @@ name: Build Project
 on:
   push:
     branches: ["main"]
+  pull_request:
+    branches: ["main"]
 
 jobs:
   build:
@@ -15,11 +17,14 @@ jobs:
       - name: Configurar Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: https://registry.npmjs.org/
 
       - name: Instalar dependências
         run: npm install
+
+      - name: Rodar testes do gerador de cardápio
+        run: npx vitest run src/lib/event-menu.test.ts
 
       - name: Build do projeto
         run: npm run build

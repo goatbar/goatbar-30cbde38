@@ -136,7 +136,18 @@ import {
 import { formatDateDot } from "@/lib/proposal-field-resolver";
 import { buildProposalFilename } from "@/lib/proposal-filename";
 import { InternalProposalPreviewModal } from "@/components/InternalProposalPreviewModal";
-import { Eye } from "lucide-react";
+import { Eye, UtensilsCrossed } from "lucide-react";
+import { buildEventMenuModel, type EventMenuArtworkMode, type EventMenuModel } from "@/lib/event-menu";
+import { EventMenuPreview } from "@/components/event-menu/EventMenuPreview";
+import {
+  downloadEventMenuPdfBlob,
+  generateEventMenuArtwork,
+  generateEventMenuPdf,
+  getEventMenuSettings,
+  saveEventMenuSettings,
+  uploadEventMenuArtwork,
+  type EventMenuSettings,
+} from "@/services/event-menu-service";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
   component: EventoInterna,
@@ -293,6 +304,10 @@ function EventoInterna() {
   const [showDeleteProposalDialog, setShowDeleteProposalDialog] = useState(false);
   const [isDeletingProposal, setIsDeletingProposal] = useState(false);
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
+  const [menuSettings, setMenuSettings] = useState<EventMenuSettings | null>(null);
+  const [isGeneratingMenuPdf, setIsGeneratingMenuPdf] = useState(false);
+  const [isGeneratingMenuArtwork, setIsGeneratingMenuArtwork] = useState(false);
+  const [isUploadingMenuArtwork, setIsUploadingMenuArtwork] = useState(false);
   const [canvaGeneration, setCanvaGeneration] = useState<{
     open: boolean;
     status: "loading" | "success" | "error";
@@ -353,6 +368,66 @@ function EventoInterna() {
         upsellUrl,
         diagnostic,
       });
+    }
+  };
+
+  const handleMenuArtworkMode = async (mode: EventMenuArtworkMode) => {
+    try {
+      const saved = await saveEventMenuSettings(eventoId, {
+        artwork_mode: mode,
+        artwork_url: mode === "ai" || mode === "upload" ? menuSettings?.artwork_url ?? null : null,
+      });
+      setMenuSettings(saved);
+    } catch (error: any) {
+      toast.error(error?.message || "Não foi possível atualizar a personalização do cardápio.");
+    }
+  };
+
+  const handleGenerateMenuArtwork = async () => {
+    if (!evento) return;
+    try {
+      setIsGeneratingMenuArtwork(true);
+      const saved = await generateEventMenuArtwork({
+        eventId: eventoId,
+        eventType: evento.event_type,
+        eventName: evento.event_name || evento.client_name,
+        brideName: evento.bride_name,
+        groomName: evento.groom_name,
+        date: evento.date,
+      });
+      setMenuSettings(saved);
+      toast.success("Arte do cardápio gerada com IA.");
+    } catch (error: any) {
+      toast.error(error?.message || "Não foi possível gerar a arte com IA.");
+    } finally {
+      setIsGeneratingMenuArtwork(false);
+    }
+  };
+
+  const handleUploadMenuArtwork = async (file: File | null) => {
+    if (!file) return;
+    try {
+      setIsUploadingMenuArtwork(true);
+      const saved = await uploadEventMenuArtwork(eventoId, file);
+      setMenuSettings(saved);
+      toast.success("Arte personalizada enviada.");
+    } catch (error: any) {
+      toast.error(error?.message || "Não foi possível enviar a arte.");
+    } finally {
+      setIsUploadingMenuArtwork(false);
+    }
+  };
+
+  const handleDownloadMenuPdf = async (menu: EventMenuModel) => {
+    try {
+      setIsGeneratingMenuPdf(true);
+      const blob = await generateEventMenuPdf(menu);
+      downloadEventMenuPdfBlob(blob, evento?.event_name || evento?.client_name);
+      toast.success("PDF do cardápio gerado.");
+    } catch (error: any) {
+      toast.error(error?.message || "Não foi possível gerar o PDF do cardápio.");
+    } finally {
+      setIsGeneratingMenuPdf(false);
     }
   };
 
@@ -440,6 +515,12 @@ function EventoInterna() {
       setRealTemplates(tps);
       setRealSigners(sigs);
       setRealContract(contract);
+      try {
+        setMenuSettings(await getEventMenuSettings(eventoId));
+      } catch (menuSettingsError) {
+        console.warn("Configuração de cardápio indisponível:", menuSettingsError);
+        setMenuSettings(null);
+      }
       if (contract?.id) {
         fetchAddendumsAndEvaluate(contract.id, budget);
       }
@@ -2037,6 +2118,7 @@ function EventoInterna() {
             { id: "Orçamento", icon: <Save className="h-4 w-4" /> },
             { id: "Contatos & Negociação", icon: <MessageCircle className="h-4 w-4" /> },
             { id: "Contrato", icon: <FileSignature className="h-4 w-4" /> },
+            { id: "Cardápio", icon: <UtensilsCrossed className="h-4 w-4" /> },
             { id: "Compras e Notinhas", icon: <FileTextIcon className="h-4 w-4" /> },
             { id: "Insumos Levados", icon: <Download className="h-4 w-4" /> },
             { id: "Fechamento do Evento", icon: <CheckCircle2 className="h-4 w-4" /> },
@@ -2106,6 +2188,150 @@ function EventoInterna() {
             </SectionCard>
           </div>
         )}
+
+        {activeTab === "Cardápio" && (() => {
+          const activeMode = menuSettings?.artwork_mode || "automatic";
+          const menu = buildEventMenuModel({
+            selectedDrinks: currentBudget?.selected_drinks ?? evento?.drinks ?? [],
+            catalog: allDrinks,
+            eventName: evento?.event_name || evento?.client_name,
+            eventType: evento?.event_type,
+            clientName: evento?.client_name,
+            brideName: evento?.bride_name,
+            groomName: evento?.groom_name,
+            date: evento?.date,
+            artworkMode: activeMode,
+            artworkUrl:
+              activeMode === "ai" || activeMode === "upload"
+                ? menuSettings?.artwork_url
+                : null,
+          });
+
+          return (
+            <div className="animate-in fade-in duration-300">
+              <SectionCard
+                title="Cardápio do Evento"
+                subtitle="Gerado automaticamente a partir do orçamento atual e das descrições cadastradas em Drinks."
+              >
+                {menu.drinks.length > 0 ? (
+                  <div className="space-y-5">
+                    <div className="grid gap-4 rounded-xl border border-border bg-surface p-4 lg:grid-cols-[1fr_auto]">
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center gap-2 text-sm">
+                          <span className="rounded-full bg-primary/10 px-3 py-1 font-semibold text-primary">
+                            {menu.drinks.length} drinks
+                          </span>
+                          <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground">
+                            {menu.pages.length} {menu.pages.length === 1 ? "página" : "páginas"}
+                          </span>
+                          <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground">
+                            Layout {menu.layout}
+                          </span>
+                        </div>
+
+                        <div>
+                          <div className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                            Personalização
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {([
+                              ["automatic", "Automático"],
+                              ["library", "Biblioteca"],
+                              ["ai", "Gerar com IA"],
+                              ["upload", "Enviar arte"],
+                            ] as const).map(([mode, label]) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                onClick={() => handleMenuArtworkMode(mode)}
+                                className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                                  activeMode === mode
+                                    ? "border-primary bg-primary text-primary-foreground"
+                                    : "border-border bg-background hover:bg-muted"
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {activeMode === "ai" && (
+                          <button
+                            type="button"
+                            disabled={isGeneratingMenuArtwork}
+                            onClick={handleGenerateMenuArtwork}
+                            className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
+                          >
+                            {isGeneratingMenuArtwork ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Sparkles className="h-4 w-4" />
+                            )}
+                            {menuSettings?.artwork_url ? "Gerar nova arte com IA" : "Gerar arte com IA"}
+                          </button>
+                        )}
+
+                        {activeMode === "upload" && (
+                          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-muted">
+                            {isUploadingMenuArtwork ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Upload className="h-4 w-4" />
+                            )}
+                            {menuSettings?.artwork_url ? "Trocar arte enviada" : "Selecionar arte"}
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                              className="hidden"
+                              disabled={isUploadingMenuArtwork}
+                              onChange={(event) => {
+                                const file = event.target.files?.[0] || null;
+                                void handleUploadMenuArtwork(file);
+                                event.currentTarget.value = "";
+                              }}
+                            />
+                          </label>
+                        )}
+
+                        {menu.warnings.length > 0 && (
+                          <div className="space-y-1 text-xs text-amber-700">
+                            {menu.warnings.map((warning) => (
+                              <div key={warning} className="flex items-start gap-2">
+                                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                <span>{warning}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-start justify-end">
+                        <PrimaryButton
+                          disabled={isGeneratingMenuPdf}
+                          onClick={() => void handleDownloadMenuPdf(menu)}
+                        >
+                          {isGeneratingMenuPdf ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="mr-2 h-4 w-4" />
+                          )}
+                          Baixar PDF
+                        </PrimaryButton>
+                      </div>
+                    </div>
+
+                    <EventMenuPreview menu={menu} />
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                    Nenhum drink selecionado no orçamento atual. O cardápio será liberado assim que o orçamento tiver drinks salvos.
+                  </div>
+                )}
+              </SectionCard>
+            </div>
+          );
+        })()}
 
         {/* TAB ORÇAMENTO */}
         {activeTab === "Orçamento" && (
