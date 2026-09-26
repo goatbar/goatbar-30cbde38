@@ -1,6 +1,9 @@
 name: Validate Addendum Flow
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - feat/addendum-official-template-flow
