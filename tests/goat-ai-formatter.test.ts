@@ -59,4 +59,11 @@ describe("formatWhatsAppMessage", () => {
     expect(output).not.toContain("###");
     expect(output).not.toContain("---");
   });
+
+  it("converts Markdown links into bare clickable WhatsApp URLs", () => {
+    const input = "PDF: [abrir](https://example.com/cardapio.pdf?token=abc)";
+    const output = formatWhatsAppMessage(input);
+    expect(output).toBe("PDF: https://example.com/cardapio.pdf?token=abc");
+    expect(output).not.toContain("[abrir]");
+  });
 });
