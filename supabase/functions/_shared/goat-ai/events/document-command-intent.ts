@@ -81,7 +81,11 @@ export function resolveEventDocumentCommandIntent(
 
   const dateHint = extractEventDateHint(message);
 
-  if (/\b(cardapio|menu)\b/.test(normalized)) {
+  const explicitFileCue = /\b(pdf|arquivo|documento|download|link)\b/.test(normalized);
+
+  // "Me manda os drinks/cardápio" é consulta e deve responder no chat.
+  // Só gera artefato quando o usuário pede explicitamente PDF/arquivo/link.
+  if (/\b(cardapio|menu)\b/.test(normalized) && explicitFileCue) {
     return { matched: true, action: "generate_menu", ...(dateHint ? { dateHint } : {}) };
   }
 
