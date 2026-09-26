@@ -34,7 +34,7 @@ export const MENU_TYPOGRAPHY = {
     fontFamily: '"Neue Montreal", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
     fontSize: 20, // pt (exact Canva standard)
     lineHeight: 24, // pt
-    fontWeight: 500,
+    fontWeight: 400,
     color: "#701117", // official wine color
   },
   drinkDescription: {
@@ -247,18 +247,22 @@ export function balanceDrinksVerticalDistribution(
     };
   }
 
-  // Com k drinks, queremos espaçar de forma equilibrada.
-  // Para poucos drinks, idealGap seria enorme, por isso limitamos a maxGap.
-  const idealGap = slack / (k + 1);
-  if (idealGap >= MENU_TYPOGRAPHY.maxGap) {
-    const gap = MENU_TYPOGRAPHY.maxGap;
-    const groupHeight = totalBlocks + (k - 1) * gap;
-    const topPadding = Math.max(0, (availableHeight - groupHeight) / 2);
-    return { gap, topPadding, groupHeight };
-  }
+  // Mantém a lista como um bloco visual centralizado na folha.
+  // Em vez de "esticar" os drinks por toda a área útil, reduzimos progressivamente
+  // o espaçamento conforme a quantidade aumenta e usamos o espaço restante como
+  // padding superior/inferior simétrico. Isso reproduz melhor a composição do Canva.
+  const countAwareMaxGap =
+    k <= 3 ? MENU_TYPOGRAPHY.maxGap :
+    k <= 5 ? 26 :
+    k <= 7 ? 18 :
+    k <= 9 ? 14 :
+    12;
 
-  // Quando há mais drinks, distribuímos uniformemente entre eles
-  const gap = Math.max(MENU_TYPOGRAPHY.minGap, slack / (k - 1 + 0.8));
+  const naturalGap = slack / Math.max(1, k - 1);
+  const gap = Math.min(
+    countAwareMaxGap,
+    Math.max(MENU_TYPOGRAPHY.minGap, naturalGap),
+  );
   const groupHeight = totalBlocks + (k - 1) * gap;
   const topPadding = Math.max(0, (availableHeight - groupHeight) / 2);
   return { gap, topPadding, groupHeight };
