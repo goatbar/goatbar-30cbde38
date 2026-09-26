@@ -44,13 +44,27 @@ export interface EventMenuContext {
   artworkUrl?: string | null;
 }
 
-function normalize(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+function normalize(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
 }
 
 function selectedEntries(selected: SelectedDrinksPayload | string[] | null | undefined) {
   if (!selected) return [] as Array<{ id?: string; name?: string }>;
-  if (Array.isArray(selected)) return selected.map((value) => ({ id: value, name: value }));
+  if (Array.isArray(selected)) {
+    return selected.flatMap((value: any) => {
+      if (typeof value === "string") return [{ id: value, name: value }];
+      if (value && typeof value === "object") {
+        const id = value.id || value.drink_id;
+        const name = value.name || value.nome;
+        return id || name ? [{ id, name }] : [];
+      }
+      return [];
+    });
+  }
   if (selected.items?.length) {
     return selected.items.map((item) => ({ id: item.drink_id, name: item.name }));
   }
