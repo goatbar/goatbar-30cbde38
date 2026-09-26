@@ -1179,6 +1179,8 @@ function EventoInterna() {
           "A data de assinatura do contrato original ainda não foi registrada.",
         NO_PROPOSAL_CHANGES_DETECTED:
           "Não há alterações na proposta atual em relação ao contrato vigente para gerar um aditivo.",
+        ADDENDUM_EVENT_DATE_REQUIRED:
+          "A data do evento é obrigatória para calcular a data final de pagamento do aditivo (7 dias antes do evento).",
       };
       toast.error(knownMessages[err.message] || err.message || "Erro ao preparar Termo Aditivo.");
     } finally {
