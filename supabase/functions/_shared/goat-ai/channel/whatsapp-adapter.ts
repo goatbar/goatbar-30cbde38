@@ -437,6 +437,7 @@ export class WhatsAppChannelAdapter {
     const documentToolNames = new Set([
       "generate_event_menu_pdf",
       "generate_commercial_proposal_pdf",
+      "get_signed_contract_pdf",
     ]);
     const generatedDocumentCall = (turnResult.toolCallsExecuted || []).find(
       (call: any) =>
@@ -452,7 +453,9 @@ export class WhatsAppChannelAdapter {
       const caption =
         generatedDocumentCall.toolName === "generate_event_menu_pdf"
           ? "Cardápio em PDF"
-          : "Proposta comercial em PDF";
+          : generatedDocumentCall.toolName === "generate_commercial_proposal_pdf"
+            ? "Proposta comercial em PDF"
+            : "Contrato assinado";
       deliveredAsDocument = await this.sendDocumentMessage(
         senderPhone,
         result.pdf_url,
