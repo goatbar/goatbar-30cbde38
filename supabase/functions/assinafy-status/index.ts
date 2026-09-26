@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getDocumentStatus, downloadArtifact } from "../_shared/assinafy-client.ts";
 import { requireContractSignatureAccess } from "../_shared/auth-helper.ts";
+import { archiveAssinafyDocument } from "../_shared/archive-assinafy-document.ts";
 import { StatusHttpError, normalizeAssinafyStatus, validateStatusPayload } from "./logic.ts";
 
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
@@ -193,10 +194,82 @@ serve(async (req) => {
         .from("event_contracts")
         .update(
           status === "completed"
-            ? { status: "signed", fully_signed_at: now, updated_at: now }
+            ? { status: "signed", fully_signed_at: sigReq.completed_at || now, updated_at: now }
             : { status: "sent", sent_for_signature_at: sigReq.sent_at || now, updated_at: now },
         )
         .eq("id", sigReq.contract_id);
+    } else if (sigReq.document_kind === "addendum" && sigReq.addendum_id) {
+      await admin
+        .from("contract_addendums")
+        .update(
+          status === "completed"
+            ? { status: "signed", fully_signed_at: sigReq.completed_at || now, updated_at: now }
+            : { status: "sent", updated_at: now },
+        )
+        .eq("id", sigReq.addendum_id);
+    }
+
+    let archivedDocument: any = null;
+    let archiveError: string | null = null;
+
+    if (status === "completed" && sigReq.external_document_id) {
+      const { data: existingDoc } = await admin
+        .from("contract_documents")
+        .select("*")
+        .eq("external_document_id", sigReq.external_document_id)
+        .is("deleted_at", null)
+        .maybeSingle();
+
+      let documentRecord = existingDoc;
+      if (!documentRecord) {
+        const isAddendum = sigReq.document_kind === "addendum" && Boolean(sigReq.addendum_id);
+        const { data: insertedDoc, error: insertDocError } = await admin
+          .from("contract_documents")
+          .insert({
+            event_id: sigReq.event_id,
+            contract_id: sigReq.contract_id,
+            addendum_id: isAddendum ? sigReq.addendum_id : null,
+            document_type: isAddendum ? "signed_addendum" : "signed_contract",
+            document_name: isAddendum
+              ? "Termo Aditivo Assinado (Assinafy)"
+              : "Contrato Assinado (Assinafy)",
+            original_filename: isAddendum
+              ? "termo_aditivo_assinado_assinafy.pdf"
+              : "contrato_assinado_assinafy.pdf",
+            storage_bucket: "contract-documents",
+            storage_path: null,
+            source: "assinafy",
+            external_document_id: sigReq.external_document_id,
+            external_assignment_id: sigReq.external_assignment_id,
+            is_signed: true,
+            is_final: true,
+            archive_status: "pending",
+            signed_at: sigReq.completed_at || now,
+          })
+          .select()
+          .single();
+
+        if (insertDocError) {
+          archiveError = insertDocError.message;
+        } else {
+          documentRecord = insertedDoc;
+        }
+      }
+
+      if (documentRecord?.id) {
+        try {
+          const archived = await archiveAssinafyDocument(admin, documentRecord.id);
+          archivedDocument = archived.doc;
+        } catch (archiveErr: any) {
+          archiveError = archiveErr?.message || String(archiveErr);
+          console.error("[assinafy-status] final_pdf_archive_failed", {
+            ...context,
+            documentRecordId: documentRecord.id,
+            externalDocumentId: sigReq.external_document_id,
+            error: archiveError,
+          });
+        }
+      }
     }
 
     return json({
@@ -208,6 +281,8 @@ serve(async (req) => {
       signed_count: signedCount,
       signer_count: syncedSigners.length,
       artifacts: doc.artifacts,
+      archived_document: archivedDocument,
+      archive_error: archiveError,
       upstream_synced: true,
     });
   } catch (e) {
