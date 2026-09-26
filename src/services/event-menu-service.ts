@@ -1,17 +1,14 @@
 import { supabase } from "@/integrations/supabase/client";
-import goatbarLogo from "@/assets/goatbar-logo.png";
+import officialPdfUrl from "@/assets/menu/modelo-cardapio-oficial.pdf?url";
+import neueMontrealMediumUrl from "@/assets/fonts/NeueMontreal-Medium.otf?url";
+import neueMontrealRegularUrl from "@/assets/fonts/NeueMontreal-Regular.otf?url";
+import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 import type { EventMenuModel } from "@/lib/event-menu";
 
-async function imageUrlToDataUrl(url: string): Promise<string> {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error("Não foi possível carregar a identidade visual da GOAT Bar.");
-  const blob = await response.blob();
-  return await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Falha ao preparar a identidade visual."));
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.readAsDataURL(blob);
-  });
+export interface EventMenuFontOptions {
+  customFontBoldBytes?: Uint8Array | ArrayBuffer;
+  customFontRegularBytes?: Uint8Array | ArrayBuffer;
 }
 
 function safeFilename(value: string) {
@@ -23,48 +20,212 @@ function safeFilename(value: string) {
     .toLowerCase();
 }
 
+/**
+ * Renderizador de alta fidelidade client-side com pdf-lib.
+ * Utiliza o template oficial vetorial como base física exata.
+ * Suporta injeção de fontes licenciadas (Neue Montreal) e fallback universal Helvetica.
+ */
+export async function renderMenuWithPdfLib(
+  menu: EventMenuModel,
+  options?: EventMenuFontOptions,
+): Promise<Blob> {
+  const response = await fetch(officialPdfUrl);
+  if (!response.ok) throw new Error("Não foi possível carregar o template canônico do cardápio.");
+  const baseBytes = await response.arrayBuffer();
+  const baseDoc = await PDFDocument.load(baseBytes);
+  const outDoc = await PDFDocument.create();
+  outDoc.registerFontkit(fontkit);
+
+  let fontBold: any = null;
+  let fontRegular: any = null;
+
+  if (options?.customFontBoldBytes) {
+    try {
+      fontBold = await outDoc.embedFont(options.customFontBoldBytes);
+    } catch {
+      fontBold = null;
+    }
+  }
+
+  if (options?.customFontRegularBytes) {
+    try {
+      fontRegular = await outDoc.embedFont(options.customFontRegularBytes);
+    } catch {
+      fontRegular = null;
+    }
+  }
+
+  // Carrega os binários oficiais da Neue Montreal bundled pelo Vite ou de /assets/fonts/
+  if (!fontBold || !fontRegular) {
+    try {
+      const [resBold, resReg] = await Promise.all([
+        !fontBold ? (fetch(neueMontrealMediumUrl).catch(() => null) ?? fetch("/assets/fonts/NeueMontreal-Medium.otf").catch(() => null)) : null,
+        !fontRegular ? (fetch(neueMontrealRegularUrl).catch(() => null) ?? fetch("/assets/fonts/NeueMontreal-Regular.otf").catch(() => null)) : null,
+      ]);
+      if (resBold && resBold.ok && !fontBold) {
+        fontBold = await outDoc.embedFont(await resBold.arrayBuffer());
+      }
+      if (resReg && resReg.ok && !fontRegular) {
+        fontRegular = await outDoc.embedFont(await resReg.arrayBuffer());
+      }
+    } catch {
+      // Ignora erro e recorre ao fallback Helvetica de emergência
+    }
+  }
+
+  // Fallback de emergência caso ocorra falha no carregamento dos arquivos oficiais
+  if (!fontBold) fontBold = await outDoc.embedFont(StandardFonts.HelveticaBold);
+  if (!fontRegular) fontRegular = await outDoc.embedFont(StandardFonts.Helvetica);
+  const fontItalic = await outDoc.embedFont(StandardFonts.TimesRomanItalic);
+
+  const wine = rgb(0x70 / 255, 0x11 / 255, 0x17 / 255);
+  const dark = rgb(0x0f / 255, 0x14 / 255, 0x14 / 255);
+
+  for (const pageLayout of menu.computedLayout.pages) {
+    const [copied] = await outDoc.copyPages(baseDoc, [0]);
+    outDoc.addPage(copied);
+
+    let currentY = pageLayout.drinksTop + pageLayout.topPadding;
+
+    for (const drink of pageLayout.drinks) {
+      // Nome do drink: 20 pt, vinho
+      for (const line of drink.nameLines) {
+        const tw = fontBold.widthOfTextAtSize(line, 20);
+        const x = (567 - tw) / 2;
+        const y = 850.5 - (currentY + 20);
+        copied.drawText(line, { x, y, size: 20, font: fontBold, color: wine });
+        currentY += 24;
+      }
+
+      // Descrição do drink: 16 pt, tom escuro
+      if (drink.descriptionLines.length > 0) {
+        currentY += 4;
+        for (const line of drink.descriptionLines) {
+          const tw = fontRegular.widthOfTextAtSize(line, 16);
+          const x = (567 - tw) / 2;
+          const y = 850.5 - (currentY + 16);
+          copied.drawText(line, { x, y, size: 16, font: fontRegular, color: dark });
+          currentY += 20;
+        }
+      }
+
+      currentY += pageLayout.gap;
+    }
+
+    // Personalização do evento na última página
+    if (pageLayout.isLastPage && pageLayout.personalization) {
+      const p = pageLayout.personalization;
+      if (p.kind === "wedding") {
+        const twInit = fontItalic.widthOfTextAtSize(p.initials, 38);
+        copied.drawText(p.initials, {
+          x: (567 - twInit) / 2,
+          y: 850.5 - 710,
+          size: 38,
+          font: fontItalic,
+          color: wine,
+        });
+        if (p.label) {
+          const twLabel = fontBold.widthOfTextAtSize(p.label.toUpperCase(), 11);
+          copied.drawText(p.label.toUpperCase(), {
+            x: (567 - twLabel) / 2,
+            y: 850.5 - 728,
+            size: 11,
+            font: fontBold,
+            color: wine,
+          });
+        }
+        if (p.date) {
+          const twDate = fontRegular.widthOfTextAtSize(p.date, 9.5);
+          copied.drawText(p.date, {
+            x: (567 - twDate) / 2,
+            y: 850.5 - 744,
+            size: 9.5,
+            font: fontRegular,
+            color: wine,
+          });
+        }
+      } else if (p.kind === "birthday") {
+        const tw = fontItalic.widthOfTextAtSize("Happy Birthday", 34);
+        copied.drawText("Happy Birthday", {
+          x: (567 - tw) / 2,
+          y: 850.5 - 725,
+          size: 34,
+          font: fontItalic,
+          color: wine,
+        });
+      } else if (p.kind === "corporate") {
+        const text = (p.label || "CHEERS!").toUpperCase();
+        const tw = fontBold.widthOfTextAtSize(text, 12);
+        copied.drawText(text, {
+          x: (567 - tw) / 2,
+          y: 850.5 - 730,
+          size: 12,
+          font: fontBold,
+          color: wine,
+        });
+      } else if (p.kind === "bachelor") {
+        const tw = fontBold.widthOfTextAtSize("GAME OVER", 24);
+        copied.drawText("GAME OVER", {
+          x: (567 - tw) / 2,
+          y: 850.5 - 725,
+          size: 24,
+          font: fontBold,
+          color: wine,
+        });
+      } else if (p.label) {
+        const text = p.label.toUpperCase();
+        const tw = fontBold.widthOfTextAtSize(text, 12);
+        copied.drawText(text, {
+          x: (567 - tw) / 2,
+          y: 850.5 - 730,
+          size: 12,
+          font: fontBold,
+          color: wine,
+        });
+      }
+    }
+  }
+
+  const pdfBytes = await outDoc.save();
+  return new Blob([pdfBytes], { type: "application/pdf" });
+}
+
 export async function generateEventMenuPdf(menu: EventMenuModel): Promise<Blob> {
-  const logoDataUrl = await imageUrlToDataUrl(goatbarLogo);
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  if (!session?.access_token) {
-    throw new Error("Sessão expirada. Entre novamente para gerar o cardápio.");
-  }
-
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-  const response = await fetch(`${supabaseUrl}/functions/v1/event-menu-render-pdf`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-      apikey: anonKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      menu,
-      logoDataUrl,
-    }),
-  });
 
-  if (!response.ok) {
-    const raw = await response.text();
-    let message = "Falha ao gerar o PDF do cardápio.";
+  // Tenta primeiro renderizar via Edge Function com browser rendering
+  if (session?.access_token && supabaseUrl) {
     try {
-      const parsed = JSON.parse(raw);
-      message = parsed.error || parsed.message || message;
-    } catch {
-      if (raw) message = raw.slice(0, 300);
+      const response = await fetch(`${supabaseUrl}/functions/v1/event-menu-render-pdf`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: anonKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ menu }),
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        if (blob.type === "application/pdf" || blob.size > 1000) {
+          return blob;
+        }
+      } else {
+        console.warn("[event-menu-service] Edge function retornou status:", response.status);
+      }
+    } catch (err) {
+      console.warn("[event-menu-service] Falha de conexão com a edge function:", err);
     }
-    throw new Error(message);
   }
 
-  const blob = await response.blob();
-  if (blob.type && blob.type !== "application/pdf") {
-    throw new Error("O gerador não retornou um PDF válido.");
-  }
-  return blob;
+  // Fallback resiliente: renderização vetorial no cliente com pdf-lib
+  return await renderMenuWithPdfLib(menu);
 }
 
 export function downloadEventMenuPdfBlob(blob: Blob, eventName?: string | null) {
@@ -78,7 +239,6 @@ export function downloadEventMenuPdfBlob(blob: Blob, eventName?: string | null) 
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-
 
 export interface EventMenuSettings {
   event_id: string;

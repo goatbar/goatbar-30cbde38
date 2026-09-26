@@ -4,6 +4,28 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ──────────────────────────────────────────────────────────
+ * Tipografia Oficial do Menu: Neue Montreal
+ * Declarada via @font-face para consumo local e no browser.
+ * Caso os arquivos de fonte licenciados sejam colocados em /public/assets/fonts/,
+ * a renderização utilizará os binários oficiais. Caso ausentes, recorre a Helvetica/Arial.
+ * ────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: "Neue Montreal";
+  src: url("/assets/fonts/NeueMontreal-Medium.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Neue Montreal";
+  src: url("/assets/fonts/NeueMontreal-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ──────────────────────────────────────────────────────────
  * GOAT BAR – Design System
  * Dark, premium, editorial. Wine accent. Epilogue + Manrope.
  * ────────────────────────────────────────────────────────── */
