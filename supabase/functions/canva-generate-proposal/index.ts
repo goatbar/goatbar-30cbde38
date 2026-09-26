@@ -38,16 +38,31 @@ serve(async (req: Request) => {
     const authorization = req.headers.get("Authorization");
     if (!authorization)
       return json({ error_code: "unauthenticated", error: "Usuário não autenticado." }, 401);
+    const requestBody = await req.json();
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") || "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
+      serviceRoleKey,
     );
-    const {
-      data: { user },
-    } = await supabaseAdmin.auth.getUser(authorization.replace(/^Bearer\s+/i, ""));
+    const token = authorization.replace(/^Bearer\s+/i, "");
+    const isInternalGiaCall = Boolean(serviceRoleKey && token === serviceRoleKey);
+    let user: any = null;
+    if (isInternalGiaCall) {
+      const requestedUserId =
+        typeof requestBody?.requested_by_user_id === "string"
+          ? requestBody.requested_by_user_id.trim()
+          : "";
+      if (!requestedUserId)
+        return json({ error_code: "requested_user_required", error: "Usuário solicitante não informado." }, 422);
+      const lookup = await supabaseAdmin.auth.admin.getUserById(requestedUserId);
+      user = lookup.data?.user || null;
+    } else {
+      const lookup = await supabaseAdmin.auth.getUser(token);
+      user = lookup.data?.user || null;
+    }
     if (!user)
       return json({ error_code: "unauthenticated", error: "Usuário não autenticado." }, 401);
-    const { event_id: eventId, budget_version_id: budgetVersionId } = await req.json();
+    const { event_id: eventId, budget_version_id: budgetVersionId } = requestBody;
     if (!eventId || !budgetVersionId)
       throw new ProposalGenerationError(
         "mapping_incomplete",
