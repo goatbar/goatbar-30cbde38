@@ -246,4 +246,12 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION public.process_assinafy_webhook_event(
+  TEXT, TEXT, TEXT, JSONB, UUID
+) FROM PUBLIC, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION public.process_assinafy_webhook_event(
+  TEXT, TEXT, TEXT, JSONB, UUID
+) TO service_role;
+
 COMMIT;
