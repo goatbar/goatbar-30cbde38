@@ -137,9 +137,17 @@ import { formatDateDot } from "@/lib/proposal-field-resolver";
 import { buildProposalFilename } from "@/lib/proposal-filename";
 import { InternalProposalPreviewModal } from "@/components/InternalProposalPreviewModal";
 import { Eye, UtensilsCrossed } from "lucide-react";
-import { buildEventMenuModel } from "@/lib/event-menu";
+import { buildEventMenuModel, type EventMenuArtworkMode, type EventMenuModel } from "@/lib/event-menu";
 import { EventMenuPreview } from "@/components/event-menu/EventMenuPreview";
-import { downloadEventMenuHtml } from "@/lib/event-menu-export";
+import {
+  downloadEventMenuPdfBlob,
+  generateEventMenuArtwork,
+  generateEventMenuPdf,
+  getEventMenuSettings,
+  saveEventMenuSettings,
+  uploadEventMenuArtwork,
+  type EventMenuSettings,
+} from "@/services/event-menu-service";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
   component: EventoInterna,
@@ -296,6 +304,10 @@ function EventoInterna() {
   const [showDeleteProposalDialog, setShowDeleteProposalDialog] = useState(false);
   const [isDeletingProposal, setIsDeletingProposal] = useState(false);
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
+  const [menuSettings, setMenuSettings] = useState<EventMenuSettings | null>(null);
+  const [isGeneratingMenuPdf, setIsGeneratingMenuPdf] = useState(false);
+  const [isGeneratingMenuArtwork, setIsGeneratingMenuArtwork] = useState(false);
+  const [isUploadingMenuArtwork, setIsUploadingMenuArtwork] = useState(false);
   const [canvaGeneration, setCanvaGeneration] = useState<{
     open: boolean;
     status: "loading" | "success" | "error";
@@ -356,6 +368,66 @@ function EventoInterna() {
         upsellUrl,
         diagnostic,
       });
+    }
+  };
+
+  const handleMenuArtworkMode = async (mode: EventMenuArtworkMode) => {
+    try {
+      const saved = await saveEventMenuSettings(eventoId, {
+        artwork_mode: mode,
+        artwork_url: mode === "ai" || mode === "upload" ? menuSettings?.artwork_url ?? null : null,
+      });
+      setMenuSettings(saved);
+    } catch (error: any) {
+      toast.error(error?.message || "Não foi possível atualizar a personalização do cardápio.");
+    }
+  };
+
+  const handleGenerateMenuArtwork = async () => {
+    if (!evento) return;
+    try {
+      setIsGeneratingMenuArtwork(true);
+      const saved = await generateEventMenuArtwork({
+        eventId: eventoId,
+        eventType: evento.event_type,
+        eventName: evento.event_name || evento.client_name,
+        brideName: evento.bride_name,
+        groomName: evento.groom_name,
+        date: evento.date,
+      });
+      setMenuSettings(saved);
+      toast.success("Arte do cardápio gerada com IA.");
+    } catch (error: any) {
+      toast.error(error?.message || "Não foi possível gerar a arte com IA.");
+    } finally {
+      setIsGeneratingMenuArtwork(false);
+    }
+  };
+
+  const handleUploadMenuArtwork = async (file: File | null) => {
+    if (!file) return;
+    try {
+      setIsUploadingMenuArtwork(true);
+      const saved = await uploadEventMenuArtwork(eventoId, file);
+      setMenuSettings(saved);
+      toast.success("Arte personalizada enviada.");
+    } catch (error: any) {
+      toast.error(error?.message || "Não foi possível enviar a arte.");
+    } finally {
+      setIsUploadingMenuArtwork(false);
+    }
+  };
+
+  const handleDownloadMenuPdf = async (menu: EventMenuModel) => {
+    try {
+      setIsGeneratingMenuPdf(true);
+      const blob = await generateEventMenuPdf(menu);
+      downloadEventMenuPdfBlob(blob, evento?.event_name || evento?.client_name);
+      toast.success("PDF do cardápio gerado.");
+    } catch (error: any) {
+      toast.error(error?.message || "Não foi possível gerar o PDF do cardápio.");
+    } finally {
+      setIsGeneratingMenuPdf(false);
     }
   };
 
@@ -443,6 +515,12 @@ function EventoInterna() {
       setRealTemplates(tps);
       setRealSigners(sigs);
       setRealContract(contract);
+      try {
+        setMenuSettings(await getEventMenuSettings(eventoId));
+      } catch (menuSettingsError) {
+        console.warn("Configuração de cardápio indisponível:", menuSettingsError);
+        setMenuSettings(null);
+      }
       if (contract?.id) {
         fetchAddendumsAndEvaluate(contract.id, budget);
       }
