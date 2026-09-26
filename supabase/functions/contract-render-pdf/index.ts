@@ -153,35 +153,80 @@ ${sanitizedBodyHtml}
       },
     };
 
-    const cfResponse = await fetch(cfEndpoint, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiToken}`,
-        "Content-Type": "application/json",
-        "Accept": "application/pdf",
-      },
-      body: JSON.stringify(cfPayload),
-    });
+    const MAX_RENDER_ATTEMPTS = 4;
+    const retryableStatuses = new Set([429, 500, 502, 503, 504]);
+    let cfResponse: Response | null = null;
 
-    if (!cfResponse.ok) {
-      const errorText = await cfResponse.text();
+    for (let attempt = 1; attempt <= MAX_RENDER_ATTEMPTS; attempt++) {
+      cfResponse = await fetch(cfEndpoint, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+          "Accept": "application/pdf",
+        },
+        body: JSON.stringify(cfPayload),
+      });
+
+      if (cfResponse.ok) break;
+
+      const shouldRetry =
+        retryableStatuses.has(cfResponse.status) && attempt < MAX_RENDER_ATTEMPTS;
+
+      if (!shouldRetry) break;
+
+      const retryAfterHeader = cfResponse.headers.get("retry-after");
+      const retryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : NaN;
+      const fallbackMs = 1000 * Math.pow(2, attempt - 1);
+      const waitMs = Number.isFinite(retryAfterSeconds)
+        ? Math.min(Math.max(retryAfterSeconds * 1000, 1000), 8000)
+        : Math.min(fallbackMs, 8000);
+
+      console.warn("[contract-render-pdf] renderer throttled; retrying", {
+        attempt,
+        status: cfResponse.status,
+        waitMs,
+      });
+
+      // Consumir/descartar o corpo da tentativa falha antes do próximo fetch.
+      try {
+        await cfResponse.arrayBuffer();
+      } catch {
+        // Ignore: a próxima tentativa é independente.
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+
+    if (!cfResponse?.ok) {
+      const errorText = cfResponse ? await cfResponse.text() : "";
       let errorJson: any = null;
       try {
-        errorJson = JSON.parse(errorText);
+        errorJson = errorText ? JSON.parse(errorText) : null;
       } catch {
         errorJson = { raw: errorText };
       }
 
+      const throttled = cfResponse?.status === 429;
       return new Response(
         JSON.stringify({
           ok: false,
-          status: cfResponse.status,
-          statusText: cfResponse.statusText,
+          error: throttled
+            ? "O serviço de geração do PDF atingiu o limite temporário. O sistema tentou novamente automaticamente, mas o serviço ainda está ocupado. Aguarde alguns segundos e tente de novo."
+            : "Não foi possível gerar o PDF oficial para assinatura.",
+          status: cfResponse?.status || 502,
+          statusText: cfResponse?.statusText || "Renderer unavailable",
           cloudflareError: errorJson,
         }),
         {
-          status: cfResponse.status,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          // Não propaga 429 para o navegador depois de esgotar os retries:
+          // o cliente recebe uma falha transitória tratável e uma mensagem clara.
+          status: throttled ? 503 : (cfResponse?.status || 502),
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            ...(throttled ? { "Retry-After": "5" } : {}),
+          },
         }
       );
     }
