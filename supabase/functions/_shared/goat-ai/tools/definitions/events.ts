@@ -8,6 +8,101 @@ import {
 } from "../../matchers/event-matcher.ts";
 import { PIPELINE_CONFIRMED_STATUS } from "../../events/confirmed-events.ts";
 
+type ResolvedEventDrink = {
+  id?: string;
+  name: string;
+  description?: string;
+  category?: string;
+};
+
+function extractDrinkRefs(value: any): Array<{ id?: string; name?: string }> {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item: any) => {
+      if (typeof item === "string") return [{ id: item, name: item }];
+      if (item && typeof item === "object") {
+        const id = item.id || item.drink_id;
+        const name = item.name || item.nome;
+        return id || name ? [{ id, name }] : [];
+      }
+      return [];
+    });
+  }
+
+  if (typeof value === "object") {
+    if (Array.isArray(value.ids)) {
+      return value.ids
+        .filter((id: any) => typeof id === "string" && id.trim())
+        .map((id: string) => ({ id: id.trim() }));
+    }
+    if (Array.isArray(value.items)) {
+      return value.items.flatMap((item: any) => {
+        const id = item?.id || item?.drink_id;
+        const name = item?.name || item?.nome;
+        return id || name ? [{ id, name }] : [];
+      });
+    }
+  }
+
+  return [];
+}
+
+async function resolveEventDrinks(
+  ctx: ToolContext,
+  eventDrinks: any,
+  budgetSelectedDrinks: any,
+): Promise<ResolvedEventDrink[]> {
+  const eventRefs = extractDrinkRefs(eventDrinks);
+  const budgetRefs = extractDrinkRefs(budgetSelectedDrinks);
+  const refs = eventRefs.length > 0 ? eventRefs : budgetRefs;
+  if (refs.length === 0) return [];
+
+  const { data: catalog, error } = await ctx.supabaseAdmin
+    .from("drinks")
+    .select("id,nome,descricao,categoria");
+
+  if (error) {
+    return refs
+      .map((ref) => ({
+        id: ref.id,
+        name: String(ref.name || ref.id || "").trim(),
+      }))
+      .filter((drink) => drink.name);
+  }
+
+  const byId = new Map<string, any>();
+  const byName = new Map<string, any>();
+  for (const drink of catalog || []) {
+    byId.set(String(drink.id), drink);
+    byName.set(normalizeStr(drink.nome), drink);
+  }
+
+  const seen = new Set<string>();
+  const resolved: ResolvedEventDrink[] = [];
+
+  for (const ref of refs) {
+    const match =
+      (ref.id ? byId.get(String(ref.id)) : undefined) ||
+      (ref.name ? byName.get(normalizeStr(ref.name)) : undefined);
+    const name = String(match?.nome || ref.name || ref.id || "").trim();
+    if (!name) continue;
+
+    const key = String(match?.id || ref.id || normalizeStr(name));
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    resolved.push({
+      id: String(match?.id || ref.id || key),
+      name,
+      description: String(match?.descricao || "").trim() || undefined,
+      category: String(match?.categoria || "").trim() || undefined,
+    });
+  }
+
+  return resolved;
+}
+
 export const searchEventsTool: GoatAIToolDefinition = {
   name: "search_events",
   domain: "EVENTS",
@@ -69,23 +164,23 @@ export const searchEventsTool: GoatAIToolDefinition = {
         .maybeSingle();
 
       if (!idErr && eventById) {
-        // Also fetch current budget drinks if event.drinks is empty
-        let drinksList = eventById.drinks || [];
-        if (!drinksList || drinksList.length === 0) {
-          const { data: budget } = await ctx.supabaseAdmin
-            .from("event_budget_versions")
-            .select("selected_drinks")
-            .eq("event_id", targetId)
-            .eq("is_current", true)
-            .maybeSingle();
+        const { data: budget } = await ctx.supabaseAdmin
+          .from("event_budget_versions")
+          .select("selected_drinks,final_budget_value,average_value_per_person,guest_count")
+          .eq("event_id", targetId)
+          .eq("is_current", true)
+          .maybeSingle();
 
-          if (budget?.selected_drinks && Array.isArray(budget.selected_drinks)) {
-            drinksList = budget.selected_drinks.map((d: any) => d.name || d.nome || String(d));
-          }
-        }
+        const drinksList = await resolveEventDrinks(
+          ctx,
+          eventById.drinks,
+          budget?.selected_drinks,
+        );
 
         const enrichedEvent = {
           ...eventById,
+          current_budget_value:
+            budget?.final_budget_value ?? eventById.current_budget_value ?? null,
           drinks: drinksList,
           match_confidence: 1.0,
           match_reason: "Busca por ID direto",
@@ -261,16 +356,16 @@ export const getEventDetailsTool: GoatAIToolDefinition = {
       .eq("is_current", true)
       .maybeSingle();
 
-    // Extract drinks from event or budget
-    let drinksList: string[] = [];
-    if (event.drinks && Array.isArray(event.drinks) && event.drinks.length > 0) {
-      drinksList = event.drinks;
-    } else if (budget?.selected_drinks && Array.isArray(budget.selected_drinks)) {
-      drinksList = budget.selected_drinks.map((d: any) => d.name || d.nome || String(d));
-    }
+    const drinksList = await resolveEventDrinks(
+      ctx,
+      event.drinks,
+      budget?.selected_drinks,
+    );
 
     const detailedEvent = {
       ...event,
+      current_budget_value:
+        budget?.final_budget_value ?? event.current_budget_value ?? null,
       drinks: drinksList,
     };
 
