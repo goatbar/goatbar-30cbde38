@@ -45,6 +45,7 @@ serve(async (req) => {
       payload.object?.document?.id ||
       null;
     const eventType = payload.event_type || payload.type || payload.event?.type || "unknown";
+    const normType = String(eventType).trim().toLowerCase();
     const admin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",

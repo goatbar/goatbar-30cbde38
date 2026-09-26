@@ -95,7 +95,13 @@ serve(async (req) => {
       });
     }
     const doc = provider.data || provider;
-    const status = normalizeAssinafyStatus(doc.status || doc.document_status);
+    const providerStatus = normalizeAssinafyStatus(doc.status || doc.document_status);
+    // A Assinafy pode manter o documento como "pending_signature" enquanto uma das
+    // partes já assinou. Não deixe o polling apagar o estado parcial recebido por webhook.
+    const status =
+      sigReq.dispatch_status === "partially_signed" && providerStatus === "pending_signature"
+        ? "partially_signed"
+        : providerStatus;
     if (status !== sigReq.dispatch_status) {
       await admin
         .from("contract_signature_requests")
