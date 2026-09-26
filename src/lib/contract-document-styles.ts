@@ -31,6 +31,8 @@ export const CANONICAL_CONTRACT_DOCUMENT_CSS = `
     line-height: 1.6;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    color-scheme: light;
+    forced-color-adjust: none;
   }
 
   #contract-root,
@@ -46,10 +48,21 @@ export const CANONICAL_CONTRACT_DOCUMENT_CSS = `
     line-height: 1.6;
   }
 
-  /* Forçar isolamento de cor contra override de Tema Escuro */
-  #contract-root p, #contract-root div, #contract-root span, #contract-root td, #contract-root li,
-  .docx-canvas-paper p, .docx-canvas-paper div, .docx-canvas-paper span, .docx-canvas-paper td, .docx-canvas-paper li {
+  /* Isolamento visual determinístico: o PDF oficial é sempre preto sobre branco.
+     Inclui tags <font> vindas do DOCX e neutraliza efeitos que podem clarear o texto. */
+  #contract-root p, #contract-root div, #contract-root span, #contract-root font,
+  #contract-root td, #contract-root th, #contract-root li, #contract-root strong,
+  #contract-root b, #contract-root em, #contract-root i, #contract-root u,
+  #contract-root a, #contract-root small, #contract-root sub, #contract-root sup,
+  .docx-canvas-paper p, .docx-canvas-paper div, .docx-canvas-paper span, .docx-canvas-paper font,
+  .docx-canvas-paper td, .docx-canvas-paper th, .docx-canvas-paper li, .docx-canvas-paper strong,
+  .docx-canvas-paper b, .docx-canvas-paper em, .docx-canvas-paper i, .docx-canvas-paper u,
+  .docx-canvas-paper a, .docx-canvas-paper small, .docx-canvas-paper sub, .docx-canvas-paper sup {
     color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    opacity: 1 !important;
+    filter: none !important;
+    mix-blend-mode: normal !important;
   }
 
   /* Parágrafos e Espaçamentos */
