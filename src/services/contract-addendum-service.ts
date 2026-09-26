@@ -347,8 +347,53 @@ export const contractAddendumService = {
       throw new Error("NO_PROPOSAL_CHANGES_DETECTED");
     }
 
-    // 4. Compara a versão contratual vigente com a proposta atual.
-    const comparison = compareContractVersions(baseVersion, updatedVersion);
+    // 4. Hidrata os IDs dos drinks com os nomes canônicos do catálogo e compara
+    // exatamente a carta de drinks salva em selected_drinks. O campo beverages
+    // representa bebidas/insumos-base e não deve ser confundido com os coquetéis.
+    const collectDrinkIds = (version: BudgetVersionData): string[] => {
+      const raw = version.selected_drinks as any;
+      if (Array.isArray(raw)) {
+        return raw.filter((value): value is string => typeof value === "string");
+      }
+      if (raw && typeof raw === "object") {
+        if (Array.isArray(raw.ids)) {
+          return raw.ids.filter((value: unknown): value is string => typeof value === "string");
+        }
+        if (Array.isArray(raw.items)) {
+          return raw.items
+            .map((item: any) => item?.drink_id || item?.id)
+            .filter((value: unknown): value is string => typeof value === "string");
+        }
+      }
+      return [];
+    };
+
+    const drinkIds = Array.from(
+      new Set([...collectDrinkIds(baseVersion), ...collectDrinkIds(updatedVersion)]),
+    );
+    let drinkNameById: Record<string, string> = {};
+    if (drinkIds.length > 0) {
+      const { data: drinkRows, error: drinksError } = await supabase
+        .from("drinks")
+        .select("id, nome")
+        .in("id", drinkIds);
+
+      if (drinksError) {
+        console.warn("Não foi possível hidratar nomes de drinks para o aditivo:", drinksError);
+      } else {
+        drinkNameById = Object.fromEntries(
+          (drinkRows || [])
+            .filter((drink: any) => drink?.id && drink?.nome)
+            .map((drink: any) => [drink.id, drink.nome]),
+        );
+      }
+    }
+
+    const comparison = compareContractVersions(
+      baseVersion,
+      updatedVersion,
+      drinkNameById,
+    );
 
     const [{ data: clientData }, { data: evento }] = await Promise.all([
       supabase

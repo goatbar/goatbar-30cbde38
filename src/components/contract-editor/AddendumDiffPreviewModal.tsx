@@ -73,7 +73,7 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Card Drinks */}
             <div className={`p-3 rounded-lg border ${comparison.drinks.changed ? "bg-amber-500/5 border-amber-500/30" : "bg-muted/30 border-muted"}`}>
-              <div className="text-xs font-bold text-muted-foreground mb-1">DRINKS & BEBIDAS</div>
+              <div className="text-xs font-bold text-muted-foreground mb-1">DRINKS SELECIONADOS</div>
               {comparison.drinks.changed ? (
                 <div className="text-xs space-y-1">
                   {comparison.drinks.added.length > 0 && (
