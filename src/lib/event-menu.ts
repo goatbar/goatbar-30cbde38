@@ -8,12 +8,20 @@ export interface EventMenuDrink {
   category?: string;
 }
 
+export type EventMenuPersonalization =
+  | { kind: "wedding"; initials: string; label: string; date?: string }
+  | { kind: "birthday"; label: string }
+  | { kind: "corporate"; label: string }
+  | { kind: "bachelor"; label: string }
+  | { kind: "generic"; label: string };
+
 export interface EventMenuModel {
   title: string;
   subtitle?: string;
   drinks: EventMenuDrink[];
   layout: "compact" | "standard" | "expanded";
   columns: 1 | 2;
+  personalization: EventMenuPersonalization;
 }
 
 function normalize(value: string) {
@@ -63,10 +71,42 @@ export function getEventMenuLayout(drinkCount: number): Pick<EventMenuModel, "la
   return { layout: "compact", columns: 2 };
 }
 
+
+function initialsFromNames(names: string[]) {
+  return names.filter(Boolean).slice(0, 2).map(name => name.trim().charAt(0).toUpperCase()).join("");
+}
+
+export function resolveEventMenuPersonalization(input: {
+  eventType?: string | null;
+  eventName?: string | null;
+  clientName?: string | null;
+  brideName?: string | null;
+  groomName?: string | null;
+  date?: string | null;
+}): EventMenuPersonalization {
+  const type = normalize(input.eventType || "");
+  const eventName = input.eventName?.trim() || input.clientName?.trim() || "";
+
+  if (type.includes("casamento")) {
+    const names = [input.groomName || "", input.brideName || ""].filter(Boolean);
+    const label = names.length === 2 ? names.join(" & ") : eventName;
+    return { kind: "wedding", initials: initialsFromNames(names.length ? names : eventName.split(/\s*(?:&| e )\s*/i)), label, date: input.date || undefined };
+  }
+  if (type.includes("anivers")) return { kind: "birthday", label: "Happy Birthday" };
+  if (type.includes("corporat") || type.includes("confratern")) return { kind: "corporate", label: eventName || "Cheers!" };
+  if (type.includes("despedida") || type.includes("solteir")) return { kind: "bachelor", label: "Game Over" };
+  return { kind: "generic", label: eventName };
+}
+
 export function buildEventMenuModel(input: {
   selectedDrinks: SelectedDrinksPayload | string[] | null | undefined;
   catalog: Drink[];
   eventName?: string | null;
+  eventType?: string | null;
+  clientName?: string | null;
+  brideName?: string | null;
+  groomName?: string | null;
+  date?: string | null;
 }): EventMenuModel {
   const drinks = resolveEventMenuDrinks(input.selectedDrinks, input.catalog);
   return {
@@ -74,5 +114,6 @@ export function buildEventMenuModel(input: {
     subtitle: input.eventName?.trim() || undefined,
     drinks,
     ...getEventMenuLayout(drinks.length),
+    personalization: resolveEventMenuPersonalization(input),
   };
 }
