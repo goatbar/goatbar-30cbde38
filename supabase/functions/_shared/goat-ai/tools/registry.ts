@@ -19,6 +19,7 @@ import { upsertDrinkAliasTool } from "./definitions/drink-aliases.ts";
 import { getDrinksCatalogTool } from "./definitions/drinks.ts";
 import { createBudgetRequestLinkTool, listPendingBudgetRequestsTool } from "./definitions/budget-request.ts";
 import {
+  createContractDataRequestLinkTool,
   generateCommercialProposalPdfTool,
   generateEventMenuPdfTool,
   generateContractAndSendSignatureTool,
@@ -64,6 +65,7 @@ export class GoatAIToolRegistry {
     this.register(getDrinksCatalogTool);
     this.register(createBudgetRequestLinkTool);
     this.register(listPendingBudgetRequestsTool);
+    this.register(createContractDataRequestLinkTool);
     this.register(generateCommercialProposalPdfTool);
     this.register(generateEventMenuPdfTool);
     this.register(generateContractAndSendSignatureTool);
