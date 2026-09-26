@@ -1,6 +1,7 @@
 export type EventDocumentCommand =
   | "generate_menu"
   | "generate_proposal"
+  | "get_signed_contract"
   | "generate_contract_and_send";
 
 export interface EventDocumentCommandIntent {
@@ -66,7 +67,7 @@ export function resolveEventDocumentCommandIntent(
   const normalized = normalize(message);
 
   const actionVerb =
-    /\b(gera|gerar|gere|cria|criar|crie|manda|mandar|envia|enviar|mande|envie|quero|preciso|consegue)\b/.test(
+    /\b(gera|gerar|gere|cria|criar|crie|manda|mandar|envia|enviar|mande|envie|quero|preciso|consegue|baixa|baixar|abre|abrir|mostra|mostrar)\b/.test(
       normalized,
     );
   if (!actionVerb) return { matched: false };
@@ -94,6 +95,18 @@ export function resolveEventDocumentCommandIntent(
   }
 
   const contractContext = /\bcontrato\b/.test(normalized);
+  const signedExistingContext =
+    contractContext &&
+    /\b(assinado|assinada|documento certificado)\b/.test(normalized);
+
+  if (signedExistingContext) {
+    return {
+      matched: true,
+      action: "get_signed_contract",
+      ...(dateHint ? { dateHint } : {}),
+    };
+  }
+
   const signatureContext = /\b(assinatura|assinar|assinafy)\b/.test(normalized);
   if (contractContext && signatureContext) {
     return {
