@@ -34,6 +34,10 @@ WHERE paid_amount_received IS NULL;
 ALTER TABLE public.contract_addendums
   ADD COLUMN IF NOT EXISTS template_id UUID REFERENCES public.contract_templates(id) ON DELETE SET NULL;
 
+CREATE INDEX IF NOT EXISTS idx_contract_addendums_template_id
+  ON public.contract_addendums(template_id)
+  WHERE template_id IS NOT NULL;
+
 -- 3. Separa, na Assinafy, o contrato original de cada aditivo.
 ALTER TABLE public.contract_signature_requests
   ADD COLUMN IF NOT EXISTS document_kind TEXT NOT NULL DEFAULT 'contract',
