@@ -1,5 +1,6 @@
 import React from "react";
 import modeloCardapioBg from "@/assets/menu/modelo-cardapio-bg.png";
+import happyBirthdayArtwork from "@/assets/menu/happy-birthday-goatbar.png";
 import type {
   EventMenuModel,
   EventMenuPageLayout,
@@ -29,11 +30,12 @@ function WeddingPersonalization({
       {/* Nomes dos noivos / casal preservando a ordem */}
       {personalization.label && (
         <div
-          className="font-sans font-medium uppercase text-[#701117]"
+          className="font-sans font-medium uppercase"
           style={{
             fontSize: "clamp(9px, 2.1cqw, 12px)",
             letterSpacing: "0.15em",
             marginTop: "clamp(3px, 0.7cqw, 5px)",
+            color: "rgba(0, 0, 0, 0.65)",
           }}
         >
           {personalization.label}
@@ -43,11 +45,12 @@ function WeddingPersonalization({
       {/* Data do casamento formatada */}
       {personalization.date && (
         <div
-          className="font-sans font-normal text-[#701117]/85"
+          className="font-sans font-normal"
           style={{
             fontSize: "clamp(8px, 1.8cqw, 10px)",
             letterSpacing: "0.22em",
             marginTop: "clamp(2px, 0.5cqw, 3px)",
+            color: "rgba(0, 0, 0, 0.65)",
           }}
         >
           {personalization.date}
@@ -57,42 +60,19 @@ function WeddingPersonalization({
   );
 }
 
-function BirthdayPersonalization({ label }: { label: string }) {
+function BirthdayPersonalization() {
   return (
-    <div className="flex flex-col items-center justify-center text-center">
-      <svg
-        viewBox="0 0 240 70"
-        className="h-[clamp(36px,9cqw,56px)] w-auto fill-[#701117]"
-        aria-label="Happy Birthday"
-      >
-        <text
-          x="120"
-          y="32"
-          textAnchor="middle"
-          fontFamily="'Brush Script MT', 'Great Vibes', 'Caveat', cursive"
-          fontSize="36"
-          fontStyle="italic"
-        >
-          Happy
-        </text>
-        <text
-          x="120"
-          y="62"
-          textAnchor="middle"
-          fontFamily="'Brush Script MT', 'Great Vibes', 'Caveat', cursive"
-          fontSize="36"
-          fontStyle="italic"
-        >
-          Birthday
-        </text>
-      </svg>
-      {label && label !== "Happy Birthday" && (
-        <div
-          className="mt-1 font-sans text-[clamp(9px,2cqw,11px)] font-medium uppercase tracking-[0.14em] text-[#701117]"
-        >
-          {label}
-        </div>
-      )}
+    <div className="flex h-full w-full items-center justify-center text-center">
+      <img
+        src={happyBirthdayArtwork}
+        alt="Happy Birthday"
+        className="block object-contain"
+        style={{
+          width: "clamp(145px, 30cqw, 180px)",
+          maxHeight: "94%",
+          mixBlendMode: "multiply",
+        }}
+      />
     </div>
   );
 }
@@ -188,7 +168,7 @@ function PersonalizationRenderer({
     return <WeddingPersonalization personalization={personalization} />;
   }
   if (personalization.kind === "birthday") {
-    return <BirthdayPersonalization label={personalization.label} />;
+    return <BirthdayPersonalization />;
   }
   if (personalization.kind === "corporate") {
     return <CorporatePersonalization label={personalization.label} />;
@@ -205,10 +185,12 @@ function MenuPageView({
   page: EventMenuPageLayout;
 }) {
   // Proporções exatas baseadas nas dimensões oficiais 567 x 850.5 pt
-  const topPercent = (page.drinksTop / MENU_PAGE_HEIGHT) * 100;
-  const heightPercent = (page.availableHeight / MENU_PAGE_HEIGHT) * 100;
-  const paddingPercent = (page.topPadding / MENU_PAGE_HEIGHT) * 100;
-  const gapPercent = (page.gap / MENU_PAGE_HEIGHT) * 100;
+  // Posiciona o grupo de drinks usando as medidas físicas do mesmo computedLayout
+  // consumido pelo PDF. Evita percentuais de padding (que o CSS calcula pela largura)
+  // e mantém a composição realmente centralizada na folha.
+  const contentTopPercent = ((page.drinksTop + page.topPadding) / MENU_PAGE_HEIGHT) * 100;
+  const contentHeightPercent = ((page.availableHeight - page.topPadding) / MENU_PAGE_HEIGHT) * 100;
+  const gapCqw = page.gap * (100 / MENU_PAGE_WIDTH);
 
   return (
     <div
@@ -225,21 +207,20 @@ function MenuPageView({
       <div
         className="absolute left-1/2 flex -translate-x-1/2 flex-col items-center text-center"
         style={{
-          top: `${topPercent}%`,
+          top: `${contentTopPercent}%`,
           width: "77.6%", // 440pt / 567pt
-          height: `${heightPercent}%`,
-          paddingTop: `${paddingPercent}%`,
-          rowGap: `${gapPercent}%`,
+          height: `${contentHeightPercent}%`,
+          rowGap: `${gapCqw}cqw`,
         }}
       >
         {page.drinks.map((drink) => (
           <div key={drink.id} className="w-full text-center">
             {/* Nome do drink: Neue Montreal Medium, tamanho 20 */}
             <h3
-              className="font-medium text-[#701117]"
+              className="font-normal text-[#701117]"
               style={{
                 fontFamily: '"Neue Montreal", Helvetica, Arial, sans-serif',
-                fontWeight: 500,
+                fontWeight: 400,
                 fontSize: "clamp(13px, 3.53cqw, 20px)",
                 lineHeight: "1.2",
                 margin: 0,
