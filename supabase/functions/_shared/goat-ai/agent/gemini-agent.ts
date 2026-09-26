@@ -2191,7 +2191,52 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
           : null,
     };
     } finally {
-      await turnManager.releaseConversationLock();
+      const record = turnManager.getRecord();
+      if (record.status === "processing") {
+        try {
+          const { data: latestAssistant } = await this.supabaseAdmin
+            .from("ai_messages")
+            .select("id,content,created_at")
+            .eq("conversation_id", conversation.id)
+            .eq("role", "assistant")
+            .gte("created_at", record.startedAt)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          const finalTimings: TurnTimings = {
+            totalMs: Date.now() - turnStartTime,
+            llmMs,
+            toolsMs,
+            dbMs,
+            retriesMs,
+            failoverMs,
+          };
+
+          if (latestAssistant?.id) {
+            await turnManager.completeTurn({
+              assistantMessageId: latestAssistant.id,
+              reply: latestAssistant.content || "",
+              providerId: undefined,
+              timings: finalTimings,
+            });
+          } else {
+            await turnManager.failTurn({
+              errorType: "turn_ended_without_reply",
+              errorMessage: "O turno terminou sem persistir uma resposta da assistente.",
+              stage: record.currentStage,
+              timings: finalTimings,
+            });
+          }
+        } catch (reconcileError: any) {
+          console.warn(
+            `[GOAT-AI][TURN][RECONCILE_WARN] turnId=${turnId} error="${reconcileError?.message || String(reconcileError)}"`,
+          );
+          await turnManager.releaseConversationLock();
+        }
+      } else {
+        await turnManager.releaseConversationLock();
+      }
     }
   }
 }
