@@ -17,7 +17,12 @@ import {
 } from "./definitions/financial.ts";
 import { upsertDrinkAliasTool } from "./definitions/drink-aliases.ts";
 import { getDrinksCatalogTool } from "./definitions/drinks.ts";
-import { createBudgetRequestLinkTool, listPendingBudgetRequestsTool } from "./definitions/budget-request.ts";\nimport {\n  generateCommercialProposalPdfTool,\n  generateEventMenuPdfTool,\n  generateContractAndSendSignatureTool,\n} from "./definitions/documents.ts";
+import { createBudgetRequestLinkTool, listPendingBudgetRequestsTool } from "./definitions/budget-request.ts";
+import {
+  generateCommercialProposalPdfTool,
+  generateEventMenuPdfTool,
+  generateContractAndSendSignatureTool,
+} from "./definitions/documents.ts";
 
 function sanitizeToolArguments(args: any): string {
   if (!args || typeof args !== "object") return String(args ?? "");
@@ -58,7 +63,10 @@ export class GoatAIToolRegistry {
     this.register(upsertDrinkAliasTool);
     this.register(getDrinksCatalogTool);
     this.register(createBudgetRequestLinkTool);
-    this.register(listPendingBudgetRequestsTool);\n    this.register(generateCommercialProposalPdfTool);\n    this.register(generateEventMenuPdfTool);\n    this.register(generateContractAndSendSignatureTool);
+    this.register(listPendingBudgetRequestsTool);
+    this.register(generateCommercialProposalPdfTool);
+    this.register(generateEventMenuPdfTool);
+    this.register(generateContractAndSendSignatureTool);
   }
 
   public register(tool: GoatAIToolDefinition) {
