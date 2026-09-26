@@ -2159,6 +2159,7 @@ function EventoInterna() {
         )}
 
         {activeTab === "Cardápio" && (() => {
+          const activeMode = menuSettings?.artwork_mode || "automatic";
           const menu = buildEventMenuModel({
             selectedDrinks: currentBudget?.selected_drinks ?? evento?.drinks ?? [],
             catalog: allDrinks,
@@ -2168,22 +2169,132 @@ function EventoInterna() {
             brideName: evento?.bride_name,
             groomName: evento?.groom_name,
             date: evento?.date,
+            artworkMode: activeMode,
+            artworkUrl:
+              activeMode === "ai" || activeMode === "upload"
+                ? menuSettings?.artwork_url
+                : null,
           });
+
           return (
             <div className="animate-in fade-in duration-300">
-              <SectionCard title="Cardápio do Evento" subtitle="Prévia gerada a partir dos drinks do orçamento atual.">
+              <SectionCard
+                title="Cardápio do Evento"
+                subtitle="Gerado automaticamente a partir do orçamento atual e das descrições cadastradas em Drinks."
+              >
                 {menu.drinks.length > 0 ? (
-                  <div className="space-y-4">
-                    <div className="flex justify-end">
-                      <PrimaryButton onClick={() => downloadEventMenuHtml(menu, `cardapio-${evento?.event_name || evento?.client_name || "evento"}.html`)}>
-                        <Download className="mr-2 h-4 w-4" /> Baixar cardápio
-                      </PrimaryButton>
+                  <div className="space-y-5">
+                    <div className="grid gap-4 rounded-xl border border-border bg-surface p-4 lg:grid-cols-[1fr_auto]">
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center gap-2 text-sm">
+                          <span className="rounded-full bg-primary/10 px-3 py-1 font-semibold text-primary">
+                            {menu.drinks.length} drinks
+                          </span>
+                          <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground">
+                            {menu.pages.length} {menu.pages.length === 1 ? "página" : "páginas"}
+                          </span>
+                          <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground">
+                            Layout {menu.layout}
+                          </span>
+                        </div>
+
+                        <div>
+                          <div className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                            Personalização
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {([
+                              ["automatic", "Automático"],
+                              ["library", "Biblioteca"],
+                              ["ai", "Gerar com IA"],
+                              ["upload", "Enviar arte"],
+                            ] as const).map(([mode, label]) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                onClick={() => handleMenuArtworkMode(mode)}
+                                className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                                  activeMode === mode
+                                    ? "border-primary bg-primary text-primary-foreground"
+                                    : "border-border bg-background hover:bg-muted"
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {activeMode === "ai" && (
+                          <button
+                            type="button"
+                            disabled={isGeneratingMenuArtwork}
+                            onClick={handleGenerateMenuArtwork}
+                            className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
+                          >
+                            {isGeneratingMenuArtwork ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Sparkles className="h-4 w-4" />
+                            )}
+                            {menuSettings?.artwork_url ? "Gerar nova arte com IA" : "Gerar arte com IA"}
+                          </button>
+                        )}
+
+                        {activeMode === "upload" && (
+                          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-muted">
+                            {isUploadingMenuArtwork ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Upload className="h-4 w-4" />
+                            )}
+                            {menuSettings?.artwork_url ? "Trocar arte enviada" : "Selecionar arte"}
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                              className="hidden"
+                              disabled={isUploadingMenuArtwork}
+                              onChange={(event) => {
+                                const file = event.target.files?.[0] || null;
+                                void handleUploadMenuArtwork(file);
+                                event.currentTarget.value = "";
+                              }}
+                            />
+                          </label>
+                        )}
+
+                        {menu.warnings.length > 0 && (
+                          <div className="space-y-1 text-xs text-amber-700">
+                            {menu.warnings.map((warning) => (
+                              <div key={warning} className="flex items-start gap-2">
+                                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                <span>{warning}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-start justify-end">
+                        <PrimaryButton
+                          disabled={isGeneratingMenuPdf}
+                          onClick={() => void handleDownloadMenuPdf(menu)}
+                        >
+                          {isGeneratingMenuPdf ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="mr-2 h-4 w-4" />
+                          )}
+                          Baixar PDF
+                        </PrimaryButton>
+                      </div>
                     </div>
+
                     <EventMenuPreview menu={menu} />
                   </div>
                 ) : (
                   <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-                    Nenhum drink selecionado no orçamento atual.
+                    Nenhum drink selecionado no orçamento atual. O cardápio será liberado assim que o orçamento tiver drinks salvos.
                   </div>
                 )}
               </SectionCard>
