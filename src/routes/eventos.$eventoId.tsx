@@ -1384,6 +1384,14 @@ function EventoInterna() {
     ? getSignatureIntegrationState(realContract.status, providerDetails)
     : "not_sent";
 
+  const finalSignedContractDoc = contractDocuments.find(
+    (doc) =>
+      doc.document_type === "signed_contract" &&
+      doc.is_final &&
+      doc.archive_status === "archived" &&
+      Boolean(doc.storage_path),
+  );
+
   const handleOpenReconciliation = async () => {
     if (!realContract?.id) return;
     setIsReconciling(true);
@@ -1478,7 +1486,11 @@ function EventoInterna() {
       const provider = getSignatureProvider(
         realContract.signature_provider || realContract.provider,
       );
-      setProviderDetails(await provider.syncStatus(realContract.id));
+      const nextStatus = await provider.syncStatus(realContract.id);
+      setProviderDetails(nextStatus);
+      const updatedContract = await eventContractsService.getContractByEventId(eventoId);
+      setRealContract(updatedContract);
+      await fetchContractDocuments();
       toast.success("Status da assinatura atualizado.");
     } catch (e: any) {
       toast.error(`Não foi possível atualizar o status: ${e.message}`);
@@ -1491,7 +1503,14 @@ function EventoInterna() {
   // Webhooks continuam sendo a fonte principal; este polling cobre atraso/falha de entrega
   // do webhook e mantém a tela atualizada sem exigir clique em "Atualizar status".
   useEffect(() => {
-    if (!realContract?.id || !["active", "sending"].includes(integrationState)) return;
+    const needsFinalArchive =
+      integrationState === "completed" && !finalSignedContractDoc;
+    if (
+      !realContract?.id ||
+      (!["active", "sending"].includes(integrationState) && !needsFinalArchive)
+    ) {
+      return;
+    }
 
     let cancelled = false;
     const sync = async () => {
@@ -1500,7 +1519,14 @@ function EventoInterna() {
           realContract.signature_provider || realContract.provider,
         );
         const next = await provider.syncStatus(realContract.id);
-        if (!cancelled) setProviderDetails(next);
+        if (!cancelled) {
+          setProviderDetails(next);
+          if (next.status === "signed" || next.status === "completed" || next.fullySigned) {
+            const updatedContract = await eventContractsService.getContractByEventId(eventoId);
+            if (!cancelled) setRealContract(updatedContract);
+            await fetchContractDocuments();
+          }
+        }
       } catch (error) {
         console.warn("[signature-auto-sync] Falha temporária ao sincronizar status:", error);
       }
@@ -1516,6 +1542,7 @@ function EventoInterna() {
     realContract?.signature_provider,
     realContract?.provider,
     integrationState,
+    finalSignedContractDoc?.id,
   ]);
 
   const handleDeleteContract = async () => {
@@ -3826,9 +3853,26 @@ function EventoInterna() {
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2 md:gap-3 shrink-0 w-full md:w-auto mt-4 md:mt-0">
-                          {realContract.signed_file_url ? (
+                          {realContract.signed_file_url || finalSignedContractDoc ? (
                             <PrimaryButton
-                              onClick={() => window.open(realContract.signed_file_url, "_blank")}
+                              onClick={async () => {
+                                try {
+                                  if (finalSignedContractDoc) {
+                                    const url = await contractDocumentService.getDocumentSignedUrl(
+                                      finalSignedContractDoc.id,
+                                    );
+                                    window.open(url, "_blank");
+                                    return;
+                                  }
+                                  if (realContract.signed_file_url) {
+                                    window.open(realContract.signed_file_url, "_blank");
+                                  }
+                                } catch (e: any) {
+                                  toast.error(
+                                    `Não foi possível abrir o contrato assinado: ${e.message}`,
+                                  );
+                                }
+                              }}
                               className="h-11 px-6 font-bold w-full sm:w-auto flex-1 sm:flex-none justify-center"
                             >
                               ABRIR CONTRATO ASSINADO
