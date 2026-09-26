@@ -118,9 +118,10 @@ serve(async (req: Request) => {
 
     // 6. Montar o documento canônico A4 com fonte e CSS embutidos
     const fullCanonicalHtml = `<!DOCTYPE html>
-<html lang="pt-BR" style="background:#ffffff; color:#0f172a;">
+<html lang="pt-BR" style="background:#ffffff; color:#0f172a; color-scheme:light;">
 <head>
   <meta charset="UTF-8">
+  <meta name="color-scheme" content="light only">
   <title>${documentTitle}</title>
   <style>
 ${CANONICAL_CONTRACT_DOCUMENT_CSS}
