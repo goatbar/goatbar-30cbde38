@@ -16,7 +16,15 @@ export function EventMenuPreview({ menu }: { menu: EventMenuModel }) {
             ))}
           </div>
           <div className="min-h-[12%] text-center text-[#7b1f2c]">
-            {menu.subtitle && <div className="font-display text-[clamp(15px,2.5vw,24px)]">{menu.subtitle}</div>}
+            {menu.personalization.kind === "wedding" ? (
+              <div>
+                <div className="font-display text-[clamp(28px,5vw,50px)] italic">{menu.personalization.initials}</div>
+                <div className="font-display text-[clamp(12px,2vw,18px)]">{menu.personalization.label}</div>
+                {menu.personalization.date && <div className="mt-1 text-[10px] tracking-[0.2em]">{menu.personalization.date}</div>}
+              </div>
+            ) : (
+              <div className="font-display text-[clamp(18px,3vw,30px)] italic">{menu.personalization.label}</div>
+            )}
           </div>
           <div className="mt-auto border-t border-[#7b1f2c]/20 pt-3 text-center text-[10px] font-semibold tracking-[0.28em] text-[#7b1f2c]">GOAT BAR</div>
         </div>
