@@ -9,6 +9,12 @@ describe("intent determinístico de link da GIA", () => {
   ]) {
     it(phrase, () => expect(resolveBudgetRequestLinkIntent(phrase).matched).toBe(true));
   }
+  it("não confunde solicitação de dados do contrato com orçamento", () =>
+    expect(
+      resolveBudgetRequestLinkIntent(
+        "Gia, você consegue gerar o link de solicitação de dados para contrato do evento da Mariana & Gustavo de 23.01.27?",
+      ).matched,
+    ).toBe(false));
   it("extrai dica opcional", () =>
     expect(
       resolveBudgetRequestLinkIntent("GIA, gere um link de orçamento para Mariana")
