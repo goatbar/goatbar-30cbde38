@@ -176,7 +176,7 @@ export const generateCommercialProposalPdfTool: GoatAIToolDefinition = {
   domain: "EVENTS",
   sourceTable: "events,event_budget_versions,generated_proposals",
   description:
-    "Gera a proposta comercial oficial em PDF para um evento, usando o orçamento atual e o modelo correto do tipo de evento. Use somente depois de resolver o evento e obter seu event_id. Retorna o link real do PDF.",
+    "Gera a proposta comercial oficial em PDF. Use SOMENTE quando o usuário pedir explicitamente uma proposta ou proposta comercial. A palavra 'orçamento' sozinha é consulta e NÃO autoriza esta ferramenta. Use depois de resolver o event_id. Retorna o PDF real.",
   parameters: {
     type: "object",
     properties: {
@@ -194,7 +194,7 @@ export const generateEventMenuPdfTool: GoatAIToolDefinition = {
   domain: "EVENTS",
   sourceTable: "events,event_budget_versions,drinks,event_menu_settings",
   description:
-    "Gera o cardápio oficial GOAT Bar em PDF usando os drinks do orçamento atual, descrições cadastradas e personalização do evento. Use somente depois de resolver o event_id. Retorna um link real e temporário para o PDF.",
+    "Gera o cardápio oficial GOAT Bar em PDF. Use SOMENTE quando o usuário pedir explicitamente PDF, arquivo ou link do cardápio/menu. Pedidos como 'me manda os drinks', 'qual o cardápio?' ou 'quais bebidas?' são consultas e devem usar get_event_details, sem gerar PDF. Use depois de resolver o event_id.",
   parameters: {
     type: "object",
     properties: {
