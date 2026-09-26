@@ -49,6 +49,7 @@ import {
 } from "../events/confirmed-events.ts";
 import { resolveBudgetRequestLinkIntent } from "../events/budget-request-intent.ts";
 import { resolveContractDataRequestLinkIntent } from "../events/contract-data-request-intent.ts";
+import { resolveEventDocumentCommandIntent } from "../events/document-command-intent.ts";
 import {
   formatPendingBudgetRequestsReply,
   resolvePendingBudgetRequestsIntent,
@@ -266,7 +267,9 @@ export class GoatAIGeminiAgent {
       let resolvedEvent: any = null;
 
       const recentEntities = await this.conversationManager.getRecentEntities(conversation.id);
-      const contextualMatch = matchContextualEventReference(input.message, recentEntities);
+      const contextualMatch = contractDataLinkIntent.dateHint
+        ? { matched: false, eventId: null }
+        : matchContextualEventReference(input.message, recentEntities);
 
       if (contextualMatch.matched && contextualMatch.eventId) {
         const lookup = await this.toolRegistry.executeTool(
@@ -286,14 +289,17 @@ export class GoatAIGeminiAgent {
       }
 
       if (!resolvedEvent) {
+        const primaryArgs = contractDataLinkIntent.dateHint
+          ? { query: "", date: contractDataLinkIntent.dateHint, limit: 20 }
+          : { query: input.message, limit: 10 };
         const search = await this.toolRegistry.executeTool(
           "search_events",
-          { query: input.message, limit: 10 },
+          primaryArgs,
           { ...context, toolCallId: `${correlationId}_contract_data_event_search` },
         );
         deterministicCalls.push({
           toolName: "search_events",
-          arguments: { query: input.message, limit: 10 },
+          arguments: primaryArgs,
           result: search.data,
           status: search.success ? "success" : "error",
         });
@@ -302,11 +308,26 @@ export class GoatAIGeminiAgent {
           ? search.data.events
           : [];
 
-        if (contractDataLinkIntent.dateHint) {
-          const exactDate = candidates.filter(
-            (event: any) => String(event.date || "").slice(0, 10) === contractDataLinkIntent.dateHint,
+        if (contractDataLinkIntent.dateHint && candidates.length > 1) {
+          const refinedArgs = {
+            query: input.message,
+            date: contractDataLinkIntent.dateHint,
+            limit: 10,
+          };
+          const refined = await this.toolRegistry.executeTool(
+            "search_events",
+            refinedArgs,
+            { ...context, toolCallId: `${correlationId}_contract_data_event_refine` },
           );
-          if (exactDate.length > 0) candidates = exactDate;
+          deterministicCalls.push({
+            toolName: "search_events",
+            arguments: refinedArgs,
+            result: refined.data,
+            status: refined.success ? "success" : "error",
+          });
+          const refinedCandidates =
+            refined.success && Array.isArray(refined.data?.events) ? refined.data.events : [];
+          if (refinedCandidates.length > 0) candidates = refinedCandidates;
         }
 
         if (candidates.length === 1) {
@@ -382,6 +403,176 @@ export class GoatAIGeminiAgent {
         "assistant",
         reply,
         linkResult.success ? "action_result" : "text",
+      );
+      return {
+        conversationId: conversation.id,
+        messageId: assistantMsg.id,
+        reply,
+        toolCallsExecuted: deterministicCalls,
+        pendingAction: null,
+      };
+    }
+
+    // Documentos do evento não dependem da escolha de ferramenta pelo LLM.
+    // A intenção, a data e o evento são resolvidos deterministicamente.
+    const documentIntent = resolveEventDocumentCommandIntent(input.message);
+    if (documentIntent.matched && documentIntent.action) {
+      const deterministicCalls: any[] = [];
+      let resolvedEvent: any = null;
+      let candidates: any[] = [];
+
+      const recentEntities = await this.conversationManager.getRecentEntities(conversation.id);
+
+      // Data explícita/relativa sempre vence o foco antigo da conversa.
+      if (!documentIntent.dateHint) {
+        const contextualMatch = matchContextualEventReference(input.message, recentEntities);
+        if (contextualMatch.matched && contextualMatch.eventId) {
+          const lookupArgs = { event_id: contextualMatch.eventId };
+          const lookup = await this.toolRegistry.executeTool(
+            "search_events",
+            lookupArgs,
+            { ...context, toolCallId: `${correlationId}_document_context_event` },
+          );
+          deterministicCalls.push({
+            toolName: "search_events",
+            arguments: lookupArgs,
+            result: lookup.data,
+            status: lookup.success ? "success" : "error",
+          });
+          resolvedEvent =
+            lookup.success && Array.isArray(lookup.data?.events)
+              ? lookup.data.events[0] || null
+              : null;
+        }
+      }
+
+      if (!resolvedEvent) {
+        const primaryArgs = documentIntent.dateHint
+          ? { query: "", date: documentIntent.dateHint, limit: 20 }
+          : { query: input.message, limit: 10 };
+        const primary = await this.toolRegistry.executeTool(
+          "search_events",
+          primaryArgs,
+          { ...context, toolCallId: `${correlationId}_document_event_search` },
+        );
+        deterministicCalls.push({
+          toolName: "search_events",
+          arguments: primaryArgs,
+          result: primary.data,
+          status: primary.success ? "success" : "error",
+        });
+        candidates =
+          primary.success && Array.isArray(primary.data?.events) ? primary.data.events : [];
+
+        if (documentIntent.dateHint && candidates.length > 1) {
+          const refinedArgs = {
+            query: input.message,
+            date: documentIntent.dateHint,
+            limit: 10,
+          };
+          const refined = await this.toolRegistry.executeTool(
+            "search_events",
+            refinedArgs,
+            { ...context, toolCallId: `${correlationId}_document_event_refine` },
+          );
+          deterministicCalls.push({
+            toolName: "search_events",
+            arguments: refinedArgs,
+            result: refined.data,
+            status: refined.success ? "success" : "error",
+          });
+          const refinedCandidates =
+            refined.success && Array.isArray(refined.data?.events) ? refined.data.events : [];
+          if (refinedCandidates.length > 0) candidates = refinedCandidates;
+        }
+
+        if (candidates.length === 1) resolvedEvent = candidates[0];
+      }
+
+      if (!resolvedEvent && candidates.length > 1) {
+        const actionLabel =
+          documentIntent.action === "generate_menu"
+            ? "gerar o cardápio"
+            : documentIntent.action === "generate_proposal"
+              ? "gerar a proposta comercial"
+              : "gerar o contrato e enviar para assinatura";
+        const options = candidates.slice(0, 5).map((event: any, index: number) => {
+          const name = event.event_name || event.client_name || "Evento";
+          const date = event.date
+            ? String(event.date).slice(0, 10).split("-").reverse().join("/")
+            : "sem data";
+          return `${index + 1}. ${name} — ${date}`;
+        });
+        const reply =
+          `Encontrei mais de um evento compatível para ${actionLabel}. Qual deles devo usar?\n\n` +
+          options.join("\n");
+        const assistantMsg = await this.conversationManager.saveMessage(
+          conversation.id,
+          "assistant",
+          reply,
+          "text",
+        );
+        return {
+          conversationId: conversation.id,
+          messageId: assistantMsg.id,
+          reply,
+          toolCallsExecuted: deterministicCalls,
+          pendingAction: null,
+        };
+      }
+
+      if (!resolvedEvent?.id) {
+        const reply =
+          "Não encontrei com segurança o evento solicitado. Informe o nome do evento/cliente ou a data.";
+        const assistantMsg = await this.conversationManager.saveMessage(
+          conversation.id,
+          "assistant",
+          reply,
+          "text",
+        );
+        return {
+          conversationId: conversation.id,
+          messageId: assistantMsg.id,
+          reply,
+          toolCallsExecuted: deterministicCalls,
+          pendingAction: null,
+        };
+      }
+
+      await this.conversationManager.saveRecentEvents(
+        conversation.id,
+        [toContextualEvent(resolvedEvent)],
+        [resolvedEvent.id],
+      );
+      await this.conversationManager.setLastFocusedEvent(conversation.id, resolvedEvent.id);
+
+      const toolName =
+        documentIntent.action === "generate_menu"
+          ? "generate_event_menu_pdf"
+          : documentIntent.action === "generate_proposal"
+            ? "generate_commercial_proposal_pdf"
+            : "generate_contract_and_send_signature";
+      const toolArgs = { event_id: resolvedEvent.id };
+      const result = await this.toolRegistry.executeTool(
+        toolName,
+        toolArgs,
+        { ...context, toolCallId: `${correlationId}_${documentIntent.action}` },
+      );
+      deterministicCalls.push({
+        toolName,
+        arguments: toolArgs,
+        result: result.data,
+        status: result.success ? "success" : "error",
+      });
+
+      const reply = result.success
+        ? result.message!
+        : `Não foi possível concluir a solicitação: ${result.error || "erro desconhecido"}.`;
+      const assistantMsg = await this.conversationManager.saveMessage(
+        conversation.id,
+        "assistant",
+        reply,
+        result.success ? "action_result" : "text",
       );
       return {
         conversationId: conversation.id,
