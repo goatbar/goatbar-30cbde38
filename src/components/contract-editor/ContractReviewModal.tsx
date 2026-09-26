@@ -31,8 +31,9 @@ interface ContractReviewModalProps {
   compiledHtml: string;
   rawTemplateContent: string;
   compiledVariables: Record<string, any>;
-  onConfirmSend: (finalCleanHtml?: string) => void;
+  onConfirmSend: (finalCleanHtml?: string) => void | Promise<void>;
   onRegenerateContract?: () => void;
+  isSubmitting?: boolean;
 }
 
 export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
@@ -46,6 +47,7 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
   compiledVariables,
   onConfirmSend,
   onRegenerateContract,
+  isSubmitting = false,
 }) => {
   // Estado CANÔNICO ÚNICO do HTML na revisão
   const [reviewHtml, setReviewHtml] = useState(compiledHtml);
@@ -372,20 +374,19 @@ export const ContractReviewModal: React.FC<ContractReviewModalProps> = ({
 
             <button
               type="button"
-              disabled={unfilled.length > 0}
+              disabled={unfilled.length > 0 || isSubmitting}
               onClick={() => {
                 const exportHtml = prepareContractExportHtml(reviewHtml);
-                onConfirmSend(exportHtml);
-                onClose();
+                void onConfirmSend(exportHtml);
               }}
               className={`text-xs px-5 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-2 ${
-                unfilled.length > 0
+                unfilled.length > 0 || isSubmitting
                   ? "bg-muted text-muted-foreground cursor-not-allowed"
                   : "bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-primary/20"
               }`}
             >
               <FileCheck2 className="h-4 w-4" />
-              <span>Aprovar e Enviar para Assinatura</span>
+              <span>{isSubmitting ? "Gerando PDF e enviando..." : "Aprovar e Enviar para Assinatura"}</span>
             </button>
           </div>
         </footer>
