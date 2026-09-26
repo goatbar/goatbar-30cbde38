@@ -215,10 +215,49 @@ function renderContract(template: any, vars: Record<string, string>) {
   const unresolved = Array.from(new Set(Array.from(body.matchAll(/\{\{\s*([a-zA-Z0-9._]+)\s*\}\}|\[([A-Z0-9_]+)\]/g)).map((m) => m[1] || m[2])));
   return { html: body, unresolved };
 }
-async function signedUrl(admin: any, bucket: string, path: string) {
-  const { data, error } = await admin.storage.from(bucket).createSignedUrl(path, 60 * 60 * 24 * 7);
-  if (error || !data?.signedUrl) throw error || new Error("Falha ao criar link assinado.");
-  return data.signedUrl;
+function randomShareToken() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+async function createDocumentShareLink(
+  admin: any,
+  supabaseUrl: string,
+  input: {
+    eventId: string;
+    documentKind: "menu" | "contract" | "proposal";
+    bucket: string;
+    path: string;
+    filename: string;
+    createdBy?: string | null;
+    expiresInSeconds: number;
+  },
+) {
+  const token = randomShareToken();
+  const tokenHash = await digest(new TextEncoder().encode(token));
+  const expiresAt = new Date(Date.now() + input.expiresInSeconds * 1000).toISOString();
+
+  const { error } = await admin.from("document_share_links").insert({
+    token_hash: tokenHash,
+    event_id: input.eventId,
+    document_kind: input.documentKind,
+    bucket_id: input.bucket,
+    object_path: input.path,
+    filename: input.filename,
+    mime_type: "application/pdf",
+    expires_at: expiresAt,
+    created_by: input.createdBy || null,
+  });
+  if (error) throw error;
+
+  return {
+    url: supabaseUrl + "/functions/v1/goat-ai-document-share?token=" + encodeURIComponent(token),
+    expiresAt,
+  };
 }
 async function proposal(admin: any, url: string, key: string, userId: string, eventId: string, requestId: string) {
   const { data: budget, error } = await admin.from("event_budget_versions").select("id").eq("event_id", eventId).eq("is_current", true).maybeSingle();
@@ -230,7 +269,7 @@ async function proposal(admin: any, url: string, key: string, userId: string, ev
   return { success: true, action: "generate_proposal", pdf_url: p.pdf_url, filename: p.filename, proposal_id: p.proposal?.id || null,
     message: "Proposta comercial gerada com sucesso.\n\nPDF: " + p.pdf_url };
 }
-async function menu(admin: any, url: string, key: string, event: any, requestId: string) {
+async function menu(admin: any, url: string, key: string, userId: string, event: any, requestId: string) {
   const results = await Promise.all([
     admin.from("event_budget_versions").select("selected_drinks").eq("event_id", event.id).eq("is_current", true).maybeSingle(),
     admin.from("drinks").select("id,nome,descricao,categoria"),
@@ -251,9 +290,25 @@ async function menu(admin: any, url: string, key: string, event: any, requestId:
   const path = "events/" + event.id + "/menus/" + Date.now() + "-" + filename;
   const up = await admin.storage.from("generated-event-menus").upload(path, pdf, { contentType: "application/pdf", upsert: false, cacheControl: "3600" });
   if (up.error) throw up.error;
-  const link = await signedUrl(admin, "generated-event-menus", path);
-  return { success: true, action: "generate_menu", pdf_url: link, filename, storage_path: path, expires_in: "7 dias",
-    message: "Cardápio gerado com sucesso.\n\nPDF: " + link };
+  const share = await createDocumentShareLink(admin, url, {
+    eventId: event.id,
+    documentKind: "menu",
+    bucket: "generated-event-menus",
+    path,
+    filename,
+    createdBy: userId,
+    expiresInSeconds: 60 * 60 * 24 * 7,
+  });
+  return {
+    success: true,
+    action: "generate_menu",
+    pdf_url: share.url,
+    filename,
+    storage_path: path,
+    expires_at: share.expiresAt,
+    expires_in: "7 dias",
+    message: "Cardápio gerado com sucesso.\n\nPDF: " + share.url,
+  };
 }
 async function contractRecords(admin: any, event: any) {
   const cr = await admin.from("event_contracts").select("*").eq("event_id", event.id).neq("status", "cancelled").order("created_at", { ascending: false });
@@ -335,7 +390,17 @@ async function contractAndSend(admin: any, url: string, key: string, userId: str
   if (active.data && ["pending_signature","signed","completed"].includes(active.data.dispatch_status)) {
     let link = contract.signed_file_url || null;
     if (!link && contract.generated_file_path) {
-      try { link = await signedUrl(admin, "contract-documents", contract.generated_file_path); } catch {}
+      try {
+        link = (await createDocumentShareLink(admin, url, {
+          eventId: event.id,
+          documentKind: "contract",
+          bucket: "contract-documents",
+          path: contract.generated_file_path,
+          filename: "contrato-" + slug(event.event_name || event.client_name) + ".pdf",
+          createdBy: userId,
+          expiresInSeconds: 60 * 60 * 24,
+        })).url;
+      } catch {}
     }
     if (!link) link = contract.generated_file_url || null;
     return { success: true, action: "generate_contract_and_send", reused: true, contract_id: contract.id,
@@ -353,7 +418,16 @@ async function contractAndSend(admin: any, url: string, key: string, userId: str
   const path = "events/" + event.id + "/contracts/" + contract.id + "/" + hash.slice(0, 16) + "-" + filename;
   const up = await admin.storage.from("contract-documents").upload(path, pdf, { contentType: "application/pdf", upsert: true, cacheControl: "3600" });
   if (up.error) throw up.error;
-  const link = await signedUrl(admin, "contract-documents", path);
+  const contractShare = await createDocumentShareLink(admin, url, {
+    eventId: event.id,
+    documentKind: "contract",
+    bucket: "contract-documents",
+    path,
+    filename,
+    createdBy: userId,
+    expiresInSeconds: 60 * 60 * 24,
+  });
+  const link = contractShare.url;
   const snapshot = contract.legal_snapshot || {
     captured_at: new Date().toISOString(),
     cliente: { nome: cv.vars["cliente.nome"], documento: cv.vars["cliente.documento"], email: cv.vars["cliente.email"] },
@@ -391,7 +465,7 @@ serve(async (req) => {
     if (ev.error || !ev.data) return responseJson({ success: false, error: "Evento não encontrado." }, 404);
     console.info("[goat-ai-document-actions]", { requestId, action, eventId, userId, channel: body?.channel || null });
     if (action === "generate_proposal") return responseJson(await proposal(admin, url, key, userId, eventId, requestId));
-    if (action === "generate_menu") return responseJson(await menu(admin, url, key, ev.data, requestId));
+    if (action === "generate_menu") return responseJson(await menu(admin, url, key, userId, ev.data, requestId));
     if (action === "generate_contract_and_send") return responseJson(await contractAndSend(admin, url, key, userId, ev.data, requestId));
     return responseJson({ success: false, error: "Ação de documento desconhecida." }, 400);
   } catch (error: any) {
