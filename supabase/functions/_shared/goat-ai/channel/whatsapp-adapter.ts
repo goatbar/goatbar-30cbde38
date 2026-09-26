@@ -117,6 +117,63 @@ export class WhatsAppChannelAdapter {
     }
   }
 
+  public async sendDocumentMessage(
+    to: string,
+    documentUrl: string,
+    filename: string,
+    caption?: string,
+    correlationId?: string,
+  ): Promise<boolean> {
+    const cleanTo = to.replace(/[^0-9]/g, "");
+    if (!this.config.accessToken || !this.config.phoneNumberId || !documentUrl) {
+      return false;
+    }
+
+    const document: Record<string, string> = {
+      link: documentUrl,
+      filename: filename || "documento.pdf",
+    };
+    if (caption) {
+      document.caption = formatWhatsAppMessage(caption).slice(0, 1024);
+    }
+
+    try {
+      const res = await fetch(getWhatsAppMessagesUrl(this.config.phoneNumberId), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.config.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: cleanTo,
+          type: "document",
+          document,
+        }),
+      });
+
+      const responseBody = await res.json().catch(() => ({}));
+      const metaId = responseBody?.messages?.[0]?.id || null;
+      if (!res.ok || !metaId) {
+        console.error(
+          `[GOAT-AI][WHATSAPP][DOCUMENT_SEND_ERROR] correlationId=${correlationId || "none"} httpStatus=${res.status} metaError=${responseBody?.error?.message || "unknown"} recipient=${maskPhone(cleanTo)}`,
+        );
+        return false;
+      }
+
+      console.log(
+        `[GOAT-AI][WHATSAPP][DOCUMENT_SEND_SUCCESS] correlationId=${correlationId || "none"} metaMessageId=${metaId} recipient=${maskPhone(cleanTo)}`,
+      );
+      return true;
+    } catch (err: any) {
+      console.error(
+        `[GOAT-AI][WHATSAPP][DOCUMENT_SEND_ERROR] correlationId=${correlationId || "none"} error="${err?.message || String(err)}" recipient=${maskPhone(cleanTo)}`,
+      );
+      return false;
+    }
+  }
+
   public async sendTemplateMessage(
     to: string,
     templateName: string,
@@ -372,8 +429,40 @@ export class WhatsAppChannelAdapter {
 
     console.log(`[GOAT-AI][WHATSAPP][AGENT_COMPLETED] correlationId=${correlationId} turnId=${turnResult.turnId} status=${turnResult.turnStatus} toolsExecuted=${turnResult.toolCallsExecuted?.length || 0} replyLength=${turnResult.reply?.length || 0}`);
 
-    // 4. Send EXACTLY ONE final reply back to WhatsApp
-    if (turnResult.reply) {
+    // 4. Se o turno gerou explicitamente um PDF, tente entregar o arquivo real.
+    // Se a Meta não conseguir buscar o documento, caia para texto com URL clicável.
+    const documentToolNames = new Set([
+      "generate_event_menu_pdf",
+      "generate_commercial_proposal_pdf",
+      "generate_contract_and_send_signature",
+    ]);
+    const generatedDocumentCall = (turnResult.toolCallsExecuted || []).find(
+      (call: any) =>
+        call?.status === "success" &&
+        documentToolNames.has(call?.toolName) &&
+        typeof call?.result?.pdf_url === "string" &&
+        call.result.pdf_url.startsWith("http"),
+    );
+
+    let deliveredAsDocument = false;
+    if (generatedDocumentCall) {
+      const result = generatedDocumentCall.result || {};
+      const caption =
+        generatedDocumentCall.toolName === "generate_event_menu_pdf"
+          ? "Cardápio em PDF"
+          : generatedDocumentCall.toolName === "generate_commercial_proposal_pdf"
+            ? "Proposta comercial em PDF"
+            : "Contrato em PDF";
+      deliveredAsDocument = await this.sendDocumentMessage(
+        senderPhone,
+        result.pdf_url,
+        result.filename || "documento-goatbar.pdf",
+        caption,
+        correlationId,
+      );
+    }
+
+    if (!deliveredAsDocument && turnResult.reply) {
       const sendOk = await this.sendTextMessage(senderPhone, turnResult.reply, correlationId);
       if (!sendOk) {
         console.error(`[GOAT-AI][WHATSAPP][WHATSAPP_SEND_ERROR] correlationId=${correlationId} recipient=${maskedPhone} reason="sendTextMessage returned false"`);
