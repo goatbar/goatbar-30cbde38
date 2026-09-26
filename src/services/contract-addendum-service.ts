@@ -54,6 +54,30 @@ export interface EffectiveBudgetVersionResult {
   addendumNumber?: number;
 }
 
+export interface AddendumSignatureSignerStatus {
+  id: string;
+  full_name: string;
+  email: string;
+  status: string | null;
+  notification_status: string | null;
+  notified_at: string | null;
+  signed_at: string | null;
+  signature_url?: string | null;
+}
+
+export interface AddendumSignatureStatus {
+  signatureRequestId?: string | null;
+  status: string;
+  dispatchStatus: string;
+  sentAt: string | null;
+  externalDocumentId: string | null;
+  externalAssignmentId: string | null;
+  signedCount: number;
+  signerCount: number;
+  signers: AddendumSignatureSignerStatus[];
+  upstreamSynced?: boolean;
+}
+
 export function assertAddendumReadyForSignature(addendum: Pick<ContractAddendumRow, "generated_html" | "original_contract_date" | "financial_snapshot">) {
   const html=addendum.generated_html||"";
   if (!addendum.original_contract_date) throw new Error("PENDING_ORIGINAL_SIGNATURE_DATE");
@@ -781,52 +805,102 @@ export const contractAddendumService = {
   },
 
   /**
-   * Sincroniza o status de assinatura do aditivo com a Assinafy.
+   * Sincroniza o status do Termo Aditivo com a Assinafy e retorna o
+   * acompanhamento completo do envio (convites + assinaturas).
    */
-  async syncAddendumStatus(addendumId: string): Promise<{ status: string; fullySigned: boolean }> {
-    const { data: addendum } = await supabase
+  async syncAddendumStatus(addendumId: string): Promise<AddendumSignatureStatus> {
+    const { data: addendum, error: addendumError } = await supabase
       .from("contract_addendums")
-      .select("id, status, external_document_id, contract_id")
+      .select("id, status, external_document_id, external_assignment_id, sent_for_signature_at")
       .eq("id", addendumId)
       .single();
 
-    if (!addendum) throw new Error("Aditivo não encontrado.");
+    if (addendumError || !addendum) throw new Error("Aditivo não encontrado.");
 
-    if (addendum.status === "signed") {
-      return { status: "signed", fullySigned: true };
-    }
-
-    if (!addendum.external_document_id) {
-      return { status: addendum.status, fullySigned: false };
-    }
-
-    // Verifica na contract_signature_requests se a Assinafy concluiu o documento
-    const { data: sigReq } = await supabase
+    const { data: sigReq, error: sigReqError } = await (supabase as any)
       .from("contract_signature_requests")
-      .select("dispatch_status, internal_status, signed_file_path")
-      .eq("external_document_id", addendum.external_document_id)
+      .select("id, dispatch_status, internal_status, sent_at, external_document_id, external_assignment_id")
+      .eq("addendum_id", addendumId)
+      .eq("document_kind", "addendum")
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
-    if (
-      sigReq &&
-      (sigReq.dispatch_status === "completed" ||
-        sigReq.dispatch_status === "signed" ||
-        sigReq.internal_status === "signed")
-    ) {
-      await supabase
-        .from("contract_addendums")
-        .update({
-          status: "signed",
-          fully_signed_at: new Date().toISOString(),
-          signed_file_url: sigReq.signed_file_path || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", addendumId);
+    if (sigReqError) throw sigReqError;
 
-      return { status: "signed", fullySigned: true };
+    if (!sigReq) {
+      return {
+        signatureRequestId: null,
+        status: addendum.status,
+        dispatchStatus: addendum.status,
+        sentAt: addendum.sent_for_signature_at || null,
+        externalDocumentId: addendum.external_document_id || null,
+        externalAssignmentId: addendum.external_assignment_id || null,
+        signedCount: addendum.status === "signed" ? 1 : 0,
+        signerCount: 0,
+        signers: [],
+        upstreamSynced: false,
+      };
     }
 
-    return { status: addendum.status, fullySigned: false };
+    let synced: any = null;
+    try {
+      const { data, error } = await supabase.functions.invoke("assinafy-status", {
+        method: "POST",
+        body: { action: "sync", signatureRequestId: sigReq.id },
+      });
+      if (error) {
+        console.warn("[syncAddendumStatus] Falha no sync remoto; usando estado local:", error);
+      } else {
+        synced = data;
+      }
+    } catch (error) {
+      console.warn("[syncAddendumStatus] Erro no sync remoto; usando estado local:", error);
+    }
+
+    let signers = Array.isArray(synced?.signers) ? synced.signers : [];
+    if (signers.length === 0) {
+      const { data: localSigners } = await (supabase as any)
+        .from("contract_signature_signers")
+        .select("id,full_name,email,status,signature_url,notification_status,notified_at,signed_at")
+        .eq("signature_request_id", sigReq.id)
+        .order("created_at", { ascending: true });
+      signers = localSigners || [];
+    }
+
+    const signedCount =
+      typeof synced?.signed_count === "number"
+        ? synced.signed_count
+        : signers.filter((signer: any) => signer.status === "signed" || Boolean(signer.signed_at)).length;
+    const signerCount =
+      typeof synced?.signer_count === "number" ? synced.signer_count : signers.length;
+
+    const dispatchStatus =
+      synced?.dispatch_status ||
+      synced?.status ||
+      sigReq.dispatch_status ||
+      addendum.status;
+
+    return {
+      signatureRequestId: sigReq.id,
+      status: synced?.status || dispatchStatus,
+      dispatchStatus,
+      sentAt: synced?.sent_at || sigReq.sent_at || addendum.sent_for_signature_at || null,
+      externalDocumentId:
+        synced?.externalDocumentId ||
+        sigReq.external_document_id ||
+        addendum.external_document_id ||
+        null,
+      externalAssignmentId:
+        synced?.externalAssignmentId ||
+        sigReq.external_assignment_id ||
+        addendum.external_assignment_id ||
+        null,
+      signedCount,
+      signerCount,
+      signers: signers as AddendumSignatureSignerStatus[],
+      upstreamSynced: Boolean(synced?.upstream_synced),
+    };
   },
 
   /**

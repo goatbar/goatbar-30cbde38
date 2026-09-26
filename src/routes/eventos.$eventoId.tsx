@@ -78,6 +78,7 @@ import { AddendumDiffPreviewModal } from "@/components/contract-editor/AddendumD
 import {
   contractAddendumService,
   type ContractAddendumRow,
+  type AddendumSignatureStatus,
 } from "@/services/contract-addendum-service";
 import {
   contractDocumentService,
@@ -281,6 +282,7 @@ function EventoInterna() {
 
   // --- Contract Addendum States ---
   const [addendums, setAddendums] = useState<ContractAddendumRow[]>([]);
+  const [addendumSignatureStatuses, setAddendumSignatureStatuses] = useState<Record<string, AddendumSignatureStatus>>({});
   const [addendumComparison, setAddendumComparison] = useState<ContractAddendumComparison | null>(null);
   const [showAddendumDiffModal, setShowAddendumDiffModal] = useState(false);
   const [activeAddendumForReview, setActiveAddendumForReview] = useState<ContractAddendumRow | null>(null);
@@ -1059,21 +1061,50 @@ function EventoInterna() {
 
   const fetchAddendumsAndEvaluate = async (contractId: string, currentB: any) => {
     try {
-      const list = await contractAddendumService.listAddendumsByContract(contractId);
-      setAddendums(list);
+      let list = await contractAddendumService.listAddendumsByContract(contractId);
       await fetchContractDocuments();
 
+      const tracking: Record<string, AddendumSignatureStatus> = {};
+      let statusChanged = false;
+
       for (const add of list) {
-        if (add.status === "sent" && add.external_document_id) {
+        if (["sent", "signed"].includes(add.status)) {
           try {
-            await contractAddendumService.syncAddendumStatus(add.id);
+            const status = await contractAddendumService.syncAddendumStatus(add.id);
+            tracking[add.id] = status;
+            const normalizedSigned =
+              status.status === "completed" ||
+              status.status === "signed" ||
+              status.dispatchStatus === "completed" ||
+              status.dispatchStatus === "signed";
+            if (normalizedSigned && add.status !== "signed") statusChanged = true;
           } catch (e) {
             console.warn("Falha ao sincronizar status do aditivo:", e);
           }
         }
       }
 
+      if (statusChanged) {
+        list = await contractAddendumService.listAddendumsByContract(contractId);
+        await fetchContractDocuments();
+      }
+
+      setAddendums(list);
+      setAddendumSignatureStatuses(tracking);
+
       if (realContract?.status === "signed" && currentB) {
+        const currentBudgetAlreadyCovered = list.some(
+          (add) =>
+            ["draft", "sent", "signed"].includes(add.status) &&
+            add.updated_budget_version_id === currentB.id,
+        );
+
+        // Se já existe aditivo para a proposta atual, não há nova pendência a alertar.
+        if (currentBudgetAlreadyCovered) {
+          setAddendumRequiresAction(false);
+          return;
+        }
+
         try {
           const effective = await contractAddendumService.getEffectiveBudgetVersion(contractId, eventoId);
           setEffectiveBudgetVersion(effective.budgetVersion);
@@ -4446,7 +4477,12 @@ function EventoInterna() {
                     subtitle="Histórico completo de minutas, contratos assinados, termos aditivos e anexos"
                     action={
                       <div className="flex flex-wrap items-center justify-end gap-2">
-                        {(realContract?.status === "signed" || integrationState === "completed") && (
+                        {(realContract?.status === "signed" || integrationState === "completed") &&
+                          !addendums.some(
+                            (add) =>
+                              ["draft", "sent", "signed"].includes(add.status) &&
+                              add.updated_budget_version_id === currentBudget?.id,
+                          ) && (
                           <PrimaryButton
                             onClick={handleOpenAddendumFlow}
                             disabled={isGeneratingAddendum}
@@ -4467,7 +4503,13 @@ function EventoInterna() {
                   >
                       <div className="space-y-4">
                         {/* Banner de alerta quando alteração pós-contrato é detectada */}
-                        {(realContract?.status === "signed" || integrationState === "completed") && addendumRequiresAction && (
+                        {(realContract?.status === "signed" || integrationState === "completed") &&
+                          addendumRequiresAction &&
+                          !addendums.some(
+                            (add) =>
+                              ["draft", "sent", "signed"].includes(add.status) &&
+                              add.updated_budget_version_id === currentBudget?.id,
+                          ) && (
                           <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div className="flex items-start gap-3">
                               <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
@@ -4674,6 +4716,78 @@ function EventoInterna() {
                                         </span>
                                       )}
                                     </div>
+
+                                    {["sent", "signed"].includes(add.status) && (() => {
+                                      const tracking = addendumSignatureStatuses[add.id];
+                                      if (!tracking) {
+                                        return (
+                                          <div className="mt-2 text-[11px] text-muted-foreground flex items-center gap-1.5">
+                                            <Clock className="h-3.5 w-3.5" />
+                                            Carregando acompanhamento da assinatura...
+                                          </div>
+                                        );
+                                      }
+
+                                      const notifiedCount = tracking.signers.filter(
+                                        (signer) => signer.notification_status === "sent" || Boolean(signer.notified_at),
+                                      ).length;
+                                      const sentLabel = tracking.sentAt
+                                        ? `Enviado à Assinafy em ${new Date(tracking.sentAt).toLocaleString("pt-BR")}`
+                                        : "Envio registrado na Assinafy";
+                                      const signaturesLabel = tracking.signerCount > 0
+                                        ? `${tracking.signedCount}/${tracking.signerCount} assinatura(s)`
+                                        : add.status === "signed"
+                                          ? "Assinatura concluída"
+                                          : "Aguardando dados dos signatários";
+
+                                      return (
+                                        <div className="mt-2 space-y-1.5">
+                                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+                                            <span className="flex items-center gap-1 text-emerald-600">
+                                              <CheckCircle2 className="h-3.5 w-3.5" />
+                                              {sentLabel}
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                              {notifiedCount === tracking.signerCount && tracking.signerCount > 0 ? (
+                                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                              ) : (
+                                                <Clock className="h-3.5 w-3.5" />
+                                              )}
+                                              Convites: {notifiedCount}/{tracking.signerCount || "—"} enviados
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                              {tracking.signerCount > 0 && tracking.signedCount === tracking.signerCount ? (
+                                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                              ) : (
+                                                <Clock className="h-3.5 w-3.5" />
+                                              )}
+                                              {signaturesLabel}
+                                            </span>
+                                          </div>
+
+                                          {tracking.signers.length > 0 && (
+                                            <div className="flex flex-wrap gap-2">
+                                              {tracking.signers.map((signer) => {
+                                                const signed = signer.status === "signed" || Boolean(signer.signed_at);
+                                                const notified = signer.notification_status === "sent" || Boolean(signer.notified_at);
+                                                return (
+                                                  <span
+                                                    key={signer.id}
+                                                    className="px-2 py-1 rounded-md border border-border/60 bg-background/40 text-[10px]"
+                                                  >
+                                                    <span className="font-semibold text-foreground">{signer.full_name}</span>
+                                                    <span className={signed ? "text-emerald-600" : "text-muted-foreground"}>
+                                                      {" · "}
+                                                      {signed ? "assinado" : notified ? "convite enviado" : "aguardando envio"}
+                                                    </span>
+                                                  </span>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2">
@@ -4701,9 +4815,17 @@ function EventoInterna() {
                                   {add.status === "sent" && (
                                     <GhostButton
                                       onClick={async () => {
-                                        await contractAddendumService.syncAddendumStatus(add.id);
-                                        await fetchAddendumsAndEvaluate(realContract.id, currentBudget);
-                                        toast.success("Status do aditivo atualizado!");
+                                        try {
+                                          const status = await contractAddendumService.syncAddendumStatus(add.id);
+                                          setAddendumSignatureStatuses((current) => ({
+                                            ...current,
+                                            [add.id]: status,
+                                          }));
+                                          await fetchAddendumsAndEvaluate(realContract.id, currentBudget);
+                                          toast.success("Status do aditivo atualizado!");
+                                        } catch (error: any) {
+                                          toast.error(error?.message || "Não foi possível atualizar o status do aditivo.");
+                                        }
                                       }}
                                       className="h-8 text-xs font-bold border"
                                     >
