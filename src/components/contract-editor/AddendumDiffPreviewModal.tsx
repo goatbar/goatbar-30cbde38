@@ -41,7 +41,6 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
   const [condition, setCondition] = useState(comparison.financial.paymentCondition || "");
   const [paymentMethod, setPaymentMethod] = useState(comparison.financial.paymentMethod || "");
   const dueDate = comparison.financial.dueDate;
-  const [showHtmlPreview, setShowHtmlPreview] = useState(false);
 
   const fmt = (v: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -239,24 +238,8 @@ export const AddendumDiffPreviewModal: React.FC<AddendumDiffPreviewModalProps> =
           </div>
         </div>
 
-        {/* 5. Alternador para Pré-visualização da Minuta */}
-        <div className="pt-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowHtmlPreview(!showHtmlPreview)}
-            className="text-xs text-muted-foreground hover:text-foreground"
-          >
-            {showHtmlPreview ? "Ocultar pré-visualização da minuta" : "Ver pré-visualização da minuta gerada"}
-          </Button>
-
-          {showHtmlPreview && (
-            <div
-              className="mt-2 p-6 rounded border bg-white text-black font-sans text-xs max-h-60 overflow-y-auto"
-              dangerouslySetInnerHTML={{ __html: compiledHtml }}
-            />
-          )}
+        <div className="pt-2 text-[11px] text-muted-foreground">
+          A minuta final será gerada com os dados do sócio selecionado e abrirá para revisão antes do envio à assinatura.
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0 mt-4">
