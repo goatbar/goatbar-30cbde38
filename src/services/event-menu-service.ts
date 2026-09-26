@@ -78,3 +78,89 @@ export function downloadEventMenuPdfBlob(blob: Blob, eventName?: string | null) 
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+
+export interface EventMenuSettings {
+  event_id: string;
+  artwork_mode: "automatic" | "library" | "ai" | "upload";
+  artwork_url: string | null;
+  custom_label: string | null;
+  updated_at?: string;
+}
+
+export async function getEventMenuSettings(eventId: string): Promise<EventMenuSettings | null> {
+  const { data, error } = await (supabase as any)
+    .from("event_menu_settings")
+    .select("*")
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data || null) as EventMenuSettings | null;
+}
+
+export async function saveEventMenuSettings(
+  eventId: string,
+  updates: Partial<Pick<EventMenuSettings, "artwork_mode" | "artwork_url" | "custom_label">>,
+): Promise<EventMenuSettings> {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) throw userError || new Error("Usuário não autenticado.");
+
+  const { data, error } = await (supabase as any)
+    .from("event_menu_settings")
+    .upsert({
+      event_id: eventId,
+      artwork_mode: updates.artwork_mode || "automatic",
+      artwork_url: updates.artwork_url ?? null,
+      custom_label: updates.custom_label ?? null,
+      updated_by: userData.user.id,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "event_id" })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as EventMenuSettings;
+}
+
+export async function uploadEventMenuArtwork(eventId: string, file: File): Promise<EventMenuSettings> {
+  if (!file.type.startsWith("image/")) throw new Error("Selecione um arquivo de imagem.");
+  if (file.size > 5 * 1024 * 1024) throw new Error("A imagem deve ter no máximo 5 MB.");
+
+  const extension = (file.name.split(".").pop() || "png").replace(/[^a-z0-9]/gi, "").toLowerCase();
+  const path = `${eventId}/upload-${Date.now()}.${extension || "png"}`;
+  const { error } = await supabase.storage.from("event-menu-assets").upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+    contentType: file.type,
+  });
+  if (error) throw error;
+
+  const { data } = supabase.storage.from("event-menu-assets").getPublicUrl(path);
+  return saveEventMenuSettings(eventId, {
+    artwork_mode: "upload",
+    artwork_url: data.publicUrl,
+  });
+}
+
+export async function generateEventMenuArtwork(input: {
+  eventId: string;
+  eventType?: string | null;
+  eventName?: string | null;
+  brideName?: string | null;
+  groomName?: string | null;
+  date?: string | null;
+}): Promise<EventMenuSettings> {
+  const { data, error } = await supabase.functions.invoke("event-menu-generate-artwork", {
+    body: input,
+  });
+  if (error) throw error;
+  if (!data?.artworkUrl) throw new Error(data?.error || "A IA não retornou uma arte válida.");
+
+  return {
+    event_id: input.eventId,
+    artwork_mode: "ai",
+    artwork_url: data.artworkUrl,
+    custom_label: null,
+    updated_at: data.updatedAt,
+  };
+}
