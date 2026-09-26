@@ -319,9 +319,9 @@ export const searchEventsTool: GoatAIToolDefinition = {
 export const getEventDetailsTool: GoatAIToolDefinition = {
   name: "get_event_details",
   domain: "EVENTS",
-  sourceTable: "events,event_budget_versions,generated_proposals,event_contracts,contract_signature_requests,event_contract_client_data,event_menu_settings,event_planning_items,event_closings,event_closing_items",
+  sourceTable: "events,event_budget_versions,generated_proposals,event_contracts,contract_documents,contract_signature_requests,event_contract_client_data,event_menu_settings,event_planning_items,event_closings,event_closing_items",
   description:
-    "Investiga o contexto completo de um evento no sistema. Cruza cadastro do evento, orçamento atual, proposta mais recente, contrato/assinatura, coleta de dados contratuais, configuração de cardápio, planejamento e fechamento operacional. Use esta ferramenta como fonte ampla antes de concluir que uma informação de evento não existe.",
+    "Investiga o contexto completo de um evento no sistema. Cruza cadastro, orçamento, proposta, contrato, documentos contratuais arquivados/assinados, assinatura, coleta de dados, cardápio, planejamento e fechamento. Use esta ferramenta antes de concluir que uma informação ou documento do evento não existe.",
   parameters: {
     type: "object",
     properties: {
@@ -354,6 +354,7 @@ export const getEventDetailsTool: GoatAIToolDefinition = {
       budgetResult,
       proposalResult,
       contractResult,
+      contractDocumentsResult,
       signatureResult,
       contractDataResult,
       menuSettingsResult,
@@ -382,6 +383,13 @@ export const getEventDetailsTool: GoatAIToolDefinition = {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
+      ctx.supabaseAdmin
+        .from("contract_documents")
+        .select("id,contract_id,addendum_id,document_type,document_name,original_filename,mime_type,file_size,source,is_signed,is_final,archive_status,manual_signature_date,signed_at,created_at")
+        .eq("event_id", args.event_id)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(50),
       ctx.supabaseAdmin
         .from("contract_signature_requests")
         .select("id,event_id,contract_id,signature_provider,dispatch_status,internal_status,provider_status,sent_at,viewed_at,signed_at,completed_at,cancelled_at,expires_at,last_synced_at,last_error,document_kind")
@@ -423,6 +431,7 @@ export const getEventDetailsTool: GoatAIToolDefinition = {
     const budget = budgetResult.data || null;
     const latestProposal = proposalResult.data || null;
     const latestContract = contractResult.data || null;
+    const contractDocuments = contractDocumentsResult.data || [];
     const latestSignatureRequest = signatureResult.data || null;
     const contractData = contractDataResult.data || null;
     const menuSettings = menuSettingsResult.data || null;
@@ -480,6 +489,15 @@ export const getEventDetailsTool: GoatAIToolDefinition = {
         found: Boolean(latestContract),
         error: contractResult.error?.message || null,
       },
+      contract_documents: {
+        checked: true,
+        found: contractDocuments.length > 0,
+        count: contractDocuments.length,
+        signed_final_count: contractDocuments.filter(
+          (doc: any) => doc.is_signed && doc.is_final,
+        ).length,
+        error: contractDocumentsResult.error?.message || null,
+      },
       signature_request: {
         checked: true,
         found: Boolean(latestSignatureRequest),
@@ -522,6 +540,7 @@ export const getEventDetailsTool: GoatAIToolDefinition = {
         drinks: drinksList,
         latest_proposal: latestProposal,
         contract: latestContract,
+        contract_documents: contractDocuments,
         signature_request: latestSignatureRequest,
         contract_client_data: contractDataSummary,
         menu_settings: menuSettings,
