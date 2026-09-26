@@ -143,6 +143,32 @@ export function validateSigner(name: unknown, email: unknown): { name: string; e
 
 export type RequiredSigner = { role: "client" | "company"; name: string; email: string };
 
+/**
+ * Resolve o signatário cliente usando primeiro o snapshot jurídico capturado
+ * imediatamente antes do envio. O cadastro geral do evento é apenas fallback.
+ */
+export function resolveClientSignerInput(
+  event: { client_name?: unknown; email?: unknown } | null | undefined,
+  legalSnapshot: unknown,
+): { name: unknown; email: unknown } {
+  const snapshot =
+    legalSnapshot && typeof legalSnapshot === "object" && !Array.isArray(legalSnapshot)
+      ? (legalSnapshot as Record<string, unknown>)
+      : null;
+  const cliente =
+    snapshot?.cliente && typeof snapshot.cliente === "object" && !Array.isArray(snapshot.cliente)
+      ? (snapshot.cliente as Record<string, unknown>)
+      : null;
+
+  const snapshotName = typeof cliente?.nome === "string" ? cliente.nome.trim() : "";
+  const snapshotEmail = typeof cliente?.email === "string" ? cliente.email.trim() : "";
+
+  return {
+    name: snapshotName || event?.client_name,
+    email: snapshotEmail || event?.email,
+  };
+}
+
 /** Both parties are mandatory; the company party comes from event_contracts.signer_id. */
 export function validateRequiredSigners(
   client: { name: unknown; email: unknown },
