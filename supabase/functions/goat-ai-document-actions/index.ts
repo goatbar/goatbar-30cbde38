@@ -425,9 +425,17 @@ async function contractAndSend(admin: any, url: string, key: string, userId: str
       } catch {}
     }
     if (!link) link = contract.generated_file_url || null;
-    return { success: true, action: "generate_contract_and_send", reused: true, contract_id: contract.id,
-      signature_request_id: active.data.id, signature_status: active.data.dispatch_status, pdf_url: link,
-      message: "O contrato já havia sido enviado para assinatura; o envio existente foi reutilizado." + (link ? "\n\nPDF: " + link : "") };
+    return {
+      success: true,
+      action: "generate_contract_and_send",
+      reused: true,
+      contract_id: contract.id,
+      signature_request_id: active.data.id,
+      signature_status: active.data.dispatch_status,
+      pdf_url: link,
+      delivery_mode: "signature_only",
+      message: "Já está enviado para assinatura.",
+    };
   }
   const cv = await contractVars(admin, event, r.budget, r.signer);
   if (cv.missing.length) { const e: any = new Error("Não foi possível gerar o contrato. Campos obrigatórios pendentes: " + cv.missing.join(", ") + "."); e.status = 422; e.missing_fields = cv.missing; throw e; }
@@ -463,10 +471,19 @@ async function contractAndSend(admin: any, url: string, key: string, userId: str
   if (save.error) throw save.error;
   const dispatch = await callJson(url, key, "assinafy-create-doc", { contractId: contract.id, documentKind: "contract", pdfBase64: b64(pdf),
     pdfHash: hash, documentTitle: title, requested_by_user_id: userId, internal_source: "gia" }, requestId);
-  return { success: true, action: "generate_contract_and_send", contract_id: contract.id, pdf_url: link, filename,
-    signature_request_id: dispatch.signatureRequestId || null, signature_status: dispatch.status || "pending_signature",
-    dispatch_outcome: dispatch.dispatchOutcome || null, external_document_id: dispatch.externalDocumentId || null,
-    message: (dispatch.message || "Contrato enviado para assinatura com sucesso.") + "\n\nPDF: " + link };
+  return {
+    success: true,
+    action: "generate_contract_and_send",
+    contract_id: contract.id,
+    pdf_url: link,
+    filename,
+    signature_request_id: dispatch.signatureRequestId || null,
+    signature_status: dispatch.status || "pending_signature",
+    dispatch_outcome: dispatch.dispatchOutcome || null,
+    external_document_id: dispatch.externalDocumentId || null,
+    delivery_mode: "signature_only",
+    message: "Enviado para assinatura.",
+  };
 }
 
 serve(async (req) => {
