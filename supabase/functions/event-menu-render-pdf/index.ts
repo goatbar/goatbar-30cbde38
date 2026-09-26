@@ -159,16 +159,20 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-      auth: { persistSession: false },
-    });
-    const { data: userData } = await authClient.auth.getUser();
-    if (!userData?.user) {
-      return new Response(JSON.stringify({ error: "Sessão inválida ou expirada." }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const isInternalGiaCall = Boolean(serviceRoleKey && authHeader === "Bearer " + serviceRoleKey);
+    if (!isInternalGiaCall) {
+      const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+        auth: { persistSession: false },
       });
+      const { data: userData } = await authClient.auth.getUser();
+      if (!userData?.user) {
+        return new Response(JSON.stringify({ error: "Sessão inválida ou expirada." }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const body = await req.json();
