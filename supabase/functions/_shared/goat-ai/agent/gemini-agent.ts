@@ -182,14 +182,6 @@ function looksLikeNegativeSystemClaim(value: string): boolean {
   );
 }
 
-function hasComprehensiveEventEvidence(toolsExecuted: any[], eventId?: string | null): boolean {
-  return toolsExecuted.some((tool) => {
-    if (tool?.toolName !== "get_event_details" || tool?.status !== "success") return false;
-    const resultEventId = tool?.result?.event?.id || tool?.arguments?.event_id;
-    return !eventId || resultEventId === eventId;
-  });
-}
-
 export class GoatAIGeminiAgent {
   private apiKey: string;
   private model: string;
