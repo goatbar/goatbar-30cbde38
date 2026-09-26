@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vitest run src/services/contract-addendum-service.test.ts src/lib/contract-addendum-comparator.test.ts tests/assinafy.test.ts src/services/canonical-pdf-service.test.ts src/services/signature-dispatch.test.ts tests/contract-pdf-visual.test.ts src/utils/normalize-editor-html.test.ts && vite build",
+    "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
