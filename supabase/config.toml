@@ -1,5 +1,11 @@
 project_id = "xdqgglrxidmegujhkygj"
 
+[functions.assinafy-create-doc]
+verify_jwt = false
+
+[functions.assinafy-cancel]
+verify_jwt = true
+
 [functions.assinafy-webhook]
 verify_jwt = false
 
