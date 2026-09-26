@@ -78,6 +78,99 @@ async function runDocumentAction(
   };
 }
 
+
+async function createContractDataRequestLink(
+  context: ToolContext,
+  eventId: string,
+): Promise<ToolExecutionResult> {
+  if (!eventId) {
+    return { success: false, error: "O event_id é obrigatório para gerar o link dos dados do contrato." };
+  }
+
+  const { data: event, error: eventError } = await context.supabaseAdmin
+    .from("events")
+    .select("id,event_name,client_name")
+    .eq("id", eventId)
+    .maybeSingle();
+
+  if (eventError) return { success: false, error: eventError.message };
+  if (!event) return { success: false, error: "Evento não encontrado." };
+
+  const now = new Date();
+  const { data: existing, error: existingError } = await context.supabaseAdmin
+    .from("event_contract_client_data")
+    .select("public_token,token_expires_at")
+    .eq("event_id", eventId)
+    .maybeSingle();
+
+  if (existingError) return { success: false, error: existingError.message };
+
+  let token = existing?.public_token || "";
+  const currentExpiry = existing?.token_expires_at ? new Date(existing.token_expires_at) : null;
+  const canReuse = Boolean(token && currentExpiry && currentExpiry.getTime() > now.getTime() + 60_000);
+
+  let expiresAt = currentExpiry;
+  if (!canReuse) {
+    token = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+    expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const { error: saveError } = await context.supabaseAdmin
+      .from("event_contract_client_data")
+      .upsert(
+        {
+          event_id: eventId,
+          public_token: token,
+          token_expires_at: expiresAt.toISOString(),
+          updated_at: now.toISOString(),
+        },
+        { onConflict: "event_id" },
+      );
+
+    if (saveError) return { success: false, error: saveError.message };
+  }
+
+  const appUrl = (
+    getEnv("PUBLIC_APP_URL") ||
+    getEnv("APP_URL") ||
+    getEnv("SITE_URL") ||
+    "https://goatbar.com.br"
+  ).replace(/\/$/, "");
+  const link = `${appUrl}/contrato/dados/${token}`;
+  const eventLabel = event.event_name || event.client_name || "evento";
+
+  return {
+    success: true,
+    data: {
+      event_id: eventId,
+      event_name: eventLabel,
+      contract_data_url: link,
+      expires_at: expiresAt?.toISOString() || null,
+      reused_existing_token: canReuse,
+    },
+    message:
+      `Link para solicitação dos dados do contrato de ${eventLabel}:\n\n${link}\n\nO link é válido por 7 dias.`,
+  };
+}
+
+
+export const createContractDataRequestLinkTool: GoatAIToolDefinition = {
+  name: "create_contract_data_request_link",
+  domain: "EVENTS",
+  sourceTable: "events,event_contract_client_data",
+  description:
+    "Gera ou reutiliza o link público para o cliente preencher os dados necessários ao contrato. Use quando o usuário pedir o link/formulário de dados do contrato, solicitação de dados contratuais ou equivalente. Resolva primeiro o event_id real. Retorna o link oficial /contrato/dados/{token}, válido por 7 dias.",
+  parameters: {
+    type: "object",
+    properties: {
+      event_id: { type: "string", description: "UUID do evento já resolvido." },
+    },
+    required: ["event_id"],
+  },
+  requiresConfirmation: false,
+  execute: (context, args) =>
+    createContractDataRequestLink(context, eventIdFromArgs(args)),
+};
+
 export const generateCommercialProposalPdfTool: GoatAIToolDefinition = {
   name: "generate_commercial_proposal_pdf",
   domain: "EVENTS",
