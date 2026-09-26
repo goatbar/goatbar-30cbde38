@@ -88,6 +88,7 @@ function pageHtml(pageLayout: any, pageIndex: number, totalPages: number, person
   const drinks = Array.isArray(pageLayout?.drinks) ? pageLayout.drinks : [];
   const topPadding = Number(pageLayout?.topPadding || 0);
   const gap = Number(pageLayout?.gap || 12);
+  const availableHeight = Number(pageLayout?.availableHeight || 540);
 
   const drinkMarkup = drinks.map((drink: any) => {
     const name = esc(String(drink?.name || "").slice(0, 120));
@@ -99,25 +100,123 @@ function pageHtml(pageLayout: any, pageIndex: number, totalPages: number, person
   }).join("");
 
   return `<main class="page">
-    <div class="drinks-container" style="padding-top: ${topPadding.toFixed(1)}pt; row-gap: ${gap.toFixed(1)}pt;">
+    <div class="drinks-container" style="height: ${availableHeight.toFixed(1)}pt; padding-top: ${topPadding.toFixed(1)}pt; row-gap: ${gap.toFixed(1)}pt;">
       ${drinkMarkup}
     </div>
     ${isLastPage ? `<div class="personalization-container">${personalizationHtml(personalization, artworkUrl)}</div>` : `<div class="continue-indicator">CONTINUA NA PÁGINA ${pageIndex + 2}</div>`}
   </main>`;
 }
 
+
+function wrapRendererText(text: string, maxCharsPerLine: number): string[] {
+  const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    if (!current) current = word;
+    else if ((current + " " + word).length <= maxCharsPerLine) current += " " + word;
+    else { lines.push(current); current = word; }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+function rendererDrinkLayout(drink: any) {
+  const nameLines = wrapRendererText(String(drink?.name || ""), 43);
+  const descriptionLines = drink?.description
+    ? wrapRendererText(String(drink.description), 58)
+    : [];
+  const blockHeight =
+    Math.max(1, nameLines.length) * 24 +
+    (descriptionLines.length ? 4 : 0) +
+    descriptionLines.length * 20;
+  return { ...drink, nameLines, descriptionLines, blockHeight };
+}
+
+function rendererHeight(drinks: any[], gap = 8) {
+  if (!drinks.length) return 0;
+  return drinks.reduce((sum, d) => sum + Number(d.blockHeight || 0), 0) + (drinks.length - 1) * gap;
+}
+
+function rendererBalance(drinks: any[], availableHeight: number) {
+  const k = drinks.length;
+  if (!k) return { gap: 0, topPadding: 0 };
+  const totalBlocks = drinks.reduce((sum, d) => sum + Number(d.blockHeight || 0), 0);
+  const slack = Math.max(0, availableHeight - totalBlocks);
+  if (k === 1) return { gap: 0, topPadding: slack / 2 };
+  const maxGap = k <= 3 ? 34 : k <= 5 ? 26 : k <= 7 ? 18 : k <= 9 ? 14 : 12;
+  const naturalGap = slack / Math.max(1, k - 1);
+  const gap = Math.min(maxGap, Math.max(8, naturalGap));
+  const groupHeight = totalBlocks + (k - 1) * gap;
+  return { gap, topPadding: Math.max(0, (availableHeight - groupHeight) / 2) };
+}
+
+function rendererPaginate(drinks: any[]) {
+  if (!drinks.length) return [[]];
+  if (rendererHeight(drinks, 8) <= 540) return [drinks];
+
+  for (let targetPages = 2; targetPages <= 6; targetPages++) {
+    const perChunk = Math.ceil(drinks.length / targetPages);
+    const candidate: any[][] = [];
+    let possible = true;
+    for (let p = 0; p < targetPages; p++) {
+      const chunk = drinks.slice(p * perChunk, p * perChunk + perChunk);
+      if (!chunk.length) { possible = false; break; }
+      const cap = p === targetPages - 1 ? 540 : 625;
+      if (rendererHeight(chunk, 8) > cap) { possible = false; break; }
+      candidate.push(chunk);
+    }
+    if (possible && candidate.reduce((sum, page) => sum + page.length, 0) === drinks.length) return candidate;
+  }
+
+  const pages: any[][] = [];
+  let remaining = [...drinks];
+  while (remaining.length) {
+    if (rendererHeight(remaining, 8) <= 540) { pages.push(remaining); break; }
+    const chunk: any[] = [];
+    let height = 0;
+    for (let i = 0; i < remaining.length; i++) {
+      if (i === remaining.length - 1 && chunk.length) break;
+      const d = remaining[i];
+      const next = height + (chunk.length ? 8 : 0) + Number(d.blockHeight || 0);
+      if (chunk.length && next > 625) break;
+      chunk.push(d);
+      height = next;
+    }
+    if (!chunk.length) chunk.push(remaining[0]);
+    pages.push(chunk);
+    remaining = remaining.slice(chunk.length);
+  }
+  return pages;
+}
+
+function rendererComputedPages(menu: any) {
+  const layouts = (Array.isArray(menu?.drinks) ? menu.drinks : []).map(rendererDrinkLayout);
+  const chunks = rendererPaginate(layouts);
+  return chunks.map((drinks, index) => {
+    const isLastPage = index === chunks.length - 1;
+    const availableHeight = isLastPage ? 540 : 625;
+    const distribution = rendererBalance(drinks, availableHeight);
+    return {
+      pageIndex: index,
+      totalPages: chunks.length,
+      isLastPage,
+      drinks,
+      drinksTop: 135,
+      drinksHeight: availableHeight,
+      availableHeight,
+      gap: distribution.gap,
+      topPadding: distribution.topPadding,
+    };
+  });
+}
+
 function buildDocument(menu: any) {
   const computedLayout = menu?.computedLayout;
   const pages = Array.isArray(computedLayout?.pages) && computedLayout.pages.length > 0
     ? computedLayout.pages
-    : (Array.isArray(menu?.pages) && menu.pages.length > 0
-      ? menu.pages.map((p: any[], idx: number) => ({
-          drinks: p,
-          topPadding: 16,
-          gap: 16,
-          isLastPage: idx === menu.pages.length - 1,
-        }))
-      : [{ drinks: Array.isArray(menu?.drinks) ? menu.drinks : [], topPadding: 16, gap: 16, isLastPage: true }]);
+    : rendererComputedPages(menu);
 
   const totalPages = pages.length;
   const fonts = menu?.fonts || {};
@@ -435,10 +534,6 @@ serve(async (req) => {
         body: JSON.stringify({
           html,
           pdfOptions: {
-            width: "567pt",
-            height: "850.5pt",
-            margin: { top: "0pt", right: "0pt", bottom: "0pt", left: "0pt" },
-            landscape: false,
             printBackground: true,
             preferCSSPageSize: true,
             scale: 1,
