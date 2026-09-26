@@ -3684,7 +3684,12 @@ function EventoInterna() {
                           {[
                             {
                               label: "Enviado à Assinafy",
-                              done: ["active", "completed"].includes(integrationState),
+                              done:
+                                ["active", "completed"].includes(integrationState) ||
+                                Boolean(providerDetails?.sent_at) ||
+                                providerDetails?.signers?.some(
+                                  (s: any) => s.notification_status === "sent",
+                                ),
                               detail: providerDetails?.sent_at
                                 ? new Date(providerDetails.sent_at).toLocaleString("pt-BR")
                                 : integrationState === "sending"
@@ -4367,7 +4372,13 @@ function EventoInterna() {
                       <StatusStep done={!!realClientData} title="Coleta de dados concluída" />
                       <StatusStep done={!!realContract} title="Documento base gerado" />
                       <StatusStep
-                        done={["active", "completed"].includes(integrationState)}
+                        done={
+                          ["active", "completed"].includes(integrationState) ||
+                          Boolean(providerDetails?.sent_at) ||
+                          providerDetails?.signers?.some(
+                            (s: any) => s.notification_status === "sent",
+                          )
+                        }
                         title="Disparo de e-mails realizado"
                       />
                       <StatusStep
