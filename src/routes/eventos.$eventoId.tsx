@@ -1093,14 +1093,58 @@ function EventoInterna() {
   };
 
   const handleOpenAddendumFlow = async () => {
-    if (!realContract || realContract.status !== "signed") return;
+    if (!realContract?.id) {
+      toast.error("Nenhum contrato foi encontrado para este evento.");
+      return;
+    }
 
     try {
       setIsGeneratingAddendum(true);
 
+      let contractForAddendum = realContract;
+
+      // O acesso ao aditivo não pode desaparecer só porque o status local ficou
+      // defasado em relação à Assinafy. Ao clicar, sincronizamos e revalidamos.
+      if (contractForAddendum.status !== "signed") {
+        try {
+          const provider = getSignatureProvider(
+            contractForAddendum.signature_provider || contractForAddendum.provider,
+          );
+          const syncedStatus = await provider.syncStatus(contractForAddendum.id);
+          setProviderDetails(syncedStatus);
+
+          const refreshedContract = await eventContractsService.getContractByEventId(eventoId);
+          if (refreshedContract) {
+            contractForAddendum = refreshedContract;
+            setRealContract(refreshedContract);
+          }
+
+          const syncedIntegrationState = getSignatureIntegrationState(
+            contractForAddendum.status,
+            syncedStatus,
+          );
+
+          if (
+            contractForAddendum.status !== "signed" &&
+            syncedIntegrationState !== "completed"
+          ) {
+            toast.error(
+              "O Termo Aditivo só pode ser gerado depois que o contrato original estiver totalmente assinado.",
+            );
+            return;
+          }
+        } catch (syncError) {
+          console.warn("Falha ao confirmar assinatura antes de gerar aditivo:", syncError);
+          toast.error(
+            "Não foi possível confirmar a assinatura do contrato original. Atualize o status da assinatura e tente novamente.",
+          );
+          return;
+        }
+      }
+
       try {
         await contractAddendumService.resolveLegacyContractBudgetVersion(
-          realContract.id,
+          contractForAddendum.id,
           selectedLegacyBudgetId || undefined,
         );
       } catch (err: any) {
@@ -1113,7 +1157,10 @@ function EventoInterna() {
         throw err;
       }
 
-      const data = await contractAddendumService.prepareAddendumData(realContract.id, eventoId);
+      const data = await contractAddendumService.prepareAddendumData(
+        contractForAddendum.id,
+        eventoId,
+      );
       setAddendumComparison(data.comparison);
       setCompiledContractText(data.compiledHtml);
 
@@ -1123,7 +1170,15 @@ function EventoInterna() {
 
       setShowAddendumDiffModal(true);
     } catch (err: any) {
-      toast.error(err.message || "Erro ao preparar Termo Aditivo.");
+      const knownMessages: Record<string, string> = {
+        CONTRACT_NOT_FULLY_SIGNED:
+          "O contrato original ainda não consta como totalmente assinado.",
+        PENDING_ORIGINAL_SIGNATURE_DATE:
+          "A data de assinatura do contrato original ainda não foi registrada.",
+        NO_PROPOSAL_CHANGES_DETECTED:
+          "Não há alterações na proposta atual em relação ao contrato vigente para gerar um aditivo.",
+      };
+      toast.error(knownMessages[err.message] || err.message || "Erro ao preparar Termo Aditivo.");
     } finally {
       setIsGeneratingAddendum(false);
     }
@@ -3659,11 +3714,11 @@ function EventoInterna() {
         {activeTab === "Contrato" && (
           <div className="space-y-6 animate-in fade-in duration-500">
             {/* Seletor de Modo de Contrato */}
-            <div className="flex gap-2 p-1 bg-surface border border-border/40 rounded-xl max-w-md">
+            <div className="flex flex-wrap gap-2 p-1 bg-surface border border-border/40 rounded-xl max-w-2xl">
               <button
                 type="button"
                 onClick={() => setContractMode("system")}
-                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                className={`flex-1 min-w-[170px] py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
                   contractMode === "system"
                     ? "bg-primary text-white shadow-md shadow-primary/20"
                     : "text-muted-foreground hover:text-foreground hover:bg-primary/5"
@@ -3675,7 +3730,7 @@ function EventoInterna() {
               <button
                 type="button"
                 onClick={() => setContractMode("upload")}
-                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                className={`flex-1 min-w-[150px] py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
                   contractMode === "upload"
                     ? "bg-primary text-white shadow-md shadow-primary/20"
                     : "text-muted-foreground hover:text-foreground hover:bg-primary/5"
@@ -3684,6 +3739,17 @@ function EventoInterna() {
                 <Upload className="h-3.5 w-3.5" />
                 UPLOAD MANUAL
               </button>
+              {realContract && (
+                <button
+                  type="button"
+                  onClick={handleOpenAddendumFlow}
+                  disabled={isGeneratingAddendum}
+                  className="flex-1 min-w-[170px] py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <FileTextIcon className="h-3.5 w-3.5" />
+                  {isGeneratingAddendum ? "PREPARANDO ADITIVO..." : "GERAR TERMO ADITIVO"}
+                </button>
+              )}
             </div>
 
             {contractMode === "system" ? (
@@ -4373,7 +4439,7 @@ function EventoInterna() {
                   >
                       <div className="space-y-4">
                         {/* Banner de alerta quando alteração pós-contrato é detectada */}
-                        {realContract?.status === "signed" && addendumRequiresAction && (
+                        {(realContract?.status === "signed" || integrationState === "completed") && addendumRequiresAction && (
                           <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div className="flex items-start gap-3">
                               <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
