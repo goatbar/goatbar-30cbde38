@@ -139,6 +139,7 @@ import { InternalProposalPreviewModal } from "@/components/InternalProposalPrevi
 import { Eye, UtensilsCrossed } from "lucide-react";
 import { buildEventMenuModel } from "@/lib/event-menu";
 import { EventMenuPreview } from "@/components/event-menu/EventMenuPreview";
+import { downloadEventMenuHtml } from "@/lib/event-menu-export";
 
 export const Route = createFileRoute("/eventos/$eventoId")({
   component: EventoInterna,
@@ -2089,7 +2090,14 @@ function EventoInterna() {
             <div className="animate-in fade-in duration-300">
               <SectionCard title="Cardápio do Evento" subtitle="Prévia gerada a partir dos drinks do orçamento atual.">
                 {menu.drinks.length > 0 ? (
-                  <EventMenuPreview menu={menu} />
+                  <div className="space-y-4">
+                    <div className="flex justify-end">
+                      <PrimaryButton onClick={() => downloadEventMenuHtml(menu, `cardapio-${evento?.event_name || evento?.client_name || "evento"}.html`)}>
+                        <Download className="mr-2 h-4 w-4" /> Baixar cardápio
+                      </PrimaryButton>
+                    </div>
+                    <EventMenuPreview menu={menu} />
+                  </div>
                 ) : (
                   <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
                     Nenhum drink selecionado no orçamento atual.
