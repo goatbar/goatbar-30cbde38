@@ -31,6 +31,10 @@ export const searchEventsTool: GoatAIToolDefinition = {
         description:
           "Filtro opcional de status (ex: 'confirmado', 'finalizado', 'cancelado', 'em_negociacao').",
       },
+      date: {
+        type: "string",
+        description: "Data exata opcional do evento no formato YYYY-MM-DD.",
+      },
       limit: {
         type: "number",
         description:
@@ -42,7 +46,7 @@ export const searchEventsTool: GoatAIToolDefinition = {
   requiresConfirmation: false,
   execute: async (
     ctx: ToolContext,
-    args: { query?: string; event_id?: string; status?: string; limit?: number },
+    args: { query?: string; event_id?: string; status?: string; date?: string; limit?: number },
   ): Promise<ToolExecutionResult> => {
     const rawQuery = (args.query || "").trim();
     const explicitLimit =
@@ -113,6 +117,11 @@ export const searchEventsTool: GoatAIToolDefinition = {
       rawQuery.toLowerCase() === "cancelado" ||
       rawQuery.toLowerCase() === "todos" ||
       rawQuery === "";
+
+    const requestedDate = (args.date || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
+      queryBuilder = queryBuilder.eq("date", requestedDate);
+    }
 
     const requestedStatus = (args.status || "").trim().toLowerCase();
     const isConfirmedStatus =
