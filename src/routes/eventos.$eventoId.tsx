@@ -4429,12 +4429,24 @@ function EventoInterna() {
                     title="Repositório de Documentos Contratuais & Aditivos"
                     subtitle="Histórico completo de minutas, contratos assinados, termos aditivos e anexos"
                     action={
-                      <PrimaryButton
-                        onClick={() => setShowUploadDocumentModal(true)}
-                        className="h-9 px-4 text-xs font-bold flex items-center gap-2"
-                      >
-                        <Upload className="h-4 w-4" /> ADICIONAR DOCUMENTOS
-                      </PrimaryButton>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {(realContract?.status === "signed" || integrationState === "completed") && (
+                          <PrimaryButton
+                            onClick={handleOpenAddendumFlow}
+                            disabled={isGeneratingAddendum}
+                            className="h-9 px-4 text-xs font-bold flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white"
+                          >
+                            <FileTextIcon className="h-4 w-4" />
+                            {isGeneratingAddendum ? "PREPARANDO..." : "GERAR TERMO ADITIVO"}
+                          </PrimaryButton>
+                        )}
+                        <PrimaryButton
+                          onClick={() => setShowUploadDocumentModal(true)}
+                          className="h-9 px-4 text-xs font-bold flex items-center gap-2"
+                        >
+                          <Upload className="h-4 w-4" /> ADICIONAR DOCUMENTOS
+                        </PrimaryButton>
+                      </div>
                     }
                   >
                       <div className="space-y-4">
