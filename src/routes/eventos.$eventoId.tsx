@@ -5373,7 +5373,6 @@ function EventoInterna() {
         onClose={() => setShowAddendumDiffModal(false)}
         comparison={addendumComparison}
         addendumNumber={addendumPendingNumber}
-        compiledHtml={compiledContractText}
         signers={realSigners}
         selectedSignerId={addendumSignerId}
         onSignerChange={setAddendumSignerId}
