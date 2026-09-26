@@ -123,6 +123,25 @@ export function compactToolResultForAgent(toolName: string, rawData: any): ToolC
                 provider: rawData.contract.provider,
               }
             : null,
+          contract_documents: Array.isArray(rawData.contract_documents)
+            ? rawData.contract_documents.slice(0, 20).map((doc: any) => ({
+                id: doc.id,
+                contract_id: doc.contract_id,
+                addendum_id: doc.addendum_id,
+                document_type: doc.document_type,
+                document_name: doc.document_name,
+                original_filename: doc.original_filename,
+                mime_type: doc.mime_type,
+                file_size: doc.file_size,
+                source: doc.source,
+                is_signed: doc.is_signed,
+                is_final: doc.is_final,
+                archive_status: doc.archive_status,
+                manual_signature_date: doc.manual_signature_date,
+                signed_at: doc.signed_at,
+                created_at: doc.created_at,
+              }))
+            : [],
           signature_request: rawData.signature_request
             ? {
                 id: rawData.signature_request.id,
