@@ -39,6 +39,7 @@ export function compactToolResultForAgent(toolName: string, rawData: any): ToolC
     case "get_event_details": {
       if (rawData.event) {
         const ev = rawData.event;
+        const budget = rawData.current_budget || {};
         compactedData = {
           event: {
             id: ev.id || ev.eventId,
@@ -47,20 +48,34 @@ export function compactToolResultForAgent(toolName: string, rawData: any): ToolC
             groom_name: ev.groom_name || ev.groomName,
             bride_name: ev.bride_name || ev.brideName,
             date: ev.date,
+            event_time: ev.event_time || ev.eventTime,
             location: ev.event_location || ev.location,
             city: ev.city,
-            guests: ev.guests,
+            guests: ev.guests ?? budget.guest_count,
             status: ev.status,
-            current_budget_value: ev.current_budget_value || ev.currentBudgetValue,
+            current_budget_value:
+              budget.final_budget_value ?? ev.current_budget_value ?? ev.currentBudgetValue,
             drinks: Array.isArray(ev.drinks)
-              ? ev.drinks.map((d: any) => ({
-                  id: d.id,
-                  name: d.name,
-                  description: d.description,
-                  category: d.category,
-                }))
+              ? ev.drinks.map((d: any) =>
+                  typeof d === "string"
+                    ? { name: d }
+                    : {
+                        id: d.id,
+                        name: d.name,
+                        description: d.description,
+                        category: d.category,
+                      }
+                )
               : ev.drinks,
             notes: ev.notes || undefined,
+          },
+          current_budget: {
+            id: budget.id,
+            final_budget_value: budget.final_budget_value,
+            average_value_per_person: budget.average_value_per_person,
+            guest_count: budget.guest_count,
+            drinks_per_person: budget.drinks_per_person,
+            version_number: budget.version_number,
           },
         };
       }
