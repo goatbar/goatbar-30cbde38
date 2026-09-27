@@ -95,6 +95,16 @@ export async function syncPushRegistration() {
   }
 }
 
+export async function sendTestPushNotification() {
+  const { data, error } = await supabase.functions.invoke("web-push-dispatch", {
+    body: { action: "test" },
+  });
+  if (error) throw error;
+  if (!data?.success) {
+    throw new Error(data?.error || "Não foi possível enviar a notificação de teste.");
+  }
+}
+
 export async function enablePushNotifications() {
   if (!pushSupported()) {
     throw new Error("Este dispositivo não oferece suporte a notificações push.");
@@ -125,11 +135,5 @@ export async function enablePushNotifications() {
 
   await registerSubscription(subscription);
 
-  const { data, error } = await supabase.functions.invoke("web-push-dispatch", {
-    body: { action: "test" },
-  });
-  if (error) throw error;
-  if (!data?.success) {
-    throw new Error(data?.error || "A assinatura foi criada, mas o teste push falhou.");
-  }
+  await sendTestPushNotification();
 }
