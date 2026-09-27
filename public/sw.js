@@ -1,5 +1,5 @@
-const SHELL_CACHE = "goatbar-pwa-shell-v1";
-const RUNTIME_CACHE = "goatbar-pwa-runtime-v1";
+const SHELL_CACHE = "goatbar-pwa-shell-v2";
+const RUNTIME_CACHE = "goatbar-pwa-runtime-v2";
 const APP_SHELL = "/";
 
 const PRECACHE = [
@@ -102,5 +102,57 @@ self.addEventListener("fetch", (event) => {
 
       return cached || network;
     }),
+  );
+});
+
+
+self.addEventListener("push", (event) => {
+  let payload = {
+    title: "Goat Bar",
+    body: "Você recebeu uma nova notificação.",
+    url: "/gia",
+    tag: "goatbar",
+    icon: "/icons/goatbar-192.png",
+  };
+
+  try {
+    if (event.data) {
+      payload = { ...payload, ...event.data.json() };
+    }
+  } catch {
+    if (event.data) {
+      payload.body = event.data.text();
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: payload.icon || "/icons/goatbar-192.png",
+      badge: "/icons/goatbar-192.png",
+      tag: payload.tag || "goatbar",
+      data: { url: payload.url || "/gia" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const relativeUrl = event.notification.data?.url || "/gia";
+  const targetUrl = new URL(relativeUrl, self.location.origin).href;
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then(async (clients) => {
+        for (const client of clients) {
+          if (new URL(client.url).origin !== self.location.origin) continue;
+          if ("navigate" in client && client.url !== targetUrl) {
+            await client.navigate(targetUrl);
+          }
+          return client.focus();
+        }
+        return self.clients.openWindow(targetUrl);
+      }),
   );
 });
