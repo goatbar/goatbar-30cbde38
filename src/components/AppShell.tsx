@@ -22,6 +22,12 @@ import {
 import { type ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { goatAIService } from "@/services/goat-ai/goat-ai-service";
+import {
+  enablePushNotifications,
+  getPushNotificationState,
+  syncPushRegistration,
+  type PushNotificationState,
+} from "@/lib/push-notifications";
 import logo from "@/assets/goatbar-logo.png";
 
 const nav: {
@@ -47,6 +53,9 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const { loading, user, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [pendingAiCount, setPendingAiCount] = useState<number>(0);
+  const [pushState, setPushState] = useState<PushNotificationState>("loading");
+  const [pushActivating, setPushActivating] = useState(false);
+  const [pushMessage, setPushMessage] = useState<string | null>(null);
   const visibleNav = nav;
 
   useEffect(() => {
@@ -59,6 +68,51 @@ export function AppShell({ children }: { children?: ReactNode }) {
     window.addEventListener("budget-notification-read", handleRead);
     return () => window.removeEventListener("budget-notification-read", handleRead);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!user) {
+      setPushState("loading");
+      return;
+    }
+
+    const refreshPushState = async () => {
+      try {
+        await syncPushRegistration().catch(() => {});
+        const state = await getPushNotificationState();
+        if (!cancelled) setPushState(state);
+      } catch {
+        if (!cancelled) setPushState("error");
+      }
+    };
+
+    void refreshPushState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const handleEnablePush = async () => {
+    setPushActivating(true);
+    setPushMessage(null);
+
+    try {
+      await enablePushNotifications();
+      setPushState("enabled");
+    } catch (error) {
+      const state = await getPushNotificationState().catch(() => "error" as const);
+      setPushState(state);
+      setPushMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível ativar as notificações.",
+      );
+    } finally {
+      setPushActivating(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -232,6 +286,44 @@ export function AppShell({ children }: { children?: ReactNode }) {
 
       {/* MAIN */}
       <main className="flex w-full min-w-0 max-w-[100vw] flex-1 flex-col overflow-y-auto overflow-x-hidden pb-[calc(5.25rem+env(safe-area-inset-bottom))] md:pb-0">
+        {pushState !== "loading" &&
+          pushState !== "unsupported" &&
+          pushState !== "enabled" && (
+            <div className="md:hidden px-4 pt-4">
+              <div className="rounded-xl border border-border bg-surface p-3.5 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                    <Bell className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-foreground">
+                      Notificações no iPhone
+                    </div>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      {pushState === "needs_install"
+                        ? "Adicione o Goat Bar à Tela de Início pelo Safari para receber alertas push."
+                        : pushState === "denied"
+                          ? "As notificações estão bloqueadas. Libere a permissão nos Ajustes do iPhone para o Goat Bar."
+                          : "Ative para receber novos pedidos de orçamento mesmo com o app fechado."}
+                    </p>
+                    {pushMessage && (
+                      <p className="mt-2 text-xs text-destructive">{pushMessage}</p>
+                    )}
+                    {(pushState === "prompt" || pushState === "error") && (
+                      <button
+                        type="button"
+                        onClick={() => void handleEnablePush()}
+                        disabled={pushActivating}
+                        className="mt-3 inline-flex items-center rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                      >
+                        {pushActivating ? "Ativando..." : "Ativar notificações"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         {children ?? <Outlet />}
       </main>
 
