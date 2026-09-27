@@ -329,7 +329,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
 
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
         <div className="grid grid-cols-5 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
-          {nav.slice(0, 5).map((item) => {
+          {nav.filter((item) => ["/gia", "/dashboard", "/vendas", "/eventos", "/controladoria"].includes(item.to)).map((item) => {
             const Icon = item.icon;
             const active = item.exact
               ? location.pathname === item.to
