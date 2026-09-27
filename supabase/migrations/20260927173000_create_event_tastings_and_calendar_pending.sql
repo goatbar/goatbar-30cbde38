@@ -3,7 +3,7 @@ create table if not exists public.event_tastings (
  id uuid primary key default gen_random_uuid(), event_id uuid not null references public.events(id) on delete cascade,
  status text not null default 'planning' check(status in('planning','scheduled','completed','finalized','cancelled')),
  scheduled_at timestamptz, duration_minutes integer not null default 90 check(duration_minutes between 15 and 480),
- location text, notes text, public_token uuid not null default gen_random_uuid() unique, public_enabled boolean not null default true,
+ location text, notes text, guest_observations text, public_token uuid not null default gen_random_uuid() unique, public_enabled boolean not null default true,
  google_calendar_event_id text, google_calendar_html_link text,
  google_calendar_sync_status text not null default 'not_synced' check(google_calendar_sync_status in('not_synced','pending','synced','error','cancelled')),
  google_calendar_synced_at timestamptz, google_calendar_sync_error text, created_at timestamptz not null default now(), updated_at timestamptz not null default now()
@@ -11,7 +11,7 @@ create table if not exists public.event_tastings (
 create table if not exists public.event_tasting_drinks (
  id uuid primary key default gen_random_uuid(), tasting_id uuid not null references public.event_tastings(id) on delete cascade,
  drink_id text not null references public.drinks(id) on delete restrict, display_order integer not null default 0,
- drink_name text not null, drink_description text, drink_image text, selected_for_event boolean not null default false,
+ drink_name text not null, drink_description text, drink_image text, bride_drink boolean not null default false, groom_drink boolean not null default false, selected_for_event boolean not null default false,
  created_at timestamptz not null default now(), unique(tasting_id,drink_id)
 );
 create table if not exists public.event_tasting_participants (
