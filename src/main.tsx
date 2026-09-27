@@ -4,6 +4,7 @@ import { RouterProvider } from "@tanstack/react-router";
 
 import "./styles.css";
 import { getRouter } from "./router";
+import { registerServiceWorker } from "./lib/register-service-worker";
 
 const rootElement = document.getElementById("root");
 
@@ -18,3 +19,5 @@ createRoot(rootElement).render(
     <RouterProvider router={router} />
   </StrictMode>,
 );
+
+registerServiceWorker();

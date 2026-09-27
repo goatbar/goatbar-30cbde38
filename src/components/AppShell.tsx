@@ -75,9 +75,9 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const initials = (user?.email ?? "GB").slice(0, 2).toUpperCase();
   const displayName = user?.email?.split("@")[0] ?? "Gestor";
   return (
-    <div className="flex h-screen w-full min-w-0 max-w-[100vw] flex-col overflow-hidden bg-background text-foreground md:flex-row">
+    <div className="flex h-[100dvh] w-full min-w-0 max-w-[100vw] flex-col overflow-hidden bg-background text-foreground md:flex-row">
       {/* MOBILE TOPBAR */}
-      <div className="shrink-0 flex items-center justify-between border-b border-border bg-surface p-4 md:hidden">
+      <div className="shrink-0 flex items-center justify-between border-b border-border bg-surface px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] md:hidden">
         <Link to="/gia" className="flex items-center gap-3">
           <img src={logo} alt="GOAT BAR" className="h-8 w-auto" />
           <div className="font-display text-[11px] font-semibold tracking-[0.18em] leading-none">
@@ -99,8 +99,8 @@ export function AppShell({ children }: { children?: ReactNode }) {
             className="fixed inset-0 bg-background/80 backdrop-blur-sm"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="relative w-72 max-w-[80vw] h-full bg-sidebar border-r border-sidebar-border shadow-2xl flex flex-col animate-in slide-in-from-left">
-            <div className="flex items-center justify-between px-6 pt-7 pb-8 shrink-0">
+          <div className="relative w-72 max-w-[80vw] h-full bg-sidebar border-r border-sidebar-border shadow-2xl flex flex-col animate-in slide-in-from-left pb-[env(safe-area-inset-bottom)]">
+            <div className="flex items-center justify-between px-6 pt-[calc(1.75rem+env(safe-area-inset-top))] pb-8 shrink-0">
               <Link
                 to="/gia"
                 className="flex items-center gap-3"
@@ -167,7 +167,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
       )}
 
       {/* DESKTOP SIDEBAR */}
-      <aside className="hidden md:flex flex-col w-64 shrink-0 bg-sidebar border-r border-sidebar-border h-screen overflow-y-auto">
+      <aside className="hidden md:flex flex-col w-64 shrink-0 bg-sidebar border-r border-sidebar-border h-[100dvh] overflow-y-auto">
         <div className="px-6 pt-7 pb-8 shrink-0">
           <Link to="/gia" className="flex items-center gap-3">
             <img src={logo} alt="GOAT BAR" className="h-12 w-auto" />
@@ -236,7 +236,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
       </main>
 
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
-        <div className="grid grid-cols-5 px-2 py-2">
+        <div className="grid grid-cols-5 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
           {nav.slice(0, 5).map((item) => {
             const Icon = item.icon;
             const active = item.exact
