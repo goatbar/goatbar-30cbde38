@@ -30,6 +30,7 @@ import {
   type PushNotificationState,
 } from "@/lib/push-notifications";
 import logo from "@/assets/goatbar-logo.png";
+import { googleCalendarService } from "@/services/google-calendar/google-calendar-service";
 
 const nav: {
   to: string;
@@ -59,6 +60,12 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const [pushMessage, setPushMessage] = useState<string | null>(null);
   const [pushTesting, setPushTesting] = useState(false);
   const visibleNav = nav;
+
+  useEffect(() => {
+    if (!user) return;
+    // Reconcilia eventos confirmados marcados como pendentes/erro, inclusive quando o status mudou fora desta tela.
+    googleCalendarService.syncAllConfirmed().catch((error) => console.warn("[calendar-reconcile]", error));
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;

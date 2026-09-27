@@ -1,0 +1,25 @@
+import { supabase } from "@/integrations/supabase/client";
+import type { Drink } from "@/lib/mock-data";
+import { convertHtmlToPdf } from "@/services/pdf-service";
+const db = supabase as any;
+
+export type TastingStatus="planning"|"scheduled"|"completed"|"finalized"|"cancelled";
+export interface Tasting { id:string; event_id:string; status:TastingStatus; scheduled_at:string|null; duration_minutes:number; location:string|null; notes:string|null; public_token:string; public_enabled:boolean; google_calendar_sync_status:string; google_calendar_html_link:string|null; }
+export interface TastingDrink { id:string; tasting_id:string; drink_id:string; display_order:number; drink_name:string; drink_description:string|null; drink_image:string|null; selected_for_event:boolean; }
+export interface TastingParticipant { id:string; tasting_id:string; slot:number; name:string|null; }
+export interface TastingRating { id:string; tasting_id:string; tasting_drink_id:string; participant_id:string; score:number; comment:string|null; }
+export interface TastingBundle { tasting:Tasting; drinks:TastingDrink[]; participants:TastingParticipant[]; ratings:TastingRating[]; }
+
+export const tastingService={
+ async list(eventId:string){const {data,error}=await db.from("event_tastings").select("*").eq("event_id",eventId).order("created_at",{ascending:false});if(error)throw error;return (data||[]) as Tasting[]},
+ async get(id:string):Promise<TastingBundle>{const [{data:t,error},{data:d},{data:p},{data:r}]=await Promise.all([db.from("event_tastings").select("*").eq("id",id).single(),db.from("event_tasting_drinks").select("*").eq("tasting_id",id).order("display_order"),db.from("event_tasting_participants").select("*").eq("tasting_id",id).order("slot"),db.from("event_tasting_ratings").select("*").eq("tasting_id",id)]);if(error)throw error;return{tasting:t as Tasting,drinks:(d||[]) as TastingDrink[],participants:(p||[]) as TastingParticipant[],ratings:(r||[]) as TastingRating[]}},
+ async create(eventId:string){const {data,error}=await db.from("event_tastings").insert({event_id:eventId}).select("*").single();if(error)throw error;return data as Tasting},
+ async update(id:string,payload:Partial<Tasting>){const next={...payload};if("scheduled_at" in next)(next as any).google_calendar_sync_status=next.scheduled_at?"pending":"not_synced";const {data,error}=await db.from("event_tastings").update(next).eq("id",id).select("*").single();if(error)throw error;return data as Tasting},
+ async setDrinks(tastingId:string,drinks:Drink[]){const {error:del}=await db.from("event_tasting_drinks").delete().eq("tasting_id",tastingId);if(del)throw del;if(!drinks.length)return;const rows=drinks.map((d,i)=>({tasting_id:tastingId,drink_id:d.id,display_order:i,drink_name:d.nome,drink_description:d.descricao||null,drink_image:d.imagem||null}));const {error}=await db.from("event_tasting_drinks").insert(rows);if(error)throw error},
+ async syncCalendar(tastingId:string){const {data,error}=await supabase.functions.invoke("tasting-calendar-sync",{body:{tastingId}});if(error||!data?.success)throw new Error(data?.error||error?.message||"Falha ao sincronizar degustação.");return data},
+ async finalize(id:string){return this.update(id,{status:"finalized"} as Partial<Tasting>)},
+ ranking(bundle:TastingBundle){return bundle.drinks.map(d=>{const rs=bundle.ratings.filter(r=>r.tasting_drink_id===d.id);const average=rs.length?rs.reduce((s,r)=>s+Number(r.score),0)/rs.length:0;return{...d,average,count:rs.length,comments:rs.filter(r=>r.comment).map(r=>r.comment as string)}}).sort((a,b)=>b.average-a.average||a.display_order-b.display_order)},
+ async applySelectedToEvent(eventId:string,bundle:TastingBundle){const selected=bundle.drinks.filter(d=>d.selected_for_event).map(d=>d.drink_id);const {error}=await db.from("events").update({drinks:selected,updated_at:new Date().toISOString()}).eq("id",eventId);if(error)throw error},
+ async toggleSelected(drinkId:string,selected:boolean){const {error}=await db.from("event_tasting_drinks").update({selected_for_event:selected}).eq("id",drinkId);if(error)throw error},
+ async downloadPdf(bundle:TastingBundle,eventName:string){const rank=this.ranking(bundle);const esc=(s:string)=>s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]||c));const html=`<div style="font-family:Arial;padding:32px"><h1>Resultado da Degustação</h1><h2>${esc(eventName)}</h2><p>Data: ${bundle.tasting.scheduled_at?new Date(bundle.tasting.scheduled_at).toLocaleString("pt-BR"):"—"}</p><h3>Ranking</h3>${rank.map((d,i)=>`<div style="padding:14px 0;border-bottom:1px solid #ddd"><strong>${i+1}º — ${esc(d.drink_name)}</strong><br/>Média: ${d.count?d.average.toFixed(1):"Sem notas"} · ${d.count} avaliação(ões)${d.comments.length?`<br/><small>${d.comments.map(esc).join(" · ")}</small>`:""}</div>`).join("")}</div>`;const pdf=await convertHtmlToPdf(html,`Degustacao_${eventName.replace(/[^a-z0-9]+/gi,"_")}`);const url=URL.createObjectURL(pdf.blob);const a=document.createElement("a");a.href=url;a.download=`Degustacao_${eventName.replace(/[^a-z0-9]+/gi,"_")}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+};
