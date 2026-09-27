@@ -26,6 +26,7 @@ import {
   enablePushNotifications,
   getPushNotificationState,
   syncPushRegistration,
+  sendTestPushNotification,
   type PushNotificationState,
 } from "@/lib/push-notifications";
 import logo from "@/assets/goatbar-logo.png";
@@ -56,6 +57,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const [pushState, setPushState] = useState<PushNotificationState>("loading");
   const [pushActivating, setPushActivating] = useState(false);
   const [pushMessage, setPushMessage] = useState<string | null>(null);
+  const [pushTesting, setPushTesting] = useState(false);
   const visibleNav = nav;
 
   useEffect(() => {
@@ -111,6 +113,19 @@ export function AppShell({ children }: { children?: ReactNode }) {
       );
     } finally {
       setPushActivating(false);
+    }
+  };
+
+  const handleTestPush = async () => {
+    setPushTesting(true);
+    setPushMessage(null);
+    try {
+      await sendTestPushNotification();
+      setPushMessage("Teste enviado. A notificação deve aparecer neste iPhone.");
+    } catch (error) {
+      setPushMessage(error instanceof Error ? error.message : "Não foi possível enviar o teste.");
+    } finally {
+      setPushTesting(false);
     }
   };
 
@@ -286,9 +301,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
 
       {/* MAIN */}
       <main className="flex w-full min-w-0 max-w-[100vw] flex-1 flex-col overflow-y-auto overflow-x-hidden pb-[calc(5.25rem+env(safe-area-inset-bottom))] md:pb-0">
-        {pushState !== "loading" &&
-          pushState !== "unsupported" &&
-          pushState !== "enabled" && (
+        {pushState !== "loading" && pushState !== "unsupported" && (
             <div className="md:hidden px-4 pt-4">
               <div className="rounded-xl border border-border bg-surface p-3.5 shadow-sm">
                 <div className="flex items-start gap-3">
@@ -300,14 +313,26 @@ export function AppShell({ children }: { children?: ReactNode }) {
                       Notificações no iPhone
                     </div>
                     <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                      {pushState === "needs_install"
-                        ? "Adicione o Goat Bar à Tela de Início pelo Safari para receber alertas push."
-                        : pushState === "denied"
-                          ? "As notificações estão bloqueadas. Libere a permissão nos Ajustes do iPhone para o Goat Bar."
-                          : "Ative para receber novos pedidos de orçamento mesmo com o app fechado."}
+                      {pushState === "enabled"
+                        ? "Notificações ativas neste aparelho. Você receberá alertas de novos pedidos de orçamento."
+                        : pushState === "needs_install"
+                          ? "Adicione o Goat Bar à Tela de Início pelo Safari para receber alertas push."
+                          : pushState === "denied"
+                            ? "As notificações estão bloqueadas. Libere a permissão nos Ajustes do iPhone para o Goat Bar."
+                            : "Ative para receber novos pedidos de orçamento mesmo com o app fechado."}
                     </p>
                     {pushMessage && (
                       <p className="mt-2 text-xs text-destructive">{pushMessage}</p>
+                    )}
+                    {pushState === "enabled" && (
+                      <button
+                        type="button"
+                        onClick={() => void handleTestPush()}
+                        disabled={pushTesting}
+                        className="mt-3 inline-flex items-center rounded-lg border border-border px-3 py-2 text-xs font-semibold text-foreground disabled:opacity-60"
+                      >
+                        {pushTesting ? "Enviando..." : "Enviar notificação de teste"}
+                      </button>
                     )}
                     {(pushState === "prompt" || pushState === "error") && (
                       <button
