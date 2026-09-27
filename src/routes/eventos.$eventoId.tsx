@@ -111,6 +111,7 @@ import {
 import { ComprasNotinhasTab } from "@/components/event-tabs/ComprasNotinhasTab";
 import { InsumosLevadosTab } from "@/components/event-tabs/InsumosLevadosTab";
 import { FechamentoTab } from "@/components/event-tabs/FechamentoTab";
+import { DegustacaoTab } from "@/components/event-tabs/DegustacaoTab";
 import {
   getSignatureIntegrationState,
   canDeleteOrRegenerateContract,
@@ -2248,6 +2249,7 @@ function EventoInterna() {
             { id: "Contatos & Negociação", icon: <MessageCircle className="h-4 w-4" /> },
             { id: "Contrato", icon: <FileSignature className="h-4 w-4" /> },
             { id: "Cardápio", icon: <UtensilsCrossed className="h-4 w-4" /> },
+            { id: "Degustação", icon: <Sparkles className="h-4 w-4" /> },
             { id: "Compras e Notinhas", icon: <FileTextIcon className="h-4 w-4" /> },
             { id: "Insumos Levados", icon: <Download className="h-4 w-4" /> },
             { id: "Fechamento do Evento", icon: <CheckCircle2 className="h-4 w-4" /> },
@@ -2315,6 +2317,12 @@ function EventoInterna() {
                 Use as abas abaixo para compras, insumos e fechamento operacional.
               </p>
             </SectionCard>
+          </div>
+        )}
+
+        {activeTab === "Degustação" && (
+          <div className="animate-in fade-in duration-300">
+            <DegustacaoTab eventId={eventoId} eventName={draft.evento_nome || draft.cliente || draft.nome} drinks={allDrinks} />
           </div>
         )}
 
