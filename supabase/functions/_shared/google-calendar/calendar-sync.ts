@@ -9,15 +9,13 @@ import { buildGoogleCalendarPayload } from "./event-formatter.ts";
 
 export function isEventConfirmed(status?: string | null): boolean {
   if (!status) return false;
-  const s = status.toLowerCase().trim();
-  return (
-    s === "confirmado" ||
-    s === "confirmados" ||
-    s === "proposta_aceita" ||
-    s === "contrato_assinado" ||
-    s === "finalizado" ||
-    s.includes("conf")
-  );
+  const s = status.toLowerCase().trim().replace(/[\s-]+/g, "_");
+  return new Set([
+    "confirmado",
+    "confirmados",
+    "proposta_aceita",
+    "contrato_assinado",
+  ]).has(s);
 }
 
 export function isEventCancelled(status?: string | null): boolean {
@@ -255,21 +253,32 @@ export async function syncAllConfirmedEvents(
   supabaseAdmin: SupabaseClient,
   appUrl?: string
 ): Promise<{ total: number; synced: number; errors: number; details: SyncEventResult[] }> {
-  // Query all confirmed events
-  const { data: events, error } = await supabaseAdmin
+  const { data: allEvents, error } = await supabaseAdmin
     .from("events")
-    .select("id, status, google_calendar_event_id, google_calendar_sync_status")
-    .or("status.ilike.%conf%,status.ilike.%proposta_aceita%,status.ilike.%contrato_assinado%,status.ilike.%finalizado%,google_calendar_sync_status.eq.pending,google_calendar_sync_status.eq.error");
+    .select("id, status, google_calendar_event_id, google_calendar_sync_status, google_calendar_synced_at");
 
-  if (error || !events) {
+  if (error || !allEvents) {
     throw new Error(`Erro ao buscar eventos para sincronização: ${error?.message || "erro"}`);
   }
+
+  const events = allEvents.filter((ev: any) => {
+    if (!isEventConfirmed(ev.status)) return false;
+    return (
+      !ev.google_calendar_event_id ||
+      !ev.google_calendar_synced_at ||
+      ["pending", "error", "not_synced"].includes(ev.google_calendar_sync_status || "")
+    );
+  });
 
   const results: SyncEventResult[] = [];
   let synced = 0;
   let errors = 0;
 
-  for (const ev of events) {
+  for (let index = 0; index < events.length; index++) {
+    const ev = events[index];
+    if (index > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 750));
+    }
     const res = await syncSingleGoatBarEvent(supabaseAdmin, ev.id, appUrl);
     results.push(res);
     if (res.success) {
