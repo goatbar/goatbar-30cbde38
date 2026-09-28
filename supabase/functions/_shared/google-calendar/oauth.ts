@@ -21,9 +21,17 @@ export interface GoogleOAuthConfig {
 export function getGoogleOAuthConfig(): GoogleOAuthConfig {
   const clientId =
     Deno.env.get("GOOGLE_CALENDAR_CLIENT_ID") ||
-    "321790958376-o8l22dnicdbc3lr6ahl7la16603aid9.apps.googleusercontent.com";
+    Deno.env.get("GOOGLE_CLIENT_ID") ||
+    "";
 
-  const clientSecret = Deno.env.get("GOOGLE_CALENDAR_CLIENT_SECRET") || "";
+  const clientSecret =
+    Deno.env.get("GOOGLE_CALENDAR_CLIENT_SECRET") ||
+    Deno.env.get("GOOGLE_CLIENT_SECRET") ||
+    "";
+
+  if (!clientId || !clientSecret) {
+    throw new Error("Credenciais OAuth do Google Calendar não configuradas.");
+  }
 
   const redirectUri =
     Deno.env.get("GOOGLE_CALENDAR_REDIRECT_URI") ||
