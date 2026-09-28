@@ -1,6 +1,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type","Content-Type":"application/json"};
+const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type, x-calendar-sync-secret","Content-Type":"application/json"};
 const out=(b:any,s=200)=>new Response(JSON.stringify(b),{status:s,headers:cors});
+async function sha256Hex(v:string){const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v));return Array.from(new Uint8Array(d)).map(b=>b.toString(16).padStart(2,"0")).join("");}
+async function internalOk(db:any,req:Request){
+ const provided=req.headers.get("x-calendar-sync-secret"); if(!provided)return false;
+ const {data,error}=await db.from("calendar_sync_internal_config").select("secret_hash").eq("id","main").single();
+ if(error||!data?.secret_hash)return false;
+ return (await sha256Hex(provided))===data.secret_hash;
+}
 async function googleFetch(url:string,init:RequestInit){
  for(let a=1;a<=5;a++){
   const r=await fetch(url,init);
@@ -31,9 +38,13 @@ Deno.serve(async(req)=>{
  if(req.method==="OPTIONS")return new Response("ok",{headers:cors});
  try{
   const url=Deno.env.get("SUPABASE_URL")!, anon=Deno.env.get("SUPABASE_ANON_KEY")!, service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const auth=req.headers.get("Authorization"); if(!auth)return out({error:"Não autorizado"},401);
-  const authDb=createClient(url,anon,{global:{headers:{Authorization:auth}}}); const {data:{user}}=await authDb.auth.getUser(); if(!user)return out({error:"Não autorizado"},401);
-  const db=createClient(url,service); const body=await req.json(); const id=body.tastingId; if(!id)return out({error:"tastingId obrigatório"},400);
+  const db=createClient(url,service); const body=await req.json();
+  const internal=await internalOk(db,req);
+  if(!internal){
+   const auth=req.headers.get("Authorization"); if(!auth)return out({error:"Não autorizado"},401);
+   const authDb=createClient(url,anon,{global:{headers:{Authorization:auth}}}); const {data:{user}}=await authDb.auth.getUser(); if(!user)return out({error:"Não autorizado"},401);
+  }
+  const id=body.tastingId; if(!id)return out({error:"tastingId obrigatório"},400);
   const {data:t,error}=await db.from("event_tastings").select("*,events(event_name,client_name,phone,event_type)").eq("id",id).single(); if(error||!t)return out({error:"Degustação não encontrada"},404);
   if(!t.scheduled_at)return out({error:"Defina a data e horário da degustação."},400);
   const {data:ds}=await db.from("event_tasting_drinks").select("drink_name").eq("tasting_id",id).order("display_order");
