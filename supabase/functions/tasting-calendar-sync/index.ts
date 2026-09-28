@@ -6,7 +6,10 @@ async function token(db:any){
  if(error||!i) throw new Error("Google Calendar não conectado.");
  if(new Date(i.token_expires_at).getTime()-Date.now()>300000) return {access:i.access_token,calendar:i.calendar_id||"primary"};
  if(!i.refresh_token) throw new Error("Google Calendar precisa ser reconectado.");
- const p=new URLSearchParams({refresh_token:i.refresh_token,client_id:Deno.env.get("GOOGLE_CALENDAR_CLIENT_ID")||"321790958376-o8l22dnicdbc3lr6ahl7la16603aid9.apps.googleusercontent.com",client_secret:Deno.env.get("GOOGLE_CALENDAR_CLIENT_SECRET")||"",grant_type:"refresh_token"});
+ const clientId=Deno.env.get("GOOGLE_CLIENT_ID")||Deno.env.get("GOOGLE_CALENDAR_CLIENT_ID")||"";
+ const clientSecret=Deno.env.get("GOOGLE_CLIENT_SECRET")||Deno.env.get("GOOGLE_CALENDAR_CLIENT_SECRET")||"";
+ if(!clientId||!clientSecret) throw new Error("Credenciais OAuth do Google Calendar não configuradas.");
+ const p=new URLSearchParams({refresh_token:i.refresh_token,client_id:clientId,client_secret:clientSecret,grant_type:"refresh_token"});
  const rr=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:p});
  if(!rr.ok) throw new Error("Falha ao renovar acesso ao Google Calendar.");
  const j=await rr.json(); await db.from("google_calendar_integrations").update({access_token:j.access_token,token_expires_at:new Date(Date.now()+(j.expires_in||3600)*1000).toISOString()}).eq("id",i.id);
