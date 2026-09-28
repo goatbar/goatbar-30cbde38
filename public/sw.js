@@ -6,9 +6,9 @@ const PRECACHE = [
   APP_SHELL,
   "/manifest.webmanifest",
   "/favicon.ico",
-  "/icons/apple-touch-icon.png?v=3",
-  "/icons/goatbar-192.png?v=3",
-  "/icons/goatbar-512.png?v=3",
+  "/icons/apple-touch-icon.png?v=4",
+  "/icons/goatbar-192.png?v=4",
+  "/icons/goatbar-512.png?v=4",
 ];
 
 self.addEventListener("install", (event) => {
@@ -112,7 +112,7 @@ self.addEventListener("push", (event) => {
     body: "Você recebeu uma nova notificação.",
     url: "/gia",
     tag: "goatbar",
-    icon: "/icons/goatbar-192.png?v=3",
+    icon: "/icons/goatbar-192.png?v=4",
   };
 
   try {
@@ -128,8 +128,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
-      icon: payload.icon || "/icons/goatbar-192.png?v=3",
-      badge: "/icons/goatbar-192.png?v=3",
+      icon: payload.icon || "/icons/goatbar-192.png?v=4",
+      badge: "/icons/goatbar-192.png?v=4",
       tag: payload.tag || "goatbar",
       data: { url: payload.url || "/gia" },
     }),
