@@ -9,8 +9,25 @@ import {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-calendar-sync-secret",
 };
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function isValidInternalRequest(supabaseAdmin: any, req: Request): Promise<boolean> {
+  const provided = req.headers.get("x-calendar-sync-secret");
+  if (!provided) return false;
+  const { data, error } = await supabaseAdmin
+    .from("calendar_sync_internal_config")
+    .select("secret_hash")
+    .eq("id", "main")
+    .single();
+  if (error || !data?.secret_hash) return false;
+  return (await sha256Hex(provided)) === data.secret_hash;
+}
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -21,39 +38,48 @@ serve(async (req: Request) => {
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
-    return new Response(
-      JSON.stringify({ error: "Não autorizado. Token de autenticação ausente." }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
-
-  const supabaseAuthClient = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Authenticate user
-  const { data: { user }, error: authError } = await supabaseAuthClient.auth.getUser();
-  if (authError || !user) {
-    return new Response(
-      JSON.stringify({ error: "Usuário não autenticado." }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+  let body: any = {};
+  if (req.method === "POST") {
+    try {
+      body = await req.json();
+    } catch {
+      body = {};
+    }
+  }
+  const action = body.action || "status";
+  const internal = await isValidInternalRequest(supabaseAdmin, req);
+
+  if (internal) {
+    if (!["sync_event", "sync_all"].includes(action)) {
+      return new Response(
+        JSON.stringify({ error: "Ação interna não permitida." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+  } else {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Não autorizado. Token de autenticação ausente." }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseAuthClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: authError } = await supabaseAuthClient.auth.getUser();
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Usuário não autenticado." }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
   }
 
   try {
-    let body: any = {};
-    if (req.method === "POST") {
-      try {
-        body = await req.json();
-      } catch {
-        body = {};
-      }
-    }
-
-    const action = body.action || "status";
     const appUrl = Deno.env.get("APP_URL") || Deno.env.get("SITE_URL") || "https://goatbar.com.br";
 
     // ------------------------------------------------------------------------
