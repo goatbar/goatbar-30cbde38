@@ -91,8 +91,5 @@ export function buildGoogleCalendarPayload(
     start: timeRange.start,
     end: timeRange.end,
     status: isCancelled ? "tentative" : "confirmed", // keep visible in calendar
-    reminders: {
-      useDefault: true,
-    },
   };
 }
