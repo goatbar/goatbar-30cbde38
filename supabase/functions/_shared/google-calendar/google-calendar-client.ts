@@ -6,6 +6,31 @@ import {
 
 export const GOOGLE_CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
 
+async function fetchGoogleWithRetry(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const maxAttempts = 5;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const response = await fetch(input, init);
+    if (response.ok || response.status === 404) return response;
+
+    let retryable = response.status === 429 || response.status >= 500;
+    if (response.status === 403) {
+      try {
+        const parsed = await response.clone().json();
+        const reason = parsed?.error?.errors?.[0]?.reason || "";
+        retryable = reason === "rateLimitExceeded" || reason === "userRateLimitExceeded";
+      } catch {
+        retryable = false;
+      }
+    }
+
+    if (!retryable || attempt === maxAttempts) return response;
+    const retryAfter = Number(response.headers.get("retry-after") || 0);
+    const delayMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(1000 * 2 ** (attempt - 1), 8000);
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return fetch(input, init);
+}
+
 export class GoogleCalendarApiError extends Error {
   status: number;
   statusText: string;
@@ -27,7 +52,7 @@ export async function createGoogleCalendarEvent(
 ): Promise<GoogleCalendarEventResponse> {
   const url = `${GOOGLE_CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events`;
 
-  const response = await fetch(url, {
+  const response = await fetchGoogleWithRetry(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -60,7 +85,7 @@ export async function updateGoogleCalendarEvent(
 ): Promise<{ event?: GoogleCalendarEventResponse; notFound?: boolean }> {
   const url = `${GOOGLE_CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`;
 
-  const response = await fetch(url, {
+  const response = await fetchGoogleWithRetry(url, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -97,7 +122,7 @@ export async function getGoogleCalendarEvent(
 ): Promise<GoogleCalendarEventResponse | null> {
   const url = `${GOOGLE_CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`;
 
-  const response = await fetch(url, {
+  const response = await fetchGoogleWithRetry(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: "application/json",
@@ -125,7 +150,7 @@ export async function listUserGoogleCalendars(
 ): Promise<GoogleCalendarListEntry[]> {
   const url = `${GOOGLE_CALENDAR_API_BASE}/users/me/calendarList?minAccessRole=writer`;
 
-  const response = await fetch(url, {
+  const response = await fetchGoogleWithRetry(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: "application/json",
