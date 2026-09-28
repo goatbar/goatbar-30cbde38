@@ -20,13 +20,13 @@ export interface GoogleOAuthConfig {
 
 export function getGoogleOAuthConfig(): GoogleOAuthConfig {
   const clientId =
-    Deno.env.get("GOOGLE_CALENDAR_CLIENT_ID") ||
     Deno.env.get("GOOGLE_CLIENT_ID") ||
+    Deno.env.get("GOOGLE_CALENDAR_CLIENT_ID") ||
     "";
 
   const clientSecret =
-    Deno.env.get("GOOGLE_CALENDAR_CLIENT_SECRET") ||
     Deno.env.get("GOOGLE_CLIENT_SECRET") ||
+    Deno.env.get("GOOGLE_CALENDAR_CLIENT_SECRET") ||
     "";
 
   if (!clientId || !clientSecret) {
