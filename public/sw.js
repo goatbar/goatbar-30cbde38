@@ -1,5 +1,5 @@
-const SHELL_CACHE = "goatbar-pwa-shell-v2";
-const RUNTIME_CACHE = "goatbar-pwa-runtime-v2";
+const SHELL_CACHE = "goatbar-pwa-shell-v3";
+const RUNTIME_CACHE = "goatbar-pwa-runtime-v3";
 const APP_SHELL = "/";
 
 const PRECACHE = [
@@ -59,9 +59,11 @@ self.addEventListener("fetch", (event) => {
       fetch(request)
         .then((response) => {
           if (response.ok) {
+            const cachedCopy = response.clone();
             void caches
               .open(SHELL_CACHE)
-              .then((cache) => cache.put(APP_SHELL, response.clone()));
+              .then((cache) => cache.put(APP_SHELL, cachedCopy))
+              .catch(() => undefined);
           }
           return response;
         })
@@ -92,9 +94,11 @@ self.addEventListener("fetch", (event) => {
       const network = fetch(request)
         .then((response) => {
           if (response.ok) {
+            const cachedCopy = response.clone();
             void caches
               .open(RUNTIME_CACHE)
-              .then((cache) => cache.put(request, response.clone()));
+              .then((cache) => cache.put(request, cachedCopy))
+              .catch(() => undefined);
           }
           return response;
         })
