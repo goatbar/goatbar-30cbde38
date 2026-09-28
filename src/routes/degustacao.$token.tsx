@@ -32,9 +32,10 @@ function TastingPublicPage(){
   const source=pdfPageRef.current;
   const clone=source.cloneNode(true) as HTMLElement;
   clone.querySelectorAll('[data-pdf-hide="true"]').forEach(el=>el.remove());
-  clone.style.width="794px";
-  clone.style.maxWidth="794px";
-  clone.style.minWidth="794px";
+  const captureWidth=Math.max(Math.ceil(source.getBoundingClientRect().width),source.scrollWidth,1200);
+  clone.style.width=`${captureWidth}px`;
+  clone.style.maxWidth=`${captureWidth}px`;
+  clone.style.minWidth=`${captureWidth}px`;
   clone.style.margin="0";
   clone.style.backgroundColor="#0f1414";
   clone.style.color="#f7f7f2";
@@ -44,7 +45,7 @@ function TastingPublicPage(){
   host.style.position="fixed";
   host.style.left="-10000px";
   host.style.top="0";
-  host.style.width="794px";
+  host.style.width=`${captureWidth}px`;
   host.style.backgroundColor="#0f1414";
   host.style.zIndex="-1";
   host.appendChild(clone);
@@ -57,7 +58,7 @@ function TastingPublicPage(){
    margin:[0,0,0,0],
    filename:`Degustacao_${safeName}.pdf`,
    image:{type:"jpeg",quality:0.99},
-   html2canvas:{scale:2,useCORS:true,allowTaint:false,logging:false,backgroundColor:"#0f1414",windowWidth:794,scrollX:0,scrollY:0},
+   html2canvas:{scale:2,useCORS:true,allowTaint:false,logging:false,backgroundColor:"#0f1414",windowWidth:captureWidth,scrollX:0,scrollY:0},
    jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},
    pagebreak:{mode:["css","legacy"]}
   }).from(clone).save();
