@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Drink } from "@/lib/mock-data";
-import { convertHtmlToPdf } from "@/services/pdf-service";
+import { exportTastingPublicPagePdf } from "@/lib/tasting-pdf";
 const db = supabase as any;
 
 export const TASTING_LOCATION = "Base da Goat Bar";
@@ -10,8 +10,6 @@ export interface TastingDrink { id:string; tasting_id:string; drink_id:string; d
 export interface TastingParticipant { id:string; tasting_id:string; slot:number; name:string|null; }
 export interface TastingRating { id:string; tasting_id:string; tasting_drink_id:string; participant_id:string; score:number; comment:string|null; }
 export interface TastingBundle { tasting:Tasting; drinks:TastingDrink[]; participants:TastingParticipant[]; ratings:TastingRating[]; }
-
-const esc=(s:string)=>String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]||c));
 
 export const tastingService={
  async list(eventId:string){const {data,error}=await db.from("event_tastings").select("*").eq("event_id",eventId).order("created_at",{ascending:false});if(error)throw error;return (data||[]) as Tasting[]},
@@ -24,17 +22,5 @@ export const tastingService={
  ranking(bundle:TastingBundle){return bundle.drinks.map(d=>{const rs=bundle.ratings.filter(r=>r.tasting_drink_id===d.id);const average=rs.length?rs.reduce((s,r)=>s+Number(r.score),0)/rs.length:0;return{...d,average,count:rs.length,comments:rs.filter(r=>r.comment).map(r=>r.comment as string)}}).sort((a,b)=>b.average-a.average||a.display_order-b.display_order)},
  async applySelectedToEvent(eventId:string,bundle:TastingBundle){const selected=bundle.drinks.filter(d=>d.selected_for_event).map(d=>d.drink_id);const {error}=await db.from("events").update({drinks:selected,updated_at:new Date().toISOString()}).eq("id",eventId);if(error)throw error},
  async toggleSelected(drinkId:string,selected:boolean){const {error}=await db.from("event_tasting_drinks").update({selected_for_event:selected}).eq("id",drinkId);if(error)throw error},
- async downloadPdf(bundle:TastingBundle,eventName:string){
-  const rank=this.ranking(bundle);
-  const participants=bundle.participants.filter(p=>p.name).sort((a,b)=>a.slot-b.slot);
-  const participantById=new Map(participants.map(p=>[p.id,p]));
-  const obs=bundle.tasting.guest_observations?esc(bundle.tasting.guest_observations).replace(/\n/g,"<br/>"):"";
-  const detail=rank.map((d,i)=>{
-   const rs=bundle.ratings.filter(r=>r.tasting_drink_id===d.id).sort((a,b)=>(participantById.get(a.participant_id)?.slot||99)-(participantById.get(b.participant_id)?.slot||99));
-   const scores=rs.map(r=>`<li>${esc(participantById.get(r.participant_id)?.name||"Participante")}: <strong>${Number(r.score).toFixed(1)}</strong>${r.comment?` — ${esc(r.comment)}`:""}</li>`).join("");
-   return `<div style="padding:14px 0;border-bottom:1px solid #ddd"><strong>${i+1}º — ${esc(d.drink_name)}</strong><br/>Média: ${d.count?d.average.toFixed(1):"Sem notas"} · ${d.count} avaliação(ões)${scores?`<ul style="margin:8px 0 0;padding-left:20px">${scores}</ul>`:""}</div>`;
-  }).join("");
-  const html=`<div style="font-family:Arial;padding:32px;color:#111"><h1>Resultado da Degustação</h1><h2>${esc(eventName)}</h2><p>Data: ${bundle.tasting.scheduled_at?new Date(bundle.tasting.scheduled_at).toLocaleString("pt-BR"):"—"}</p>${participants.length?`<p><strong>Participantes:</strong> ${participants.map(p=>esc(p.name||"")).join(" · ")}</p>`:""}${obs?`<h3>Observações da degustação</h3><p>${obs}</p>`:""}<h3>Ranking</h3>${detail}</div>`;
-  const safeName=eventName.replace(/[^a-z0-9]+/gi,"_");const pdf=await convertHtmlToPdf(html,`Degustacao_${safeName}`);const url=URL.createObjectURL(pdf.blob);const a=document.createElement("a");a.href=url;a.download=`Degustacao_${safeName}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
- }
+ async downloadPdf(bundle:TastingBundle,eventName:string){await exportTastingPublicPagePdf(bundle.tasting.public_token,eventName)}
 };
