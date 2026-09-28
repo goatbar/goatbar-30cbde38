@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect,useMemo,useState } from "react";
+import { useEffect,useMemo,useRef,useState } from "react";
 import { CalendarDays,CheckCircle2,Download,GlassWater,Loader2,Plus,Star,Users } from "lucide-react";
 import logo from "@/assets/goatbar-logo.png";
-import { convertHtmlToPdf } from "@/services/pdf-service";
+import html2pdf from "html2pdf.js";
 
 export const Route=createFileRoute("/degustacao/$token")({component:TastingPublicPage});
 type Drink={id:string;drink_id:string;drink_name:string;drink_description?:string|null;drink_image?:string|null;display_order:number};
@@ -16,8 +16,9 @@ const formatEventDate=(value?:string)=>{if(!value)return"—";const d=new Date(`
 
 function TastingPublicPage(){
  const {token}=Route.useParams();
- const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[adding,setAdding]=useState(false),[done,setDone]=useState(false),[error,setError]=useState("");
+ const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[adding,setAdding]=useState(false),[exporting,setExporting]=useState(false),[done,setDone]=useState(false),[error,setError]=useState("");
  const [data,setData]=useState<any>(null),[people,setPeople]=useState<Person[]>([{slot:1,name:""}]),[ratings,setRatings]=useState<Record<string,{score:string;comment:string}>>({}),[observations,setObservations]=useState("");
+ const pdfPageRef=useRef<HTMLElement|null>(null);
  const loadData=async()=>{const r=await fetch(endpoint(),{method:"POST",headers:{apikey:key(),"Content-Type":"application/json"},body:JSON.stringify({action:"get",token})});const j=await r.json();if(!r.ok)throw new Error(j.error);setData(j);setObservations(j.tasting?.guest_observations||"");const existingParticipants=j.participants||[];const ratedParticipantIds=new Set((j.ratings||[]).map((x:any)=>x.participant_id));const occupied=existingParticipants.filter((p:any)=>p.name||ratedParticipantIds.has(p.id));const count=Math.max(1,...occupied.map((p:any)=>Number(p.slot)||1));setPeople(Array.from({length:count},(_,i)=>({slot:i+1,name:existingParticipants.find((p:any)=>Number(p.slot)===i+1)?.name||""})));const next:any={};for(const rr of j.ratings||[]){const p=existingParticipants.find((x:any)=>x.id===rr.participant_id);if(p)next[`${rr.tasting_drink_id}:${p.slot}`]={score:String(rr.score),comment:rr.comment||""}}setRatings(next);return j};
  useEffect(()=>{loadData().catch(e=>setError(e.message)).finally(()=>setLoading(false))},[token]);
  const resizePeople=(count:number)=>{const n=Math.max(1,Math.min(30,Number(count)||1));setPeople(current=>Array.from({length:n},(_,i)=>current[i]||{slot:i+1,name:""}))};
@@ -27,12 +28,45 @@ function TastingPublicPage(){
  const addDrink=async(drinkId:string)=>{if(!drinkId||!data)return;setAdding(true);setError("");try{const r=await fetch(endpoint(),{method:"POST",headers:{apikey:key(),"Content-Type":"application/json"},body:JSON.stringify({action:"add_drink",token,drink_id:drinkId})});const j=await r.json();if(!r.ok)throw new Error(j.error);setData((current:any)=>({...current,drinks:[...(current.drinks||[]).filter((d:any)=>d.id!==j.drink.id),j.drink].sort((a:any,b:any)=>a.display_order-b.display_order)}))}catch(e:any){setError(e.message)}finally{setAdding(false)}};
  const submit=async()=>{if(!canSubmit)return;setSaving(true);setError("");try{const rows=[] as any[];for(const d of data.drinks||[])for(const p of people){const v=ratings[`${d.id}:${p.slot}`]||{score:"",comment:""};rows.push({tasting_drink_id:d.id,slot:p.slot,score:Number(v.score),comment:v.comment||""})}const r=await fetch(endpoint(),{method:"POST",headers:{apikey:key(),"Content-Type":"application/json"},body:JSON.stringify({action:"submit",flow_version:2,token,participants:people,ratings:rows,observations})});const j=await r.json();if(!r.ok)throw new Error(j.error);const refreshed=await loadData();setDone(true);setData(refreshed)}catch(e:any){setError(e.message)}finally{setSaving(false)}};
  const ranking=useMemo(()=>{if(!data)return[];const participants=data.participants||[];return (data.drinks||[]).map((d:Drink)=>{const rs=(data.ratings||[]).filter((r:any)=>r.tasting_drink_id===d.id);const scores=rs.map((r:any)=>({score:Number(r.score),name:participants.find((p:any)=>p.id===r.participant_id)?.name||"Participante"}));const average=scores.length?scores.reduce((s:number,r:any)=>s+r.score,0)/scores.length:0;return{...d,average,count:scores.length,scores}}).sort((a:any,b:any)=>b.average-a.average||a.display_order-b.display_order)},[data]);
- const generatePdf=async()=>{if(!data)return;const event=eventOf(data);const participants=(data.participants||[]).filter((p:any)=>p.name).sort((a:any,b:any)=>a.slot-b.slot);const rows=ranking.map((d:any,i:number)=>`<div style="padding:14px 0;border-bottom:1px solid #ddd"><strong>${i+1}º — ${esc(d.drink_name)}</strong><br/>Média: ${d.count?d.average.toFixed(1):"Sem notas"}${d.scores?.length?`<ul>${d.scores.map((s:any)=>`<li>${esc(s.name)}: <strong>${s.score.toFixed(1)}</strong></li>`).join("")}</ul>`:""}</div>`).join("");const html=`<div style="font-family:Arial;padding:32px;color:#111"><h1>Resultado da Degustação</h1><h2>${esc(event?.event_name||event?.client_name||"GOAT Bar")}</h2><p><strong>Participantes:</strong> ${participants.map((p:any)=>esc(p.name)).join(" · ")}</p>${data.tasting?.guest_observations?`<p><strong>Observações:</strong><br/>${esc(data.tasting.guest_observations).replace(/\n/g,"<br/>")}</p>`:""}<h3>Ranking</h3>${rows}</div>`;const name=String(event?.event_name||event?.client_name||"Degustacao").replace(/[^a-z0-9]+/gi,"_");const pdf=await convertHtmlToPdf(html,`Degustacao_${name}`);const url=URL.createObjectURL(pdf.blob);const a=document.createElement("a");a.href=url;a.download=`Degustacao_${name}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+ const generatePdf=async()=>{if(!data||!pdfPageRef.current||exporting)return;setExporting(true);let host:HTMLDivElement|null=null;try{
+  const source=pdfPageRef.current;
+  const clone=source.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll('[data-pdf-hide="true"]').forEach(el=>el.remove());
+  clone.style.width="794px";
+  clone.style.maxWidth="794px";
+  clone.style.minWidth="794px";
+  clone.style.margin="0";
+  clone.style.backgroundColor="#0f1414";
+  clone.style.color="#f7f7f2";
+  clone.style.overflow="visible";
+  host=document.createElement("div");
+  host.setAttribute("aria-hidden","true");
+  host.style.position="fixed";
+  host.style.left="-10000px";
+  host.style.top="0";
+  host.style.width="794px";
+  host.style.backgroundColor="#0f1414";
+  host.style.zIndex="-1";
+  host.appendChild(clone);
+  document.body.appendChild(host);
+  await Promise.all(Array.from(clone.querySelectorAll("img")).map(img=>img.complete?Promise.resolve():new Promise<void>(resolve=>{img.onload=()=>resolve();img.onerror=()=>resolve()})));
+  await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
+  const event=eventOf(data);
+  const safeName=String(event?.event_name||event?.client_name||"Degustacao").replace(/[^a-z0-9]+/gi,"_");
+  await html2pdf().set({
+   margin:[0,0,0,0],
+   filename:`Degustacao_${safeName}.pdf`,
+   image:{type:"jpeg",quality:0.99},
+   html2canvas:{scale:2,useCORS:true,allowTaint:false,logging:false,backgroundColor:"#0f1414",windowWidth:794,scrollX:0,scrollY:0},
+   jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},
+   pagebreak:{mode:["css","legacy"]}
+  }).from(clone).save();
+ }catch(e:any){console.error("Erro ao gerar PDF da degustação:",e);setError("Não foi possível gerar o PDF da degustação.")}finally{if(host&&document.body.contains(host))document.body.removeChild(host);setExporting(false)}};
  if(loading)return <main className="min-h-screen grid place-items-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary"/></main>;
  if(error&&!data)return <main className="min-h-screen grid place-items-center bg-background p-6"><div className="max-w-md text-center"><img src={logo} className="h-14 mx-auto mb-6"/><h1 className="text-xl font-bold">Degustação indisponível</h1><p className="mt-2 text-muted-foreground">{error}</p></div></main>;
  const event=eventOf(data);const finalized=done||data?.tasting?.status==="finalized";
  const availableCatalog=(data?.catalog||[]).filter((c:CatalogDrink)=>!(data?.drinks||[]).some((d:Drink)=>d.drink_id===c.id));
- return <main className="min-h-screen bg-background text-foreground"><header className="border-b bg-black text-white"><div className="max-w-6xl mx-auto px-5 py-5 flex items-center justify-between"><img src={logo} alt="GOAT Bar" className="h-12 w-auto"/><div className="text-right"><span className="block text-[10px] uppercase tracking-[0.32em] opacity-70">Experiência GOAT Bar</span><span className="font-display text-lg tracking-wide">Degustação</span></div></div></header><div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
+ return <main ref={pdfPageRef} className="min-h-screen bg-background text-foreground"><header className="border-b bg-black text-white"><div className="max-w-6xl mx-auto px-5 py-5 flex items-center justify-between"><img src={logo} alt="GOAT Bar" className="h-12 w-auto"/><div className="text-right"><span className="block text-[10px] uppercase tracking-[0.32em] opacity-70">Experiência GOAT Bar</span><span className="font-display text-lg tracking-wide">Degustação</span></div></div></header><div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
   <section className="rounded-2xl border bg-surface p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><div className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-bold">Evento</div><h1 className="font-display text-3xl font-bold mt-1">{event?.event_name||event?.client_name||"Degustação GOAT Bar"}</h1><p className="text-sm text-muted-foreground mt-1">{event?.event_type||"Evento"}</p></div>{finalized&&<span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary inline-flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5"/>Degustação finalizada</span>}</div><div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-5"><div className="rounded-xl border bg-background p-4"><CalendarDays className="h-4 w-4 text-primary mb-2"/><div className="text-xs text-muted-foreground">Data do evento</div><div className="font-bold capitalize">{formatEventDate(event?.date)}</div></div><div className="rounded-xl border bg-background p-4"><Users className="h-4 w-4 text-primary mb-2"/><div className="text-xs text-muted-foreground">Quantidade de pessoas</div><div className="font-bold">{event?.guests??"—"}</div></div><div className="rounded-xl border bg-background p-4 sm:col-span-2 lg:col-span-1"><GlassWater className="h-4 w-4 text-primary mb-2"/><div className="text-xs text-muted-foreground">Drinks do orçamento</div><div className="font-bold text-sm mt-1">{(data?.budget_drinks||[]).length?(data.budget_drinks as string[]).join(" · "):"Nenhum drink registrado"}</div></div></div></section>
 
   {!finalized?<>
@@ -45,7 +79,7 @@ function TastingPublicPage(){
    <section className="rounded-2xl border bg-surface p-5"><h2 className="font-bold text-lg">Observações gerais</h2><textarea value={observations} onChange={e=>setObservations(e.target.value)} rows={4} placeholder="Observações da degustação (opcional)" className="mt-3 w-full rounded-xl border bg-background p-3 text-sm"/></section>
    {error&&<p className="text-sm text-destructive">{error}</p>}<div className="rounded-2xl border bg-surface p-4 flex flex-wrap items-center justify-between gap-3"><div className="text-sm"><b>{completedRatings}</b> de <b>{expectedRatings}</b> notas preenchidas{!people.every(p=>p.name.trim())&&<span className="text-muted-foreground"> · preencha todos os nomes</span>}</div><button disabled={saving||!canSubmit} onClick={submit} className="h-12 rounded-xl bg-primary text-primary-foreground px-6 font-bold disabled:opacity-50">{saving?"Finalizando...":"Finalizar degustação"}</button></div>
   </>:
-  <section className="rounded-2xl border bg-surface p-5"><div className="flex flex-wrap justify-between gap-3"><div><h2 className="font-display text-2xl font-bold flex items-center gap-2"><CheckCircle2 className="h-6 w-6 text-primary"/>Resumo da degustação</h2><p className="text-sm text-muted-foreground mt-1">Ranking calculado pela média das notas de todas as pessoas presentes.</p></div><button onClick={generatePdf} className="rounded-xl border px-4 py-2.5 font-bold inline-flex items-center gap-2"><Download className="h-4 w-4"/>Gerar PDF</button></div><div className="mt-5 space-y-3">{ranking.map((d:any,i:number)=><div key={d.id} className="rounded-xl border bg-background p-4"><div className="flex items-center gap-3"><div className="text-2xl font-black w-10">{i+1}º</div>{d.drink_image&&<img src={d.drink_image} alt="" className="h-14 w-14 rounded-lg object-cover"/>}<div className="flex-1"><div className="font-bold">{d.drink_name}</div><div className="text-xs text-muted-foreground">{d.count} avaliação(ões)</div></div><div className="text-2xl font-black text-primary">{d.count?d.average.toFixed(1):"—"}</div></div>{d.scores?.length>0&&<div className="flex flex-wrap gap-2 mt-3 pl-0 sm:pl-[52px]">{d.scores.map((s:any,idx:number)=><span key={idx} className="rounded-full border px-2.5 py-1 text-xs"><b>{s.name}</b>: {s.score.toFixed(1)}</span>)}</div>}</div>)}</div>{data?.tasting?.guest_observations&&<div className="mt-5 rounded-xl border bg-background p-4"><div className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Observações</div><p className="text-sm mt-2 whitespace-pre-wrap">{data.tasting.guest_observations}</p></div>}</section>}
+  <section className="rounded-2xl border bg-surface p-5"><div className="flex flex-wrap justify-between gap-3"><div><h2 className="font-display text-2xl font-bold flex items-center gap-2"><CheckCircle2 className="h-6 w-6 text-primary"/>Resumo da degustação</h2><p className="text-sm text-muted-foreground mt-1">Ranking calculado pela média das notas de todas as pessoas presentes.</p></div><button data-pdf-hide="true" disabled={exporting} onClick={generatePdf} className="rounded-xl border px-4 py-2.5 font-bold inline-flex items-center gap-2 disabled:opacity-60">{exporting?<Loader2 className="h-4 w-4 animate-spin"/>:<Download className="h-4 w-4"/>}{exporting?"Gerando PDF...":"Gerar PDF"}</button></div><div className="mt-5 space-y-3">{ranking.map((d:any,i:number)=><div key={d.id} className="rounded-xl border bg-background p-4"><div className="flex items-center gap-3"><div className="text-2xl font-black w-10">{i+1}º</div>{d.drink_image&&<img src={d.drink_image} alt="" className="h-14 w-14 rounded-lg object-cover"/>}<div className="flex-1"><div className="font-bold">{d.drink_name}</div><div className="text-xs text-muted-foreground">{d.count} avaliação(ões)</div></div><div className="text-2xl font-black text-primary">{d.count?d.average.toFixed(1):"—"}</div></div>{d.scores?.length>0&&<div className="flex flex-wrap gap-2 mt-3 pl-0 sm:pl-[52px]">{d.scores.map((s:any,idx:number)=><span key={idx} className="rounded-full border px-2.5 py-1 text-xs"><b>{s.name}</b>: {s.score.toFixed(1)}</span>)}</div>}</div>)}</div>{data?.tasting?.guest_observations&&<div className="mt-5 rounded-xl border bg-background p-4"><div className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Observações</div><p className="text-sm mt-2 whitespace-pre-wrap">{data.tasting.guest_observations}</p></div>}</section>}
   <p className="text-center text-xs text-muted-foreground pb-6">GOAT Bar · Degustação</p>
  </div></main>
 }
