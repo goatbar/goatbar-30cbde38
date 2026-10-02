@@ -55,7 +55,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const normalizedEmail = email.trim().toLowerCase();
+    const rawLogin = email.trim().toLowerCase();
+    const username = rawLogin.startsWith("@") ? rawLogin.slice(1) : rawLogin;
+    const normalizedEmail = rawLogin.includes("@") && !rawLogin.startsWith("@")
+      ? rawLogin
+      : `${username}@goatbar.internal`;
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
