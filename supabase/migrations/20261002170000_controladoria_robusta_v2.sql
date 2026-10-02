@@ -1,0 +1,216 @@
+-- Controladoria robusta v2
+-- Modalidades, receitas, alocacoes internas, autoria e rastreabilidade.
+
+ALTER TABLE public.financial_expenses
+  DROP CONSTRAINT IF EXISTS financial_expenses_modality_check;
+
+UPDATE public.financial_expenses SET modality = '7 Steak House' WHERE modality IN ('Steakhouse','7Steakhouse','7 Steakhouse');
+UPDATE public.financial_expenses SET modality = 'Goat Botequim' WHERE modality IN ('Goatbotequim','Goat Botequim');
+UPDATE public.financial_expenses SET modality = 'Ativo' WHERE modality = 'Geral';
+
+ALTER TABLE public.financial_expenses
+  ADD CONSTRAINT financial_expenses_modality_check
+  CHECK (modality IN ('Evento','Goat Botequim','7 Steak House','Degustação','Ativo'));
+
+ALTER TABLE public.financial_expenses
+  ADD COLUMN IF NOT EXISTS entry_type text NOT NULL DEFAULT 'Despesa',
+  ADD COLUMN IF NOT EXISTS tasting_id uuid REFERENCES public.event_tastings(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS payment_payer_name text,
+  ADD COLUMN IF NOT EXISTS created_by_user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS updated_by_user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS source_channel text NOT NULL DEFAULT 'web',
+  ADD COLUMN IF NOT EXISTS source_reference text,
+  ADD COLUMN IF NOT EXISTS inventory_transfer_id uuid,
+  ADD COLUMN IF NOT EXISTS cash_effect boolean NOT NULL DEFAULT true;
+
+ALTER TABLE public.financial_expenses
+  DROP CONSTRAINT IF EXISTS financial_expenses_entry_type_check;
+ALTER TABLE public.financial_expenses
+  ADD CONSTRAINT financial_expenses_entry_type_check
+  CHECK (entry_type IN ('Despesa','Receita','Alocação Interna'));
+
+ALTER TABLE public.financial_expenses
+  DROP CONSTRAINT IF EXISTS financial_expenses_source_channel_check;
+ALTER TABLE public.financial_expenses
+  ADD CONSTRAINT financial_expenses_source_channel_check
+  CHECK (source_channel IN ('web','gia','system'));
+
+ALTER TABLE public.financial_expenses
+  DROP CONSTRAINT IF EXISTS financial_expenses_payment_method_check;
+
+UPDATE public.financial_expenses
+SET payment_method = CASE
+  WHEN payment_method IN ('PIX','Transferencia','Transferência') THEN 'PIX Goat'
+  WHEN payment_method IN ('Cartao','Cartão') THEN 'Cartão de crédito Goat'
+  ELSE payment_method
+END
+WHERE payment_method IS NOT NULL;
+
+ALTER TABLE public.financial_expenses
+  ADD CONSTRAINT financial_expenses_payment_method_check
+  CHECK (payment_method IN ('Cartão de crédito Goat','PIX Goat','Pessoal','Interno/Estoque'));
+
+CREATE INDEX IF NOT EXISTS idx_financial_expenses_modality_date
+  ON public.financial_expenses (modality, date DESC);
+CREATE INDEX IF NOT EXISTS idx_financial_expenses_event
+  ON public.financial_expenses (event_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_financial_expenses_tasting
+  ON public.financial_expenses (tasting_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_financial_expenses_created_by
+  ON public.financial_expenses (created_by_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_financial_expenses_entry_type
+  ON public.financial_expenses (entry_type, date DESC);
+
+ALTER TABLE public.financial_expense_items
+  ADD COLUMN IF NOT EXISTS inventory_id uuid REFERENCES public.inventory(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS allocated_quantity numeric(10,3) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS returned_quantity numeric(10,3) NOT NULL DEFAULT 0;
+
+ALTER TABLE public.inventory_movements
+  DROP CONSTRAINT IF EXISTS inventory_movements_source_check;
+
+ALTER TABLE public.inventory_movements
+  ADD COLUMN IF NOT EXISTS destination_modality text,
+  ADD COLUMN IF NOT EXISTS event_id uuid REFERENCES public.events(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS tasting_id uuid REFERENCES public.event_tastings(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS unit_cost numeric(15,2),
+  ADD COLUMN IF NOT EXISTS total_cost numeric(15,2),
+  ADD COLUMN IF NOT EXISTS performed_by_user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS source_expense_item_id uuid REFERENCES public.financial_expense_items(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS financial_entry_id uuid REFERENCES public.financial_expenses(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS notes text;
+
+ALTER TABLE public.inventory_movements
+  ADD CONSTRAINT inventory_movements_source_check
+  CHECK (source IN ('event','sale','manual','purchase','event_return','internal_allocation'));
+
+ALTER TABLE public.inventory_movements
+  ADD CONSTRAINT inventory_movements_destination_modality_check
+  CHECK (
+    destination_modality IS NULL OR
+    destination_modality IN ('Evento','Goat Botequim','7 Steak House','Degustação','Ativo')
+  );
+
+CREATE INDEX IF NOT EXISTS idx_inventory_movements_destination
+  ON public.inventory_movements(destination_modality, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_inventory_movements_performed_by
+  ON public.inventory_movements(performed_by_user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.goatbar_user_profiles (
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  username text NOT NULL UNIQUE,
+  display_name text NOT NULL,
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.goatbar_user_profiles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "authenticated read goatbar profiles" ON public.goatbar_user_profiles;
+CREATE POLICY "authenticated read goatbar profiles"
+  ON public.goatbar_user_profiles FOR SELECT TO authenticated USING (true);
+
+CREATE OR REPLACE FUNCTION public.set_financial_expense_audit_fields()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    NEW.created_by_user_id := COALESCE(NEW.created_by_user_id, auth.uid());
+    NEW.updated_by_user_id := COALESCE(NEW.updated_by_user_id, auth.uid());
+  ELSE
+    NEW.updated_by_user_id := COALESCE(auth.uid(), NEW.updated_by_user_id);
+    NEW.updated_at := now();
+  END IF;
+
+  IF NEW.modality = 'Evento' AND NEW.event_id IS NULL THEN
+    RAISE EXCEPTION 'Lançamentos da modalidade Evento exigem event_id';
+  END IF;
+
+  IF NEW.modality = 'Degustação' AND NEW.event_id IS NULL THEN
+    RAISE EXCEPTION 'Lançamentos da modalidade Degustação exigem event_id';
+  END IF;
+
+  IF NEW.payment_method = 'Pessoal' AND COALESCE(trim(NEW.payment_payer_name),'') = '' AND NEW.entry_type = 'Despesa' THEN
+    RAISE EXCEPTION 'Pagamentos pessoais exigem o nome de quem pagou';
+  END IF;
+
+  IF NEW.entry_type = 'Alocação Interna' THEN
+    NEW.cash_effect := false;
+    NEW.payment_method := 'Interno/Estoque';
+    NEW.status := 'Pago';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_financial_expense_audit_fields ON public.financial_expenses;
+CREATE TRIGGER trg_financial_expense_audit_fields
+BEFORE INSERT OR UPDATE ON public.financial_expenses
+FOR EACH ROW EXECUTE FUNCTION public.set_financial_expense_audit_fields();
+
+CREATE OR REPLACE FUNCTION public.allocate_inventory_cost(
+  p_inventory_id uuid,
+  p_quantity numeric,
+  p_destination_modality text,
+  p_event_id uuid DEFAULT NULL,
+  p_tasting_id uuid DEFAULT NULL,
+  p_notes text DEFAULT NULL
+) RETURNS uuid
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  v_inventory public.inventory%ROWTYPE;
+  v_total numeric(15,2);
+  v_entry_id uuid;
+BEGIN
+  IF p_quantity <= 0 THEN RAISE EXCEPTION 'Quantidade deve ser maior que zero'; END IF;
+  IF p_destination_modality NOT IN ('Evento','Goat Botequim','7 Steak House','Degustação','Ativo') THEN
+    RAISE EXCEPTION 'Modalidade inválida';
+  END IF;
+  IF p_destination_modality IN ('Evento','Degustação') AND p_event_id IS NULL THEN
+    RAISE EXCEPTION 'Evento obrigatório para esta modalidade';
+  END IF;
+
+  SELECT * INTO v_inventory FROM public.inventory WHERE id=p_inventory_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Item de estoque não encontrado'; END IF;
+  IF v_inventory.quantity < p_quantity THEN RAISE EXCEPTION 'Saldo de estoque insuficiente'; END IF;
+
+  v_total := round((COALESCE(v_inventory.cost_per_unit,0) * p_quantity)::numeric,2);
+
+  INSERT INTO public.financial_expenses(
+    date, modality, category, description, amount, responsible,
+    payment_method, status, classification, event_id, tasting_id,
+    entry_type, cash_effect, created_by_user_id, source_channel
+  ) VALUES (
+    current_date, p_destination_modality, 'Insumos',
+    'Alocação de estoque - ' || v_inventory.name,
+    v_total, COALESCE((SELECT display_name FROM public.goatbar_user_profiles WHERE user_id=auth.uid()), 'Usuário Goat Bar'),
+    'Interno/Estoque','Pago','Direto',p_event_id,p_tasting_id,
+    'Alocação Interna',false,auth.uid(),'web'
+  ) RETURNING id INTO v_entry_id;
+
+  UPDATE public.inventory
+  SET quantity=quantity-p_quantity, updated_at=now()
+  WHERE id=p_inventory_id;
+
+  INSERT INTO public.inventory_movements(
+    inventory_id,type,quantity,source,destination_modality,event_id,tasting_id,
+    unit_cost,total_cost,performed_by_user_id,financial_entry_id,notes
+  ) VALUES (
+    p_inventory_id,'out',p_quantity,'internal_allocation',p_destination_modality,p_event_id,p_tasting_id,
+    v_inventory.cost_per_unit,v_total,auth.uid(),v_entry_id,p_notes
+  );
+
+  RETURN v_entry_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.allocate_inventory_cost(uuid,numeric,text,uuid,uuid,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.allocate_inventory_cost(uuid,numeric,text,uuid,uuid,text) TO authenticated;
