@@ -73,9 +73,9 @@ export class ConversationManager {
         return {
           userId: accountByWaId.user_id,
           name:
-            accountByWaId.display_name ||
             goatbarProfile?.display_name ||
             (goatbarProfile?.username ? `@${goatbarProfile.username}` : null) ||
+            accountByWaId.display_name ||
             legacyProfile?.display_name ||
             "Sócio",
           email: legacyProfile?.email,
@@ -148,9 +148,9 @@ export class ConversationManager {
         return {
           userId: matchedAccount.user_id,
           name:
-            matchedAccount.display_name ||
             goatbarProfile?.display_name ||
             (goatbarProfile?.username ? `@${goatbarProfile.username}` : null) ||
+            matchedAccount.display_name ||
             legacyProfile?.display_name ||
             "Sócio",
           email: legacyProfile?.email,
