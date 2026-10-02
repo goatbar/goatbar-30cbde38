@@ -6,7 +6,7 @@ interface AuthContextValue {
   session: Session | null;
   user: User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signIn: (username: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -20,7 +20,7 @@ function getAuthErrorMessage(message: string | undefined) {
   }
 
   if (message === "Email not confirmed") {
-    return "E-mail ainda não confirmado";
+    return "Usuário ainda não está ativo";
   }
 
   if (message.toLowerCase().includes("captcha")) {
@@ -54,15 +54,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    const rawLogin = email.trim().toLowerCase();
-    const username = rawLogin.startsWith("@") ? rawLogin.slice(1) : rawLogin;
-    const normalizedEmail = rawLogin.includes("@") && !rawLogin.startsWith("@")
-      ? rawLogin
-      : `${username}@goatbar.internal`;
+  const signIn = async (usernameInput: string, password: string) => {
+    const rawUsername = usernameInput.trim().toLowerCase();
+    const username = rawUsername.startsWith("@") ? rawUsername.slice(1) : rawUsername;
+
+    if (!/^[a-z0-9._-]+$/.test(username)) {
+      return { error: "Usuário inválido" };
+    }
+
+    const internalAuthEmail = `${username}@goatbar.internal`;
     try {
       const { error } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
+        email: internalAuthEmail,
         password,
       });
 
