@@ -223,6 +223,7 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.allocate_inventory_cost(uuid,numeric,text,uuid,uuid,text,uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.allocate_inventory_cost(uuid,numeric,text,uuid,uuid,text,uuid) FROM anon;
 GRANT EXECUTE ON FUNCTION public.allocate_inventory_cost(uuid,numeric,text,uuid,uuid,text,uuid) TO authenticated, service_role;
 
 
@@ -338,7 +339,8 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.return_event_leftover_to_inventory(uuid,numeric,text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.return_event_leftover_to_inventory(uuid,numeric,text) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.return_event_leftover_to_inventory(uuid,numeric,text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.return_event_leftover_to_inventory(uuid,numeric,text) TO authenticated, service_role;
 
 
 -- Controladoria, estoque e planejamento são módulos internos.
