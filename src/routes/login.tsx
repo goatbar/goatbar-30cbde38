@@ -11,7 +11,7 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const navigate = useNavigate();
   const { user, loading: sessionLoading, signIn } = useAuth();
-  const [login, setLogin] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +27,7 @@ function LoginPage() {
     setError(null);
     setLoading(true);
 
-    const result = await signIn(login.trim(), password);
+    const result = await signIn(username.trim(), password);
 
     if (result.error) {
       setError(result.error);
@@ -75,7 +75,7 @@ function LoginPage() {
           <div className="label-eyebrow mb-3">Acesso interno</div>
           <h1 className="font-display text-3xl font-semibold leading-tight">Bem-vindo de volta</h1>
           <p className="text-sm text-muted-foreground mt-2">
-            Entre com suas credenciais para acessar o painel.
+            Entre com seu usuário e senha para acessar o painel.
           </p>
 
           <form onSubmit={handleSubmit} autoComplete="off" className="mt-8 space-y-4">
@@ -84,9 +84,9 @@ function LoginPage() {
               <input
                 type="text"
                 required
-                value={login}
-                onChange={(e) => setLogin(e.target.value)}
-                autoComplete="off"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
                 className="w-full h-11 px-4 rounded-lg bg-surface border border-border focus:border-primary focus:outline-none text-sm transition-colors"
                 placeholder="@romulochaves"
               />
@@ -99,7 +99,7 @@ function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                autoComplete="new-password"
+                autoComplete="current-password"
                 className="w-full h-11 px-4 rounded-lg bg-surface border border-border focus:border-primary focus:outline-none text-sm transition-colors"
                 placeholder="••••••••"
               />
