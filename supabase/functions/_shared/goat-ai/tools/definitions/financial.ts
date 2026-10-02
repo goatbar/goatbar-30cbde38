@@ -185,8 +185,6 @@ export const createSalesSessionTool: GoatAIToolDefinition = {
         type: "string",
         description: "Data final da operação no formato YYYY-MM-DD (ex: '2026-08-09').",
       },
-      payment_method: { type: "string", description: "Forma de pagamento: Cartão de crédito Goat, PIX Goat ou Pessoal." },
-      payment_payer_name: { type: "string", description: "Obrigatório quando payment_method for Pessoal." },
       items: {
         type: "array",
         description: "Lista de drinks vendidos na sessão.",
@@ -957,3 +955,80 @@ export const getFinancialSummaryTool: GoatAIToolDefinition = {
   },
 };
 
+
+
+export const allocateInventoryCostTool: GoatAIToolDefinition = {
+  name: "allocate_inventory_cost",
+  domain: "PURCHASES",
+  sourceTable: "inventory, inventory_movements, financial_expenses",
+  description: "Direciona uma quantidade do estoque Goat Bar para uma modalidade e registra o custo gerencial correspondente sem gerar nova saída de caixa.",
+  parameters: {
+    type: "object",
+    properties: {
+      inventory_id: { type: "string", description: "ID do item no estoque." },
+      quantity: { type: "number", description: "Quantidade a direcionar." },
+      destination_modality: {
+        type: "string",
+        description: "Destino: Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo.",
+      },
+      event_id: { type: "string", description: "Obrigatório quando o destino for Evento ou Degustação." },
+      tasting_id: { type: "string", description: "Degustação específica, quando conhecida." },
+      notes: { type: "string", description: "Observação opcional sobre a transferência." },
+    },
+    required: ["inventory_id", "quantity", "destination_modality"],
+  },
+  requiresConfirmation: true,
+  execute: async (ctx: ToolContext, args: any): Promise<ToolExecutionResult> => {
+    const modality = String(args.destination_modality || "");
+    const missing: string[] = [];
+    if (!args.inventory_id) missing.push("inventory_id");
+    if (!(Number(args.quantity) > 0)) missing.push("quantity");
+    if (!modality) missing.push("destination_modality");
+    if ((modality === "Evento" || modality === "Degustação") && !args.event_id) missing.push("event_id");
+    if (missing.length) {
+      return { success: false, missing_fields: missing, error: `Campos obrigatórios pendentes: ${missing.join(", ")}` };
+    }
+
+    const { data: inventoryItem, error: itemError } = await ctx.supabaseAdmin
+      .from("inventory")
+      .select("id,name,quantity,unit,cost_per_unit")
+      .eq("id", args.inventory_id)
+      .single();
+
+    if (itemError || !inventoryItem) {
+      return { success: false, error: "Item de estoque não encontrado." };
+    }
+    if (Number(inventoryItem.quantity || 0) < Number(args.quantity)) {
+      return { success: false, error: `Saldo insuficiente. Disponível: ${inventoryItem.quantity} ${inventoryItem.unit || "un"}.` };
+    }
+
+    const { data: entryId, error } = await ctx.supabaseAdmin.rpc("allocate_inventory_cost", {
+      p_inventory_id: args.inventory_id,
+      p_quantity: Number(args.quantity),
+      p_destination_modality: modality,
+      p_event_id: args.event_id || null,
+      p_tasting_id: args.tasting_id || null,
+      p_notes: args.notes || null,
+      p_performed_by_user_id: ctx.userId || null,
+    });
+
+    if (error) {
+      return { success: false, error: `Erro ao direcionar estoque: ${error.message}` };
+    }
+
+    const totalCost = Math.round(Number(inventoryItem.cost_per_unit || 0) * Number(args.quantity) * 100) / 100;
+    return {
+      success: true,
+      data: {
+        financial_entry_id: entryId,
+        inventory_id: args.inventory_id,
+        item_name: inventoryItem.name,
+        quantity: Number(args.quantity),
+        destination_modality: modality,
+        event_id: args.event_id || null,
+        total_cost: totalCost,
+      },
+      message: `Pronto. ${args.quantity} ${inventoryItem.unit || "un"} de ${inventoryItem.name} foram direcionados para ${modality}, com custo gerencial de R$ ${totalCost.toFixed(2).replace(".", ",")}.`,
+    };
+  },
+};
