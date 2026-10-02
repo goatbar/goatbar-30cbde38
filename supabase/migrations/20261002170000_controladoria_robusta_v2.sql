@@ -149,6 +149,10 @@ BEGIN
     NEW.status := 'Pago';
   END IF;
 
+  IF NEW.source_channel IN ('web','gia') AND NEW.created_by_user_id IS NULL THEN
+    RAISE EXCEPTION 'Lançamentos web/GIA exigem usuário autor identificado';
+  END IF;
+
   RETURN NEW;
 END;
 $$;
@@ -335,3 +339,48 @@ $$;
 
 REVOKE ALL ON FUNCTION public.return_event_leftover_to_inventory(uuid,numeric,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.return_event_leftover_to_inventory(uuid,numeric,text) TO authenticated;
+
+
+-- Controladoria, estoque e planejamento são módulos internos.
+-- Remove políticas legadas abertas a PUBLIC e restringe operações ao usuário autenticado.
+ALTER TABLE public.financial_expenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.financial_expense_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_movements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.event_planning_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Enable delete for all" ON public.financial_expenses;
+DROP POLICY IF EXISTS "Enable insert for all" ON public.financial_expenses;
+DROP POLICY IF EXISTS "Enable read for all" ON public.financial_expenses;
+DROP POLICY IF EXISTS "Enable update for all" ON public.financial_expenses;
+DROP POLICY IF EXISTS "Enable ALL for authenticated users on financial_expense_items" ON public.financial_expense_items;
+DROP POLICY IF EXISTS "public full access inventory" ON public.inventory;
+DROP POLICY IF EXISTS "authenticated full access inventory" ON public.inventory;
+DROP POLICY IF EXISTS "public full access inventory_movements" ON public.inventory_movements;
+DROP POLICY IF EXISTS "authenticated full access inventory_movements" ON public.inventory_movements;
+DROP POLICY IF EXISTS "Enable ALL for authenticated users on event_planning_items" ON public.event_planning_items;
+
+CREATE POLICY "authenticated financial expenses"
+  ON public.financial_expenses FOR ALL TO authenticated
+  USING ((select auth.uid()) IS NOT NULL)
+  WITH CHECK ((select auth.uid()) IS NOT NULL);
+
+CREATE POLICY "authenticated financial expense items"
+  ON public.financial_expense_items FOR ALL TO authenticated
+  USING ((select auth.uid()) IS NOT NULL)
+  WITH CHECK ((select auth.uid()) IS NOT NULL);
+
+CREATE POLICY "authenticated inventory"
+  ON public.inventory FOR ALL TO authenticated
+  USING ((select auth.uid()) IS NOT NULL)
+  WITH CHECK ((select auth.uid()) IS NOT NULL);
+
+CREATE POLICY "authenticated inventory movements"
+  ON public.inventory_movements FOR ALL TO authenticated
+  USING ((select auth.uid()) IS NOT NULL)
+  WITH CHECK ((select auth.uid()) IS NOT NULL);
+
+CREATE POLICY "authenticated event planning"
+  ON public.event_planning_items FOR ALL TO authenticated
+  USING ((select auth.uid()) IS NOT NULL)
+  WITH CHECK ((select auth.uid()) IS NOT NULL);
