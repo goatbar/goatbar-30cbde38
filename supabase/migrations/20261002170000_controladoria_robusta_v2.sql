@@ -164,7 +164,8 @@ CREATE OR REPLACE FUNCTION public.allocate_inventory_cost(
   p_destination_modality text,
   p_event_id uuid DEFAULT NULL,
   p_tasting_id uuid DEFAULT NULL,
-  p_notes text DEFAULT NULL
+  p_notes text DEFAULT NULL,
+  p_performed_by_user_id uuid DEFAULT NULL
 ) RETURNS uuid
 LANGUAGE plpgsql
 SECURITY INVOKER
@@ -196,9 +197,9 @@ BEGIN
   ) VALUES (
     current_date, p_destination_modality, 'Insumos',
     'Alocação de estoque - ' || v_inventory.name,
-    v_total, COALESCE((SELECT display_name FROM public.goatbar_user_profiles WHERE user_id=auth.uid()), 'Usuário Goat Bar'),
+    v_total, COALESCE((SELECT display_name FROM public.goatbar_user_profiles WHERE user_id=COALESCE(auth.uid(),p_performed_by_user_id)), 'Usuário Goat Bar'),
     'Interno/Estoque','Pago','Direto',p_event_id,p_tasting_id,
-    'Alocação Interna',false,auth.uid(),'web'
+    'Alocação Interna',false,COALESCE(auth.uid(),p_performed_by_user_id),CASE WHEN auth.uid() IS NULL THEN 'gia' ELSE 'web' END
   ) RETURNING id INTO v_entry_id;
 
   UPDATE public.inventory
@@ -210,15 +211,15 @@ BEGIN
     unit_cost,total_cost,performed_by_user_id,financial_entry_id,notes
   ) VALUES (
     p_inventory_id,'out',p_quantity,'internal_allocation',p_destination_modality,p_event_id,p_tasting_id,
-    v_inventory.cost_per_unit,v_total,auth.uid(),v_entry_id,p_notes
+    v_inventory.cost_per_unit,v_total,COALESCE(auth.uid(),p_performed_by_user_id),v_entry_id,p_notes
   );
 
   RETURN v_entry_id;
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.allocate_inventory_cost(uuid,numeric,text,uuid,uuid,text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.allocate_inventory_cost(uuid,numeric,text,uuid,uuid,text) TO authenticated;
+REVOKE ALL ON FUNCTION public.allocate_inventory_cost(uuid,numeric,text,uuid,uuid,text,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.allocate_inventory_cost(uuid,numeric,text,uuid,uuid,text,uuid) TO authenticated, service_role;
 
 
 -- Espelha automaticamente compras de Evento na aba Insumos Levados.
