@@ -824,7 +824,7 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
   name: "create_event_purchase",
   domain: "PURCHASES",
   sourceTable: "financial_expenses",
-  description: "Registra uma compra de insumos ou bebidas vinculada diretamente a um evento com entrada no estoque.",
+  description: "Registra uma compra de insumos ou bebidas vinculada diretamente a um evento e detalha os itens para a aba Insumos Levados. Não adiciona automaticamente a compra ao estoque central.",
   parameters: {
     type: "object",
     properties: {
@@ -840,10 +840,19 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
           properties: {
             name: { type: "string" },
             quantity: { type: "number" },
+            unit: { type: "string", description: "Unidade, ex: garrafa, caixa, kg, un." },
             unit_price: { type: "number" },
           },
           required: ["name", "quantity"],
         },
+      },
+      payment_method: {
+        type: "string",
+        description: "Forma de pagamento: PIX Goat, Cartão de crédito Goat ou Pessoal.",
+      },
+      payment_payer_name: {
+        type: "string",
+        description: "Obrigatório quando payment_method for Pessoal.",
       },
     },
     required: ["event_id", "supplier_name", "total_amount"],
@@ -854,7 +863,7 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
     supplier_name: string;
     total_amount: number;
     date?: string;
-    items?: Array<{ name: string; quantity: number; unit_price?: number }>;
+    items?: Array<{ name: string; quantity: number; unit?: string; unit_price?: number }>;
     payment_method?: string;
     payment_payer_name?: string;
   }): Promise<ToolExecutionResult> => {
@@ -862,6 +871,9 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
     if (!args.event_id) missing.push("event_id");
     if (!args.supplier_name) missing.push("supplier_name");
     if (args.total_amount == null) missing.push("total_amount");
+    if (args.payment_method === "Pessoal" && !String(args.payment_payer_name || "").trim()) {
+      missing.push("payment_payer_name");
+    }
 
     if (missing.length > 0) {
       return { success: false, missing_fields: missing, error: `Campos obrigatórios pendentes: ${missing.join(", ")}` };
@@ -893,6 +905,42 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
       return { success: false, error: `Erro ao registrar compra do evento: ${error?.message}` };
     }
 
+    const normalizedItems = (args.items || [])
+      .filter((item) => item?.name && Number(item.quantity) > 0)
+      .map((item) => {
+        const quantity = Number(item.quantity);
+        const explicitUnitPrice = item.unit_price == null ? null : Number(item.unit_price);
+        const inferredUnitPrice =
+          args.items?.length === 1 && explicitUnitPrice == null && quantity > 0
+            ? Number(args.total_amount) / quantity
+            : explicitUnitPrice;
+
+        return {
+          expense_id: purchase.id,
+          product_name: String(item.name).trim(),
+          quantity,
+          unit: item.unit || "un",
+          unit_price: inferredUnitPrice,
+          total_price: inferredUnitPrice == null ? null : Math.round(inferredUnitPrice * quantity * 100) / 100,
+          suggested_category: "Insumos",
+          reviewed: true,
+        };
+      });
+
+    if (normalizedItems.length > 0) {
+      const { error: itemsError } = await ctx.supabaseAdmin
+        .from("financial_expense_items")
+        .insert(normalizedItems);
+
+      if (itemsError) {
+        await ctx.supabaseAdmin.from("financial_expenses").delete().eq("id", purchase.id);
+        return {
+          success: false,
+          error: `A compra não foi mantida porque houve erro ao registrar os itens: ${itemsError.message}`,
+        };
+      }
+    }
+
     return {
       success: true,
       data: {
@@ -900,6 +948,7 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
         event_id: args.event_id,
         supplier: args.supplier_name,
         total: args.total_amount,
+        items_count: normalizedItems.length,
       },
       message: `Compra de R$ ${args.total_amount.toFixed(2)} vinculada ao evento com sucesso.`,
     };
