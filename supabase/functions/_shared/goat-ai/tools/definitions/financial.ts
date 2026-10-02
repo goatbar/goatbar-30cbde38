@@ -1032,3 +1032,52 @@ export const allocateInventoryCostTool: GoatAIToolDefinition = {
     };
   },
 };
+
+
+export const searchInventoryTool: GoatAIToolDefinition = {
+  name: "search_inventory",
+  domain: "PURCHASES",
+  sourceTable: "inventory",
+  description: "Busca itens reais no estoque Goat Bar por nome e retorna saldo, unidade e custo unitário para permitir alocações seguras.",
+  parameters: {
+    type: "object",
+    properties: {
+      query: { type: "string", description: "Nome ou trecho do item, por exemplo gin, Beefeater, gelo." },
+      limit: { type: "number", description: "Quantidade máxima de resultados. Padrão 10." },
+    },
+    required: ["query"],
+  },
+  requiresConfirmation: false,
+  execute: async (ctx: ToolContext, args: { query: string; limit?: number }): Promise<ToolExecutionResult> => {
+    const query = String(args.query || "").trim();
+    if (!query) return { success: false, missing_fields: ["query"], error: "Informe o item que deseja buscar no estoque." };
+
+    const { data, error } = await ctx.supabaseAdmin
+      .from("inventory")
+      .select("id,name,category,quantity,unit,cost_per_unit,updated_at")
+      .ilike("name", `%${query}%`)
+      .order("name", { ascending: true })
+      .limit(args.limit || 10);
+
+    if (error) return { success: false, error: `Erro ao consultar estoque: ${error.message}` };
+
+    return {
+      success: true,
+      data: {
+        count: (data || []).length,
+        items: (data || []).map((item: any) => ({
+          inventory_id: item.id,
+          name: item.name,
+          category: item.category,
+          quantity: Number(item.quantity || 0),
+          unit: item.unit,
+          cost_per_unit: Number(item.cost_per_unit || 0),
+          updated_at: item.updated_at,
+        })),
+      },
+      message: (data || []).length
+        ? `Encontrei ${(data || []).length} item(ns) no estoque.`
+        : "Nenhum item correspondente foi encontrado no estoque.",
+    };
+  },
+};
