@@ -33,6 +33,9 @@ function InventoryPage() {
   const [formNome, setFormNome] = useState("");
   const [formQtd, setFormQtd] = useState(0);
   const [formObs, setFormObs] = useState("");
+  const [formCategoria, setFormCategoria] = useState("Insumos");
+  const [formUnidade, setFormUnidade] = useState("un");
+  const [formCustoUnitario, setFormCustoUnitario] = useState(0);
 
   useEffect(() => {
     const loadInventory = async () => {
@@ -85,6 +88,9 @@ function InventoryPage() {
     setFormNome(item.nome);
     setFormQtd(item.quantidadeTotal);
     setFormObs(item.observacoes);
+    setFormCategoria(item.categoria || "Insumos");
+    setFormUnidade(item.unidade || "un");
+    setFormCustoUnitario(Number(item.custoUnitario || 0));
     setShowModal(true);
   };
 
@@ -95,13 +101,28 @@ function InventoryPage() {
       if (editingId) {
         const { error } = await supabase
           .from("inventory")
-          .update({ name: formNome, quantity: formQtd, updated_at: new Date().toISOString() })
+          .update({
+            name: formNome,
+            category: formCategoria,
+            quantity: formQtd,
+            unit: formUnidade,
+            cost_per_unit: formCustoUnitario,
+            updated_at: new Date().toISOString()
+          })
           .eq("id", editingId);
         if (error) throw error;
         setInventoryItems((prev) =>
           prev.map((i) =>
             i.id === editingId
-              ? { ...i, nome: formNome, quantidadeTotal: formQtd, observacoes: formObs }
+              ? {
+                  ...i,
+                  nome: formNome,
+                  quantidadeTotal: formQtd,
+                  observacoes: formObs,
+                  categoria: formCategoria,
+                  unidade: formUnidade,
+                  custoUnitario: formCustoUnitario,
+                }
               : i,
           ),
         );
@@ -109,19 +130,33 @@ function InventoryPage() {
         const { data, error } = await supabase
           .from("inventory")
           // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-          .insert({ name: formNome, quantity: formQtd })
+          .insert({
+            name: formNome,
+            category: formCategoria,
+            quantity: formQtd,
+            unit: formUnidade,
+            cost_per_unit: formCustoUnitario,
+          })
           .select("id")
           .single();
         if (error) throw error;
         setInventoryItems((prev) => [
-          { id: data.id, nome: formNome, quantidadeTotal: formQtd, observacoes: formObs },
+          {
+            id: data.id,
+            nome: formNome,
+            quantidadeTotal: formQtd,
+            observacoes: formObs,
+            categoria: formCategoria,
+            unidade: formUnidade,
+            custoUnitario: formCustoUnitario,
+          },
           ...prev,
         ]);
       }
     } catch (e) {
       console.error("Erro ao salvar item no Supabase.", {
         table: "inventory",
-        payload: { id: editingId, formNome, formQtd, formObs },
+        payload: { id: editingId, formNome, formQtd, formObs, formCategoria, formUnidade, formCustoUnitario },
         error: e,
       });
       alert("Erro ao salvar item. Verifique conexão/Supabase e tente novamente.");
@@ -196,6 +231,9 @@ function InventoryPage() {
               setFormNome("");
               setFormQtd(0);
               setFormObs("");
+              setFormCategoria("Insumos");
+              setFormUnidade("un");
+              setFormCustoUnitario(0);
               setShowModal(true);
             }}
           >
@@ -410,15 +448,54 @@ function InventoryPage() {
                 />
               </div>
 
-              <div>
-                <label className="label-eyebrow block mb-2">Quantidade total do item</label>
-                <input
-                  type="number"
-                  placeholder="Ex: 20"
-                  value={formQtd || ""}
-                  onChange={(e) => setFormQtd(Number(e.target.value))}
-                  className="w-full h-11 px-4 rounded-xl bg-input border border-border text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="label-eyebrow block mb-2">Categoria</label>
+                  <input
+                    type="text"
+                    value={formCategoria}
+                    onChange={(e) => setFormCategoria(e.target.value)}
+                    className="w-full h-11 px-4 rounded-xl bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                    placeholder="Ex: Bebidas"
+                  />
+                </div>
+                <div>
+                  <label className="label-eyebrow block mb-2">Unidade</label>
+                  <input
+                    type="text"
+                    value={formUnidade}
+                    onChange={(e) => setFormUnidade(e.target.value)}
+                    className="w-full h-11 px-4 rounded-xl bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                    placeholder="un, garrafa, caixa, kg..."
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="label-eyebrow block mb-2">Quantidade total</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    placeholder="Ex: 20"
+                    value={formQtd || ""}
+                    onChange={(e) => setFormQtd(Number(e.target.value))}
+                    className="w-full h-11 px-4 rounded-xl bg-input border border-border text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="label-eyebrow block mb-2">Custo unitário (R$)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formCustoUnitario || ""}
+                    onChange={(e) => setFormCustoUnitario(Number(e.target.value))}
+                    className="w-full h-11 px-4 rounded-xl bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                    placeholder="0,00"
+                  />
+                </div>
               </div>
 
               <div>
