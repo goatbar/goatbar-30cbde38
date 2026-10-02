@@ -185,6 +185,8 @@ export const createSalesSessionTool: GoatAIToolDefinition = {
         type: "string",
         description: "Data final da operação no formato YYYY-MM-DD (ex: '2026-08-09').",
       },
+      payment_method: { type: "string", description: "Forma de pagamento: Cartão de crédito Goat, PIX Goat ou Pessoal." },
+      payment_payer_name: { type: "string", description: "Obrigatório quando payment_method for Pessoal." },
       items: {
         type: "array",
         description: "Lista de drinks vendidos na sessão.",
@@ -545,7 +547,7 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
   name: "create_controladoria_expense",
   domain: "CONTROLLER",
   sourceTable: "financial_expenses",
-  description: "Registra uma despesa, nota fiscal, cupom ou comprovante no módulo de Controladoria do Goat Bar com prévia e confirmação.",
+  description: "Registra despesa, compra, receita ou alocação interna na Controladoria do Goat Bar, com modalidade, evento, pagamento, autoria e confirmação.",
   parameters: {
     type: "object",
     properties: {
@@ -561,11 +563,14 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
       },
       modality: {
         type: "string",
-        description: "Unidade/Destino da despesa: '7 Steakhouse', 'Goat Botequim', 'Evento' ou 'Geral'.",
+        description: "Modalidade financeira: 'Evento', 'Goat Botequim', '7 Steak House', 'Degustação' ou 'Ativo'.",
       },
       event_id: { type: "string", description: "ID do evento caso seja referente a um evento específico." },
       description: { type: "string", description: "Descrição dos itens ou finalidade da compra." },
-      payment_method: { type: "string", description: "Forma de pagamento (PIX, Dinheiro, Cartão, Transferência, Outros)." },
+      payment_method: { type: "string", description: "Forma de pagamento: 'Cartão de crédito Goat', 'PIX Goat', 'Pessoal' ou 'Interno/Estoque'." },
+      payment_payer_name: { type: "string", description: "Nome de quem pagou quando a forma de pagamento for Pessoal." },
+      entry_type: { type: "string", description: "Tipo do lançamento: 'Despesa', 'Receita' ou 'Alocação Interna'." },
+      tasting_id: { type: "string", description: "ID da degustação quando houver uma degustação específica relacionada." },
       status: { type: "string", description: "Status de pagamento ('Pago' ou 'Pendente')." },
       classification: { type: "string", description: "Classificação de custo ('Direto' ou 'Indireto')." },
       responsible: { type: "string", description: "Responsável pelo lançamento (preenchido com usuário autenticado)." },
@@ -649,10 +654,18 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
       amount: norm.amount,
       date: norm.date,
       due_date: norm.due_date || null,
-      modality: norm.modality, // 'Steakhouse', 'Goatbotequim', 'Evento', 'Geral'
+      modality: norm.modality,
       category: norm.category, // 'Fornecedor', 'Equipe', 'Insumos', 'Operacional', 'Outros'
       description: norm.description,
-      payment_method: norm.payment_method, // 'PIX', 'Dinheiro', 'Cartao', 'Transferencia', 'Outros'
+      payment_method: norm.payment_method,
+      payment_payer_name: norm.payment_payer_name || null,
+      entry_type: norm.entry_type,
+      tasting_id: norm.tasting_id || null,
+      cash_effect: norm.entry_type === "Alocação Interna" ? false : true,
+      created_by_user_id: ctx.userId || null,
+      updated_by_user_id: ctx.userId || null,
+      source_channel: "gia",
+      source_reference: norm.source_message_id || null,
       status: norm.status,
       classification: norm.classification,
       responsible: norm.responsible,
@@ -755,7 +768,7 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
         items_count: itemsCount,
         review_status: norm.review_status,
       },
-      message: `Pronto. O gasto de ${fmtAmount} (${norm.supplier_name}) foi lançado com sucesso na Controladoria.`,
+      message: `Pronto. O lançamento de ${fmtAmount} foi registrado na modalidade ${norm.modality}.`,
     };
   },
 };
@@ -844,6 +857,8 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
     total_amount: number;
     date?: string;
     items?: Array<{ name: string; quantity: number; unit_price?: number }>;
+    payment_method?: string;
+    payment_payer_name?: string;
   }): Promise<ToolExecutionResult> => {
     const missing: string[] = [];
     if (!args.event_id) missing.push("event_id");
@@ -862,6 +877,13 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
         date: args.date || new Date().toISOString().split("T")[0],
         category: "Insumos",
         modality: "Evento",
+        event_id: args.event_id,
+        entry_type: "Despesa",
+        payment_method: args.payment_method || "PIX Goat",
+        payment_payer_name: args.payment_method === "Pessoal" ? (args.payment_payer_name || null) : null,
+        created_by_user_id: ctx.userId || null,
+        updated_by_user_id: ctx.userId || null,
+        source_channel: "gia",
         description: `Compra para evento (${args.items?.map((i) => `${i.quantity}x ${i.name}`).join(", ") || "Insumos"})`,
         responsible: ctx.userName || "GIA",
         status: "Pago",
@@ -910,18 +932,17 @@ export const getFinancialSummaryTool: GoatAIToolDefinition = {
 
     const { data: expenses } = await ctx.supabaseAdmin
       .from("financial_expenses")
-      .select("amount, category, modality")
+      .select("amount, category, modality, entry_type, cash_effect")
       .gte("date", startDate)
       .lte("date", endDate);
 
-    const { data: events } = await ctx.supabaseAdmin
-      .from("events")
-      .select("current_budget_value, current_profit_value")
-      .gte("date", startDate)
-      .lte("date", endDate);
-
-    const totalExpenses = (expenses || []).reduce((acc: number, e: any) => acc + (Number(e.amount) || 0), 0);
-    const totalEventRevenue = (events || []).reduce((acc: number, e: any) => acc + (Number(e.current_budget_value) || 0), 0);
+    const allEntries = expenses || [];
+    const totalExpenses = allEntries
+      .filter((e: any) => e.entry_type !== "Receita")
+      .reduce((acc: number, e: any) => acc + (Number(e.amount) || 0), 0);
+    const totalEventRevenue = allEntries
+      .filter((e: any) => e.entry_type === "Receita")
+      .reduce((acc: number, e: any) => acc + (Number(e.amount) || 0), 0);
 
     return {
       success: true,
