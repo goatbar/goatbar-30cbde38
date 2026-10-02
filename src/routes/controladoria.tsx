@@ -352,23 +352,34 @@ function ControladoriaPage() {
       <PageHeader
         title="Controladoria"
         action={
-          <div className="flex gap-2">
-            <GhostButton onClick={() => setShowTextImportModal(true)}>
-              <FileText className="h-4 w-4" /> Importar de Texto
+          <div className="grid w-full grid-cols-2 gap-2 lg:flex lg:w-auto">
+            <GhostButton
+              onClick={() => setShowTextImportModal(true)}
+              className="w-full min-w-0 justify-center px-3 text-xs lg:w-auto lg:text-sm"
+            >
+              <FileText className="h-4 w-4 shrink-0" />
+              <span className="truncate">Importar texto</span>
             </GhostButton>
-            <GhostButton onClick={() => setShowReceiptModal(true)}>
-              <Camera className="h-4 w-4" /> Lançar por foto da notinha
+            <GhostButton
+              onClick={() => setShowReceiptModal(true)}
+              className="w-full min-w-0 justify-center px-3 text-xs lg:w-auto lg:text-sm"
+            >
+              <Camera className="h-4 w-4 shrink-0" />
+              <span className="truncate">Foto da notinha</span>
             </GhostButton>
-            <PrimaryButton onClick={() => setShowModal(true)}>
-              <Plus className="h-4 w-4" /> Novo Lançamento
+            <PrimaryButton
+              onClick={() => setShowModal(true)}
+              className="col-span-2 w-full justify-center lg:col-span-1 lg:w-auto"
+            >
+              <Plus className="h-4 w-4 shrink-0" /> Novo Lançamento
             </PrimaryButton>
           </div>
         }
       />
 
-      <div className="page-container space-y-7 max-w-[1600px] mx-auto w-full">
+      <div className="page-container mx-auto w-full max-w-[1600px] space-y-5 lg:space-y-7">
         {/* RESUMO */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
           <StatCard label="Receitas" value={fmtBRL(totals.receitas)} icon={<CheckCircle2 className="text-emerald-500" />} />
           <StatCard label="Custos Alocados" value={fmtBRL(totals.custos)} />
           <StatCard label="Resultado" value={fmtBRL(totals.resultado)} />
@@ -376,7 +387,7 @@ function ControladoriaPage() {
         </div>
 
         {/* DASHBOARD CHARTS */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-7">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-7">
           <SectionCard title="Gastos por Modalidade" className="lg:col-span-1">
             <div className="h-[250px] w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -448,17 +459,17 @@ function ControladoriaPage() {
             <button onClick={() => applyPeriodPreset("year")} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:border-primary">Ano</button>
             <button onClick={() => applyPeriodPreset("all")} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:border-primary">Todo período</button>
           </div>
-          <div className="flex flex-wrap gap-4 mb-6 p-4 rounded-xl bg-surface border border-border">
-            <div className="flex-1 min-w-[200px]">
+          <div className="mb-6 grid grid-cols-1 gap-3 rounded-xl border border-border bg-surface p-3 sm:grid-cols-2 sm:p-4 xl:flex xl:flex-wrap xl:gap-4">
+            <div className="min-w-0 sm:col-span-2 xl:flex-1 xl:min-w-[260px]">
               <label className="label-eyebrow block mb-1.5">Período</label>
-              <div className="flex items-center gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
                 <input
                   type="date"
                   value={filters.start_date}
                   onChange={(e) => setFilters((p) => ({ ...p, start_date: e.target.value }))}
                   className="bg-background border border-border rounded-lg px-3 py-2 text-xs w-full"
                 />
-                <span className="text-muted-foreground">-</span>
+                <span className="hidden text-muted-foreground sm:inline">-</span>
                 <input
                   type="date"
                   value={filters.end_date}
@@ -472,7 +483,7 @@ function ControladoriaPage() {
               <select
                 value={filters.modality}
                 onChange={(e) => setFilters((p) => ({ ...p, modality: e.target.value }))}
-                className="bg-background border border-border rounded-lg px-3 py-2 text-xs min-w-[140px]"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs xl:min-w-[140px]"
               >
                 <option value="">Todas</option>
                 <option value="Evento">Evento</option>
@@ -487,7 +498,7 @@ function ControladoriaPage() {
               <select
                 value={filters.entry_type}
                 onChange={(e) => setFilters((p) => ({ ...p, entry_type: e.target.value }))}
-                className="bg-background border border-border rounded-lg px-3 py-2 text-xs min-w-[140px]"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs xl:min-w-[140px]"
               >
                 <option value="">Todos</option>
                 <option value="Despesa">Despesa</option>
@@ -500,7 +511,7 @@ function ControladoriaPage() {
               <select
                 value={filters.status}
                 onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}
-                className="bg-background border border-border rounded-lg px-3 py-2 text-xs min-w-[140px]"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs xl:min-w-[140px]"
               >
                 <option value="">Todos</option>
                 <option value="Pago">Pago</option>
@@ -509,7 +520,84 @@ function ControladoriaPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="space-y-3 md:hidden">
+            {expenses.length === 0 && !loading && (
+              <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+                Nenhum lançamento encontrado no período.
+              </div>
+            )}
+            {expenses.map((exp) => (
+              <article key={`mobile-${exp.id}`} className="rounded-xl border border-border bg-background/50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {format(parseISO(exp.date), "dd/MM/yy")} · {exp.modality}
+                    </div>
+                    <h3 className="mt-1 line-clamp-2 text-sm font-semibold text-foreground">
+                      {exp.description}
+                    </h3>
+                  </div>
+                  <button onClick={() => toggleStatus(exp)} className="shrink-0">
+                    <StatusBadge status={exp.status} />
+                  </button>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-muted px-2 py-1 text-[9px] font-bold uppercase tracking-tight">
+                    {exp.category}
+                  </span>
+                  {exp.entry_type && (
+                    <span className="rounded-full border border-border px-2 py-1 text-[9px] font-semibold uppercase tracking-tight text-muted-foreground">
+                      {exp.entry_type}
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-4 flex items-end justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-display text-xl font-bold">{fmtBRL(exp.amount)}</div>
+                    <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <User className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{exp.responsible || "Sem responsável"} · {exp.classification}</span>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {exp.invoice_url && (
+                      <a
+                        href={exp.invoice_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary"
+                        title="Nota Fiscal"
+                      >
+                        <FileText className="h-4 w-4" />
+                      </a>
+                    )}
+                    {exp.receipt_url && (
+                      <a
+                        href={exp.receipt_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500"
+                        title="Comprovante"
+                      >
+                        <Receipt className="h-4 w-4" />
+                      </a>
+                    )}
+                    <button
+                      onClick={() => handleDelete(exp.id)}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-destructive hover:bg-destructive/10"
+                      aria-label={`Excluir ${exp.description}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-border">
@@ -567,10 +655,7 @@ function ControladoriaPage() {
                     <td className="py-4 font-display font-bold text-sm">{fmtBRL(exp.amount)}</td>
                     <td className="py-4">
                       <button onClick={() => toggleStatus(exp)} className="cursor-pointer">
-                        {/* @ts-expect-error */}
-                        <StatusBadge variant={exp.status === "Pago" ? "success" : "warning"}>
-                          {exp.status}
-                        </StatusBadge>
+                        <StatusBadge status={exp.status} />
                       </button>
                     </td>
                     <td className="py-4">
@@ -618,9 +703,9 @@ function ControladoriaPage() {
       {/* MODAL NOVO GASTO */}
 
       {showTextImportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setShowTextImportModal(false)} />
-          <div className="relative w-full max-w-xl bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="relative max-h-[92dvh] w-full max-w-xl overflow-hidden rounded-t-2xl border border-border bg-surface shadow-2xl animate-in zoom-in-95 duration-200 sm:rounded-2xl">
             <div className="px-6 py-4 border-b border-border flex justify-between items-center bg-primary/5">
               <h2 className="font-display text-lg font-bold">Importar Pedido / Nota Fiscal</h2>
               <button
@@ -665,9 +750,9 @@ function ControladoriaPage() {
       )}
 
       {showReceiptModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
           <div className="absolute inset-0 bg-background/80" onClick={() => setShowReceiptModal(false)} />
-          <div className="relative w-full max-w-xl bg-surface border border-border rounded-2xl p-6 space-y-4">
+          <div className="relative max-h-[92dvh] w-full max-w-xl space-y-4 overflow-y-auto rounded-t-2xl border border-border bg-surface p-4 sm:rounded-2xl sm:p-6">
             <h3 className="font-display text-lg font-bold">Lançar por foto da notinha</h3>
             <p className="text-sm text-muted-foreground">Envie imagem ou PDF. Vamos pré-preencher e você revisa antes de salvar.</p>
             <input type="file" accept="image/*,.pdf" capture="environment" onChange={(e)=>{const f=e.target.files?.[0]; if(!f)return; setReceiptFile(f); setReceiptPreview(URL.createObjectURL(f));}} />
@@ -683,12 +768,12 @@ function ControladoriaPage() {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
           <div
             className="absolute inset-0 bg-background/80 backdrop-blur-sm"
             onClick={() => setShowModal(false)}
           />
-          <div className="relative w-full max-w-2xl bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="relative max-h-[92dvh] w-full max-w-2xl overflow-hidden rounded-t-2xl border border-border bg-surface shadow-2xl animate-in zoom-in-95 duration-200 sm:rounded-2xl">
             <div className="px-6 py-4 border-b border-border flex justify-between items-center bg-primary/5">
               <h2 className="font-display text-lg font-bold">Novo Lançamento Financeiro</h2>
               <button
@@ -699,7 +784,7 @@ function ControladoriaPage() {
               </button>
             </div>
 
-            <div className="p-6 max-h-[80vh] overflow-y-auto scrollbar-thin">
+            <div className="max-h-[calc(92dvh-8.5rem)] overflow-y-auto p-4 scrollbar-thin sm:p-6">
               {form.ocr_raw_text && (
                 <div className="mb-6 bg-primary/5 border border-primary/20 rounded-xl p-4 animate-in fade-in slide-in-from-top-4">
                   <div className="flex items-center gap-2 mb-3">
@@ -1191,7 +1276,7 @@ function ControladoriaPage() {
 
             </div>
             
-            <div className="p-6 border-t border-border flex justify-end gap-3 bg-primary/5">
+            <div className="flex flex-col-reverse gap-2 border-t border-border bg-primary/5 p-4 sm:flex-row sm:justify-end sm:gap-3 sm:p-6">
               <GhostButton onClick={() => setShowModal(false)}>Cancelar</GhostButton>
               <PrimaryButton
                 onClick={handleSubmit}

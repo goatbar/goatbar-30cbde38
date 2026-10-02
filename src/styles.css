@@ -243,7 +243,7 @@
 
 @layer utilities {
   .page-container {
-    @apply px-4 py-5 sm:px-6 lg:px-8 lg:py-7;
+    @apply w-full min-w-0 max-w-full px-4 py-5 sm:px-6 lg:px-8 lg:py-7;
   }
 
   .responsive-grid-kpi {

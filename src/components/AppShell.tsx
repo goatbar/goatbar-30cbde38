@@ -308,59 +308,67 @@ export function AppShell({ children }: { children?: ReactNode }) {
 
       {/* MAIN */}
       <main className="flex w-full min-w-0 max-w-[100vw] flex-1 flex-col overflow-y-auto overflow-x-hidden pb-[calc(5.25rem+env(safe-area-inset-bottom))] md:pb-0">
-        {pushState !== "loading" && pushState !== "unsupported" && (
-            <div className="md:hidden px-4 pt-4">
-              <div className="rounded-xl border border-border bg-surface p-3.5 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                    <Bell className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold text-foreground">
-                      Notificações no iPhone
-                    </div>
-                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                      {pushState === "enabled"
-                        ? "Notificações ativas neste aparelho. Você receberá alertas de novos pedidos de orçamento."
-                        : pushState === "needs_install"
-                          ? "Adicione o Goat Bar à Tela de Início pelo Safari para receber alertas push."
-                          : pushState === "denied"
-                            ? "As notificações estão bloqueadas. Libere a permissão nos Ajustes do iPhone para o Goat Bar."
-                            : "Ative para receber novos pedidos de orçamento mesmo com o app fechado."}
-                    </p>
-                    {pushMessage && (
-                      <p className="mt-2 text-xs text-destructive">{pushMessage}</p>
-                    )}
-                    {pushState === "enabled" && (
-                      <button
-                        type="button"
-                        onClick={() => void handleTestPush()}
-                        disabled={pushTesting}
-                        className="mt-3 inline-flex items-center rounded-lg border border-border px-3 py-2 text-xs font-semibold text-foreground disabled:opacity-60"
-                      >
-                        {pushTesting ? "Enviando..." : "Enviar notificação de teste"}
-                      </button>
-                    )}
-                    {(pushState === "prompt" || pushState === "error") && (
-                      <button
-                        type="button"
-                        onClick={() => void handleEnablePush()}
-                        disabled={pushActivating}
-                        className="mt-3 inline-flex items-center rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
-                      >
-                        {pushActivating ? "Ativando..." : "Ativar notificações"}
-                      </button>
-                    )}
-                  </div>
+        {pushState === "enabled" ? (
+          <div className="md:hidden px-4 pt-3">
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2.5 shadow-sm">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                <Bell className="h-4 w-4 text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold text-foreground">Notificações ativas</div>
+                {pushMessage && (
+                  <div className="truncate text-[10px] text-muted-foreground">{pushMessage}</div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleTestPush()}
+                disabled={pushTesting}
+                className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-[10px] font-semibold text-foreground disabled:opacity-60"
+              >
+                {pushTesting ? "Enviando..." : "Testar"}
+              </button>
+            </div>
+          </div>
+        ) : pushState !== "loading" && pushState !== "unsupported" ? (
+          <div className="md:hidden px-4 pt-3">
+            <div className="rounded-xl border border-border bg-surface p-3.5 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                  <Bell className="h-4 w-4 text-primary" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-foreground">Notificações no iPhone</div>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {pushState === "needs_install"
+                      ? "Adicione o Goat Bar à Tela de Início pelo Safari para receber alertas push."
+                      : pushState === "denied"
+                        ? "As notificações estão bloqueadas. Libere a permissão nos Ajustes do iPhone para o Goat Bar."
+                        : "Ative para receber novos pedidos de orçamento mesmo com o app fechado."}
+                  </p>
+                  {pushMessage && (
+                    <p className="mt-2 text-xs text-destructive">{pushMessage}</p>
+                  )}
+                  {(pushState === "prompt" || pushState === "error") && (
+                    <button
+                      type="button"
+                      onClick={() => void handleEnablePush()}
+                      disabled={pushActivating}
+                      className="mt-3 inline-flex items-center rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                    >
+                      {pushActivating ? "Ativando..." : "Ativar notificações"}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
-          )}
+          </div>
+        ) : null}
         {children ?? <Outlet />}
       </main>
 
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
-        <div className="grid grid-cols-5 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+        <div className="grid grid-cols-5 px-1 pt-1.5 pb-[calc(0.4rem+env(safe-area-inset-bottom))]">
           {nav.filter((item) => ["/gia", "/dashboard", "/vendas", "/eventos", "/controladoria"].includes(item.to)).map((item) => {
             const Icon = item.icon;
             const active = item.exact
@@ -370,12 +378,12 @@ export function AppShell({ children }: { children?: ReactNode }) {
               <Link
                 key={`bottom-${item.to}`}
                 to={item.to as any}
-                className={`flex flex-col items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[10px] ${
+                className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-0.5 py-1.5 text-[9px] ${
                   active ? "text-primary" : "text-muted-foreground"
                 }`}
               >
-                <Icon className="h-4 w-4" />
-                <span className="truncate max-w-full">{item.label}</span>
+                <Icon className="h-[18px] w-[18px]" />
+                <span className="w-full whitespace-nowrap text-center leading-tight">{item.label}</span>
               </Link>
             );
           })}
@@ -396,19 +404,18 @@ interface PageHeaderProps {
 export function PageHeader({ title, subtitle, breadcrumb, action, periodo }: PageHeaderProps) {
   return (
     <header className="bg-surface/50 lg:bg-transparent lg:topbar-glass lg:sticky lg:top-0 z-30 border-b border-border lg:border-none">
-      <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6 px-4 lg:px-8 py-4 lg:py-5">
-        <div className="flex-1 min-w-0 flex items-center justify-between w-full lg:w-auto">
-          <div>
-            {breadcrumb && <div className="label-eyebrow mb-1 lg:mb-2">{breadcrumb}</div>}
-            <h1 className="font-display text-xl lg:text-2xl font-semibold leading-tight">
-              {title}
-            </h1>
-            {subtitle && (
-              <p className="text-xs lg:text-sm text-muted-foreground mt-1">{subtitle}</p>
-            )}
-          </div>
-          <div className="lg:hidden">{action}</div>
+      <div className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:gap-6 lg:px-8 lg:py-5">
+        <div className="min-w-0 flex-1">
+          {breadcrumb && <div className="label-eyebrow mb-1 lg:mb-2">{breadcrumb}</div>}
+          <h1 className="font-display text-xl font-semibold leading-tight lg:text-2xl">
+            {title}
+          </h1>
+          {subtitle && (
+            <p className="mt-1 text-xs text-muted-foreground lg:text-sm">{subtitle}</p>
+          )}
         </div>
+
+        {action && <div className="w-full min-w-0 lg:hidden">{action}</div>}
 
         <div className="hidden lg:flex items-center gap-3">
           {periodo ?? (

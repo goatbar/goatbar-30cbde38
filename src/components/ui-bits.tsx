@@ -81,15 +81,15 @@ export function SectionCard({
   className?: string;
 }) {
   return (
-    <section className={`card-premium ${className}`}>
-      <header className="flex items-center justify-between gap-4 px-6 pt-5 pb-4 border-b border-border">
-        <div>
-          <h2 className="font-display text-base font-semibold">{title}</h2>
-          {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+    <section className={`card-premium min-w-0 ${className}`}>
+      <header className="flex min-w-0 items-start justify-between gap-3 border-b border-border px-4 pb-3 pt-4 sm:items-center sm:px-6 sm:pb-4 sm:pt-5">
+        <div className="min-w-0">
+          <h2 className="font-display text-sm font-semibold sm:text-base">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
         </div>
-        {action}
+        {action && <div className="shrink-0">{action}</div>}
       </header>
-      <div className="p-6">{children}</div>
+      <div className="min-w-0 p-4 sm:p-6">{children}</div>
     </section>
   );
 }
