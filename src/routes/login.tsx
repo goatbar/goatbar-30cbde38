@@ -11,7 +11,7 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const navigate = useNavigate();
   const { user, loading: sessionLoading, signIn } = useAuth();
-  const [login, setUsuário] = useState("");
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,13 +82,13 @@ function LoginPage() {
             <div>
               <label className="label-eyebrow block mb-2">Usuário</label>
               <input
-                type="login"
+                type="text"
                 required
                 value={login}
-                onChange={(e) => setUsuário(e.target.value)}
+                onChange={(e) => setLogin(e.target.value)}
                 autoComplete="off"
                 className="w-full h-11 px-4 rounded-lg bg-surface border border-border focus:border-primary focus:outline-none text-sm transition-colors"
-                placeholder="seu@login.com"
+                placeholder="@romulochaves"
               />
             </div>
 
