@@ -42,9 +42,14 @@ UPDATE public.financial_expenses
 SET payment_method = CASE
   WHEN payment_method IN ('PIX','Transferencia','Transferência') THEN 'PIX Goat'
   WHEN payment_method IN ('Cartao','Cartão') THEN 'Cartão de crédito Goat'
+  WHEN payment_method IN ('Dinheiro','Outros') THEN 'Pessoal'
   ELSE payment_method
 END
 WHERE payment_method IS NOT NULL;
+
+UPDATE public.financial_expenses
+SET payment_payer_name = COALESCE(NULLIF(payment_payer_name,''), 'Histórico - pagador não informado')
+WHERE payment_method = 'Pessoal' AND COALESCE(trim(payment_payer_name),'') = '';
 
 ALTER TABLE public.financial_expenses
   ADD CONSTRAINT financial_expenses_payment_method_check
