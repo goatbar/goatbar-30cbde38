@@ -11,7 +11,7 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const navigate = useNavigate();
   const { user, loading: sessionLoading, signIn } = useAuth();
-  const [email, setEmail] = useState("");
+  const [login, setUsuário] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +27,7 @@ function LoginPage() {
     setError(null);
     setLoading(true);
 
-    const result = await signIn(email.trim(), password);
+    const result = await signIn(login.trim(), password);
 
     if (result.error) {
       setError(result.error);
@@ -80,15 +80,15 @@ function LoginPage() {
 
           <form onSubmit={handleSubmit} autoComplete="off" className="mt-8 space-y-4">
             <div>
-              <label className="label-eyebrow block mb-2">E-mail</label>
+              <label className="label-eyebrow block mb-2">Usuário</label>
               <input
-                type="email"
+                type="login"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={login}
+                onChange={(e) => setUsuário(e.target.value)}
                 autoComplete="off"
                 className="w-full h-11 px-4 rounded-lg bg-surface border border-border focus:border-primary focus:outline-none text-sm transition-colors"
-                placeholder="seu@email.com"
+                placeholder="seu@login.com"
               />
             </div>
 
