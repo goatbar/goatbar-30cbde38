@@ -2,7 +2,7 @@
 import { eventBudgetService, type EventPlanningItem } from "@/services/event-budget-service";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtBRL } from "@/lib/format";
-import { Plus, Download, Trash2, Save, Loader2, Package, ChevronDown, ChevronUp, AlertCircle, HelpCircle } from "lucide-react";
+import { Plus, Download, Trash2, Save, Loader2, Package, ChevronDown, ChevronUp, AlertCircle, HelpCircle, RotateCcw, X } from "lucide-react";
 
 const CATEGORIES = [
   { id: "Insumos", label: "Insumos Gerais", icon: "📦", color: "from-blue-500/20 to-blue-600/5 text-blue-400 border-blue-500/20" },
@@ -76,6 +76,10 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
   const [items, setItems] = useState<EventPlanningItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [returningItem, setReturningItem] = useState<EventPlanningItem | null>(null);
+  const [returnQuantity, setReturnQuantity] = useState(0);
+  const [returnNotes, setReturnNotes] = useState("");
+  const [returnLoading, setReturnLoading] = useState(false);
   const [expandedPackages, setExpandedPackages] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
@@ -163,6 +167,32 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
       alert("Erro ao salvar o planejamento.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function returnLeftoverToInventory() {
+    if (!returningItem?.id) return;
+    if (returnQuantity <= 0) return alert("Informe a quantidade que sobrou.");
+    if (returnQuantity > Number(returningItem.planned_quantity || 0)) {
+      return alert("A sobra não pode ser maior que a quantidade levada.");
+    }
+    setReturnLoading(true);
+    try {
+      await eventBudgetService.returnPlanningItemLeftoverToInventory(
+        returningItem.id,
+        returnQuantity,
+        returnNotes || undefined,
+      );
+      setReturningItem(null);
+      setReturnQuantity(0);
+      setReturnNotes("");
+      alert("Sobra devolvida ao estoque da Goat Bar.");
+      await loadItems();
+    } catch (e) {
+      console.error(e);
+      alert("Não foi possível devolver a sobra ao estoque.");
+    } finally {
+      setReturnLoading(false);
     }
   }
 
@@ -442,11 +472,26 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
                                 {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                               </button>
                             </td>
-                            {/* Action Trash */}
+                            {/* Actions */}
                             <td className="p-3 pr-5 text-center">
-                              <button onClick={() => removeItem(item.id, globalIdx)} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
+                              <div className="flex items-center justify-center gap-1">
+                                {item.id && item.origin === "Comprado para evento" && (
+                                  <button
+                                    onClick={() => {
+                                      setReturningItem(item);
+                                      setReturnQuantity(0);
+                                      setReturnNotes("");
+                                    }}
+                                    title="Devolver sobra ao estoque"
+                                    className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                                  >
+                                    <RotateCcw className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                                <button onClick={() => removeItem(item.id, globalIdx)} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
 
@@ -565,6 +610,65 @@ export function InsumosLevadosTab({ eventId }: { eventId: string }) {
           );
         })}
       </div>
+
+      {returningItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-surface border border-border rounded-2xl shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div>
+                <h3 className="font-display font-bold">Devolver sobra ao estoque</h3>
+                <p className="text-xs text-muted-foreground mt-1">{returningItem.item_name}</p>
+              </div>
+              <button onClick={() => setReturningItem(null)} className="p-2 text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="rounded-xl border border-border bg-background/40 p-4 text-sm">
+                Levado: <strong>{returningItem.planned_quantity} {returningItem.unit || "un"}</strong><br />
+                Custo unitário: <strong>{fmtBRL(returningItem.estimated_unit_cost || 0)}</strong>
+              </div>
+              <div>
+                <label className="label-eyebrow block mb-2">Quantidade que sobrou</label>
+                <input
+                  type="number"
+                  min="0.001"
+                  step="0.001"
+                  max={returningItem.planned_quantity}
+                  value={returnQuantity || ""}
+                  onChange={(e) => setReturnQuantity(Number(e.target.value || 0))}
+                  className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="label-eyebrow block mb-2">Observação</label>
+                <textarea
+                  value={returnNotes}
+                  onChange={(e) => setReturnNotes(e.target.value)}
+                  rows={3}
+                  className="w-full p-4 rounded-xl bg-input border border-border outline-none focus:border-primary resize-none"
+                  placeholder="Ex: 5 garrafas fechadas retornaram após o evento"
+                />
+              </div>
+              <div className="rounded-xl bg-primary/5 border border-primary/20 p-4 text-xs text-muted-foreground">
+                Valor que volta ao estoque: <strong className="text-foreground">{fmtBRL((returningItem.estimated_unit_cost || 0) * returnQuantity)}</strong>.
+                Depois, esse saldo poderá ser direcionado pelo Inventário para qualquer modalidade.
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-border">
+              <button onClick={() => setReturningItem(null)} className="px-4 py-2 text-sm rounded-xl border border-border">Cancelar</button>
+              <button
+                onClick={returnLeftoverToInventory}
+                disabled={returnLoading}
+                className="px-4 py-2 text-sm rounded-xl bg-primary text-primary-foreground font-bold flex items-center gap-2 disabled:opacity-60"
+              >
+                {returnLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                Devolver ao estoque
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
