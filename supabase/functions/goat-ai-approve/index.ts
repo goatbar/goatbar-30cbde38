@@ -49,13 +49,23 @@ serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
+    const { data: profile } = await adminClient
+      .from("goatbar_user_profiles")
+      .select("username, display_name")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const performerName =
+      profile?.display_name ||
+      (profile?.username ? `@${profile.username}` : "Gestor");
+
     // 2. Call the atomic transactional RPC
     const { data, error } = await adminClient.rpc("approve_goat_ai_inbox_item", {
       p_item_id: item_id,
       p_override_data: override_data || null,
       p_event_id: event_id || null,
       p_performed_by: user.id,
-      p_performer_name: user.email?.split("@")[0] || "Gestor",
+      p_performer_name: performerName,
     });
 
     if (error) {
