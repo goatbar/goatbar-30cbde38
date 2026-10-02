@@ -17,6 +17,8 @@ describe("Goat AI - Tool Registry & Safety Validation", () => {
     expect(toolNames).toContain("create_controller_entry");
     expect(toolNames).toContain("search_controller_entries");
     expect(toolNames).toContain("create_event_purchase");
+    expect(toolNames).toContain("search_inventory");
+    expect(toolNames).toContain("allocate_inventory_cost");
     expect(toolNames).toContain("get_financial_summary");
   });
 
@@ -66,6 +68,54 @@ describe("Goat AI - Tool Registry & Safety Validation", () => {
     expect(result.success).toBe(false);
     expect(result.missing_fields).toContain("amount");
     expect(result.missing_fields).toContain("modality");
+  });
+
+  it("allocates inventory cost with the authenticated GIA user", async () => {
+    const rpc = vi.fn(async () => ({ data: "fin-entry-1", error: null }));
+    const mockAdmin = {
+      from: vi.fn((table: string) => {
+        if (table === "inventory") {
+          return {
+            select: () => ({
+              eq: () => ({
+                single: async () => ({
+                  data: { id: "inv-1", name: "Gin", quantity: 5, unit: "garrafa", cost_per_unit: 100 },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === "ai_tool_calls") return { insert: async () => ({ data: null, error: null }) };
+        return {};
+      }),
+      rpc,
+    };
+
+    const result = await defaultToolRegistry.executeTool(
+      "allocate_inventory_cost",
+      {
+        inventory_id: "inv-1",
+        quantity: 2,
+        destination_modality: "7 Steak House",
+      },
+      {
+        supabaseAdmin: mockAdmin,
+        conversationId: "conv-test",
+        channel: "whatsapp",
+        userId: "user-gustavo",
+        userName: "Gustavo",
+      } as ToolContext,
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.data.total_cost).toBe(200);
+    expect(rpc).toHaveBeenCalledWith("allocate_inventory_cost", expect.objectContaining({
+      p_inventory_id: "inv-1",
+      p_quantity: 2,
+      p_destination_modality: "7 Steak House",
+      p_performed_by_user_id: "user-gustavo",
+    }));
   });
 
   it("executes get_sales_sessions filtering by dates array or date range and returns clean message on zero results", async () => {
