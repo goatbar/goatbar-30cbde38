@@ -291,10 +291,33 @@ DECLARE
   v_plan public.event_planning_items%ROWTYPE;
   v_inventory_id uuid;
   v_move_id uuid;
+  v_returned_quantity numeric := 0;
+  v_remaining_quantity numeric := 0;
 BEGIN
   IF p_quantity <= 0 THEN RAISE EXCEPTION 'Quantidade deve ser maior que zero'; END IF;
-  SELECT * INTO v_plan FROM public.event_planning_items WHERE id=p_planning_item_id;
+
+  SELECT * INTO v_plan
+  FROM public.event_planning_items
+  WHERE id=p_planning_item_id
+  FOR UPDATE;
+
   IF NOT FOUND THEN RAISE EXCEPTION 'Item do evento não encontrado'; END IF;
+  IF v_plan.source_expense_item_id IS NULL THEN
+    RAISE EXCEPTION 'Somente itens comprados para o evento podem ser devolvidos ao estoque';
+  END IF;
+
+  SELECT COALESCE(returned_quantity,0)
+  INTO v_returned_quantity
+  FROM public.financial_expense_items
+  WHERE id=v_plan.source_expense_item_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN RAISE EXCEPTION 'Item financeiro de origem não encontrado'; END IF;
+
+  v_remaining_quantity := GREATEST(COALESCE(v_plan.planned_quantity,0) - v_returned_quantity, 0);
+  IF p_quantity > v_remaining_quantity THEN
+    RAISE EXCEPTION 'Quantidade de devolução excede o saldo disponível. Saldo: %', v_remaining_quantity;
+  END IF;
 
   v_inventory_id := v_plan.inventory_id;
   IF v_inventory_id IS NULL THEN
