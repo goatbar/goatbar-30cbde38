@@ -7,8 +7,8 @@ const PRECACHE = [
   "/manifest.webmanifest",
   "/favicon.ico",
   "/icons/apple-touch-icon.png?v=5",
-  "/icons/goatbar-192.png?v=4",
-  "/icons/goatbar-512.png?v=4",
+  "/icons/goatbar-192.png?v=5",
+  "/icons/goatbar-512.png?v=5",
 ];
 
 self.addEventListener("install", (event) => {
