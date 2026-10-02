@@ -62,7 +62,7 @@ serve(async (req) => {
 
           const { data: legacyProfile } = await supabaseAdmin
             .from("profiles")
-            .select("display_name, email, role")
+            .select("display_name, email")
             .eq("user_id", user.id)
             .maybeSingle();
 
@@ -72,7 +72,7 @@ serve(async (req) => {
             legacyProfile?.display_name ||
             legacyProfile?.email?.split("@")[0] ||
             "Sócio";
-          userRole = legacyProfile?.role || "socio";
+          userRole = "socio";
 
           if (goatbarProfile && goatbarProfile.active === false) {
             return new Response(
