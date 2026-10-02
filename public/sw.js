@@ -1,12 +1,12 @@
-const SHELL_CACHE = "goatbar-pwa-shell-v3";
-const RUNTIME_CACHE = "goatbar-pwa-runtime-v3";
+const SHELL_CACHE = "goatbar-pwa-shell-v4";
+const RUNTIME_CACHE = "goatbar-pwa-runtime-v4";
 const APP_SHELL = "/";
 
 const PRECACHE = [
   APP_SHELL,
   "/manifest.webmanifest",
   "/favicon.ico",
-  "/icons/apple-touch-icon.png?v=4",
+  "/icons/apple-touch-icon.png?v=5",
   "/icons/goatbar-192.png?v=4",
   "/icons/goatbar-512.png?v=4",
 ];
@@ -18,6 +18,12 @@ self.addEventListener("install", (event) => {
       .then((cache) => cache.addAll(PRECACHE))
       .then(() => self.skipWaiting()),
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    void self.skipWaiting();
+  }
 });
 
 self.addEventListener("activate", (event) => {
