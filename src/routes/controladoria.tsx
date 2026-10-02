@@ -51,7 +51,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { format, startOfMonth, endOfMonth, parseISO } from "date-fns";
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export const Route = createFileRoute("/controladoria")({
@@ -99,6 +99,26 @@ function ControladoriaPage() {
   });
 
   const [uploading, setUploading] = useState<{ invoice?: boolean; receipt?: boolean; note?: boolean }>({});
+
+  const applyPeriodPreset = (preset: "today" | "week" | "month" | "year" | "all") => {
+    const now = new Date();
+    if (preset === "all") {
+      setFilters((p) => ({ ...p, start_date: "", end_date: "" }));
+      return;
+    }
+    const ranges = {
+      today: [now, now],
+      week: [startOfWeek(now, { weekStartsOn: 1 }), endOfWeek(now, { weekStartsOn: 1 })],
+      month: [startOfMonth(now), endOfMonth(now)],
+      year: [startOfYear(now), endOfYear(now)],
+    } as const;
+    const [start, end] = ranges[preset];
+    setFilters((p) => ({
+      ...p,
+      start_date: format(start, "yyyy-MM-dd"),
+      end_date: format(end, "yyyy-MM-dd"),
+    }));
+  };
 
   useEffect(() => {
     fetchExpenses();
@@ -421,6 +441,13 @@ function ControladoriaPage() {
 
         {/* FILTROS E LISTA */}
         <SectionCard title="Fluxo de Custos">
+          <div className="flex flex-wrap gap-2 mb-3">
+            <button onClick={() => applyPeriodPreset("today")} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:border-primary">Hoje</button>
+            <button onClick={() => applyPeriodPreset("week")} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:border-primary">Semana</button>
+            <button onClick={() => applyPeriodPreset("month")} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:border-primary">Mês</button>
+            <button onClick={() => applyPeriodPreset("year")} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:border-primary">Ano</button>
+            <button onClick={() => applyPeriodPreset("all")} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:border-primary">Todo período</button>
+          </div>
           <div className="flex flex-wrap gap-4 mb-6 p-4 rounded-xl bg-surface border border-border">
             <div className="flex-1 min-w-[200px]">
               <label className="label-eyebrow block mb-1.5">Período</label>
