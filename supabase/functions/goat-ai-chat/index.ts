@@ -54,13 +54,35 @@ serve(async (req) => {
         const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
         if (user && !authErr) {
           userId = user.id;
-          const { data: profile } = await supabaseAdmin
-            .from("profiles")
-            .select("display_name, email, role")
+          const { data: goatbarProfile } = await supabaseAdmin
+            .from("goatbar_user_profiles")
+            .select("username, display_name, active")
             .eq("user_id", user.id)
             .maybeSingle();
-          userName = profile?.display_name || profile?.email?.split("@")[0] || "Sócio";
-          userRole = profile?.role || "socio";
+
+          const { data: legacyProfile } = await supabaseAdmin
+            .from("profiles")
+            .select("display_name, email")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          userName =
+            goatbarProfile?.display_name ||
+            (goatbarProfile?.username ? `@${goatbarProfile.username}` : null) ||
+            legacyProfile?.display_name ||
+            legacyProfile?.email?.split("@")[0] ||
+            "Sócio";
+          userRole = "socio";
+
+          if (goatbarProfile && goatbarProfile.active === false) {
+            return new Response(
+              JSON.stringify({ success: false, error: "Usuário inativo" }),
+              {
+                status: 403,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              },
+            );
+          }
         }
       } catch (authErr) {
         console.warn(`[GOAT-AI-CHAT] correlationId=${correlationId} stage=auth_warning error=${String(authErr)}`);

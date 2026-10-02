@@ -56,18 +56,31 @@ export class ConversationManager {
         .maybeSingle();
 
       if (accountByWaId) {
-        const { data: profile } = await this.supabaseAdmin
+        const { data: goatbarProfile } = await this.supabaseAdmin
+          .from("goatbar_user_profiles")
+          .select("username, display_name, active")
+          .eq("user_id", accountByWaId.user_id)
+          .maybeSingle();
+
+        const { data: legacyProfile } = await this.supabaseAdmin
           .from("profiles")
           .select("display_name, email")
           .eq("user_id", accountByWaId.user_id)
           .maybeSingle();
 
+        const isActive = goatbarProfile?.active !== false;
+
         return {
           userId: accountByWaId.user_id,
-          name: accountByWaId.display_name || profile?.display_name || "Sócio",
-          email: profile?.email,
+          name:
+            goatbarProfile?.display_name ||
+            (goatbarProfile?.username ? `@${goatbarProfile.username}` : null) ||
+            accountByWaId.display_name ||
+            legacyProfile?.display_name ||
+            "Sócio",
+          email: legacyProfile?.email,
           role: "socio",
-          authorized: true,
+          authorized: isActive,
           externalUserId: accountByWaId.external_user_id || rawWaId,
           phoneNumber: accountByWaId.phone_number,
         };
@@ -118,18 +131,31 @@ export class ConversationManager {
           }
         }
 
-        const { data: profile } = await this.supabaseAdmin
+        const { data: goatbarProfile } = await this.supabaseAdmin
+          .from("goatbar_user_profiles")
+          .select("username, display_name, active")
+          .eq("user_id", matchedAccount.user_id)
+          .maybeSingle();
+
+        const { data: legacyProfile } = await this.supabaseAdmin
           .from("profiles")
           .select("display_name, email")
           .eq("user_id", matchedAccount.user_id)
           .maybeSingle();
 
+        const isActive = goatbarProfile?.active !== false;
+
         return {
           userId: matchedAccount.user_id,
-          name: matchedAccount.display_name || profile?.display_name || "Sócio",
-          email: profile?.email,
+          name:
+            goatbarProfile?.display_name ||
+            (goatbarProfile?.username ? `@${goatbarProfile.username}` : null) ||
+            matchedAccount.display_name ||
+            legacyProfile?.display_name ||
+            "Sócio",
+          email: legacyProfile?.email,
           role: "socio",
-          authorized: true,
+          authorized: isActive,
           externalUserId: rawWaId || matchedAccount.external_user_id,
           phoneNumber: matchedAccount.phone_number,
         };
