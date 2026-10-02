@@ -211,7 +211,10 @@ export const financialService = {
         .insert(itemsToInsert);
       if (itemsError) console.error("Error inserting expense items:", itemsError);
 
-      // --- Update Inventory ---
+      // --- Update central inventory only when the purchase destination is Ativo.
+      // Event/restaurant/tasting purchases are costs of their destination and must not
+      // inflate Goat Bar central stock; only leftovers explicitly returned do that.
+      if (expensePayload.modality === "Ativo" && expensePayload.entry_type !== "Receita") {
       for (const item of items) {
         if (item.matched_product_id) {
           const { data: invData } = await supabase.from("inventory").select("quantity").eq("id", item.matched_product_id).single();
@@ -222,8 +225,8 @@ export const financialService = {
              await supabase.from("inventory_movements").insert({
                inventory_id: item.matched_product_id,
                quantity: item.quantity,
-               type: "ENTRADA",
-               source: expensePayload.event_id ? "event" : "purchase",
+               type: "in",
+               source: "purchase",
                destination_modality: expensePayload.modality || null,
                event_id: expensePayload.event_id || null,
                tasting_id: expensePayload.tasting_id || null,
@@ -234,6 +237,7 @@ export const financialService = {
              });
           }
         }
+      }
       }
     }
     
