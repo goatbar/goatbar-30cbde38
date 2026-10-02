@@ -214,3 +214,118 @@ $$;
 
 REVOKE ALL ON FUNCTION public.allocate_inventory_cost(uuid,numeric,text,uuid,uuid,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.allocate_inventory_cost(uuid,numeric,text,uuid,uuid,text) TO authenticated;
+
+
+-- Espelha automaticamente compras de Evento na aba Insumos Levados.
+ALTER TABLE public.event_planning_items
+  ADD COLUMN IF NOT EXISTS inventory_id uuid REFERENCES public.inventory(id) ON DELETE SET NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_event_planning_source_expense_item
+  ON public.event_planning_items(source_expense_item_id)
+  WHERE source_expense_item_id IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION public.sync_event_purchase_item_to_planning()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  v_expense public.financial_expenses%ROWTYPE;
+BEGIN
+  SELECT * INTO v_expense FROM public.financial_expenses WHERE id=NEW.expense_id;
+  IF NOT FOUND OR v_expense.modality <> 'Evento' OR v_expense.event_id IS NULL OR v_expense.entry_type <> 'Despesa' THEN
+    RETURN NEW;
+  END IF;
+
+  INSERT INTO public.event_planning_items(
+    event_id, source_expense_item_id, inventory_id, item_name, category,
+    planned_quantity, unit, estimated_unit_cost, estimated_total_cost, origin, notes
+  ) VALUES (
+    v_expense.event_id, NEW.id, NEW.inventory_id, NEW.product_name,
+    COALESCE(NEW.suggested_category,'Insumos'), NEW.quantity, COALESCE(NEW.unit,'un'),
+    COALESCE(NEW.unit_price,0), COALESCE(NEW.total_price,0), 'Comprado para evento',
+    'Gerado automaticamente pela Controladoria'
+  )
+  ON CONFLICT (source_expense_item_id) WHERE source_expense_item_id IS NOT NULL
+  DO UPDATE SET
+    item_name=EXCLUDED.item_name,
+    planned_quantity=EXCLUDED.planned_quantity,
+    unit=EXCLUDED.unit,
+    estimated_unit_cost=EXCLUDED.estimated_unit_cost,
+    estimated_total_cost=EXCLUDED.estimated_total_cost,
+    inventory_id=EXCLUDED.inventory_id,
+    updated_at=now();
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_sync_event_purchase_item_to_planning ON public.financial_expense_items;
+CREATE TRIGGER trg_sync_event_purchase_item_to_planning
+AFTER INSERT OR UPDATE ON public.financial_expense_items
+FOR EACH ROW EXECUTE FUNCTION public.sync_event_purchase_item_to_planning();
+
+-- Devolve sobra física de um evento ao estoque preservando o custo original.
+CREATE OR REPLACE FUNCTION public.return_event_leftover_to_inventory(
+  p_planning_item_id uuid,
+  p_quantity numeric,
+  p_notes text DEFAULT NULL
+) RETURNS uuid
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  v_plan public.event_planning_items%ROWTYPE;
+  v_inventory_id uuid;
+  v_move_id uuid;
+BEGIN
+  IF p_quantity <= 0 THEN RAISE EXCEPTION 'Quantidade deve ser maior que zero'; END IF;
+  SELECT * INTO v_plan FROM public.event_planning_items WHERE id=p_planning_item_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Item do evento não encontrado'; END IF;
+
+  v_inventory_id := v_plan.inventory_id;
+  IF v_inventory_id IS NULL THEN
+    INSERT INTO public.inventory(name,category,quantity,unit,cost_per_unit)
+    VALUES (
+      v_plan.item_name,
+      COALESCE(v_plan.category,'Insumos'),
+      0,
+      COALESCE(v_plan.unit,'un'),
+      COALESCE(v_plan.estimated_unit_cost,0)
+    )
+    RETURNING id INTO v_inventory_id;
+
+    UPDATE public.event_planning_items SET inventory_id=v_inventory_id WHERE id=v_plan.id;
+    UPDATE public.financial_expense_items
+      SET inventory_id=v_inventory_id, returned_quantity=COALESCE(returned_quantity,0)+p_quantity
+      WHERE id=v_plan.source_expense_item_id;
+  ELSE
+    UPDATE public.financial_expense_items
+      SET returned_quantity=COALESCE(returned_quantity,0)+p_quantity
+      WHERE id=v_plan.source_expense_item_id;
+  END IF;
+
+  UPDATE public.inventory
+  SET quantity=quantity+p_quantity,
+      cost_per_unit=CASE WHEN cost_per_unit=0 THEN COALESCE(v_plan.estimated_unit_cost,0) ELSE cost_per_unit END,
+      updated_at=now()
+  WHERE id=v_inventory_id;
+
+  INSERT INTO public.inventory_movements(
+    inventory_id,type,quantity,source,destination_modality,event_id,
+    unit_cost,total_cost,performed_by_user_id,source_expense_item_id,notes
+  ) VALUES (
+    v_inventory_id,'in',p_quantity,'event_return','Ativo',v_plan.event_id,
+    COALESCE(v_plan.estimated_unit_cost,0),
+    round((COALESCE(v_plan.estimated_unit_cost,0)*p_quantity)::numeric,2),
+    auth.uid(),v_plan.source_expense_item_id,p_notes
+  ) RETURNING id INTO v_move_id;
+
+  RETURN v_move_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.return_event_leftover_to_inventory(uuid,numeric,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.return_event_leftover_to_inventory(uuid,numeric,text) TO authenticated;
