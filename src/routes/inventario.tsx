@@ -4,7 +4,8 @@ import { SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { migrateLegacyStoreToSupabase } from "@/lib/migration";
-import { Package, Plus, Search, Edit2, Trash2, X } from "lucide-react";
+import { Package, Plus, Search, Edit2, Trash2, X, ArrowRightLeft, Loader2 } from "lucide-react";
+import { financialService, type FinancialModality } from "@/services/financial-service";
 
 export const Route = createFileRoute("/inventario")({
   component: () => (
@@ -19,17 +20,29 @@ function InventoryPage() {
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [eventsList, setEventsList] = useState<any[]>([]);
+  const [allocationItem, setAllocationItem] = useState<any | null>(null);
+  const [allocationLoading, setAllocationLoading] = useState(false);
+  const [allocationForm, setAllocationForm] = useState<{
+    quantity: number;
+    modality: FinancialModality;
+    event_id: string;
+    notes: string;
+  }>({ quantity: 1, modality: "7 Steak House", event_id: "", notes: "" });
 
   const [formNome, setFormNome] = useState("");
   const [formQtd, setFormQtd] = useState(0);
   const [formObs, setFormObs] = useState("");
+  const [formCategoria, setFormCategoria] = useState("Insumos");
+  const [formUnidade, setFormUnidade] = useState("un");
+  const [formCustoUnitario, setFormCustoUnitario] = useState(0);
 
   useEffect(() => {
     const loadInventory = async () => {
       try {
         const { data, error } = await supabase
           .from("inventory")
-          .select("id, name, quantity, updated_at")
+          .select("id, name, category, quantity, unit, cost_per_unit, updated_at")
           .order("updated_at", { ascending: false });
         if (error) throw error;
 
@@ -39,9 +52,21 @@ function InventoryPage() {
             nome: item.name ?? "Item",
             quantidadeTotal: Number(item.quantity ?? 0),
             observacoes: "",
+            categoria: item.category ?? "Outros",
+            unidade: item.unit ?? "un",
+            custoUnitario: Number(item.cost_per_unit ?? 0),
           }));
           setInventoryItems(mapped);
         }
+
+        const { data: eventsData, error: eventsError } = await (supabase as any)
+          .from("events")
+          .select("id, client_name, event_name, date, status")
+          .order("date", { ascending: false });
+        if (eventsError) throw eventsError;
+        setEventsList((eventsData || []).filter((ev: any) =>
+          ["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(String(ev.status || "").toUpperCase())
+        ));
       } catch (e) {
         console.error("Falha ao carregar inventário do Supabase.", {
           table: "inventory",
@@ -63,6 +88,9 @@ function InventoryPage() {
     setFormNome(item.nome);
     setFormQtd(item.quantidadeTotal);
     setFormObs(item.observacoes);
+    setFormCategoria(item.categoria || "Insumos");
+    setFormUnidade(item.unidade || "un");
+    setFormCustoUnitario(Number(item.custoUnitario || 0));
     setShowModal(true);
   };
 
@@ -73,13 +101,28 @@ function InventoryPage() {
       if (editingId) {
         const { error } = await supabase
           .from("inventory")
-          .update({ name: formNome, quantity: formQtd, updated_at: new Date().toISOString() })
+          .update({
+            name: formNome,
+            category: formCategoria,
+            quantity: formQtd,
+            unit: formUnidade,
+            cost_per_unit: formCustoUnitario,
+            updated_at: new Date().toISOString()
+          })
           .eq("id", editingId);
         if (error) throw error;
         setInventoryItems((prev) =>
           prev.map((i) =>
             i.id === editingId
-              ? { ...i, nome: formNome, quantidadeTotal: formQtd, observacoes: formObs }
+              ? {
+                  ...i,
+                  nome: formNome,
+                  quantidadeTotal: formQtd,
+                  observacoes: formObs,
+                  categoria: formCategoria,
+                  unidade: formUnidade,
+                  custoUnitario: formCustoUnitario,
+                }
               : i,
           ),
         );
@@ -87,19 +130,33 @@ function InventoryPage() {
         const { data, error } = await supabase
           .from("inventory")
           // @ts-expect-error Erro legado pré-existente fora do escopo (Tipagem de BD desatualizada)
-          .insert({ name: formNome, quantity: formQtd })
+          .insert({
+            name: formNome,
+            category: formCategoria,
+            quantity: formQtd,
+            unit: formUnidade,
+            cost_per_unit: formCustoUnitario,
+          })
           .select("id")
           .single();
         if (error) throw error;
         setInventoryItems((prev) => [
-          { id: data.id, nome: formNome, quantidadeTotal: formQtd, observacoes: formObs },
+          {
+            id: data.id,
+            nome: formNome,
+            quantidadeTotal: formQtd,
+            observacoes: formObs,
+            categoria: formCategoria,
+            unidade: formUnidade,
+            custoUnitario: formCustoUnitario,
+          },
           ...prev,
         ]);
       }
     } catch (e) {
       console.error("Erro ao salvar item no Supabase.", {
         table: "inventory",
-        payload: { id: editingId, formNome, formQtd, formObs },
+        payload: { id: editingId, formNome, formQtd, formObs, formCategoria, formUnidade, formCustoUnitario },
         error: e,
       });
       alert("Erro ao salvar item. Verifique conexão/Supabase e tente novamente.");
@@ -107,6 +164,45 @@ function InventoryPage() {
     }
 
     setShowModal(false);
+  };
+
+  const openAllocation = (item: any) => {
+    setAllocationItem(item);
+    setAllocationForm({ quantity: 1, modality: "7 Steak House", event_id: "", notes: "" });
+  };
+
+  const handleAllocate = async () => {
+    if (!allocationItem) return;
+    if (allocationForm.quantity <= 0) return alert("Informe uma quantidade válida.");
+    if (allocationForm.quantity > Number(allocationItem.quantidadeTotal || 0)) {
+      return alert("A quantidade é maior que o saldo disponível em estoque.");
+    }
+    if ((allocationForm.modality === "Evento" || allocationForm.modality === "Degustação") && !allocationForm.event_id) {
+      return alert("Selecione o evento relacionado.");
+    }
+
+    setAllocationLoading(true);
+    try {
+      await financialService.allocateInventoryCost({
+        inventory_id: allocationItem.id,
+        quantity: allocationForm.quantity,
+        destination_modality: allocationForm.modality,
+        event_id: allocationForm.event_id || undefined,
+        notes: allocationForm.notes || undefined,
+      });
+
+      setInventoryItems((prev) => prev.map((item) =>
+        item.id === allocationItem.id
+          ? { ...item, quantidadeTotal: Number(item.quantidadeTotal || 0) - allocationForm.quantity }
+          : item
+      ));
+      setAllocationItem(null);
+    } catch (e) {
+      console.error("Erro ao direcionar estoque.", e);
+      alert("Não foi possível direcionar o estoque. Verifique o saldo e tente novamente.");
+    } finally {
+      setAllocationLoading(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -135,6 +231,9 @@ function InventoryPage() {
               setFormNome("");
               setFormQtd(0);
               setFormObs("");
+              setFormCategoria("Insumos");
+              setFormUnidade("un");
+              setFormCustoUnitario(0);
               setShowModal(true);
             }}
           >
@@ -170,12 +269,22 @@ function InventoryPage() {
                     <div>
                       <div className="font-semibold">{item.nome}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        Estoque: {item.quantidadeTotal}{" "}
-                        {item.quantidadeTotal === 1 ? "unidade" : "unidades"}
+                        Estoque: {item.quantidadeTotal} {item.unidade || "un"}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground mt-1">
+                        Custo unitário: R$ {Number(item.custoUnitario || 0).toFixed(2).replace(".", ",")}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => openAllocation(item)}
+                      disabled={Number(item.quantidadeTotal || 0) <= 0}
+                      title="Direcionar estoque para uma modalidade"
+                      className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30"
+                    >
+                      <ArrowRightLeft className="h-4 w-4" />
+                    </button>
                     <button
                       onClick={() => handleEdit(item)}
                       className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
@@ -205,6 +314,113 @@ function InventoryPage() {
         </SectionCard>
       </div>
 
+      {allocationItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="w-full max-w-lg bg-surface border border-border rounded-2xl shadow-2xl my-auto">
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
+              <div>
+                <h2 className="font-display text-lg font-semibold">Direcionar estoque</h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {allocationItem.nome} · saldo {allocationItem.quantidadeTotal} {allocationItem.unidade || "un"}
+                </p>
+              </div>
+              <button
+                onClick={() => setAllocationItem(null)}
+                className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/40 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div>
+                <label className="label-eyebrow block mb-2">Quantidade</label>
+                <input
+                  type="number"
+                  min="0.001"
+                  step="0.001"
+                  max={allocationItem.quantidadeTotal}
+                  value={allocationForm.quantity}
+                  onChange={(e) => setAllocationForm((p) => ({ ...p, quantity: Number(e.target.value || 0) }))}
+                  className="w-full h-11 px-4 rounded-xl bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="label-eyebrow block mb-2">Direcionar para</label>
+                <select
+                  value={allocationForm.modality}
+                  onChange={(e) => {
+                    const modality = e.target.value as FinancialModality;
+                    setAllocationForm((p) => ({
+                      ...p,
+                      modality,
+                      event_id: modality === "Evento" || modality === "Degustação" ? p.event_id : "",
+                    }));
+                  }}
+                  className="w-full h-11 px-4 rounded-xl bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                >
+                  <option value="Evento">Evento</option>
+                  <option value="Goat Botequim">Goat Botequim</option>
+                  <option value="7 Steak House">7 Steak House</option>
+                  <option value="Degustação">Degustação</option>
+                  <option value="Ativo">Ativo</option>
+                </select>
+              </div>
+
+              {(allocationForm.modality === "Evento" || allocationForm.modality === "Degustação") && (
+                <div>
+                  <label className="label-eyebrow block mb-2">
+                    {allocationForm.modality === "Degustação" ? "Evento da degustação" : "Evento relacionado"}
+                  </label>
+                  <select
+                    value={allocationForm.event_id}
+                    onChange={(e) => setAllocationForm((p) => ({ ...p, event_id: e.target.value }))}
+                    className="w-full h-11 px-4 rounded-xl bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                  >
+                    <option value="">Selecione...</option>
+                    {eventsList.map((ev: any) => (
+                      <option key={ev.id} value={ev.id}>
+                        {ev.event_name || ev.client_name} - {ev.date}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="rounded-xl border border-border bg-background/40 p-4">
+                <div className="text-xs text-muted-foreground">Custo que será alocado à modalidade</div>
+                <div className="text-xl font-bold mt-1">
+                  R$ {(Number(allocationItem.custoUnitario || 0) * Number(allocationForm.quantity || 0)).toFixed(2).replace(".", ",")}
+                </div>
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  Esta operação gera custo gerencial, mas não uma nova saída de caixa.
+                </div>
+              </div>
+
+              <div>
+                <label className="label-eyebrow block mb-2">Observação</label>
+                <textarea
+                  value={allocationForm.notes}
+                  onChange={(e) => setAllocationForm((p) => ({ ...p, notes: e.target.value }))}
+                  rows={3}
+                  className="w-full p-4 rounded-xl bg-input border border-border text-sm focus:border-primary focus:outline-none resize-none"
+                  placeholder="Ex: 2 garrafas direcionadas para operação semanal"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 px-6 py-4 bg-background/50 border-t border-border rounded-b-2xl">
+              <GhostButton onClick={() => setAllocationItem(null)}>Cancelar</GhostButton>
+              <PrimaryButton onClick={handleAllocate} disabled={allocationLoading}>
+                {allocationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightLeft className="h-4 w-4" />}
+                Direcionar
+              </PrimaryButton>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="w-full max-w-lg bg-surface border border-border rounded-2xl shadow-2xl my-auto">
@@ -232,15 +448,54 @@ function InventoryPage() {
                 />
               </div>
 
-              <div>
-                <label className="label-eyebrow block mb-2">Quantidade total do item</label>
-                <input
-                  type="number"
-                  placeholder="Ex: 20"
-                  value={formQtd || ""}
-                  onChange={(e) => setFormQtd(Number(e.target.value))}
-                  className="w-full h-11 px-4 rounded-xl bg-input border border-border text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="label-eyebrow block mb-2">Categoria</label>
+                  <input
+                    type="text"
+                    value={formCategoria}
+                    onChange={(e) => setFormCategoria(e.target.value)}
+                    className="w-full h-11 px-4 rounded-xl bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                    placeholder="Ex: Bebidas"
+                  />
+                </div>
+                <div>
+                  <label className="label-eyebrow block mb-2">Unidade</label>
+                  <input
+                    type="text"
+                    value={formUnidade}
+                    onChange={(e) => setFormUnidade(e.target.value)}
+                    className="w-full h-11 px-4 rounded-xl bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                    placeholder="un, garrafa, caixa, kg..."
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="label-eyebrow block mb-2">Quantidade total</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    placeholder="Ex: 20"
+                    value={formQtd || ""}
+                    onChange={(e) => setFormQtd(Number(e.target.value))}
+                    className="w-full h-11 px-4 rounded-xl bg-input border border-border text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="label-eyebrow block mb-2">Custo unitário (R$)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formCustoUnitario || ""}
+                    onChange={(e) => setFormCustoUnitario(Number(e.target.value))}
+                    className="w-full h-11 px-4 rounded-xl bg-input border border-border text-sm focus:border-primary focus:outline-none"
+                    placeholder="0,00"
+                  />
+                </div>
               </div>
 
               <div>

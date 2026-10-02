@@ -545,7 +545,7 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
   name: "create_controladoria_expense",
   domain: "CONTROLLER",
   sourceTable: "financial_expenses",
-  description: "Registra uma despesa, nota fiscal, cupom ou comprovante no módulo de Controladoria do Goat Bar com prévia e confirmação.",
+  description: "Registra despesa, compra, receita ou alocação interna na Controladoria do Goat Bar, com modalidade, evento, pagamento, autoria e confirmação.",
   parameters: {
     type: "object",
     properties: {
@@ -561,11 +561,14 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
       },
       modality: {
         type: "string",
-        description: "Unidade/Destino da despesa: '7 Steakhouse', 'Goat Botequim', 'Evento' ou 'Geral'.",
+        description: "Modalidade financeira: 'Evento', 'Goat Botequim', '7 Steak House', 'Degustação' ou 'Ativo'.",
       },
       event_id: { type: "string", description: "ID do evento caso seja referente a um evento específico." },
       description: { type: "string", description: "Descrição dos itens ou finalidade da compra." },
-      payment_method: { type: "string", description: "Forma de pagamento (PIX, Dinheiro, Cartão, Transferência, Outros)." },
+      payment_method: { type: "string", description: "Forma de pagamento: 'Cartão de crédito Goat', 'PIX Goat', 'Pessoal' ou 'Interno/Estoque'." },
+      payment_payer_name: { type: "string", description: "Nome de quem pagou quando a forma de pagamento for Pessoal." },
+      entry_type: { type: "string", description: "Tipo do lançamento: 'Despesa', 'Receita' ou 'Alocação Interna'." },
+      tasting_id: { type: "string", description: "ID da degustação quando houver uma degustação específica relacionada." },
       status: { type: "string", description: "Status de pagamento ('Pago' ou 'Pendente')." },
       classification: { type: "string", description: "Classificação de custo ('Direto' ou 'Indireto')." },
       responsible: { type: "string", description: "Responsável pelo lançamento (preenchido com usuário autenticado)." },
@@ -649,10 +652,18 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
       amount: norm.amount,
       date: norm.date,
       due_date: norm.due_date || null,
-      modality: norm.modality, // 'Steakhouse', 'Goatbotequim', 'Evento', 'Geral'
+      modality: norm.modality,
       category: norm.category, // 'Fornecedor', 'Equipe', 'Insumos', 'Operacional', 'Outros'
       description: norm.description,
-      payment_method: norm.payment_method, // 'PIX', 'Dinheiro', 'Cartao', 'Transferencia', 'Outros'
+      payment_method: norm.payment_method,
+      payment_payer_name: norm.payment_payer_name || null,
+      entry_type: norm.entry_type,
+      tasting_id: norm.tasting_id || null,
+      cash_effect: norm.entry_type === "Alocação Interna" ? false : true,
+      created_by_user_id: ctx.userId || null,
+      updated_by_user_id: ctx.userId || null,
+      source_channel: "gia",
+      source_reference: norm.source_message_id || null,
       status: norm.status,
       classification: norm.classification,
       responsible: norm.responsible,
@@ -755,7 +766,7 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
         items_count: itemsCount,
         review_status: norm.review_status,
       },
-      message: `Pronto. O gasto de ${fmtAmount} (${norm.supplier_name}) foi lançado com sucesso na Controladoria.`,
+      message: `Pronto. O lançamento de ${fmtAmount} foi registrado na modalidade ${norm.modality}.`,
     };
   },
 };
@@ -813,7 +824,7 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
   name: "create_event_purchase",
   domain: "PURCHASES",
   sourceTable: "financial_expenses",
-  description: "Registra uma compra de insumos ou bebidas vinculada diretamente a um evento com entrada no estoque.",
+  description: "Registra uma compra de insumos ou bebidas vinculada diretamente a um evento e detalha os itens para a aba Insumos Levados. Não adiciona automaticamente a compra ao estoque central.",
   parameters: {
     type: "object",
     properties: {
@@ -829,10 +840,19 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
           properties: {
             name: { type: "string" },
             quantity: { type: "number" },
+            unit: { type: "string", description: "Unidade, ex: garrafa, caixa, kg, un." },
             unit_price: { type: "number" },
           },
           required: ["name", "quantity"],
         },
+      },
+      payment_method: {
+        type: "string",
+        description: "Forma de pagamento: PIX Goat, Cartão de crédito Goat ou Pessoal.",
+      },
+      payment_payer_name: {
+        type: "string",
+        description: "Obrigatório quando payment_method for Pessoal.",
       },
     },
     required: ["event_id", "supplier_name", "total_amount"],
@@ -843,12 +863,17 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
     supplier_name: string;
     total_amount: number;
     date?: string;
-    items?: Array<{ name: string; quantity: number; unit_price?: number }>;
+    items?: Array<{ name: string; quantity: number; unit?: string; unit_price?: number }>;
+    payment_method?: string;
+    payment_payer_name?: string;
   }): Promise<ToolExecutionResult> => {
     const missing: string[] = [];
     if (!args.event_id) missing.push("event_id");
     if (!args.supplier_name) missing.push("supplier_name");
     if (args.total_amount == null) missing.push("total_amount");
+    if (args.payment_method === "Pessoal" && !String(args.payment_payer_name || "").trim()) {
+      missing.push("payment_payer_name");
+    }
 
     if (missing.length > 0) {
       return { success: false, missing_fields: missing, error: `Campos obrigatórios pendentes: ${missing.join(", ")}` };
@@ -862,6 +887,13 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
         date: args.date || new Date().toISOString().split("T")[0],
         category: "Insumos",
         modality: "Evento",
+        event_id: args.event_id,
+        entry_type: "Despesa",
+        payment_method: args.payment_method || "PIX Goat",
+        payment_payer_name: args.payment_method === "Pessoal" ? (args.payment_payer_name || null) : null,
+        created_by_user_id: ctx.userId || null,
+        updated_by_user_id: ctx.userId || null,
+        source_channel: "gia",
         description: `Compra para evento (${args.items?.map((i) => `${i.quantity}x ${i.name}`).join(", ") || "Insumos"})`,
         responsible: ctx.userName || "GIA",
         status: "Pago",
@@ -873,6 +905,42 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
       return { success: false, error: `Erro ao registrar compra do evento: ${error?.message}` };
     }
 
+    const normalizedItems = (args.items || [])
+      .filter((item) => item?.name && Number(item.quantity) > 0)
+      .map((item) => {
+        const quantity = Number(item.quantity);
+        const explicitUnitPrice = item.unit_price == null ? null : Number(item.unit_price);
+        const inferredUnitPrice =
+          args.items?.length === 1 && explicitUnitPrice == null && quantity > 0
+            ? Number(args.total_amount) / quantity
+            : explicitUnitPrice;
+
+        return {
+          expense_id: purchase.id,
+          product_name: String(item.name).trim(),
+          quantity,
+          unit: item.unit || "un",
+          unit_price: inferredUnitPrice,
+          total_price: inferredUnitPrice == null ? null : Math.round(inferredUnitPrice * quantity * 100) / 100,
+          suggested_category: "Insumos",
+          reviewed: true,
+        };
+      });
+
+    if (normalizedItems.length > 0) {
+      const { error: itemsError } = await ctx.supabaseAdmin
+        .from("financial_expense_items")
+        .insert(normalizedItems);
+
+      if (itemsError) {
+        await ctx.supabaseAdmin.from("financial_expenses").delete().eq("id", purchase.id);
+        return {
+          success: false,
+          error: `A compra não foi mantida porque houve erro ao registrar os itens: ${itemsError.message}`,
+        };
+      }
+    }
+
     return {
       success: true,
       data: {
@@ -880,6 +948,7 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
         event_id: args.event_id,
         supplier: args.supplier_name,
         total: args.total_amount,
+        items_count: normalizedItems.length,
       },
       message: `Compra de R$ ${args.total_amount.toFixed(2)} vinculada ao evento com sucesso.`,
     };
@@ -910,18 +979,17 @@ export const getFinancialSummaryTool: GoatAIToolDefinition = {
 
     const { data: expenses } = await ctx.supabaseAdmin
       .from("financial_expenses")
-      .select("amount, category, modality")
+      .select("amount, category, modality, entry_type, cash_effect")
       .gte("date", startDate)
       .lte("date", endDate);
 
-    const { data: events } = await ctx.supabaseAdmin
-      .from("events")
-      .select("current_budget_value, current_profit_value")
-      .gte("date", startDate)
-      .lte("date", endDate);
-
-    const totalExpenses = (expenses || []).reduce((acc: number, e: any) => acc + (Number(e.amount) || 0), 0);
-    const totalEventRevenue = (events || []).reduce((acc: number, e: any) => acc + (Number(e.current_budget_value) || 0), 0);
+    const allEntries = expenses || [];
+    const totalExpenses = allEntries
+      .filter((e: any) => e.entry_type !== "Receita")
+      .reduce((acc: number, e: any) => acc + (Number(e.amount) || 0), 0);
+    const totalEventRevenue = allEntries
+      .filter((e: any) => e.entry_type === "Receita")
+      .reduce((acc: number, e: any) => acc + (Number(e.amount) || 0), 0);
 
     return {
       success: true,
@@ -936,3 +1004,129 @@ export const getFinancialSummaryTool: GoatAIToolDefinition = {
   },
 };
 
+
+
+export const allocateInventoryCostTool: GoatAIToolDefinition = {
+  name: "allocate_inventory_cost",
+  domain: "PURCHASES",
+  sourceTable: "inventory, inventory_movements, financial_expenses",
+  description: "Direciona uma quantidade do estoque Goat Bar para uma modalidade e registra o custo gerencial correspondente sem gerar nova saída de caixa.",
+  parameters: {
+    type: "object",
+    properties: {
+      inventory_id: { type: "string", description: "ID do item no estoque." },
+      quantity: { type: "number", description: "Quantidade a direcionar." },
+      destination_modality: {
+        type: "string",
+        description: "Destino: Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo.",
+      },
+      event_id: { type: "string", description: "Obrigatório quando o destino for Evento ou Degustação." },
+      tasting_id: { type: "string", description: "Degustação específica, quando conhecida." },
+      notes: { type: "string", description: "Observação opcional sobre a transferência." },
+    },
+    required: ["inventory_id", "quantity", "destination_modality"],
+  },
+  requiresConfirmation: true,
+  execute: async (ctx: ToolContext, args: any): Promise<ToolExecutionResult> => {
+    const modality = String(args.destination_modality || "");
+    const missing: string[] = [];
+    if (!args.inventory_id) missing.push("inventory_id");
+    if (!(Number(args.quantity) > 0)) missing.push("quantity");
+    if (!modality) missing.push("destination_modality");
+    if ((modality === "Evento" || modality === "Degustação") && !args.event_id) missing.push("event_id");
+    if (missing.length) {
+      return { success: false, missing_fields: missing, error: `Campos obrigatórios pendentes: ${missing.join(", ")}` };
+    }
+
+    const { data: inventoryItem, error: itemError } = await ctx.supabaseAdmin
+      .from("inventory")
+      .select("id,name,quantity,unit,cost_per_unit")
+      .eq("id", args.inventory_id)
+      .single();
+
+    if (itemError || !inventoryItem) {
+      return { success: false, error: "Item de estoque não encontrado." };
+    }
+    if (Number(inventoryItem.quantity || 0) < Number(args.quantity)) {
+      return { success: false, error: `Saldo insuficiente. Disponível: ${inventoryItem.quantity} ${inventoryItem.unit || "un"}.` };
+    }
+
+    const { data: entryId, error } = await ctx.supabaseAdmin.rpc("allocate_inventory_cost", {
+      p_inventory_id: args.inventory_id,
+      p_quantity: Number(args.quantity),
+      p_destination_modality: modality,
+      p_event_id: args.event_id || null,
+      p_tasting_id: args.tasting_id || null,
+      p_notes: args.notes || null,
+      p_performed_by_user_id: ctx.userId || null,
+    });
+
+    if (error) {
+      return { success: false, error: `Erro ao direcionar estoque: ${error.message}` };
+    }
+
+    const totalCost = Math.round(Number(inventoryItem.cost_per_unit || 0) * Number(args.quantity) * 100) / 100;
+    return {
+      success: true,
+      data: {
+        financial_entry_id: entryId,
+        inventory_id: args.inventory_id,
+        item_name: inventoryItem.name,
+        quantity: Number(args.quantity),
+        destination_modality: modality,
+        event_id: args.event_id || null,
+        total_cost: totalCost,
+      },
+      message: `Pronto. ${args.quantity} ${inventoryItem.unit || "un"} de ${inventoryItem.name} foram direcionados para ${modality}, com custo gerencial de R$ ${totalCost.toFixed(2).replace(".", ",")}.`,
+    };
+  },
+};
+
+
+export const searchInventoryTool: GoatAIToolDefinition = {
+  name: "search_inventory",
+  domain: "PURCHASES",
+  sourceTable: "inventory",
+  description: "Busca itens reais no estoque Goat Bar por nome e retorna saldo, unidade e custo unitário para permitir alocações seguras.",
+  parameters: {
+    type: "object",
+    properties: {
+      query: { type: "string", description: "Nome ou trecho do item, por exemplo gin, Beefeater, gelo." },
+      limit: { type: "number", description: "Quantidade máxima de resultados. Padrão 10." },
+    },
+    required: ["query"],
+  },
+  requiresConfirmation: false,
+  execute: async (ctx: ToolContext, args: { query: string; limit?: number }): Promise<ToolExecutionResult> => {
+    const query = String(args.query || "").trim();
+    if (!query) return { success: false, missing_fields: ["query"], error: "Informe o item que deseja buscar no estoque." };
+
+    const { data, error } = await ctx.supabaseAdmin
+      .from("inventory")
+      .select("id,name,category,quantity,unit,cost_per_unit,updated_at")
+      .ilike("name", `%${query}%`)
+      .order("name", { ascending: true })
+      .limit(args.limit || 10);
+
+    if (error) return { success: false, error: `Erro ao consultar estoque: ${error.message}` };
+
+    return {
+      success: true,
+      data: {
+        count: (data || []).length,
+        items: (data || []).map((item: any) => ({
+          inventory_id: item.id,
+          name: item.name,
+          category: item.category,
+          quantity: Number(item.quantity || 0),
+          unit: item.unit,
+          cost_per_unit: Number(item.cost_per_unit || 0),
+          updated_at: item.updated_at,
+        })),
+      },
+      message: (data || []).length
+        ? `Encontrei ${(data || []).length} item(ns) no estoque.`
+        : "Nenhum item correspondente foi encontrado no estoque.",
+    };
+  },
+};

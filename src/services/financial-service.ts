@@ -2,15 +2,17 @@ import { supabase } from "@/integrations/supabase/client";
 import Tesseract from "tesseract.js";
 import { calculateSteakhouseSessionFinancials } from "@/lib/steakhouse-financials";
 
-export type FinancialModality = "Evento" | "Steakhouse" | "Goatbotequim" | "Geral";
+export type FinancialModality = "Evento" | "Goat Botequim" | "7 Steak House" | "Degustação" | "Ativo";
 export type FinancialCategory = "Fornecedor" | "Equipe" | "Insumos" | "Operacional" | "Outros";
 export type FinancialStatus = "Pago" | "Pendente";
 export type FinancialClassification = "Direto" | "Indireto";
-export type PaymentMethod = "PIX" | "Dinheiro" | "Cartão" | "Transferência" | "Outros";
+export type FinancialEntryType = "Despesa" | "Receita" | "Alocação Interna";
+export type PaymentMethod = "Cartão de crédito Goat" | "PIX Goat" | "Pessoal" | "Interno/Estoque";
 
 export interface FinancialExpense {
   id: string;
   event_id?: string;
+  tasting_id?: string;
   date: string;
   due_date?: string;
   modality: FinancialModality;
@@ -19,7 +21,10 @@ export interface FinancialExpense {
   amount: number;
   responsible: string;
   payment_method: PaymentMethod;
+  payment_payer_name?: string;
   status: FinancialStatus;
+  entry_type?: FinancialEntryType;
+  cash_effect?: boolean;
   classification: FinancialClassification;
   supplier_name?: string;
   staff_name?: string;
@@ -35,6 +40,10 @@ export interface FinancialExpense {
   ocr_metadata?: Record<string, unknown>;
   auto_filled_fields?: string[];
   manually_edited_fields?: string[];
+  created_by_user_id?: string;
+  updated_by_user_id?: string;
+  source_channel?: "web" | "gia" | "system";
+  source_reference?: string;
   created_at: string;
   updated_at: string;
 }
@@ -137,6 +146,9 @@ export const financialService = {
     modality?: string;
     status?: string;
     category?: string;
+    entry_type?: FinancialEntryType;
+    event_id?: string;
+    tasting_id?: string;
   }) {
     let query = supabase.from("financial_expenses").select("*").order("date", { ascending: false });
 
@@ -145,6 +157,9 @@ export const financialService = {
     if (filters?.modality) query = query.eq("modality", filters.modality);
     if (filters?.status) query = query.eq("status", filters.status);
     if (filters?.category) query = query.eq("category", filters.category);
+    if (filters?.entry_type) query = query.eq("entry_type", filters.entry_type);
+    if (filters?.event_id) query = query.eq("event_id", filters.event_id);
+    if (filters?.tasting_id) query = query.eq("tasting_id", filters.tasting_id);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -163,10 +178,19 @@ export const financialService = {
 
   async createExpense(payload: Partial<FinancialExpense> & { items?: FinancialExpenseItem[] }) {
     const { items, ...expensePayload } = payload;
+    const { data: authData } = await supabase.auth.getUser();
+    const currentUserId = authData.user?.id || undefined;
+    const normalizedPayload = {
+      ...expensePayload,
+      created_by_user_id: expensePayload.created_by_user_id || currentUserId,
+      updated_by_user_id: expensePayload.updated_by_user_id || currentUserId,
+      source_channel: expensePayload.source_channel || "web",
+      cash_effect: expensePayload.entry_type === "Alocação Interna" ? false : (expensePayload.cash_effect ?? true),
+    };
     
     const { data, error } = await supabase
       .from("financial_expenses")
-      .insert(expensePayload as any)
+      .insert(normalizedPayload as any)
       .select()
       .single();
     if (error) throw error;
@@ -187,7 +211,10 @@ export const financialService = {
         .insert(itemsToInsert);
       if (itemsError) console.error("Error inserting expense items:", itemsError);
 
-      // --- Update Inventory ---
+      // --- Update central inventory only when the purchase destination is Ativo.
+      // Event/restaurant/tasting purchases are costs of their destination and must not
+      // inflate Goat Bar central stock; only leftovers explicitly returned do that.
+      if (expensePayload.modality === "Ativo" && expensePayload.entry_type !== "Receita") {
       for (const item of items) {
         if (item.matched_product_id) {
           const { data: invData } = await supabase.from("inventory").select("quantity").eq("id", item.matched_product_id).single();
@@ -198,11 +225,19 @@ export const financialService = {
              await supabase.from("inventory_movements").insert({
                inventory_id: item.matched_product_id,
                quantity: item.quantity,
-               type: "ENTRADA",
-               source: expensePayload.event_id ? `Compra - Evento` : "Compra Controladoria"
+               type: "in",
+               source: "purchase",
+               destination_modality: expensePayload.modality || null,
+               event_id: expensePayload.event_id || null,
+               tasting_id: expensePayload.tasting_id || null,
+               unit_cost: item.unit_price || null,
+               total_cost: item.total_price || null,
+               performed_by_user_id: currentUserId || null,
+               financial_entry_id: data.id
              });
           }
         }
+      }
       }
     }
     
@@ -210,14 +245,35 @@ export const financialService = {
   },
 
   async updateExpense(id: string, payload: Partial<FinancialExpense>) {
+    const { data: authData } = await supabase.auth.getUser();
     const { data, error } = await supabase
       .from("financial_expenses")
-      .update({ ...payload, updated_at: new Date().toISOString() } as any)
+      .update({ ...payload, updated_by_user_id: authData.user?.id || payload.updated_by_user_id, updated_at: new Date().toISOString() } as any)
       .eq("id", id)
       .select()
       .single();
     if (error) throw error;
     return data as FinancialExpense;
+  },
+
+  async allocateInventoryCost(payload: {
+    inventory_id: string;
+    quantity: number;
+    destination_modality: FinancialModality;
+    event_id?: string;
+    tasting_id?: string;
+    notes?: string;
+  }) {
+    const { data, error } = await (supabase as any).rpc("allocate_inventory_cost", {
+      p_inventory_id: payload.inventory_id,
+      p_quantity: payload.quantity,
+      p_destination_modality: payload.destination_modality,
+      p_event_id: payload.event_id || null,
+      p_tasting_id: payload.tasting_id || null,
+      p_notes: payload.notes || null,
+    });
+    if (error) throw error;
+    return data as string;
   },
 
   async deleteExpense(id: string) {

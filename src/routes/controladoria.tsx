@@ -36,6 +36,7 @@ import {
   type FinancialCategory,
   type FinancialStatus,
   type FinancialClassification,
+  type FinancialEntryType,
   type PaymentMethod,
 } from "@/services/financial-service";
 import {
@@ -50,7 +51,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { format, startOfMonth, endOfMonth, parseISO } from "date-fns";
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export const Route = createFileRoute("/controladoria")({
@@ -79,22 +80,45 @@ function ControladoriaPage() {
     modality: "",
     status: "",
     category: "",
+    entry_type: "",
   });
 
   const [form, setForm] = useState<Partial<FinancialExpense> & { items?: any[] }>({
     date: format(new Date(), "yyyy-MM-dd"),
-    modality: "Geral",
+    modality: "Ativo",
     event_id: "",
+    entry_type: "Despesa",
     category: "Operacional",
     description: "",
     amount: 0,
     responsible: "",
-    payment_method: "PIX",
-    status: "Pendente",
+    payment_method: "PIX Goat",
+    status: "Pago",
     classification: "Direto",
+    items: [{ product_name: "", quantity: 1, unit: "un", unit_price: 0, total_price: 0 }],
   });
 
   const [uploading, setUploading] = useState<{ invoice?: boolean; receipt?: boolean; note?: boolean }>({});
+
+  const applyPeriodPreset = (preset: "today" | "week" | "month" | "year" | "all") => {
+    const now = new Date();
+    if (preset === "all") {
+      setFilters((p) => ({ ...p, start_date: "", end_date: "" }));
+      return;
+    }
+    const ranges = {
+      today: [now, now],
+      week: [startOfWeek(now, { weekStartsOn: 1 }), endOfWeek(now, { weekStartsOn: 1 })],
+      month: [startOfMonth(now), endOfMonth(now)],
+      year: [startOfYear(now), endOfYear(now)],
+    } as const;
+    const [start, end] = ranges[preset];
+    setFilters((p) => ({
+      ...p,
+      start_date: format(start, "yyyy-MM-dd"),
+      end_date: format(end, "yyyy-MM-dd"),
+    }));
+  };
 
   useEffect(() => {
     fetchExpenses();
@@ -106,8 +130,15 @@ function ControladoriaPage() {
       const data = await financialService.listExpenses(filters);
       setExpenses(data);
       
-      const { data: eventsData } = await (window as any).supabase.from("events").select("id, client_name, event_name, date").order("date", { ascending: false });
-      if (eventsData) setEventsList(eventsData);
+      const { data: eventsData } = await (window as any).supabase
+        .from("events")
+        .select("id, client_name, event_name, date, status")
+        .order("date", { ascending: false });
+      if (eventsData) {
+        setEventsList(eventsData.filter((ev: any) =>
+          ["CONFIRMADO", "FINALIZADO", "REALIZADO", "PROPOSTA_ACEITA"].includes(String(ev.status || "").toUpperCase())
+        ));
+      }
     } catch (e) {
       console.error("Erro ao carregar gastos:", e);
     } finally {
@@ -116,17 +147,20 @@ function ControladoriaPage() {
   };
 
   const totals = useMemo(() => {
-    const total = expenses.reduce((a, b) => a + Number(b.amount), 0);
-    const pago = expenses
-      .filter((e) => e.status === "Pago")
+    const receitas = expenses
+      .filter((e) => e.entry_type === "Receita")
       .reduce((a, b) => a + Number(b.amount), 0);
-    const pendente = total - pago;
-    const direto = expenses
-      .filter((e) => e.classification === "Direto")
+    const custos = expenses
+      .filter((e) => e.entry_type !== "Receita")
       .reduce((a, b) => a + Number(b.amount), 0);
-    const percDireto = total > 0 ? (direto / total) * 100 : 0;
+    const pendente = expenses
+      .filter((e) => e.entry_type === "Despesa" && e.status === "Pendente")
+      .reduce((a, b) => a + Number(b.amount), 0);
+    const caixaSaida = expenses
+      .filter((e) => e.entry_type === "Despesa" && e.cash_effect !== false)
+      .reduce((a, b) => a + Number(b.amount), 0);
 
-    return { total, pago, pendente, percDireto };
+    return { receitas, custos, pendente, caixaSaida, resultado: receitas - custos };
   }, [expenses]);
 
   const chartDataByCategory = useMemo(() => {
@@ -183,7 +217,7 @@ function ControladoriaPage() {
         supplier_name: extracted.supplier_name || prev.supplier_name || "",
         supplier_cnpj: extracted.supplier_cnpj || "",
         category: extracted.category || prev.category || "Outros",
-        payment_method: extracted.payment_method || prev.payment_method || "Outros",
+        payment_method: prev.payment_method || "PIX Goat",
         review_status: extracted.review_status,
         ocr_raw_text: extracted.raw_text,
         ocr_metadata: { confidence: extracted.confidence || 0, source: "ocr-receipt" },
@@ -207,7 +241,7 @@ function ControladoriaPage() {
 
       setForm((prev) => ({
         ...prev,
-        modality: textImportEventId ? "Evento" : "Geral",
+        modality: textImportEventId ? "Evento" : "Ativo",
         event_id: textImportEventId || "",
         date: parsedDate,
         description: `Despesa via Importação - ${extracted.supplier_name || "revisar dados"} - ${parsedDate.split("-").reverse().join("/")}`,
@@ -215,7 +249,7 @@ function ControladoriaPage() {
         supplier_name: extracted.supplier_name || prev.supplier_name || "",
         supplier_cnpj: extracted.supplier_cnpj || "",
         category: extracted.category || prev.category || "Outros",
-        payment_method: extracted.payment_method || prev.payment_method || "Outros",
+        payment_method: prev.payment_method || "PIX Goat",
         review_status: extracted.review_status,
         ocr_raw_text: extracted.raw_text,
         ocr_metadata: { confidence: extracted.confidence || 0, source: "text-import" },
@@ -230,9 +264,24 @@ function ControladoriaPage() {
   };
 
   const handleSubmit = async () => {
-    if (!form.description || !form.amount || !form.responsible) {
-      alert("Preencha os campos obrigatórios.");
+    if (!form.description || !form.amount) {
+      alert("Preencha descrição e valor.");
       return;
+    }
+    if ((form.modality === "Evento" || form.modality === "Degustação") && !form.event_id) {
+      alert("Selecione o evento relacionado.");
+      return;
+    }
+    if (form.entry_type === "Despesa" && form.payment_method === "Pessoal" && !form.payment_payer_name?.trim()) {
+      alert("Informe quem realizou o pagamento pessoal.");
+      return;
+    }
+    if (form.entry_type === "Despesa") {
+      const firstItem = (form.items || [])[0];
+      if (!firstItem?.product_name?.trim() || Number(firstItem?.quantity || 0) <= 0) {
+        alert("Informe o que foi comprado e a quantidade.");
+        return;
+      }
     }
 
     try {
@@ -240,7 +289,13 @@ function ControladoriaPage() {
         const value = (form as any)[field];
         return value !== undefined && value !== null && String(value).trim() !== "";
       });
-      const saved = await financialService.createExpense({ ...form, manually_edited_fields: manuallyEdited });
+      const normalizedItems = (form.items || []).map((item: any) => ({
+        ...item,
+        product_name: item.product_name?.trim() || form.description || "Item",
+        unit_price: Number(item.quantity || 0) > 0 ? Number(form.amount || 0) / Number(item.quantity || 1) : Number(form.amount || 0),
+        total_price: Number(form.amount || 0),
+      }));
+      const saved = await financialService.createExpense({ ...form, items: normalizedItems, manually_edited_fields: manuallyEdited });
       if ((form as any).invoice_url) {
         await financialService.createReceiptLog({
           expense_id: saved.id,
@@ -255,14 +310,16 @@ function ControladoriaPage() {
       fetchExpenses();
       setForm({
         date: format(new Date(), "yyyy-MM-dd"),
-        modality: "Geral",
+        modality: "Ativo",
+        entry_type: "Despesa",
         category: "Operacional",
         description: "",
         amount: 0,
         responsible: "",
-        payment_method: "PIX",
-        status: "Pendente",
+        payment_method: "PIX Goat",
+        status: "Pago",
         classification: "Direto",
+        items: [{ product_name: "", quantity: 1, unit: "un", unit_price: 0, total_price: 0 }],
       });
     } catch (e) {
       alert("Erro ao salvar lançamento.");
@@ -303,7 +360,7 @@ function ControladoriaPage() {
               <Camera className="h-4 w-4" /> Lançar por foto da notinha
             </GhostButton>
             <PrimaryButton onClick={() => setShowModal(true)}>
-              <Plus className="h-4 w-4" /> Novo Gasto
+              <Plus className="h-4 w-4" /> Novo Lançamento
             </PrimaryButton>
           </div>
         }
@@ -312,26 +369,10 @@ function ControladoriaPage() {
       <div className="page-container space-y-7 max-w-[1600px] mx-auto w-full">
         {/* RESUMO */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          <StatCard
-            label="Total de Gastos"
-            value={fmtBRL(totals.total)}
-            hint="+12% vs mês anterior"
-          />
-          <StatCard
-            label="Realizado (Pago)"
-            value={fmtBRL(totals.pago)}
-            icon={<CheckCircle2 className="text-emerald-500" />}
-          />
-          <StatCard
-            label="Em Aberto (Pendente)"
-            value={fmtBRL(totals.pendente)}
-            icon={<AlertCircle className="text-amber-500" />}
-          />
-          <StatCard
-            label="Custo Direto"
-            value={`${totals.percDireto.toFixed(1)}%`}
-            hint="Do volume total de gastos"
-          />
+          <StatCard label="Receitas" value={fmtBRL(totals.receitas)} icon={<CheckCircle2 className="text-emerald-500" />} />
+          <StatCard label="Custos Alocados" value={fmtBRL(totals.custos)} />
+          <StatCard label="Resultado" value={fmtBRL(totals.resultado)} />
+          <StatCard label="Despesas Pendentes" value={fmtBRL(totals.pendente)} icon={<AlertCircle className="text-amber-500" />} />
         </div>
 
         {/* DASHBOARD CHARTS */}
@@ -400,6 +441,13 @@ function ControladoriaPage() {
 
         {/* FILTROS E LISTA */}
         <SectionCard title="Fluxo de Custos">
+          <div className="flex flex-wrap gap-2 mb-3">
+            <button onClick={() => applyPeriodPreset("today")} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:border-primary">Hoje</button>
+            <button onClick={() => applyPeriodPreset("week")} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:border-primary">Semana</button>
+            <button onClick={() => applyPeriodPreset("month")} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:border-primary">Mês</button>
+            <button onClick={() => applyPeriodPreset("year")} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:border-primary">Ano</button>
+            <button onClick={() => applyPeriodPreset("all")} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:border-primary">Todo período</button>
+          </div>
           <div className="flex flex-wrap gap-4 mb-6 p-4 rounded-xl bg-surface border border-border">
             <div className="flex-1 min-w-[200px]">
               <label className="label-eyebrow block mb-1.5">Período</label>
@@ -428,9 +476,23 @@ function ControladoriaPage() {
               >
                 <option value="">Todas</option>
                 <option value="Evento">Evento</option>
-                <option value="Steakhouse">Steakhouse</option>
-                <option value="Goatbotequim">Goatbotequim</option>
-                <option value="Geral">Geral</option>
+                <option value="Goat Botequim">Goat Botequim</option>
+                <option value="7 Steak House">7 Steak House</option>
+                <option value="Degustação">Degustação</option>
+                <option value="Ativo">Ativo</option>
+              </select>
+            </div>
+            <div>
+              <label className="label-eyebrow block mb-1.5">Tipo</label>
+              <select
+                value={filters.entry_type}
+                onChange={(e) => setFilters((p) => ({ ...p, entry_type: e.target.value }))}
+                className="bg-background border border-border rounded-lg px-3 py-2 text-xs min-w-[140px]"
+              >
+                <option value="">Todos</option>
+                <option value="Despesa">Despesa</option>
+                <option value="Receita">Receita</option>
+                <option value="Alocação Interna">Alocação Interna</option>
               </select>
             </div>
             <div>
@@ -678,8 +740,28 @@ function ControladoriaPage() {
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-4 md:col-span-2">
-                  <label className="label-eyebrow">Descrição do Gasto</label>
+                <div>
+                  <label className="label-eyebrow">Tipo de Lançamento</label>
+                  <select
+                    value={form.entry_type || "Despesa"}
+                    onChange={(e) => {
+                      const entryType = e.target.value as FinancialEntryType;
+                      setForm((p) => ({
+                        ...p,
+                        entry_type: entryType,
+                        payment_method: entryType === "Alocação Interna" ? "Interno/Estoque" : (p.payment_method === "Interno/Estoque" ? "PIX Goat" : p.payment_method),
+                        status: entryType === "Receita" || entryType === "Alocação Interna" ? "Pago" : p.status,
+                      }));
+                    }}
+                    className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
+                  >
+                    <option value="Despesa">Despesa / Compra</option>
+                    <option value="Receita">Receita / Entrada</option>
+                    <option value="Alocação Interna">Alocação Interna de Estoque</option>
+                  </select>
+                </div>
+                <div className="space-y-4">
+                  <label className="label-eyebrow">{form.entry_type === "Receita" ? "Descrição da Receita" : "O que foi comprado / lançado"}</label>
                   <input
                     type="text"
                     value={form.description}
@@ -715,25 +797,60 @@ function ControladoriaPage() {
                   />
                 </div>
 
+                {form.entry_type === "Despesa" && (
+                  <>
+                    <div>
+                      <label className="label-eyebrow">Quantidade</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        value={(form.items || [])[0]?.quantity || 1}
+                        onChange={(e) => setForm((p) => {
+                          const current = (p.items || [{ product_name: p.description || "", quantity: 1, unit: "un", unit_price: 0, total_price: 0 }]).slice();
+                          current[0] = { ...current[0], quantity: Number(e.target.value || 0), product_name: current[0].product_name || p.description || "" };
+                          return { ...p, items: current };
+                        })}
+                        className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="label-eyebrow">Unidade</label>
+                      <input
+                        value={(form.items || [])[0]?.unit || "un"}
+                        onChange={(e) => setForm((p) => {
+                          const current = (p.items || [{ product_name: p.description || "", quantity: 1, unit: "un", unit_price: 0, total_price: 0 }]).slice();
+                          current[0] = { ...current[0], unit: e.target.value, product_name: current[0].product_name || p.description || "" };
+                          return { ...p, items: current };
+                        })}
+                        className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
+                        placeholder="un, garrafa, caixa, kg..."
+                      />
+                    </div>
+                  </>
+                )}
+
                 <div>
                   <label className="label-eyebrow">Modalidade</label>
                   <select
                     value={form.modality}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, modality: e.target.value as FinancialModality, event_id: e.target.value === "Evento" ? p.event_id : "" }))
-                    }
+                    onChange={(e) => {
+                      const next = e.target.value as FinancialModality;
+                      setForm((p) => ({ ...p, modality: next, event_id: (next === "Evento" || next === "Degustação") ? p.event_id : "" }));
+                    }}
                     className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
                   >
                     <option value="Evento">Evento</option>
-                    <option value="Steakhouse">Steakhouse</option>
-                    <option value="Goatbotequim">Goatbotequim</option>
-                    <option value="Geral">Geral</option>
+                    <option value="Goat Botequim">Goat Botequim</option>
+                    <option value="7 Steak House">7 Steak House</option>
+                    <option value="Degustação">Degustação</option>
+                    <option value="Ativo">Ativo</option>
                   </select>
                 </div>
                 
-                {form.modality === "Evento" && (
+                {(form.modality === "Evento" || form.modality === "Degustação") && (
                   <div>
-                    <label className="label-eyebrow">Evento Relacionado</label>
+                    <label className="label-eyebrow">{form.modality === "Degustação" ? "Evento da Degustação" : "Evento Relacionado"}</label>
                     <select
                       value={form.event_id || ""}
                       onChange={(e) => setForm((p) => ({ ...p, event_id: e.target.value }))}
@@ -843,13 +960,24 @@ function ControladoriaPage() {
                     }
                     className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
                   >
-                    <option value="PIX">PIX</option>
-                    <option value="Dinheiro">Dinheiro</option>
-                    <option value="Cartão">Cartão</option>
-                    <option value="Transferência">Transferência</option>
-                    <option value="Outros">Outros</option>
+                    <option value="Cartão de crédito Goat">Cartão de crédito Goat</option>
+                    <option value="PIX Goat">PIX Goat</option>
+                    <option value="Pessoal">Pessoal</option>
+                    <option value="Interno/Estoque">Interno/Estoque</option>
                   </select>
                 </div>
+
+                {form.payment_method === "Pessoal" && form.entry_type === "Despesa" && (
+                  <div>
+                    <label className="label-eyebrow">Quem fez o pagamento pessoal?</label>
+                    <input
+                      value={form.payment_payer_name || ""}
+                      onChange={(e) => setForm((p) => ({ ...p, payment_payer_name: e.target.value }))}
+                      className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
+                      placeholder="Nome da pessoa"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label className="label-eyebrow">Status</label>

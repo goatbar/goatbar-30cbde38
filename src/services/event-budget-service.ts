@@ -135,6 +135,7 @@ export interface EventPlanningItem {
   id?: string;
   event_id: string;
   source_expense_item_id?: string;
+  inventory_id?: string;
   item_name: string;
   category: string;
   planned_quantity: number;
@@ -299,6 +300,16 @@ export const eventBudgetService = {
   async deletePlanningItem(id: string) {
     const { error } = await supabase.from("event_planning_items").delete().eq("id", id);
     if (error) throw error;
+  },
+
+  async returnPlanningItemLeftoverToInventory(planningItemId: string, quantity: number, notes?: string) {
+    const { data, error } = await (supabase as any).rpc("return_event_leftover_to_inventory", {
+      p_planning_item_id: planningItemId,
+      p_quantity: quantity,
+      p_notes: notes || null,
+    });
+    if (error) throw error;
+    return data as string;
   },
 
   // --- Event Closing ---

@@ -13,6 +13,8 @@ import {
   createControllerEntryTool,
   searchControllerEntriesTool,
   createEventPurchaseTool,
+  allocateInventoryCostTool,
+  searchInventoryTool,
   getFinancialSummaryTool,
 } from "./definitions/financial.ts";
 import { upsertDrinkAliasTool } from "./definitions/drink-aliases.ts";
@@ -61,6 +63,8 @@ export class GoatAIToolRegistry {
     this.register(createControllerEntryTool);
     this.register(searchControllerEntriesTool);
     this.register(createEventPurchaseTool);
+    this.register(allocateInventoryCostTool);
+    this.register(searchInventoryTool);
     this.register(getFinancialSummaryTool);
     this.register(upsertDrinkAliasTool);
     this.register(getDrinksCatalogTool);

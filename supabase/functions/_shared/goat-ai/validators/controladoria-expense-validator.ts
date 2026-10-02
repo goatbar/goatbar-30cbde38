@@ -1,6 +1,7 @@
-export type ControladoriaModality = "Evento" | "Steakhouse" | "Goatbotequim" | "Geral";
+export type ControladoriaModality = "Evento" | "Goat Botequim" | "7 Steak House" | "Degustação" | "Ativo";
 export type ControladoriaCategory = "Fornecedor" | "Equipe" | "Insumos" | "Operacional" | "Outros";
-export type ControladoriaPaymentMethod = "PIX" | "Dinheiro" | "Cartao" | "Transferencia" | "Outros";
+export type ControladoriaPaymentMethod = "Cartão de crédito Goat" | "PIX Goat" | "Pessoal" | "Interno/Estoque";
+export type ControladoriaEntryType = "Despesa" | "Receita" | "Alocação Interna";
 export type ControladoriaStatus = "Pago" | "Pendente";
 export type ControladoriaClassification = "Direto" | "Indireto";
 export type ControladoriaReviewStatus = "Lido automaticamente" | "Precisa revisar" | "Erro na leitura";
@@ -26,6 +27,9 @@ export interface ControladoriaExpenseDraft {
   category?: string;
   description?: string;
   payment_method?: string;
+  payment_payer_name?: string;
+  entry_type?: string;
+  tasting_id?: string;
   status?: string;
   classification?: string;
   event_id?: string;
@@ -62,6 +66,9 @@ export interface NormalizedControladoriaExpense {
   category: ControladoriaCategory;
   description: string;
   payment_method: ControladoriaPaymentMethod;
+  payment_payer_name?: string;
+  entry_type: ControladoriaEntryType;
+  tasting_id?: string;
   status: ControladoriaStatus;
   classification: ControladoriaClassification;
   event_id?: string;
@@ -173,32 +180,20 @@ export function normalizeControladoriaModality(val?: string | null): {
   matched: boolean;
 } {
   if (!val || typeof val !== "string") {
-    return { normalized: "Geral", displayName: "Geral", matched: false };
+    return { normalized: "Ativo", displayName: "Ativo", matched: false };
   }
 
-  const clean = val
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
+  const clean = val.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
-  if (clean.includes("steak") || clean.includes("7steak") || clean.includes("steakhouse")) {
-    return { normalized: "Steakhouse", displayName: "7 Steakhouse", matched: true };
+  if (clean.includes("degust")) return { normalized: "Degustação", displayName: "Degustação", matched: true };
+  if (clean.includes("steak") || clean.includes("7steak")) return { normalized: "7 Steak House", displayName: "7 Steak House", matched: true };
+  if (clean.includes("botequim")) return { normalized: "Goat Botequim", displayName: "Goat Botequim", matched: true };
+  if (clean.includes("evento")) return { normalized: "Evento", displayName: "Evento", matched: true };
+  if (clean.includes("ativo") || clean.includes("estoque") || clean.includes("geral") || clean.includes("matriz")) {
+    return { normalized: "Ativo", displayName: "Ativo", matched: true };
   }
 
-  if (clean.includes("botequim") || clean.includes("goatbotequim") || clean.includes("bar")) {
-    return { normalized: "Goatbotequim", displayName: "Goat Botequim", matched: true };
-  }
-
-  if (clean.includes("evento")) {
-    return { normalized: "Evento", displayName: "Evento", matched: true };
-  }
-
-  if (clean.includes("geral") || clean.includes("matriz") || clean.includes("administra") || clean.includes("outro")) {
-    return { normalized: "Geral", displayName: "Geral", matched: true };
-  }
-
-  return { normalized: "Geral", displayName: val.trim(), matched: false };
+  return { normalized: "Ativo", displayName: val.trim(), matched: false };
 }
 
 /**
@@ -279,19 +274,14 @@ export function normalizeControladoriaCategory(val?: string | null, textHint = "
  * Valores permitidos: 'PIX', 'Dinheiro', 'Cartao', 'Transferencia', 'Outros'
  */
 export function normalizeControladoriaPaymentMethod(val?: string | null): ControladoriaPaymentMethod {
-  if (!val || typeof val !== "string") return "PIX";
+  if (!val || typeof val !== "string") return "PIX Goat";
+  const clean = val.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-  const clean = val
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-
-  if (clean.includes("pix")) return "PIX";
-  if (clean.includes("dinheiro") || clean.includes("especie") || clean.includes("cash")) return "Dinheiro";
-  if (clean.includes("cartao") || clean.includes("credito") || clean.includes("debito") || clean.includes("card")) return "Cartao";
-  if (clean.includes("transfer") || clean.includes("ted") || clean.includes("doc")) return "Transferencia";
-
-  return "Outros";
+  if (clean.includes("pessoal") || clean.includes("proprio") || clean.includes("próprio")) return "Pessoal";
+  if (clean.includes("estoque") || clean.includes("intern")) return "Interno/Estoque";
+  if (clean.includes("cartao") || clean.includes("credito") || clean.includes("card")) return "Cartão de crédito Goat";
+  if (clean.includes("pix")) return "PIX Goat";
+  return "PIX Goat";
 }
 
 /**
@@ -370,8 +360,20 @@ export function validateControladoriaExpenseDraft(
   // 6. Category
   const category = normalizeControladoriaCategory(draft.category, `${supplierName} ${draft.description || ""}`);
 
-  // 7. Payment Method
-  const paymentMethod = normalizeControladoriaPaymentMethod(draft.payment_method);
+  // 7. Entry type & payment
+  const entryType: ControladoriaEntryType =
+    draft.entry_type === "Receita" ? "Receita" :
+    draft.entry_type === "Alocação Interna" ? "Alocação Interna" : "Despesa";
+  const paymentMethod = entryType === "Alocação Interna"
+    ? "Interno/Estoque"
+    : normalizeControladoriaPaymentMethod(draft.payment_method);
+  const paymentPayerName = (draft.payment_payer_name || "").trim() || undefined;
+  if (entryType === "Despesa" && paymentMethod === "Pessoal" && !paymentPayerName) {
+    missingFields.push("payment_payer_name");
+  }
+  if ((resolvedModality === "Evento" || resolvedModality === "Degustação") && !draft.event_id) {
+    missingFields.push("event_id");
+  }
 
   // 8. Responsible
   const responsible = (draft.responsible || options?.fallbackResponsible || "Sócio Goat Bar").trim();
@@ -397,7 +399,7 @@ export function validateControladoriaExpenseDraft(
       .includes("mao de obra") ||
       /\bmo\b/i.test(`${draft.category || ""} ${draft.description || ""} ${draft.supplier_name || ""}`));
 
-  if (resolvedModality === "Steakhouse" && isLabor) {
+  if (resolvedModality === "7 Steak House" && isLabor) {
     description = "Mão de Obra Semanal";
   } else if (!description) {
     if (normalizedItems.length > 0) {
@@ -440,7 +442,10 @@ export function validateControladoriaExpenseDraft(
     category,
     description,
     payment_method: paymentMethod,
-    status: draft.status === "Pago" ? "Pago" : "Pendente",
+    payment_payer_name: paymentPayerName,
+    entry_type: entryType,
+    tasting_id: draft.tasting_id || undefined,
+    status: entryType === "Receita" || entryType === "Alocação Interna" ? "Pago" : (draft.status === "Pendente" ? "Pendente" : "Pago"),
     classification: draft.classification === "Indireto" ? "Indireto" : "Direto",
     event_id: draft.event_id || undefined,
     responsible,
@@ -480,10 +485,8 @@ export function formatControladoriaExpenseWhatsAppPreview(
 
   const modalityDisplay =
     expense.modality === "Steakhouse"
-      ? "7 Steakhouse"
-      : expense.modality === "Goatbotequim"
-        ? "Goat Botequim"
-        : expense.modality;
+      ? "7 Steak House"
+      : expense.modality;
 
   const paymentDisplay =
     expense.payment_method === "Cartao"
