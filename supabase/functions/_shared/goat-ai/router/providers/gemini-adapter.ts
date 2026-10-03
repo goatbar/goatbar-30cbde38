@@ -8,6 +8,7 @@ import {
 } from "../types.ts";
 import { fromGeminiResponse, toGeminiContents } from "../canonical.ts";
 import { PROVIDER_CONFIGS } from "../config.ts";
+import { CURRENT_GEMINI_MODEL, normalizeGeminiModel } from "../../config.ts";
 
 export interface GeminiAdapterOptions {
   apiKey?: string;
@@ -37,7 +38,9 @@ export class GeminiRouterAdapter extends BaseAIProvider {
   constructor(options?: GeminiAdapterOptions) {
     super();
     this.apiKey = options?.apiKey || "";
-    this.model = options?.model || PROVIDER_CONFIGS.gemini.defaultModel || "gemini-2.5-flash";
+    this.model = normalizeGeminiModel(
+      options?.model || PROVIDER_CONFIGS.gemini.defaultModel || CURRENT_GEMINI_MODEL,
+    );
     this.defaultModel = this.model;
     this.baseUrl = options?.baseUrl || PROVIDER_CONFIGS.gemini.defaultBaseUrl || "https://generativelanguage.googleapis.com";
   }
