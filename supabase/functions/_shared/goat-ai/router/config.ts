@@ -1,4 +1,4 @@
-import { getEnv } from "../config.ts";
+import { CURRENT_GEMINI_MODEL, getEnv, normalizeGeminiModel } from "../config.ts";
 import { AIProviderId, FreeTierType, PrivacyClassification, ProviderCapabilities } from "./types.ts";
 
 export const ALLOW_PAID_PROVIDERS = false;
@@ -147,7 +147,7 @@ export const PROVIDER_CONFIGS: Record<AIProviderId, ProviderStaticConfig> = {
     priority: 80,
     freeType: "FREE",
     defaultBaseUrl: "https://generativelanguage.googleapis.com",
-    defaultModel: "gemini-2.5-flash",
+    defaultModel: CURRENT_GEMINI_MODEL,
     capabilities: {
       supportsText: true,
       supportsTools: true,
@@ -216,7 +216,7 @@ export function getProviderSecrets(providerId: AIProviderId): {
       return {
         apiKey: getEnv("GEMINI_API_KEY") || getEnv("GOOGLE_AI_API_KEY") || getEnv("GOOGLE_API_KEY"),
         baseUrl: PROVIDER_CONFIGS.gemini.defaultBaseUrl,
-        model: gModel || PROVIDER_CONFIGS.gemini.defaultModel,
+        model: normalizeGeminiModel(gModel || PROVIDER_CONFIGS.gemini.defaultModel),
       };
     }
     default:
