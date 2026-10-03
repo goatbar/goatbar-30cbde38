@@ -790,7 +790,6 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
       expect(savedPendingActions[0].arguments.amount).toBe(120);
       expect(savedExpenses).toHaveLength(0);
     });
-    });
   });
 
   // 3. Idempotency, Concurrency & Security Tests
