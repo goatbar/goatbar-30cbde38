@@ -110,7 +110,7 @@ export class AIRouter {
       }),
       new GeminiRouterAdapter({
         apiKey: geminiSec.apiKey,
-        model: geminiSec.model || "gemini-2.5-flash",
+        model: geminiSec.model || "gemini-3.8-flash",
       }),
     ];
 
