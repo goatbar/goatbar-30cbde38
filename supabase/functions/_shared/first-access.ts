@@ -45,21 +45,17 @@ export async function generateFirstAccessRecoveryLink(
     .from("first_access_requests")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
+    .in("delivery_status", ["generated", "sent"])
     .gte("requested_at", oneMinuteAgo);
 
   const { count: recentHourCount } = await supabaseAdmin
     .from("first_access_requests")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
+    .in("delivery_status", ["generated", "sent"])
     .gte("requested_at", oneHourAgo);
 
   if ((recentMinuteCount || 0) >= 1 || (recentHourCount || 0) >= 5) {
-    await supabaseAdmin.from("first_access_requests").insert({
-      user_id: userId,
-      channel,
-      delivery_status: "rate_limited",
-      failure_reason: "cooldown",
-    });
     return { ok: false, code: "RATE_LIMIT" };
   }
 
