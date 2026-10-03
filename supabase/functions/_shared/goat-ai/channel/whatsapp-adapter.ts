@@ -367,6 +367,7 @@ export class WhatsAppChannelAdapter {
         attachments.push({
           mimeType: media.mimeType || mime,
           dataBase64: media.dataBase64,
+          mediaId,
         });
       }
     } else if (message.type === "document") {
@@ -393,6 +394,7 @@ export class WhatsAppChannelAdapter {
           mimeType: media.mimeType || mime,
           dataBase64: media.dataBase64,
           fileName: message.document.filename,
+          mediaId,
         });
       }
     } else if (message.type === "audio" || message.type === "voice") {
