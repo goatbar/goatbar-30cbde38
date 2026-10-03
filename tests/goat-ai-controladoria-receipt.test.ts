@@ -606,6 +606,7 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
       expect(result.reply).toContain("R$ 196,40");
       expect(result.reply).toContain("Posso confirmar o lançamento");
       expect(savedExpenses.length).toBe(0); // Ainda não gravou, apenas corrigiu a prévia
+    });
 
     it("foto sem legenda de nota fiscal vira Compra, salva o anexo e grava itens após confirmação", async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
@@ -760,7 +761,6 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
       expect(result.reply).toContain("Qual foi a forma de pagamento desta compra");
       expect(result.reply).toContain("Cartão de crédito Goat");
       expect(savedExpenses).toHaveLength(0);
-    });
     });
   });
 
