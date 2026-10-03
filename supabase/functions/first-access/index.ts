@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { WhatsAppChannelAdapter } from "../_shared/goat-ai/channel/whatsapp-adapter.ts";
+import { getWhatsAppMessagesUrl } from "../_shared/goat-ai/config.ts";
 import {
   generateFirstAccessRecoveryLink,
   markFirstAccessDelivery,
@@ -23,6 +23,36 @@ function json(body: unknown, status = 200) {
 function maskPhone(phone: string) {
   const digits = String(phone || "").replace(/\D/g, "");
   return digits.length >= 4 ? `•••• ${digits.slice(-4)}` : "WhatsApp cadastrado";
+}
+
+async function sendWhatsAppText(to: string, message: string) {
+  const accessToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "";
+  const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") || "";
+  if (!accessToken || !phoneNumberId) return false;
+
+  const cleanTo = String(to || "").replace(/\D/g, "");
+  const response = await fetch(getWhatsAppMessagesUrl(phoneNumberId), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: cleanTo,
+      type: "text",
+      text: { body: message },
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    console.warn("[FIRST_ACCESS][WHATSAPP_SEND_FAILED]", response.status, body.slice(0, 300));
+    return false;
+  }
+
+  return true;
 }
 
 serve(async (req) => {
@@ -93,12 +123,7 @@ serve(async (req) => {
     `${recovery.actionLink}\n\n` +
     `Este link é pessoal. Não encaminhe para ninguém. Se você não solicitou, ignore esta mensagem.`;
 
-  const adapter = new WhatsAppChannelAdapter(admin);
-  const sent = await adapter.sendTextMessage(
-    messaging.phone_number,
-    message,
-    `first_access_${recovery.requestId}`,
-  );
+  const sent = await sendWhatsAppText(messaging.phone_number, message);
 
   await markFirstAccessDelivery(
     admin,
