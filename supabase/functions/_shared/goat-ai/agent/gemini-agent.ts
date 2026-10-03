@@ -1,4 +1,5 @@
 import {
+  AgentAttachment,
   AgentInput,
   AgentTurnResponse,
   ContextualEvent,
@@ -171,6 +172,85 @@ function enforceCurrentTurnUrlProvenance(
   return sanitized;
 }
 
+
+function isFiscalDocumentAttachment(att?: AgentAttachment | null): boolean {
+  if (!att) return false;
+  const mime = String(att.mimeType || "").toLowerCase();
+  return mime.startsWith("image/") || mime.includes("pdf") || mime.includes("document");
+}
+
+function financialAttachmentExtension(mimeType: string): string {
+  const mime = String(mimeType || "").toLowerCase();
+  if (mime.includes("png")) return "png";
+  if (mime.includes("webp")) return "webp";
+  if (mime.includes("pdf")) return "pdf";
+  return "jpg";
+}
+
+function decodeBase64Bytes(dataBase64: string): Uint8Array {
+  const binary = atob(dataBase64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function persistGiaFinancialAttachment(params: {
+  supabaseAdmin: any;
+  attachment: AgentAttachment;
+  userId?: string | null;
+  externalMessageId?: string | null;
+  correlationId: string;
+}): Promise<string | undefined> {
+  const { supabaseAdmin, attachment, userId, externalMessageId, correlationId } = params;
+
+  if (attachment.url) return attachment.url;
+  if (!attachment.dataBase64 || !supabaseAdmin?.storage?.from) return undefined;
+
+  try {
+    const extension = financialAttachmentExtension(attachment.mimeType);
+    const rawId =
+      attachment.mediaId ||
+      externalMessageId ||
+      correlationId ||
+      `receipt_${Date.now()}`;
+    const safeId = String(rawId).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 140);
+    const safeUserId = String(userId || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const dateKey = new Date().toISOString().slice(0, 10);
+    const objectPath = `gia/${safeUserId}/${dateKey}/${safeId}.${extension}`;
+    const bytes = decodeBase64Bytes(attachment.dataBase64);
+
+    const bucket = supabaseAdmin.storage.from("financial_attachments");
+    const { error: uploadError } = await bucket.upload(objectPath, bytes, {
+      contentType: attachment.mimeType || "image/jpeg",
+      upsert: true,
+    });
+
+    if (uploadError) {
+      console.warn(
+        `[GOAT-AI][CONTROLADORIA_ATTACHMENT][UPLOAD_WARN] correlationId=${correlationId} error="${uploadError?.message || uploadError}"`,
+      );
+      return undefined;
+    }
+
+    const publicResult = bucket.getPublicUrl(objectPath);
+    const publicUrl = publicResult?.data?.publicUrl;
+    if (publicUrl) {
+      console.log(
+        `[GOAT-AI][CONTROLADORIA_ATTACHMENT][SAVED] correlationId=${correlationId} mediaId=${attachment.mediaId || "none"} path="${objectPath}"`,
+      );
+      return publicUrl;
+    }
+
+    return undefined;
+  } catch (error: any) {
+    console.warn(
+      `[GOAT-AI][CONTROLADORIA_ATTACHMENT][UPLOAD_WARN] correlationId=${correlationId} error="${error?.message || String(error)}"`,
+    );
+    return undefined;
+  }
+}
 
 function looksLikeNegativeSystemClaim(value: string): boolean {
   const normalized = String(value || "")
@@ -1636,6 +1716,22 @@ export class GoatAIGeminiAgent {
     // Contextual instruction if pending action was collecting missing fields, unit was resolved, or entities are present
     let userPromptText = input.message;
 
+    const currentFiscalAttachment = input.attachments?.find(isFiscalDocumentAttachment);
+    if (currentFiscalAttachment) {
+      userPromptText += `
+[CONTEXTO OPERACIONAL - IMAGEM/DOCUMENTO ANEXADO]
+Analise visualmente o anexo. Se ele for uma nota fiscal, cupom fiscal, DANFE, recibo ou comprovante de uma COMPRA (e não um relatório de vendas/POS), trate-o como compra da Controladoria mesmo quando a mensagem for apenas "Foto enviada" ou estiver sem legenda.
+Nesse caso:
+- chame 'create_controladoria_expense' com TODOS os dados legíveis;
+- use 'entry_type' = 'Despesa' (tipo canônico que representa "Despesa / Compra" no sistema);
+- extraia fornecedor, CNPJ, data, valor total e itens com produto, quantidade, unidade, valor unitário e total sempre que estiverem visíveis;
+- extraia a forma de pagamento apenas se houver evidência visual/textual; nunca invente PIX, cartão ou pagador;
+- se modalidade/unidade, forma de pagamento, valor ou outro dado obrigatório não estiverem identificáveis, ainda assim chame a ferramenta com os campos conhecidos para que o fluxo peça SOMENTE o que faltar;
+- não responda apenas descrevendo a nota: o objetivo é preparar o lançamento da compra para confirmação.
+Se o anexo for fechamento de vendas/POS, siga o fluxo de sessão de vendas em vez de compra.
+`;
+    }
+
     if (recentEntities.events && recentEntities.events.length > 0) {
       const formattedRecent = recentEntities.events
         .slice(0, 8)
@@ -1867,6 +1963,28 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                   ? activePending.arguments || {}
                   : {};
               const mergedArgs: ControladoriaExpenseDraft = { ...priorArgs, ...args };
+              const fiscalAttachment = input.attachments?.find(isFiscalDocumentAttachment);
+
+              if (fiscalAttachment) {
+                // Nota fiscal/cupom/comprovante é uma compra. No banco, "Compra" é
+                // representada canonicamente por entry_type = "Despesa".
+                mergedArgs.entry_type = "Despesa";
+
+                if (fiscalAttachment.mediaId && !mergedArgs.source_media_id) {
+                  mergedArgs.source_media_id = fiscalAttachment.mediaId;
+                }
+
+                if (!mergedArgs.invoice_url) {
+                  const persistedUrl = await persistGiaFinancialAttachment({
+                    supabaseAdmin: this.supabaseAdmin,
+                    attachment: fiscalAttachment,
+                    userId: input.userId,
+                    externalMessageId: input.externalMessageId,
+                    correlationId,
+                  });
+                  if (persistedUrl) mergedArgs.invoice_url = persistedUrl;
+                }
+              }
 
               if (!mergedArgs.modality && inheritedUnit) {
                 mergedArgs.modality = inheritedUnit;
@@ -1927,9 +2045,11 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                   validation.missingFields.includes("modality") &&
                   !validation.missingFields.includes("amount")
                 ) {
-                  missingQuestion = `Li a nota:\n${supplierName}${dateStr}${amountStr}\nEm qual unidade devo lançar esse gasto? ('7 Steakhouse', 'Goat Botequim', 'Evento' ou 'Geral')`;
+                  missingQuestion = `Li a nota:\n${supplierName}${dateStr}${amountStr}\nEm qual destino devo lançar esta compra? ('Evento', 'Goat Botequim', '7 Steak House', 'Degustação' ou 'Ativo')`;
                 } else if (validation.missingFields.includes("amount")) {
                   missingQuestion = `Consegui receber a foto${mergedArgs.supplier_name ? ` de ${mergedArgs.supplier_name}` : ""}, mas não consegui identificar o valor da nota com segurança. Pode enviar uma foto mais próxima ou me informar o valor?`;
+                } else if (validation.missingFields.includes("payment_method")) {
+                  missingQuestion = "Qual foi a forma de pagamento desta compra: Cartão de crédito Goat, PIX Goat ou Pessoal?";
                 } else {
                   missingQuestion = `Identifiquei os dados da nota, mas ainda preciso de: ${validation.missingFields.join(" e ")}. Pode informar?`;
                 }

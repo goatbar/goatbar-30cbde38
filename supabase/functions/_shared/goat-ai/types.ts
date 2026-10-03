@@ -138,6 +138,8 @@ export interface AgentAttachment {
   dataBase64?: string;
   url?: string;
   fileName?: string;
+  /** Provider media id (ex.: Meta WhatsApp media id) used for traceability/idempotency. */
+  mediaId?: string;
 }
 
 export interface AgentInput {
