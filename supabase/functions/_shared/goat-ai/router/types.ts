@@ -94,6 +94,7 @@ export interface NormalizedMessage {
     dataBase64?: string;
     url?: string;
     fileName?: string;
+    mediaId?: string;
   }>;
 }
 
