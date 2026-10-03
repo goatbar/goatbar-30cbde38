@@ -550,7 +550,7 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
     type: "object",
     properties: {
       operation_id: { type: "string", description: "ID único da operação para garantia de idempotência financeira." },
-      supplier_name: { type: "string", description: "Nome do fornecedor ou estabelecimento." },
+      supplier_name: { type: "string", description: "Nome do fornecedor ou estabelecimento, somente se estiver legível. Opcional no fluxo por foto." },
       supplier_cnpj: { type: "string", description: "CNPJ do fornecedor se identificado." },
       amount: { type: "number", description: "Valor total da nota/despesa (ex: 186.40)." },
       date: { type: "string", description: "Data da compra/emissão no formato YYYY-MM-DD." },
@@ -565,7 +565,7 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
       },
       event_id: { type: "string", description: "ID do evento caso seja referente a um evento específico." },
       description: { type: "string", description: "Descrição dos itens ou finalidade da compra." },
-      payment_method: { type: "string", description: "Forma de pagamento: 'Cartão de crédito Goat', 'PIX Goat', 'Pessoal' ou 'Interno/Estoque'." },
+      payment_method: { type: "string", description: "Forma de pagamento quando estiver identificável: 'Cartão de crédito Goat', 'PIX Goat', 'Pessoal', 'Interno/Estoque' ou 'Não informado'." },
       payment_payer_name: { type: "string", description: "Nome de quem pagou quando a forma de pagamento for Pessoal." },
       entry_type: { type: "string", description: "Tipo do lançamento: 'Despesa', 'Receita' ou 'Alocação Interna'." },
       tasting_id: { type: "string", description: "ID da degustação quando houver uma degustação específica relacionada." },
@@ -649,7 +649,8 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
 
     // 3. Database Write to financial_expenses
     const expensePayload: Record<string, any> = {
-      supplier_name: norm.supplier_name,
+      supplier_name:
+        norm.supplier_name === "Fornecedor não identificado" ? null : norm.supplier_name,
       supplier_cnpj: norm.supplier_cnpj || null,
       amount: norm.amount,
       date: norm.date,

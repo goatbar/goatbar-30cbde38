@@ -1,6 +1,6 @@
 export type ControladoriaModality = "Evento" | "Goat Botequim" | "7 Steak House" | "Degustação" | "Ativo";
 export type ControladoriaCategory = "Fornecedor" | "Equipe" | "Insumos" | "Operacional" | "Outros";
-export type ControladoriaPaymentMethod = "Cartão de crédito Goat" | "PIX Goat" | "Pessoal" | "Interno/Estoque";
+export type ControladoriaPaymentMethod = "Cartão de crédito Goat" | "PIX Goat" | "Pessoal" | "Interno/Estoque" | "Não informado";
 export type ControladoriaEntryType = "Despesa" | "Receita" | "Alocação Interna";
 export type ControladoriaStatus = "Pago" | "Pendente";
 export type ControladoriaClassification = "Direto" | "Indireto";
@@ -274,14 +274,15 @@ export function normalizeControladoriaCategory(val?: string | null, textHint = "
  * Valores permitidos: 'PIX', 'Dinheiro', 'Cartao', 'Transferencia', 'Outros'
  */
 export function normalizeControladoriaPaymentMethod(val?: string | null): ControladoriaPaymentMethod {
-  if (!val || typeof val !== "string") return "PIX Goat";
+  if (!val || typeof val !== "string") return "Não informado";
   const clean = val.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
   if (clean.includes("pessoal") || clean.includes("proprio") || clean.includes("próprio")) return "Pessoal";
   if (clean.includes("estoque") || clean.includes("intern")) return "Interno/Estoque";
   if (clean.includes("cartao") || clean.includes("credito") || clean.includes("card")) return "Cartão de crédito Goat";
   if (clean.includes("pix")) return "PIX Goat";
-  return "PIX Goat";
+  if (clean.includes("nao informado") || clean.includes("não informado") || clean.includes("desconhecido")) return "Não informado";
+  return "Não informado";
 }
 
 /**
@@ -314,8 +315,23 @@ export function validateControladoriaExpenseDraft(
   const manuallyEditedFields: string[] = Array.isArray(draft.manually_edited_fields) ? [...draft.manually_edited_fields] : [];
   const unreadableFields: string[] = Array.isArray(draft.unreadable_fields) ? [...draft.unreadable_fields] : [];
 
-  // 1. Amount
-  const amount = normalizeCurrencyBRL(draft.amount);
+  const isReceiptPurchase = Boolean(
+    draft.source_media_id || draft.invoice_url || draft.receipt_url,
+  );
+  const itemTotalFromDraft = (draft.items || []).reduce((sum, item) => {
+    const explicitTotal = normalizeCurrencyBRL(item.total_price);
+    if (explicitTotal > 0) return sum + explicitTotal;
+    const quantity = Number(item.quantity) || 1;
+    const unitPrice = normalizeCurrencyBRL(item.unit_price);
+    return sum + quantity * unitPrice;
+  }, 0);
+
+  // 1. Amount: on receipt/photo flows derive it from item totals when the
+  // document total was not separately readable.
+  let amount = normalizeCurrencyBRL(draft.amount);
+  if (amount <= 0 && isReceiptPurchase && itemTotalFromDraft > 0) {
+    amount = Math.round(itemTotalFromDraft * 100) / 100;
+  }
   if (amount <= 0) {
     missingFields.push("amount");
     errors.push("Valor da despesa não identificado ou inválido.");
@@ -323,14 +339,21 @@ export function validateControladoriaExpenseDraft(
     autoFilledFields.push("amount");
   }
 
-  // 2. Date
+  // 2. Date: for a photo purchase, if the fiscal date is unreadable we use
+  // the ingestion date instead of interrogating the user about another field.
   let parsedDate = "";
-  if (!draft.date) {
+  if (!draft.date && isReceiptPurchase) {
+    parsedDate = new Date().toISOString().slice(0, 10);
+  } else if (!draft.date) {
     missingFields.push("date");
   } else {
     parsedDate = normalizeControladoriaDate(draft.date, options?.defaultYear || 2026);
     if (!parsedDate) {
-      missingFields.push("date");
+      if (isReceiptPurchase) {
+        parsedDate = new Date().toISOString().slice(0, 10);
+      } else {
+        missingFields.push("date");
+      }
     } else if (!autoFilledFields.includes("date") && !manuallyEditedFields.includes("date")) {
       autoFilledFields.push("date");
     }
@@ -357,8 +380,12 @@ export function validateControladoriaExpenseDraft(
     autoFilledFields.push("supplier_cnpj");
   }
 
-  // 6. Category
-  const category = normalizeControladoriaCategory(draft.category, `${supplierName} ${draft.description || ""}`);
+  // 6. Category: infer primarily from what was purchased, not from supplier.
+  const itemNamesHint = (draft.items || []).map((item) => item.product_name || "").join(" ");
+  const category = normalizeControladoriaCategory(
+    draft.category,
+    `${itemNamesHint} ${draft.description || ""} ${supplierName}`,
+  );
 
   // 7. Entry type & payment
   const entryType: ControladoriaEntryType =
@@ -370,7 +397,7 @@ export function validateControladoriaExpenseDraft(
     ? "Interno/Estoque"
     : normalizeControladoriaPaymentMethod(draft.payment_method);
   const paymentPayerName = (draft.payment_payer_name || "").trim() || undefined;
-  if (entryType === "Despesa" && !hasExplicitPaymentMethod) {
+  if (entryType === "Despesa" && !hasExplicitPaymentMethod && !isReceiptPurchase) {
     missingFields.push("payment_method");
   }
   if (entryType === "Despesa" && paymentMethod === "Pessoal" && !paymentPayerName) {
@@ -519,9 +546,11 @@ export function formatControladoriaExpenseWhatsAppPreview(
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `📍 *Unidade/Destino:* ${modalityDisplay}`,
     `🏷️ *Categoria/Campo:* ${categoryDisplay}`,
-    `🏪 *Fornecedor:* ${expense.supplier_name}`,
   ];
 
+  if (expense.supplier_name && expense.supplier_name !== "Fornecedor não identificado") {
+    lines.push(`🏪 *Fornecedor:* ${expense.supplier_name}`);
+  }
   if (expense.supplier_cnpj) {
     lines.push(`📄 *CNPJ:* ${expense.supplier_cnpj}`);
   }
@@ -529,9 +558,11 @@ export function formatControladoriaExpenseWhatsAppPreview(
   lines.push(
     `📅 *Data:* ${formattedDate}`,
     `💰 *Valor Total:* *${formattedAmount}*`,
-    `💳 *Forma de Pagamento:* ${paymentDisplay}`,
-    `📝 *Descrição:* ${expense.description}`
   );
+  if (expense.payment_method !== "Não informado") {
+    lines.push(`💳 *Forma de Pagamento:* ${paymentDisplay}`);
+  }
+  lines.push(`📝 *Descrição:* ${expense.description}`);
 
   if (expense.items && expense.items.length > 0) {
     lines.push(``);

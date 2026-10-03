@@ -16,7 +16,7 @@ import {
 } from "./schemas.ts";
 import { normalizeStr } from "./event-matcher.ts";
 
-export const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
 export const GOOGLE_PROJECT_NUMBER = "321790958376";
 
 function getEnv(key: string): string | undefined {
@@ -134,9 +134,13 @@ export class GeminiProvider implements AIProvider {
       }
 
       const rawModel = this.model.startsWith("models/") ? this.model.slice(7) : this.model;
-      const normalizedModel = (rawModel.includes("1.5") || rawModel.includes("2.0") || rawModel.includes("2.5"))
-        ? "gemini-3.6-flash"
-        : (rawModel || "gemini-3.6-flash");
+      const normalizedModel =
+        rawModel.includes("1.5") ||
+        rawModel.includes("2.0") ||
+        rawModel.includes("2.5") ||
+        rawModel.includes("3.6")
+          ? "gemini-3.8-flash"
+          : (rawModel || "gemini-3.8-flash");
       const uniqueModels = [normalizedModel];
 
       const controller = new AbortController();
