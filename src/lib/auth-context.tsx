@@ -43,9 +43,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession ?? null);
       setLoading(false);
+
+      if (event === "PASSWORD_RECOVERY" && typeof window !== "undefined") {
+        window.sessionStorage.setItem("goatbar:password-recovery", "1");
+        if (window.location.pathname !== "/primeiro-acesso") {
+          window.location.replace("/primeiro-acesso");
+        }
+      }
     });
 
     return () => {
