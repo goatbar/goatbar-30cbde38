@@ -595,7 +595,9 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
       auto_filled_fields: { type: "array", items: { type: "string" } },
       manually_edited_fields: { type: "array", items: { type: "string" } },
     },
-    required: ["amount", "modality"],
+    // Partial drafts are intentional: deterministic validation collects only the
+    // missing fields after the AI extracts everything visible from the receipt.
+    required: [],
   },
   requiresConfirmation: true,
   execute: async (ctx: ToolContext, args: any): Promise<ToolExecutionResult> => {
@@ -753,6 +755,9 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
     }
 
     const fmtAmount = `R$ ${norm.amount.toFixed(2).replace(".", ",")}`;
+    const isPurchase =
+      norm.entry_type === "Despesa" &&
+      (Boolean(norm.invoice_url) || norm.items.length > 0 || norm.description.toLowerCase().includes("compra"));
     return {
       success: true,
       data: {
@@ -766,7 +771,9 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
         items_count: itemsCount,
         review_status: norm.review_status,
       },
-      message: `Pronto. O lançamento de ${fmtAmount} foi registrado na modalidade ${norm.modality}.`,
+      message: isPurchase
+        ? `Pronto. A compra de ${fmtAmount} foi lançada na modalidade ${norm.modality}.`
+        : `Pronto. O lançamento de ${fmtAmount} foi registrado na modalidade ${norm.modality}.`,
     };
   },
 };
