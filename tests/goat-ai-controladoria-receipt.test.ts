@@ -22,6 +22,7 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
   let savedExpenses: any[];
   let savedExpenseItems: any[];
   let savedReceiptLogs: any[];
+  let savedUploads: Array<{ path: string; contentType?: string }>;
   let isUserAuthorized: boolean;
 
   beforeEach(() => {
@@ -44,8 +45,22 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
     savedExpenses = [];
     savedExpenseItems = [];
     savedReceiptLogs = [];
+    savedUploads = [];
 
     mockSupabase = {
+      storage: {
+        from: vi.fn((bucket: string) => ({
+          upload: vi.fn(async (path: string, _bytes: Uint8Array, options?: { contentType?: string }) => {
+            savedUploads.push({ path: `${bucket}/${path}`, contentType: options?.contentType });
+            return { data: { path }, error: null };
+          }),
+          getPublicUrl: vi.fn((path: string) => ({
+            data: {
+              publicUrl: `https://storage.test/${bucket}/${path}`,
+            },
+          })),
+        })),
+      },
       from: vi.fn((table: string) => {
         if (table === "user_messaging_accounts") {
           return {
@@ -591,6 +606,161 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
       expect(result.reply).toContain("R$ 196,40");
       expect(result.reply).toContain("Posso confirmar o lançamento");
       expect(savedExpenses.length).toBe(0); // Ainda não gravou, apenas corrigiu a prévia
+
+    it("foto sem legenda de nota fiscal vira Compra, salva o anexo e grava itens após confirmação", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    functionCall: {
+                      name: "create_controladoria_expense",
+                      args: {
+                        supplier_name: "Supermercado BH",
+                        supplier_cnpj: "12345678000190",
+                        amount: 248.9,
+                        date: "2026-10-02",
+                        modality: "Ativo",
+                        category: "Insumos",
+                        payment_method: "PIX Goat",
+                        items: [
+                          {
+                            product_name: "Gin",
+                            quantity: 2,
+                            unit: "garrafa",
+                            unit_price: 80,
+                            total_price: 160,
+                          },
+                          {
+                            product_name: "Limão",
+                            quantity: 5,
+                            unit: "kg",
+                            unit_price: 17.78,
+                            total_price: 88.9,
+                          },
+                        ],
+                      },
+                    },
+                  },
+                ],
+              },
+              finishReason: "STOP",
+            },
+          ],
+        }),
+      } as any);
+
+      const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", toolRegistry);
+      const draft = await agent.processTurn({
+        channel: "whatsapp",
+        message: "Foto enviada",
+        userId: "user-socio-1",
+        userName: "Romulo Chaves",
+        externalMessageId: "wamid.receipt.123",
+        attachments: [
+          {
+            mimeType: "image/jpeg",
+            dataBase64: "dGVzdA==",
+            mediaId: "media-receipt-123",
+          },
+        ],
+      });
+
+      expect(draft.reply).toContain("Compra na Controladoria");
+      expect(draft.reply).toContain("Supermercado BH");
+      expect(draft.reply).toContain("R$ 248,90");
+      expect(draft.pendingAction?.status).toBe("ready_for_confirmation");
+      expect(savedPendingActions[0].arguments.entry_type).toBe("Despesa");
+      expect(savedPendingActions[0].arguments.source_message_id).toBe("wamid.receipt.123");
+      expect(savedPendingActions[0].arguments.source_media_id).toBe("media-receipt-123");
+      expect(savedPendingActions[0].arguments.invoice_url).toContain(
+        "https://storage.test/financial_attachments/gia/user-socio-1/",
+      );
+      expect(savedPendingActions[0].arguments.items).toHaveLength(2);
+      expect(savedUploads).toHaveLength(1);
+      expect(savedUploads[0].path).toContain("media-receipt-123.jpg");
+
+      const confirmed = await agent.processTurn({
+        channel: "whatsapp",
+        message: "sim",
+        userId: "user-socio-1",
+        userName: "Romulo Chaves",
+      });
+
+      expect(confirmed.reply).toContain("A compra de R$ 248,90 foi lançada");
+      expect(savedExpenses).toHaveLength(1);
+      expect(savedExpenses[0].entry_type).toBe("Despesa");
+      expect(savedExpenses[0].source_channel).toBe("gia");
+      expect(savedExpenses[0].source_reference).toBe("wamid.receipt.123");
+      expect(savedExpenses[0].invoice_url).toContain("financial_attachments");
+      expect(savedExpenses[0].ocr_metadata.source_media_id).toBe("media-receipt-123");
+      expect(savedExpenseItems).toHaveLength(2);
+      expect(savedExpenseItems[0].product_name).toBe("Gin");
+    });
+
+    it("nota fiscal sem forma de pagamento pergunta somente a forma de pagamento", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    functionCall: {
+                      name: "create_controladoria_expense",
+                      args: {
+                        supplier_name: "Atacadão",
+                        amount: 120,
+                        date: "2026-10-02",
+                        modality: "Ativo",
+                        category: "Insumos",
+                        items: [
+                          {
+                            product_name: "Água tônica",
+                            quantity: 12,
+                            unit: "un",
+                            unit_price: 10,
+                            total_price: 120,
+                          },
+                        ],
+                      },
+                    },
+                  },
+                ],
+              },
+              finishReason: "STOP",
+            },
+          ],
+        }),
+      } as any);
+
+      const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", toolRegistry);
+      const result = await agent.processTurn({
+        channel: "whatsapp",
+        message: "Foto enviada",
+        userId: "user-socio-1",
+        userName: "Romulo Chaves",
+        attachments: [
+          {
+            mimeType: "image/jpeg",
+            dataBase64: "dGVzdA==",
+            mediaId: "media-no-payment",
+          },
+        ],
+      });
+
+      expect(result.pendingAction?.status).toBe("collecting");
+      expect(result.pendingAction?.missingFields).toEqual(["payment_method"]);
+      expect(result.reply).toContain("Qual foi a forma de pagamento desta compra");
+      expect(result.reply).toContain("Cartão de crédito Goat");
+      expect(savedExpenses).toHaveLength(0);
+    });
     });
   });
 
