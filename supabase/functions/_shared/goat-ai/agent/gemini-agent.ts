@@ -1256,6 +1256,65 @@ export class GoatAIGeminiAgent {
         draftModified = true;
       }
 
+      // Complete payment data deterministically when a purchase draft is collecting it.
+      // This avoids asking the LLM to reinterpret a simple "PIX Goat", "Cartão Goat"
+      // or "Pessoal" follow-up.
+      const paymentWasPending =
+        activePending.missing_fields?.includes("payment_method") ||
+        activePending.missing_fields?.includes("payment_payer_name");
+
+      if (
+        activePending.missing_fields?.includes("payment_method") ||
+        /\b(pix|cartao|credito|pessoal)\b/i.test(normalizedInput)
+      ) {
+        if (/\bpix\b/i.test(normalizedInput)) {
+          draftArgs.payment_method = "PIX Goat";
+          draftModified = true;
+        } else if (/\b(cartao|credito)\b/i.test(normalizedInput)) {
+          draftArgs.payment_method = "Cartão de crédito Goat";
+          draftModified = true;
+        } else if (/\bpessoal\b/i.test(normalizedInput)) {
+          draftArgs.payment_method = "Pessoal";
+          draftModified = true;
+
+          const payerMatch = input.message.match(
+            /(?:pessoal|pago\s+por|pagou|foi\s+pago\s+por)\s*[:,-]?\s*(?:por\s+)?([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ .'-]{1,60})$/i,
+          );
+          const candidatePayer = payerMatch?.[1]?.trim();
+          if (
+            candidatePayer &&
+            !/^(pix|goat|cartao|credito|pessoal)$/i.test(candidatePayer)
+          ) {
+            draftArgs.payment_payer_name = candidatePayer;
+          }
+        }
+      }
+
+      if (
+        activePending.missing_fields?.includes("payment_payer_name") &&
+        draftArgs.payment_method === "Pessoal" &&
+        !draftArgs.payment_payer_name
+      ) {
+        const payerOnly = input.message.trim();
+        if (
+          payerOnly.length >= 2 &&
+          payerOnly.length <= 80 &&
+          !/^(sim|nao|não|cancela|pix|pix goat|cartao|cartão|cartao goat|cartão goat|pessoal)$/i.test(
+            payerOnly,
+          )
+        ) {
+          draftArgs.payment_payer_name = payerOnly;
+          draftModified = true;
+        }
+      }
+
+      // Keep this variable used for debug-level traceability and future refinements.
+      if (paymentWasPending && draftModified) {
+        console.log(
+          `[GOAT-AI][CONTROLADORIA_DRAFT][PAYMENT_FOLLOWUP] correlationId=${correlationId} paymentMethod="${draftArgs.payment_method || "none"}" payerProvided=${Boolean(draftArgs.payment_payer_name)}`,
+        );
+      }
+
       // Check if user is supplying/correcting amount
       const amountMatch = normalizedInput.match(
         /(?:o\s+)?valor(?:\s+correto)?(?:\s+e|\s+foi|\s*=\s*)?\s*(?:r\$)?\s*(\d+[\.,]\d{2})/i,
@@ -1323,9 +1382,13 @@ export class GoatAIGeminiAgent {
 
           let reply = "";
           if (validation.missingFields.includes("modality")) {
-            reply = `Em qual unidade devo lançar esse gasto? ('7 Steakhouse', 'Goat Botequim', 'Evento' ou 'Geral')`;
+            reply = `Em qual destino devo lançar esta compra? ('Evento', 'Goat Botequim', '7 Steak House', 'Degustação' ou 'Ativo')`;
           } else if (validation.missingFields.includes("amount")) {
             reply = `Qual o valor total da nota/gasto?`;
+          } else if (validation.missingFields.includes("payment_method")) {
+            reply = "Qual foi a forma de pagamento desta compra: Cartão de crédito Goat, PIX Goat ou Pessoal?";
+          } else if (validation.missingFields.includes("payment_payer_name")) {
+            reply = "Quem realizou o pagamento pessoal desta compra?";
           } else {
             reply = `Ainda preciso de: ${validation.missingFields.join(" e ")}. Pode informar?`;
           }
