@@ -703,7 +703,7 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
       expect(savedExpenseItems[0].product_name).toBe("Gin");
     });
 
-    it("nota fiscal sem forma de pagamento pergunta somente a forma de pagamento", async () => {
+    it("foto de nota fiscal sem fornecedor ou pagamento pergunta somente a modalidade", async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -716,10 +716,6 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
                     functionCall: {
                       name: "create_controladoria_expense",
                       args: {
-                        supplier_name: "Atacadão",
-                        amount: 120,
-                        date: "2026-10-02",
-                        modality: "Ativo",
                         category: "Insumos",
                         items: [
                           {
@@ -747,33 +743,46 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
         message: "Foto enviada",
         userId: "user-socio-1",
         userName: "Romulo Chaves",
+        externalMessageId: "wamid.photo.only-modality",
         attachments: [
           {
             mimeType: "image/jpeg",
             dataBase64: "dGVzdA==",
-            mediaId: "media-no-payment",
+            mediaId: "media-only-modality",
           },
         ],
       });
 
       expect(result.pendingAction?.status).toBe("collecting");
-      expect(result.pendingAction?.missingFields).toEqual(["payment_method"]);
-      expect(result.reply).toContain("Qual foi a forma de pagamento desta compra");
-      expect(result.reply).toContain("Cartão de crédito Goat");
+      expect(result.pendingAction?.missingFields).toEqual(["modality"]);
+      expect(result.reply).toBe(
+        "A qual modalidade essa compra pertence? Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo.",
+      );
+      expect(result.reply).not.toContain("Fornecedor");
+      expect(result.reply).not.toContain("pagamento");
+      expect(result.reply).not.toContain("CNPJ");
+      expect(savedPendingActions[0].arguments.items).toHaveLength(1);
+      expect(savedPendingActions[0].arguments.amount).toBeUndefined();
+      expect(savedPendingActions[0].arguments.supplier_name).toBeUndefined();
       expect(savedExpenses).toHaveLength(0);
 
-      const completedPayment = await agent.processTurn({
+      const completedModality = await agent.processTurn({
         channel: "whatsapp",
-        message: "PIX Goat",
+        message: "Ativo",
         userId: "user-socio-1",
         userName: "Romulo Chaves",
       });
 
-      expect(completedPayment.pendingAction?.status).toBe("ready_for_confirmation");
-      expect(completedPayment.reply).toContain("Compra na Controladoria");
-      expect(completedPayment.reply).toContain("PIX Goat");
-      expect(savedPendingActions[0].arguments.payment_method).toBe("PIX Goat");
+      expect(completedModality.pendingAction?.status).toBe("ready_for_confirmation");
+      expect(completedModality.reply).toContain("Compra na Controladoria");
+      expect(completedModality.reply).toContain("Água tônica");
+      expect(completedModality.reply).toContain("R$ 120,00");
+      expect(completedModality.reply).not.toContain("Fornecedor não identificado");
+      expect(completedModality.reply).not.toContain("Forma de Pagamento");
+      expect(savedPendingActions[0].arguments.payment_method).toBe("Não informado");
+      expect(savedPendingActions[0].arguments.amount).toBe(120);
       expect(savedExpenses).toHaveLength(0);
+    });
     });
   });
 
@@ -917,7 +926,7 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
         userId: "user-socio-1",
         userName: "Romulo Chaves",
       });
-      expect(turn1.reply).toContain("Pode me enviar a foto");
+      expect(turn1.reply).toBe("Pode enviar a foto da compra.");
       expect(savedExpenses.length).toBe(0);
 
       // Turn 2: Usuário envia imagem [imagem da nota]
@@ -961,7 +970,9 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
           },
         ],
       });
-      expect(turn2.reply).toContain("Em qual unidade devo lançar esse gasto?");
+      expect(turn2.reply).toBe(
+        "A qual modalidade essa compra pertence? Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo.",
+      );
       expect(turn2.pendingAction?.status).toBe("collecting");
       expect(savedExpenses.length).toBe(0);
 
