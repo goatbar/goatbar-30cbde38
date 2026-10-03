@@ -2078,6 +2078,11 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                 // representada canonicamente por entry_type = "Despesa".
                 mergedArgs.entry_type = "Despesa";
 
+                // Regra de negócio: modalidade de compra por foto NUNCA pode ser
+                // inferida pelo modelo, fornecedor, conteúdo da nota ou contexto
+                // recente da conversa. O usuário precisa escolhê-la explicitamente.
+                delete mergedArgs.modality;
+
                 if (fiscalAttachment.mediaId && !mergedArgs.source_media_id) {
                   mergedArgs.source_media_id = fiscalAttachment.mediaId;
                 }
@@ -2094,7 +2099,9 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                 }
               }
 
-              if (!mergedArgs.modality && inheritedUnit) {
+              // Contexto anterior só pode preencher modalidade em lançamentos que
+              // NÃO vieram de foto fiscal. Em compra por foto, sempre perguntamos.
+              if (!fiscalAttachment && !mergedArgs.modality && inheritedUnit) {
                 mergedArgs.modality = inheritedUnit;
               }
 
