@@ -364,10 +364,15 @@ export function validateControladoriaExpenseDraft(
   const entryType: ControladoriaEntryType =
     draft.entry_type === "Receita" ? "Receita" :
     draft.entry_type === "Alocação Interna" ? "Alocação Interna" : "Despesa";
+  const hasExplicitPaymentMethod =
+    typeof draft.payment_method === "string" && draft.payment_method.trim().length > 0;
   const paymentMethod = entryType === "Alocação Interna"
     ? "Interno/Estoque"
     : normalizeControladoriaPaymentMethod(draft.payment_method);
   const paymentPayerName = (draft.payment_payer_name || "").trim() || undefined;
+  if (entryType === "Despesa" && !hasExplicitPaymentMethod) {
+    missingFields.push("payment_method");
+  }
   if (entryType === "Despesa" && paymentMethod === "Pessoal" && !paymentPayerName) {
     missingFields.push("payment_payer_name");
   }
@@ -503,8 +508,14 @@ export function formatControladoriaExpenseWhatsAppPreview(
 
   const categoryDisplay = isSteakLabor ? "Mão de Obra Semanal" : expense.category;
 
+  const isPurchase =
+    expense.entry_type === "Despesa" &&
+    (Boolean(expense.invoice_url) ||
+      expense.items.length > 0 ||
+      expense.description.toLowerCase().includes("compra"));
+
   const lines: string[] = [
-    `🧾 *Lançamento de Gasto na Controladoria*`,
+    isPurchase ? `🧾 *Compra na Controladoria*` : `🧾 *Lançamento de Gasto na Controladoria*`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `📍 *Unidade/Destino:* ${modalityDisplay}`,
     `🏷️ *Categoria/Campo:* ${categoryDisplay}`,
@@ -542,7 +553,9 @@ export function formatControladoriaExpenseWhatsAppPreview(
 
   lines.push(
     `━━━━━━━━━━━━━━━━━━━━━━`,
-    `Posso confirmar o lançamento desse gasto na Controladoria? *(Responda 'sim' para lançar ou 'cancela' para descartar)*`
+    isPurchase
+      ? `Posso confirmar esta compra na Controladoria? *(Responda 'sim' para lançar ou 'cancela' para descartar)*`
+      : `Posso confirmar o lançamento desse gasto na Controladoria? *(Responda 'sim' para lançar ou 'cancela' para descartar)*`
   );
 
   return lines.join("\n");
