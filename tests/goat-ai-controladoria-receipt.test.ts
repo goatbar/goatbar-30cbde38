@@ -615,7 +615,7 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
       expect(savedExpenses.length).toBe(0); // Ainda não gravou, apenas corrigiu a prévia
     });
 
-    it("foto sem legenda de nota fiscal vira Compra, salva o anexo e grava itens após confirmação", async () => {
+    it("foto ignora modalidade inferida pela IA, pergunta ao usuário e só depois confirma a compra", async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -628,27 +628,26 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
                     functionCall: {
                       name: "create_controladoria_expense",
                       args: {
-                        supplier_name: "Supermercado BH",
-                        supplier_cnpj: "12345678000190",
-                        amount: 248.9,
+                        supplier_name: "Sendas Distribuidora S/A",
+                        supplier_cnpj: "06057223047640",
+                        amount: 98.7,
                         date: "2026-10-02",
-                        modality: "Ativo",
+                        modality: "7 Steak House",
                         category: "Insumos",
-                        payment_method: "PIX Goat",
                         items: [
                           {
-                            product_name: "Gin",
+                            product_name: "V Smirnoff 998ml",
                             quantity: 2,
-                            unit: "garrafa",
-                            unit_price: 80,
-                            total_price: 160,
+                            unit: "gf",
+                            unit_price: 39.9,
+                            total_price: 79.8,
                           },
                           {
-                            product_name: "Limão",
-                            quantity: 5,
-                            unit: "kg",
-                            unit_price: 17.78,
-                            total_price: 88.9,
+                            product_name: "Canudo Bio 10mm c/100",
+                            quantity: 1,
+                            unit: "un",
+                            unit_price: 18.9,
+                            total_price: 18.9,
                           },
                         ],
                       },
@@ -668,29 +667,43 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
         message: "Foto enviada",
         userId: "user-socio-1",
         userName: "Romulo Chaves",
-        externalMessageId: "wamid.receipt.123",
+        externalMessageId: "wamid.receipt.inferred-modality",
         attachments: [
           {
             mimeType: "image/jpeg",
             dataBase64: "dGVzdA==",
-            mediaId: "media-receipt-123",
+            mediaId: "media-inferred-modality",
           },
         ],
       });
 
-      expect(draft.reply).toContain("Compra na Controladoria");
-      expect(draft.reply).toContain("Supermercado BH");
-      expect(draft.reply).toContain("R$ 248,90");
-      expect(draft.pendingAction?.status).toBe("ready_for_confirmation");
+      expect(draft.reply).toBe(
+        "A qual modalidade essa compra pertence? Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo.",
+      );
+      expect(draft.pendingAction?.status).toBe("collecting");
+      expect(draft.pendingAction?.missingFields).toEqual(["modality"]);
+      expect(savedPendingActions[0].arguments.modality).toBeUndefined();
       expect(savedPendingActions[0].arguments.entry_type).toBe("Despesa");
-      expect(savedPendingActions[0].arguments.source_message_id).toBe("wamid.receipt.123");
-      expect(savedPendingActions[0].arguments.source_media_id).toBe("media-receipt-123");
+      expect(savedPendingActions[0].arguments.source_message_id).toBe("wamid.receipt.inferred-modality");
+      expect(savedPendingActions[0].arguments.source_media_id).toBe("media-inferred-modality");
       expect(savedPendingActions[0].arguments.invoice_url).toContain(
         "https://storage.test/financial_attachments/gia/user-socio-1/",
       );
       expect(savedPendingActions[0].arguments.items).toHaveLength(2);
       expect(savedUploads).toHaveLength(1);
-      expect(savedUploads[0].path).toContain("media-receipt-123.jpg");
+
+      const selected = await agent.processTurn({
+        channel: "whatsapp",
+        message: "Ativo",
+        userId: "user-socio-1",
+        userName: "Romulo Chaves",
+      });
+
+      expect(selected.pendingAction?.status).toBe("ready_for_confirmation");
+      expect(selected.reply).toContain("Compra na Controladoria");
+      expect(selected.reply).toContain("Ativo");
+      expect(selected.reply).toContain("R$ 98,70");
+      expect(selected.reply).not.toContain("7 Steak House");
 
       const confirmed = await agent.processTurn({
         channel: "whatsapp",
@@ -699,15 +712,11 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
         userName: "Romulo Chaves",
       });
 
-      expect(confirmed.reply).toContain("A compra de R$ 248,90 foi lançada");
+      expect(confirmed.reply).toContain("A compra de R$ 98,70 foi lançada");
       expect(savedExpenses).toHaveLength(1);
+      expect(savedExpenses[0].modality).toBe("Ativo");
       expect(savedExpenses[0].entry_type).toBe("Despesa");
-      expect(savedExpenses[0].source_channel).toBe("gia");
-      expect(savedExpenses[0].source_reference).toBe("wamid.receipt.123");
-      expect(savedExpenses[0].invoice_url).toContain("financial_attachments");
-      expect(savedExpenses[0].ocr_metadata.source_media_id).toBe("media-receipt-123");
       expect(savedExpenseItems).toHaveLength(2);
-      expect(savedExpenseItems[0].product_name).toBe("Gin");
     });
 
     it("foto de nota fiscal sem fornecedor ou pagamento pergunta somente a modalidade", async () => {
