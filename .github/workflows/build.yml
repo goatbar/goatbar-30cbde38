@@ -26,5 +26,8 @@ jobs:
       - name: Rodar testes do gerador de cardápio
         run: npx vitest run src/lib/event-menu.test.ts
 
+      - name: Testar foto de nota fiscal como compra na GIA
+        run: npx vitest run tests/goat-ai-controladoria-receipt.test.ts -t "foto sem legenda de nota fiscal|nota fiscal sem forma de pagamento"
+
       - name: Build do projeto
         run: npm run build
