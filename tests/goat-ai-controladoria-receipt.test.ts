@@ -12,6 +12,7 @@ import {
   normalizeControladoriaDate,
 } from "../supabase/functions/_shared/goat-ai/validators/controladoria-expense-validator";
 import { CircuitBreakerManager } from "../supabase/functions/_shared/goat-ai/router/circuit-breaker";
+import { normalizeGeminiModel } from "../supabase/functions/_shared/goat-ai/config";
 
 describe("GIA Controladoria Receipt & Expense Integration", () => {
   let mockSupabase: any;
@@ -306,6 +307,12 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
 
   // 1. Validator & Deterministic Normalizers Unit Tests
   describe("Deterministic Normalizers & Validator", () => {
+    it("modelo Gemini de visão migra configurações antigas para 3.8 flash", () => {
+      expect(normalizeGeminiModel("gemini-2.5-flash")).toBe("gemini-3.8-flash");
+      expect(normalizeGeminiModel("gemini-3.6-flash")).toBe("gemini-3.8-flash");
+      expect(normalizeGeminiModel("models/gemini-2.5-flash")).toBe("gemini-3.8-flash");
+      expect(normalizeGeminiModel("gemini-3.8-flash")).toBe("gemini-3.8-flash");
+    });
     it("1. Normaliza valores monetários BRL com precisão", () => {
       expect(normalizeCurrencyBRL("186,40")).toBe(186.4);
       expect(normalizeCurrencyBRL("R$ 1.250,50")).toBe(1250.5);
