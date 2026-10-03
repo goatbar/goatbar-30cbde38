@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
@@ -120,6 +120,18 @@ function LoginPage() {
               {loading ? "Entrando..." : "Entrar"}
             </button>
           </form>
+
+          <div className="mt-5 text-center">
+            <Link
+              to="/primeiro-acesso"
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              Primeiro acesso
+            </Link>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Crie sua senha usando o WhatsApp já autorizado na GIA.
+            </p>
+          </div>
         </div>
       </div>
     </div>
