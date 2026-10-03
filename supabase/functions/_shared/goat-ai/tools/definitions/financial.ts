@@ -747,6 +747,8 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
             operation_id: norm.operation_id,
             confidence: norm.confidence,
             source_message_id: norm.source_message_id || null,
+            source_media_id: norm.source_media_id || null,
+            invoice_url: norm.invoice_url || null,
           },
         });
       }
