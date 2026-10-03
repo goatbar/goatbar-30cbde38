@@ -252,6 +252,25 @@ async function persistGiaFinancialAttachment(params: {
   }
 }
 
+function looksLikeBarePurchaseStartIntent(value: string): boolean {
+  const normalized = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+  if (!normalized || normalized.length > 140) return false;
+  const hasPurchaseIntent =
+    normalized.includes("compra") &&
+    /(lancar|registrar|adicionar|incluir|colocar|controladoria|notinha|nota)/.test(normalized);
+  const alreadyContainsFinancialDetails =
+    /r\$|\b\d+[\.,]\d{2}\b|pix|cartao|pessoal|evento|botequim|steak|degustacao|ativo/.test(
+      normalized,
+    );
+
+  return hasPurchaseIntent && !alreadyContainsFinancialDetails;
+}
+
 function looksLikeNegativeSystemClaim(value: string): boolean {
   const normalized = String(value || "")
     .normalize("NFD")
@@ -1119,6 +1138,28 @@ export class GoatAIGeminiAgent {
       }
     }
 
+    if (
+      !activePending &&
+      (!input.attachments || input.attachments.length === 0) &&
+      looksLikeBarePurchaseStartIntent(input.message)
+    ) {
+      const reply = "Pode enviar a foto da compra.";
+      const assistantMsg = await this.conversationManager.saveMessage(
+        conversation.id,
+        "assistant",
+        reply,
+        "text",
+      );
+
+      return {
+        conversationId: conversation.id,
+        messageId: assistantMsg.id,
+        reply,
+        toolCallsExecuted: [],
+        pendingAction: null,
+      };
+    }
+
     // 2.1 Check for Sales Session Direct Modifications (e.g. updating labor_value / Mão de Obra Semanal / Por Dia)
     if (activePending && activePending.tool_name === "create_sales_session") {
       const draftArgs = { ...(activePending.arguments || {}) };
@@ -1382,7 +1423,7 @@ export class GoatAIGeminiAgent {
 
           let reply = "";
           if (validation.missingFields.includes("modality")) {
-            reply = `Em qual destino devo lançar esta compra? ('Evento', 'Goat Botequim', '7 Steak House', 'Degustação' ou 'Ativo')`;
+            reply = "A qual modalidade essa compra pertence? Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo.";
           } else if (validation.missingFields.includes("amount")) {
             reply = `Qual o valor total da nota/gasto?`;
           } else if (validation.missingFields.includes("payment_method")) {
@@ -1785,12 +1826,16 @@ export class GoatAIGeminiAgent {
 [CONTEXTO OPERACIONAL - IMAGEM/DOCUMENTO ANEXADO]
 Analise visualmente o anexo. Se ele for uma nota fiscal, cupom fiscal, DANFE, recibo ou comprovante de uma COMPRA (e não um relatório de vendas/POS), trate-o como compra da Controladoria mesmo quando a mensagem for apenas "Foto enviada" ou estiver sem legenda.
 Nesse caso:
-- chame 'create_controladoria_expense' com TODOS os dados legíveis;
-- use 'entry_type' = 'Despesa' (tipo canônico que representa "Despesa / Compra" no sistema);
-- extraia fornecedor, CNPJ, data, valor total e itens com produto, quantidade, unidade, valor unitário e total sempre que estiverem visíveis;
-- extraia a forma de pagamento apenas se houver evidência visual/textual; nunca invente PIX, cartão ou pagador;
-- se modalidade/unidade, forma de pagamento, valor ou outro dado obrigatório não estiverem identificáveis, ainda assim chame a ferramenta com os campos conhecidos para que o fluxo peça SOMENTE o que faltar;
-- não responda apenas descrevendo a nota: o objetivo é preparar o lançamento da compra para confirmação.
+- chame 'create_controladoria_expense';
+- use 'entry_type' = 'Despesa';
+- PRIORIZE ler o que foi comprado: itens, quantidades, unidades, valores unitários/totais e valor total;
+- fornecedor e CNPJ são opcionais: extraia somente se estiverem claros e NUNCA transforme isso em pergunta ao usuário;
+- forma de pagamento também é opcional nesse fluxo de foto: extraia se estiver clara, mas NUNCA pergunte por ela;
+- a única pergunta operacional inicial após uma leitura bem-sucedida deve ser a modalidade da compra: Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo;
+- se a data fiscal não estiver legível, o sistema usará a data do recebimento da foto;
+- não responda com checklist, formulário ou lista de campos necessários;
+- não responda apenas descrevendo a nota: prepare o lançamento e deixe a camada determinística perguntar a modalidade.
+Se a imagem estiver ilegível a ponto de não permitir identificar itens/valores, peça apenas uma foto mais nítida.
 Se o anexo for fechamento de vendas/POS, siga o fluxo de sessão de vendas em vez de compra.
 `;
     }
@@ -2095,26 +2140,29 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                 );
                 finalPendingAction = pending;
 
-                const supplierName = mergedArgs.supplier_name
-                  ? `🏪 *Fornecedor:* ${mergedArgs.supplier_name}\n`
-                  : "";
-                const dateStr = mergedArgs.date ? `📅 *Data:* ${mergedArgs.date}\n` : "";
-                const amountStr = mergedArgs.amount
-                  ? `💰 *Valor:* R$ ${normalizeCurrencyBRL(mergedArgs.amount).toFixed(2).replace(".", ",")}\n`
-                  : "";
-
                 let missingQuestion = "";
+                const isPhotoPurchase = Boolean(
+                  fiscalAttachment ||
+                  mergedArgs.source_media_id ||
+                  mergedArgs.invoice_url ||
+                  mergedArgs.receipt_url,
+                );
+
                 if (
                   validation.missingFields.includes("modality") &&
                   !validation.missingFields.includes("amount")
                 ) {
-                  missingQuestion = `Li a nota:\n${supplierName}${dateStr}${amountStr}\nEm qual destino devo lançar esta compra? ('Evento', 'Goat Botequim', '7 Steak House', 'Degustação' ou 'Ativo')`;
+                  missingQuestion =
+                    "A qual modalidade essa compra pertence? Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo.";
+                } else if (isPhotoPurchase) {
+                  missingQuestion =
+                    "Não consegui ler os itens e valores dessa compra com segurança. Envie uma foto mais nítida e completa.";
                 } else if (validation.missingFields.includes("amount")) {
-                  missingQuestion = `Consegui receber a foto${mergedArgs.supplier_name ? ` de ${mergedArgs.supplier_name}` : ""}, mas não consegui identificar o valor da nota com segurança. Pode enviar uma foto mais próxima ou me informar o valor?`;
+                  missingQuestion = "Qual o valor total desse gasto?";
                 } else if (validation.missingFields.includes("payment_method")) {
-                  missingQuestion = "Qual foi a forma de pagamento desta compra: Cartão de crédito Goat, PIX Goat ou Pessoal?";
+                  missingQuestion = "Qual foi a forma de pagamento: Cartão de crédito Goat, PIX Goat ou Pessoal?";
                 } else {
-                  missingQuestion = `Identifiquei os dados da nota, mas ainda preciso de: ${validation.missingFields.join(" e ")}. Pode informar?`;
+                  missingQuestion = `Ainda preciso de: ${validation.missingFields.join(" e ")}. Pode informar?`;
                 }
 
                 finalReply = missingQuestion;
