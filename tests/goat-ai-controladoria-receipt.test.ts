@@ -761,6 +761,19 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
       expect(result.reply).toContain("Qual foi a forma de pagamento desta compra");
       expect(result.reply).toContain("Cartão de crédito Goat");
       expect(savedExpenses).toHaveLength(0);
+
+      const completedPayment = await agent.processTurn({
+        channel: "whatsapp",
+        message: "PIX Goat",
+        userId: "user-socio-1",
+        userName: "Romulo Chaves",
+      });
+
+      expect(completedPayment.pendingAction?.status).toBe("ready_for_confirmation");
+      expect(completedPayment.reply).toContain("Compra na Controladoria");
+      expect(completedPayment.reply).toContain("PIX Goat");
+      expect(savedPendingActions[0].arguments.payment_method).toBe("PIX Goat");
+      expect(savedExpenses).toHaveLength(0);
     });
   });
 
