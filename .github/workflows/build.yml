@@ -27,7 +27,7 @@ jobs:
         run: npx vitest run src/lib/event-menu.test.ts
 
       - name: Testar foto de nota fiscal como compra na GIA
-        run: npx vitest run tests/goat-ai-controladoria-receipt.test.ts -t "foto sem legenda de nota fiscal|nota fiscal sem forma de pagamento"
+        run: npx vitest run tests/goat-ai-controladoria-receipt.test.ts -t "foto sem legenda de nota fiscal|foto de nota fiscal sem fornecedor ou pagamento|modelo Gemini de visão"
 
       - name: Build do projeto
         run: npm run build
