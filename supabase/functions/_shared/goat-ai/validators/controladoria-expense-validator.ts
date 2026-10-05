@@ -14,6 +14,8 @@ export interface ControladoriaExpenseItemDraft {
   total_price?: number;
   suggested_category?: string;
   confidence?: number;
+  /** Situação financeira específica deste item quando difere dos demais. */
+  status?: "Pago" | "Pendente";
 }
 
 export interface ControladoriaExpenseDraft {
@@ -35,6 +37,8 @@ export interface ControladoriaExpenseDraft {
   event_id?: string;
   responsible?: string;
   items?: ControladoriaExpenseItemDraft[];
+  /** Itens explicitamente informados como ainda não pagos; viram lançamento Em aberto separado. */
+  open_items?: ControladoriaExpenseItemDraft[];
   invoice_url?: string;
   receipt_url?: string;
   ocr_raw_text?: string;
@@ -53,6 +57,7 @@ export interface NormalizedControladoriaExpenseItem {
   unit_price: number;
   total_price: number;
   suggested_category?: string;
+  status?: "Pago" | "Pendente";
 }
 
 export interface NormalizedControladoriaExpense {
@@ -74,6 +79,7 @@ export interface NormalizedControladoriaExpense {
   event_id?: string;
   responsible: string;
   items: NormalizedControladoriaExpenseItem[];
+  open_items: NormalizedControladoriaExpenseItem[];
   invoice_url?: string;
   receipt_url?: string;
   ocr_raw_text?: string;
@@ -467,15 +473,38 @@ export function validateControladoriaExpenseDraft(
   // 8. Responsible
   const responsible = (draft.responsible || options?.fallbackResponsible || "Sócio Goat Bar").trim();
 
-  // 9. Items
-  const normalizedItems: NormalizedControladoriaExpenseItem[] = (draft.items || []).map((it) => ({
+  // 9. Items. Mixed payment status is preserved instead of flattening the
+  // whole purchase into "Pago" or "Pendente".
+  const sourceItems = Array.isArray(draft.items) ? draft.items : [];
+  const pendingSourceItems = [
+    ...(Array.isArray(draft.open_items) ? draft.open_items : []),
+    ...sourceItems.filter((it) => it.status === "Pendente"),
+  ];
+  const paidSourceItems = sourceItems.filter((it) => it.status !== "Pendente");
+
+  const normalizeItem = (
+    it: ControladoriaExpenseItemDraft,
+    itemStatus: "Pago" | "Pendente",
+  ): NormalizedControladoriaExpenseItem => ({
     product_name: (it.product_name || "Item").trim(),
     quantity: Number(it.quantity) || 1,
     unit: it.unit?.trim() || "un",
     unit_price: normalizeCurrencyBRL(it.unit_price),
-    total_price: normalizeCurrencyBRL(it.total_price) || Math.round((Number(it.quantity || 1) * normalizeCurrencyBRL(it.unit_price)) * 100) / 100,
-    suggested_category: it.suggested_category || category,
-  }));
+    total_price:
+      normalizeCurrencyBRL(it.total_price) ||
+      Math.round(
+        (Number(it.quantity || 1) * normalizeCurrencyBRL(it.unit_price)) * 100,
+      ) / 100,
+    suggested_category:
+      it.suggested_category ||
+      (/m[aã]o\s+de\s+obra/i.test(it.product_name || "") ? "Equipe" : category),
+    status: itemStatus,
+  });
+
+  const normalizedItems = paidSourceItems.map((it) => normalizeItem(it, "Pago"));
+  const normalizedOpenItems = pendingSourceItems.map((it) =>
+    normalizeItem(it, "Pendente"),
+  );
 
   // 10. Description
   let description = (draft.description || "").trim();
@@ -491,8 +520,9 @@ export function validateControladoriaExpenseDraft(
   if (resolvedModality === "7 Steak House" && isLabor) {
     description = "Mão de Obra Semanal";
   } else if (!description) {
-    if (normalizedItems.length > 0) {
-      const itemsSummary = normalizedItems.map((i) => `${i.quantity}x ${i.product_name}`).slice(0, 3).join(", ");
+    const allNormalizedItems = [...normalizedItems, ...normalizedOpenItems];
+    if (allNormalizedItems.length > 0) {
+      const itemsSummary = allNormalizedItems.map((i) => `${i.quantity}x ${i.product_name}`).slice(0, 3).join(", ");
       description = `Compra de ${supplierName !== "Fornecedor não identificado" ? supplierName : category} (${itemsSummary})`;
     } else {
       const dParts = parsedDate.split("-");
@@ -509,7 +539,7 @@ export function validateControladoriaExpenseDraft(
   const confidence = Number(draft.confidence) || (autoFilledFields.length >= 3 ? 0.85 : 0.5);
 
   if (missingFields.length > 0 || unreadableFields.length > 0 || errors.length > 0) {
-    if (amount <= 0 && !draft.supplier_name && normalizedItems.length === 0) {
+    if (amount <= 0 && !draft.supplier_name && normalizedItems.length === 0 && normalizedOpenItems.length === 0) {
       reviewStatus = "Erro na leitura";
     } else {
       reviewStatus = "Precisa revisar";
@@ -539,6 +569,7 @@ export function validateControladoriaExpenseDraft(
     event_id: draft.event_id || undefined,
     responsible,
     items: normalizedItems,
+    open_items: normalizedOpenItems,
     invoice_url: draft.invoice_url,
     receipt_url: draft.receipt_url,
     ocr_raw_text: draft.ocr_raw_text,
@@ -596,6 +627,7 @@ export function formatControladoriaExpenseWhatsAppPreview(
     expense.entry_type === "Despesa" &&
     (Boolean(expense.invoice_url) ||
       expense.items.length > 0 ||
+      expense.open_items.length > 0 ||
       expense.description.toLowerCase().includes("compra"));
 
   const lines: string[] = [
@@ -616,10 +648,14 @@ export function formatControladoriaExpenseWhatsAppPreview(
     `📅 *Data:* ${formattedDate}`,
     `💰 *Valor Total:* *${formattedAmount}*`,
   );
+  const hasMixedStatus =
+    expense.items.length > 0 && expense.open_items.length > 0;
   lines.push(
-    expense.status === "Pago"
-      ? "✅ *Status:* Pago"
-      : "🟠 *Status:* Em aberto (Pendente)",
+    hasMixedStatus
+      ? "🟡 *Status:* Parte paga + parte Em aberto"
+      : expense.status === "Pago"
+        ? "✅ *Status:* Pago"
+        : "🟠 *Status:* Em aberto (Pendente)",
   );
   if (expense.payment_method !== "Não informado" && expense.status === "Pago") {
     lines.push(`💳 *Forma de Pagamento:* ${paymentDisplay}`);
@@ -628,15 +664,22 @@ export function formatControladoriaExpenseWhatsAppPreview(
 
   if (expense.items && expense.items.length > 0) {
     lines.push(``);
-    lines.push(`📦 *Itens Identificados (${expense.items.length}):*`);
+    lines.push(`✅ *Itens pagos (${expense.items.length}):*`);
     expense.items.slice(0, 8).forEach((item) => {
       const unitStr = item.unit ? ` ${item.unit}` : "";
       const priceStr = item.total_price > 0 ? ` = R$ ${item.total_price.toFixed(2).replace(".", ",")}` : "";
       lines.push(`• ${item.quantity}${unitStr} ${item.product_name}${priceStr}`);
     });
-    if (expense.items.length > 8) {
-      lines.push(`• ... e mais ${expense.items.length - 8} itens`);
-    }
+  }
+
+  if (expense.open_items && expense.open_items.length > 0) {
+    lines.push(``);
+    lines.push(`🟠 *Em aberto (${expense.open_items.length}):*`);
+    expense.open_items.slice(0, 8).forEach((item) => {
+      const unitStr = item.unit ? ` ${item.unit}` : "";
+      const priceStr = item.total_price > 0 ? ` = R$ ${item.total_price.toFixed(2).replace(".", ",")}` : "";
+      lines.push(`• ${item.quantity}${unitStr} ${item.product_name}${priceStr}`);
+    });
   }
 
   if (warnings.length > 0) {
