@@ -176,6 +176,26 @@ export const financialService = {
     return data as FinancialExpense;
   },
 
+  async getExpenseDetails(id: string) {
+    const [{ data: expense, error: expenseError }, { data: items, error: itemsError }] =
+      await Promise.all([
+        supabase.from("financial_expenses").select("*").eq("id", id).single(),
+        supabase
+          .from("financial_expense_items")
+          .select("*")
+          .eq("expense_id", id)
+          .order("created_at", { ascending: true }),
+      ]);
+
+    if (expenseError) throw expenseError;
+    if (itemsError) throw itemsError;
+
+    return {
+      expense: expense as FinancialExpense,
+      items: (items || []) as FinancialExpenseItem[],
+    };
+  },
+
   async createExpense(payload: Partial<FinancialExpense> & { items?: FinancialExpenseItem[] }) {
     const { items, ...expensePayload } = payload;
     const { data: authData } = await supabase.auth.getUser();
