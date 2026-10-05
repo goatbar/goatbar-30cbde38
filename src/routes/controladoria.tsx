@@ -383,7 +383,7 @@ function ControladoriaPage() {
           <StatCard label="Receitas" value={fmtBRL(totals.receitas)} icon={<CheckCircle2 className="text-emerald-500" />} />
           <StatCard label="Custos Alocados" value={fmtBRL(totals.custos)} />
           <StatCard label="Resultado" value={fmtBRL(totals.resultado)} />
-          <StatCard label="Despesas Pendentes" value={fmtBRL(totals.pendente)} icon={<AlertCircle className="text-amber-500" />} />
+          <StatCard label="Em aberto" value={fmtBRL(totals.pendente)} icon={<AlertCircle className="text-amber-500" />} />
         </div>
 
         {/* DASHBOARD CHARTS */}
@@ -515,7 +515,7 @@ function ControladoriaPage() {
               >
                 <option value="">Todos</option>
                 <option value="Pago">Pago</option>
-                <option value="Pendente">Pendente</option>
+                <option value="Pendente">Em aberto</option>
               </select>
             </div>
           </div>
@@ -538,7 +538,15 @@ function ControladoriaPage() {
                     </h3>
                   </div>
                   <button onClick={() => toggleStatus(exp)} className="shrink-0">
-                    <StatusBadge status={exp.status} />
+                    <StatusBadge
+                          status={
+                            exp.status === "Pendente"
+                              ? "financeiro_em_aberto"
+                              : exp.status === "Pago"
+                                ? "financeiro_pago"
+                                : exp.status
+                          }
+                        />
                   </button>
                 </div>
 
@@ -655,7 +663,15 @@ function ControladoriaPage() {
                     <td className="py-4 font-display font-bold text-sm">{fmtBRL(exp.amount)}</td>
                     <td className="py-4">
                       <button onClick={() => toggleStatus(exp)} className="cursor-pointer">
-                        <StatusBadge status={exp.status} />
+                        <StatusBadge
+                          status={
+                            exp.status === "Pendente"
+                              ? "financeiro_em_aberto"
+                              : exp.status === "Pago"
+                                ? "financeiro_pago"
+                                : exp.status
+                          }
+                        />
                       </button>
                     </td>
                     <td className="py-4">
@@ -1073,7 +1089,7 @@ function ControladoriaPage() {
                     }
                     className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
                   >
-                    <option value="Pendente">Pendente</option>
+                    <option value="Pendente">Em aberto</option>
                     <option value="Pago">Pago</option>
                   </select>
                 </div>
