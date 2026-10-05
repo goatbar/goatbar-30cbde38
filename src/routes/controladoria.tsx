@@ -307,12 +307,30 @@ function ControladoriaPage() {
         const value = (form as any)[field];
         return value !== undefined && value !== null && String(value).trim() !== "";
       });
-      const normalizedItems = (form.items || []).map((item: any) => ({
-        ...item,
-        product_name: item.product_name?.trim() || form.description || "Item",
-        unit_price: Number(item.quantity || 0) > 0 ? Number(form.amount || 0) / Number(item.quantity || 1) : Number(form.amount || 0),
-        total_price: Number(form.amount || 0),
-      }));
+      const sourceItems = form.items || [];
+      const normalizedItems = sourceItems.map((item: any) => {
+        const quantity = Number(item.quantity || 0);
+        const currentTotal = Number(item.total_price || 0);
+        const currentUnit = Number(item.unit_price || 0);
+        const singleItemFallback = sourceItems.length === 1 ? Number(form.amount || 0) : 0;
+        const totalPrice = currentTotal > 0
+          ? currentTotal
+          : currentUnit > 0 && quantity > 0
+            ? currentUnit * quantity
+            : singleItemFallback;
+        const unitPrice = currentUnit > 0
+          ? currentUnit
+          : quantity > 0
+            ? totalPrice / quantity
+            : totalPrice;
+        return {
+          ...item,
+          product_name: item.product_name?.trim() || form.description || "Item",
+          quantity,
+          unit_price: unitPrice,
+          total_price: totalPrice,
+        };
+      });
       const saved = editingExpenseId
         ? await financialService.updateExpenseWithItems(editingExpenseId, {
             ...form,
@@ -383,10 +401,7 @@ function ControladoriaPage() {
       setForm({
         ...expenseData,
         status: options?.markAsPaid ? "Pago" : expenseData.status,
-        payment_method:
-          options?.markAsPaid && expenseData.payment_method === "Não informado"
-            ? "PIX Goat"
-            : expenseData.payment_method,
+        payment_method: expenseData.payment_method,
         items:
           detail.items.length > 0
             ? detail.items
@@ -486,7 +501,7 @@ function ControladoriaPage() {
               <span className="truncate">Foto da notinha</span>
             </GhostButton>
             <PrimaryButton
-              onClick={() => setShowModal(true)}
+              onClick={() => { setEditingExpenseId(null); setShowModal(true); }}
               className="col-span-2 w-full justify-center lg:col-span-1 lg:w-auto"
             >
               <Plus className="h-4 w-4 shrink-0" /> Novo Lançamento
@@ -1477,11 +1492,7 @@ function ControladoriaPage() {
                         ...p,
                         status,
                         payment_method:
-                          status === "Pendente"
-                            ? "Não informado"
-                            : p.payment_method === "Não informado"
-                              ? "PIX Goat"
-                              : p.payment_method,
+                          status === "Pendente" ? "Não informado" : p.payment_method,
                         payment_payer_name: status === "Pendente" ? "" : p.payment_payer_name,
                         personal_reimbursed: status === "Pendente" ? false : p.personal_reimbursed,
                         personal_reimbursed_at: status === "Pendente" ? null : p.personal_reimbursed_at,
@@ -1693,12 +1704,12 @@ function ControladoriaPage() {
             </div>
             
             <div className="flex flex-col-reverse gap-2 border-t border-border bg-primary/5 p-4 sm:flex-row sm:justify-end sm:gap-3 sm:p-6">
-              <GhostButton onClick={() => setShowModal(false)}>Cancelar</GhostButton>
+              <GhostButton onClick={() => { setShowModal(false); setEditingExpenseId(null); }}>Cancelar</GhostButton>
               <PrimaryButton
                 onClick={handleSubmit}
                 disabled={uploading.invoice || uploading.receipt}
               >
-                Confirmar Lançamento
+                {editingExpenseId ? "Salvar Alterações" : "Confirmar Lançamento"}
               </PrimaryButton>
             </div>
           </div>
