@@ -101,7 +101,9 @@ export const PROVIDER_CONFIGS: Record<AIProviderId, ProviderStaticConfig> = {
       supportsText: true,
       supportsTools: true,
       supportsStructuredOutput: true,
-      supportsVision: false,
+      // openrouter/free routes image requests only to free models that support vision.
+      // This gives GIA an independent multimodal path when Gemini is unavailable.
+      supportsVision: true,
       supportsAudio: false,
       supportsStreaming: true,
     },
