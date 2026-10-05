@@ -25,6 +25,7 @@ import {
   Trash2,
   X,
   Eye,
+  Pencil,
   Camera,
   Sparkles,
 } from "lucide-react";
@@ -67,6 +68,7 @@ function ControladoriaPage() {
   const [eventsList, setEventsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
@@ -275,7 +277,20 @@ function ControladoriaPage() {
       alert("Selecione o evento relacionado.");
       return;
     }
-    if (form.entry_type === "Despesa" && form.payment_method === "Pessoal" && !form.payment_payer_name?.trim()) {
+    if (
+      form.entry_type === "Despesa" &&
+      form.status === "Pago" &&
+      (!form.payment_method || form.payment_method === "Não informado")
+    ) {
+      alert("Informe como este lançamento foi pago.");
+      return;
+    }
+    if (
+      form.entry_type === "Despesa" &&
+      form.status === "Pago" &&
+      form.payment_method === "Pessoal" &&
+      !form.payment_payer_name?.trim()
+    ) {
       alert("Informe quem realizou o pagamento pessoal.");
       return;
     }
@@ -298,7 +313,23 @@ function ControladoriaPage() {
         unit_price: Number(item.quantity || 0) > 0 ? Number(form.amount || 0) / Number(item.quantity || 1) : Number(form.amount || 0),
         total_price: Number(form.amount || 0),
       }));
-      const saved = await financialService.createExpense({ ...form, items: normalizedItems, manually_edited_fields: manuallyEdited });
+      const saved = editingExpenseId
+        ? await financialService.updateExpenseWithItems(editingExpenseId, {
+            ...form,
+            items: normalizedItems,
+            manually_edited_fields: manuallyEdited,
+            personal_reimbursed:
+              form.payment_method === "Pessoal" ? Boolean(form.personal_reimbursed) : false,
+            personal_reimbursed_at:
+              form.payment_method === "Pessoal" && form.personal_reimbursed
+                ? form.personal_reimbursed_at || new Date().toISOString()
+                : null,
+          })
+        : await financialService.createExpense({
+            ...form,
+            items: normalizedItems,
+            manually_edited_fields: manuallyEdited,
+          });
       if ((form as any).invoice_url) {
         await financialService.createReceiptLog({
           expense_id: saved.id,
@@ -310,6 +341,7 @@ function ControladoriaPage() {
         });
       }
       setShowModal(false);
+      setEditingExpenseId(null);
       fetchExpenses();
       setForm({
         date: format(new Date(), "yyyy-MM-dd"),
@@ -339,10 +371,52 @@ function ControladoriaPage() {
     }
   };
 
+  const openEditExpense = async (
+    expense: FinancialExpense,
+    options?: { markAsPaid?: boolean },
+  ) => {
+    try {
+      const detail = await financialService.getExpenseDetails(expense.id);
+      const expenseData = detail.expense;
+      setEditingExpenseId(expense.id);
+      setSelectedExpense(null);
+      setForm({
+        ...expenseData,
+        status: options?.markAsPaid ? "Pago" : expenseData.status,
+        payment_method:
+          options?.markAsPaid && expenseData.payment_method === "Não informado"
+            ? "PIX Goat"
+            : expenseData.payment_method,
+        items:
+          detail.items.length > 0
+            ? detail.items
+            : [{
+                product_name: expenseData.description || "",
+                quantity: 1,
+                unit: "un",
+                unit_price: Number(expenseData.amount || 0),
+                total_price: Number(expenseData.amount || 0),
+              }],
+      });
+      setShowModal(true);
+    } catch (e) {
+      console.error("Erro ao abrir edição do lançamento:", e);
+      alert("Erro ao carregar o lançamento para edição.");
+    }
+  };
+
   const toggleStatus = async (expense: FinancialExpense) => {
+    if (expense.status === "Pendente") {
+      await openEditExpense(expense, { markAsPaid: true });
+      return;
+    }
     try {
       await financialService.updateExpense(expense.id, {
-        status: expense.status === "Pago" ? "Pendente" : "Pago",
+        status: "Pendente",
+        payment_method: "Não informado",
+        payment_payer_name: undefined,
+        personal_reimbursed: false,
+        personal_reimbursed_at: null,
       });
       fetchExpenses();
     } catch (e) {
@@ -632,6 +706,14 @@ function ControladoriaPage() {
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     <button
+                      onClick={() => openEditExpense(exp)}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-foreground hover:bg-muted"
+                      title="Editar lançamento"
+                      aria-label={`Editar ${exp.description}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
                       onClick={() => openExpenseDetails(exp)}
                       className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-foreground hover:bg-muted"
                       title="Ver detalhes"
@@ -795,6 +877,14 @@ function ControladoriaPage() {
                     <td className="py-4 text-right">
                       <div className="flex justify-end gap-1">
                         <button
+                          onClick={() => openEditExpense(exp)}
+                          className="h-8 w-8 rounded hover:bg-muted text-foreground flex items-center justify-center"
+                          title="Editar lançamento"
+                          aria-label={`Editar ${exp.description}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
                           onClick={() => openExpenseDetails(exp)}
                           className="h-8 w-8 rounded hover:bg-muted text-foreground flex items-center justify-center"
                           title="Ver detalhes"
@@ -943,6 +1033,25 @@ function ControladoriaPage() {
                 )}
               </div>
 
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => openEditExpense(selectedExpense)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-muted"
+                >
+                  <Pencil className="h-4 w-4" /> Editar lançamento
+                </button>
+                {selectedExpense.status === "Pendente" && (
+                  <button
+                    type="button"
+                    onClick={() => openEditExpense(selectedExpense, { markAsPaid: true })}
+                    className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-500 hover:bg-emerald-500/20"
+                  >
+                    <CheckCircle2 className="h-4 w-4" /> Marcar como pago
+                  </button>
+                )}
+              </div>
+
               {(selectedExpense.invoice_url || selectedExpense.receipt_url) && (
                 <div className="flex flex-wrap gap-2">
                   {selectedExpense.invoice_url && (
@@ -1033,11 +1142,11 @@ function ControladoriaPage() {
         <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
           <div
             className="absolute inset-0 bg-background/80 backdrop-blur-sm"
-            onClick={() => setShowModal(false)}
+            onClick={() => { setShowModal(false); setEditingExpenseId(null); }}
           />
           <div className="relative max-h-[92dvh] w-full max-w-2xl overflow-hidden rounded-t-2xl border border-border bg-surface shadow-2xl animate-in zoom-in-95 duration-200 sm:rounded-2xl">
             <div className="px-6 py-4 border-b border-border flex justify-between items-center bg-primary/5">
-              <h2 className="font-display text-lg font-bold">Novo Lançamento Financeiro</h2>
+              <h2 className="font-display text-lg font-bold">{editingExpenseId ? "Editar Lançamento Financeiro" : "Novo Lançamento Financeiro"}</h2>
               <button
                 onClick={() => setShowModal(false)}
                 className="h-8 w-8 rounded-full hover:bg-border flex items-center justify-center transition-colors"
@@ -1302,8 +1411,15 @@ function ControladoriaPage() {
                   <label className="label-eyebrow">Método Pagto</label>
                   <select
                     value={form.payment_method}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, payment_method: e.target.value as PaymentMethod }))
+                    onChange={(e) => {
+                      const method = e.target.value as PaymentMethod;
+                      setForm((p) => ({
+                        ...p,
+                        payment_method: method,
+                        payment_payer_name: method === "Pessoal" ? p.payment_payer_name : "",
+                        personal_reimbursed: method === "Pessoal" ? p.personal_reimbursed : false,
+                        personal_reimbursed_at: method === "Pessoal" ? p.personal_reimbursed_at : null,
+                      }));
                     }
                     className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
                   >
@@ -1311,27 +1427,65 @@ function ControladoriaPage() {
                     <option value="PIX Goat">PIX Goat</option>
                     <option value="Pessoal">Pessoal</option>
                     <option value="Interno/Estoque">Interno/Estoque</option>
+                    <option value="Não informado">Não informado</option>
                   </select>
                 </div>
 
                 {form.payment_method === "Pessoal" && form.entry_type === "Despesa" && (
-                  <div>
-                    <label className="label-eyebrow">Quem fez o pagamento pessoal?</label>
-                    <input
-                      value={form.payment_payer_name || ""}
-                      onChange={(e) => setForm((p) => ({ ...p, payment_payer_name: e.target.value }))}
-                      className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
-                      placeholder="Nome da pessoa"
-                    />
-                  </div>
+                  <>
+                    <div>
+                      <label className="label-eyebrow">Quem fez o pagamento pessoal?</label>
+                      <input
+                        value={form.payment_payer_name || ""}
+                        onChange={(e) => setForm((p) => ({ ...p, payment_payer_name: e.target.value }))}
+                        className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
+                        placeholder="Nome da pessoa"
+                      />
+                    </div>
+                    {form.status === "Pago" && (
+                      <div>
+                        <label className="label-eyebrow">Reembolso</label>
+                        <select
+                          value={form.personal_reimbursed ? "reimbursed" : "pending"}
+                          onChange={(e) => {
+                            const reimbursed = e.target.value === "reimbursed";
+                            setForm((p) => ({
+                              ...p,
+                              personal_reimbursed: reimbursed,
+                              personal_reimbursed_at: reimbursed
+                                ? p.personal_reimbursed_at || new Date().toISOString()
+                                : null,
+                            }));
+                          }}
+                          className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
+                        >
+                          <option value="pending">Reembolso pendente</option>
+                          <option value="reimbursed">Reembolsado</option>
+                        </select>
+                      </div>
+                    )}
+                  </>
                 )}
 
                 <div>
                   <label className="label-eyebrow">Status</label>
                   <select
                     value={form.status}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, status: e.target.value as FinancialStatus }))
+                    onChange={(e) => {
+                      const status = e.target.value as FinancialStatus;
+                      setForm((p) => ({
+                        ...p,
+                        status,
+                        payment_method:
+                          status === "Pendente"
+                            ? "Não informado"
+                            : p.payment_method === "Não informado"
+                              ? "PIX Goat"
+                              : p.payment_method,
+                        payment_payer_name: status === "Pendente" ? "" : p.payment_payer_name,
+                        personal_reimbursed: status === "Pendente" ? false : p.personal_reimbursed,
+                        personal_reimbursed_at: status === "Pendente" ? null : p.personal_reimbursed_at,
+                      }));
                     }
                     className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
                   >
