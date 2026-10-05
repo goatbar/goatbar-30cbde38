@@ -569,7 +569,10 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
       payment_payer_name: { type: "string", description: "Nome de quem pagou quando a forma de pagamento for Pessoal." },
       entry_type: { type: "string", description: "Tipo do lançamento: 'Despesa', 'Receita' ou 'Alocação Interna'." },
       tasting_id: { type: "string", description: "ID da degustação quando houver uma degustação específica relacionada." },
-      status: { type: "string", description: "Status de pagamento ('Pago' ou 'Pendente')." },
+      status: {
+        type: "string",
+        description: "Status financeiro: 'Pago' quando o pagamento já ocorreu; 'Pendente' quando estiver em aberto, a pagar ou ainda não pago.",
+      },
       classification: { type: "string", description: "Classificação de custo ('Direto' ou 'Indireto')." },
       responsible: { type: "string", description: "Responsável pelo lançamento (preenchido com usuário autenticado)." },
       items: {
@@ -662,7 +665,10 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
       payment_payer_name: norm.payment_payer_name || null,
       entry_type: norm.entry_type,
       tasting_id: norm.tasting_id || null,
-      cash_effect: norm.entry_type === "Alocação Interna" ? false : true,
+      cash_effect:
+        norm.entry_type === "Alocação Interna" || norm.status === "Pendente"
+          ? false
+          : true,
       created_by_user_id: ctx.userId || null,
       updated_by_user_id: ctx.userId || null,
       source_channel: "gia",
@@ -773,10 +779,11 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
         category: norm.category,
         items_count: itemsCount,
         review_status: norm.review_status,
+        status: norm.status,
       },
       message: isPurchase
-        ? `Pronto. A compra de ${fmtAmount} foi lançada na modalidade ${norm.modality}.`
-        : `Pronto. O lançamento de ${fmtAmount} foi registrado na modalidade ${norm.modality}.`,
+        ? `Pronto. A compra de ${fmtAmount} foi lançada na modalidade ${norm.modality} como ${norm.status === "Pago" ? "paga" : "em aberto"}.`
+        : `Pronto. O lançamento de ${fmtAmount} foi registrado na modalidade ${norm.modality} como ${norm.status === "Pago" ? "pago" : "em aberto"}.`,
     };
   },
 };
@@ -864,6 +871,10 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
         type: "string",
         description: "Obrigatório quando payment_method for Pessoal.",
       },
+      status: {
+        type: "string",
+        description: "Status financeiro da compra: 'Pago' ou 'Pendente'.",
+      },
     },
     required: ["event_id", "supplier_name", "total_amount"],
   },
@@ -876,6 +887,7 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
     items?: Array<{ name: string; quantity: number; unit?: string; unit_price?: number }>;
     payment_method?: string;
     payment_payer_name?: string;
+    status?: "Pago" | "Pendente";
   }): Promise<ToolExecutionResult> => {
     const missing: string[] = [];
     if (!args.event_id) missing.push("event_id");
@@ -899,14 +911,23 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
         modality: "Evento",
         event_id: args.event_id,
         entry_type: "Despesa",
-        payment_method: args.payment_method || "PIX Goat",
-        payment_payer_name: args.payment_method === "Pessoal" ? (args.payment_payer_name || null) : null,
+        payment_method:
+          args.status === "Pendente"
+            ? "Não informado"
+            : (args.payment_method || "PIX Goat"),
+        payment_payer_name:
+          args.status === "Pendente"
+            ? null
+            : args.payment_method === "Pessoal"
+              ? (args.payment_payer_name || null)
+              : null,
         created_by_user_id: ctx.userId || null,
         updated_by_user_id: ctx.userId || null,
         source_channel: "gia",
         description: `Compra para evento (${args.items?.map((i) => `${i.quantity}x ${i.name}`).join(", ") || "Insumos"})`,
         responsible: ctx.userName || "GIA",
-        status: "Pago",
+        status: args.status === "Pendente" ? "Pendente" : "Pago",
+        cash_effect: args.status === "Pendente" ? false : true,
       })
       .select()
       .single();
