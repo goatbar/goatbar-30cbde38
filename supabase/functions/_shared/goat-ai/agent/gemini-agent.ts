@@ -1224,11 +1224,85 @@ export class GoatAIGeminiAgent {
           `[GOAT-AI][CONFIRMATION_RESOLVER] correlationId=${correlationId} conversationId=${conversation.id} phone=${maskedSender} pendingAction=${activePending.tool_name} pendingStatus=${activePending.status} decision=CONFIRM`,
         );
 
-        // Execute deterministic tool using EXCLUSIVELY the approved structured arguments
-        const execResult = await this.conversationManager.executePendingAction(
-          activePending,
-          context,
-        );
+        // Execute deterministic tool using EXCLUSIVELY the approved structured arguments.
+        // Multi-date purchases are expanded into one normal Controladoria expense
+        // per date so dates/items are never collapsed into a single launch.
+        let execResult: any;
+        if (activePending.tool_name === "create_controladoria_expense_batch") {
+          const args = activePending.arguments || {};
+          const batches = Array.isArray(args.batches) ? args.batches : [];
+          const completed: any[] = [];
+          let batchError = "";
+
+          await this.supabaseAdmin
+            .from("ai_pending_actions")
+            .update({ status: "executing", updated_at: new Date().toISOString() })
+            .eq("id", activePending.id);
+
+          for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+            const batch = batches[batchIndex] || {};
+            const expenseArgs = {
+              ...batch,
+              modality: args.modality,
+              payment_method: args.payment_method,
+              payment_payer_name: args.payment_payer_name,
+              status: batch.status || args.status || "Pago",
+              responsible: args.responsible || input.userName || "Sócio Goat Bar",
+              source_message_id: args.source_message_id,
+              operation_id:
+                batch.operation_id ||
+                `${args.operation_id || args.source_message_id || correlationId}:${batch.date || batchIndex}`,
+              entry_type: "Despesa",
+              classification: batch.classification || "Direto",
+            };
+            const result = await this.toolRegistry.executeTool(
+              "create_controladoria_expense",
+              expenseArgs,
+              { ...context, toolCallId: `${correlationId}_batch_${batchIndex}` },
+            );
+            if (!result.success) {
+              batchError = result.error || `Falha no lançamento de ${batch.date || batchIndex + 1}`;
+              break;
+            }
+            completed.push(result.data);
+          }
+
+          if (batchError) {
+            await this.supabaseAdmin
+              .from("ai_pending_actions")
+              .update({
+                status: "ready_for_confirmation",
+                error: batchError,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", activePending.id);
+            execResult = {
+              success: false,
+              error: batchError,
+              data: { completed },
+            };
+          } else {
+            await this.supabaseAdmin
+              .from("ai_pending_actions")
+              .update({
+                status: "executed",
+                result: { entries: completed, count: completed.length },
+                error: null,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", activePending.id);
+            execResult = {
+              success: true,
+              data: { entries: completed, count: completed.length },
+              message: `Pronto. Registrei ${completed.length} lançamento(s) da compra na modalidade ${args.modality}.`,
+            };
+          }
+        } else {
+          execResult = await this.conversationManager.executePendingAction(
+            activePending,
+            context,
+          );
+        }
         let confirmationReply = "";
 
         if (execResult.success) {
