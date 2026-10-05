@@ -253,6 +253,35 @@ async function persistGiaFinancialAttachment(params: {
   }
 }
 
+function looksLikeControladoriaWriteIntent(value: string): boolean {
+  const normalized = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+  if (!normalized) return false;
+
+  const hasWriteVerb =
+    /\b(lanca|lancar|registre|registrar|registra|adiciona|adicionar|inclui|incluir|coloca|colocar)\b/.test(
+      normalized,
+    );
+  if (!hasWriteVerb) return false;
+
+  const hasControladoriaSubject =
+    /\b(controladoria|despesa|gasto|compra|reembolso|fornecedor|insumo|conta\s+a\s+pagar)\b/.test(
+      normalized,
+    );
+  const hasLaborSubject =
+    /\b(mao\s+de\s+obra|equipe|freelancer|staff|bartender|barman|garcom|copeira)\b/.test(
+      normalized,
+    );
+  const hasFinancialStatus =
+    inferControladoriaPaymentStatusFromText(value) !== undefined;
+
+  return hasControladoriaSubject || (hasLaborSubject && hasFinancialStatus);
+}
+
 function looksLikeBarePurchaseStartIntent(value: string): boolean {
   const normalized = String(value || "")
     .normalize("NFD")
@@ -747,7 +776,12 @@ export class GoatAIGeminiAgent {
     }
 
     // Consultas de dados do evento respondem no chat. Não geram PDF.
-    const eventReadIntent = resolveEventReadIntent(input.message);
+    // Comandos de ESCRITA financeira (ex.: "lança 800 de mão de obra, ainda
+    // não foi paga") nunca podem ser desviados para uma busca de evento.
+    const isControladoriaWriteIntent = looksLikeControladoriaWriteIntent(input.message);
+    const eventReadIntent = isControladoriaWriteIntent
+      ? { matched: false } as ReturnType<typeof resolveEventReadIntent>
+      : resolveEventReadIntent(input.message);
     if (eventReadIntent.matched) {
       const deterministicCalls: any[] = [];
       let resolvedEvent: any = null;
@@ -1762,12 +1796,15 @@ export class GoatAIGeminiAgent {
     // 3.2 Check for Direct Labor Launch in 7 Steak House session (Deterministic Resolution)
     const laborIntent = extractLaborIntent(input.message, inheritedUnit);
     const isExplicitControladoria = input.message.toLowerCase().includes("controladoria");
+    const laborHasFinancialStatus =
+      inferControladoriaPaymentStatusFromText(input.message) !== undefined;
 
     if (
       laborIntent.isLabor &&
       laborIntent.isSteakhouse &&
       laborIntent.amount &&
-      !isExplicitControladoria
+      !isExplicitControladoria &&
+      !laborHasFinancialStatus
     ) {
       const today = new Date().toISOString().split("T")[0];
       // Try to extract a date from the message; fall back to today
