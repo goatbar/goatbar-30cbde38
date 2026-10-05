@@ -273,6 +273,41 @@ export function normalizeControladoriaCategory(val?: string | null, textHint = "
  * Normalização determinística de Forma de Pagamento para constraints da tabela financial_expenses.
  * Valores permitidos: 'PIX', 'Dinheiro', 'Cartao', 'Transferencia', 'Outros'
  */
+export function inferControladoriaPaymentStatusFromText(
+  text?: string | null,
+): ControladoriaStatus | undefined {
+  const normalized = String(text || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) return undefined;
+
+  // Negative / open-payment language must win before any generic "pago" match.
+  if (
+    /\b(ainda\s+nao\s+(?:foi\s+)?pag[oa]|nao\s+(?:foi\s+)?pag[oa]|nao\s+paguei|nao\s+pagamos|em\s+aberto|pendente|a\s+pagar|falta\s+pagar|aguardando\s+pagamento|sera\s+pag[oa]|vai\s+ser\s+pag[oa])\b/.test(
+      normalized,
+    )
+  ) {
+    return "Pendente";
+  }
+
+  if (
+    /\b(ja\s+(?:foi\s+)?pag[oa]|ja\s+paguei|ja\s+pagamos|pagamento\s+(?:feito|realizado|confirmado)|quitad[oa]|valor\s+pago|pix\s+(?:feito|realizado|pago)|(?:cartao|debito|credito)\s+(?:aprovado|pago|realizado))\b/.test(
+      normalized,
+    )
+  ) {
+    return "Pago";
+  }
+
+  // Bare "pago/paga" is accepted only after the negative cases above were excluded.
+  if (/\bpag[oa]\b/.test(normalized)) return "Pago";
+
+  return undefined;
+}
+
 export function normalizeControladoriaPaymentMethod(val?: string | null): ControladoriaPaymentMethod {
   if (!val || typeof val !== "string") return "Não informado";
   const clean = val.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -391,16 +426,38 @@ export function validateControladoriaExpenseDraft(
   const entryType: ControladoriaEntryType =
     draft.entry_type === "Receita" ? "Receita" :
     draft.entry_type === "Alocação Interna" ? "Alocação Interna" : "Despesa";
+  const explicitStatus =
+    draft.status === "Pendente" || draft.status === "Pago"
+      ? (draft.status as ControladoriaStatus)
+      : undefined;
+  const status: ControladoriaStatus =
+    entryType === "Receita" || entryType === "Alocação Interna"
+      ? "Pago"
+      : explicitStatus || "Pago";
+
   const hasExplicitPaymentMethod =
     typeof draft.payment_method === "string" && draft.payment_method.trim().length > 0;
   const paymentMethod = entryType === "Alocação Interna"
     ? "Interno/Estoque"
     : normalizeControladoriaPaymentMethod(draft.payment_method);
   const paymentPayerName = (draft.payment_payer_name || "").trim() || undefined;
-  if (entryType === "Despesa" && !hasExplicitPaymentMethod && !isReceiptPurchase) {
+
+  // Despesa em aberto ainda não tem meio de pagamento realizado; não pergunte
+  // PIX/cartão/pagador antes de ela ser efetivamente paga.
+  if (
+    entryType === "Despesa" &&
+    status === "Pago" &&
+    !hasExplicitPaymentMethod &&
+    !isReceiptPurchase
+  ) {
     missingFields.push("payment_method");
   }
-  if (entryType === "Despesa" && paymentMethod === "Pessoal" && !paymentPayerName) {
+  if (
+    entryType === "Despesa" &&
+    status === "Pago" &&
+    paymentMethod === "Pessoal" &&
+    !paymentPayerName
+  ) {
     missingFields.push("payment_payer_name");
   }
   if ((resolvedModality === "Evento" || resolvedModality === "Degustação") && !draft.event_id) {
@@ -477,7 +534,7 @@ export function validateControladoriaExpenseDraft(
     payment_payer_name: paymentPayerName,
     entry_type: entryType,
     tasting_id: draft.tasting_id || undefined,
-    status: entryType === "Receita" || entryType === "Alocação Interna" ? "Pago" : (draft.status === "Pendente" ? "Pendente" : "Pago"),
+    status,
     classification: draft.classification === "Indireto" ? "Indireto" : "Direto",
     event_id: draft.event_id || undefined,
     responsible,
@@ -559,7 +616,12 @@ export function formatControladoriaExpenseWhatsAppPreview(
     `📅 *Data:* ${formattedDate}`,
     `💰 *Valor Total:* *${formattedAmount}*`,
   );
-  if (expense.payment_method !== "Não informado") {
+  lines.push(
+    expense.status === "Pago"
+      ? "✅ *Status:* Pago"
+      : "🟠 *Status:* Em aberto (Pendente)",
+  );
+  if (expense.payment_method !== "Não informado" && expense.status === "Pago") {
     lines.push(`💳 *Forma de Pagamento:* ${paymentDisplay}`);
   }
   lines.push(`📝 *Descrição:* ${expense.description}`);
