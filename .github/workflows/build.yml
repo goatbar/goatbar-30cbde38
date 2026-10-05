@@ -29,5 +29,8 @@ jobs:
       - name: Testar foto de nota fiscal como compra na GIA
         run: npx vitest run tests/goat-ai-controladoria-receipt.test.ts -t "foto ignora modalidade inferida pela IA|foto de nota fiscal sem fornecedor ou pagamento|modelo Gemini de visão"
 
+      - name: Testar resiliência do modelo de visão
+        run: npx vitest run tests/goat-ai-router.test.ts -t "Gemini troca 3.8 por 3.7|falha total de visão"
+
       - name: Build do projeto
         run: npm run build
