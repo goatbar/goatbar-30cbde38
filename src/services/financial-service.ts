@@ -295,6 +295,44 @@ export const financialService = {
     return data as FinancialExpense;
   },
 
+  async updateExpenseWithItems(
+    id: string,
+    payload: Partial<FinancialExpense> & { items?: FinancialExpenseItem[] },
+  ) {
+    const { items, ...expensePayload } = payload;
+    const updated = await this.updateExpense(id, expensePayload);
+
+    if (items) {
+      const { error: deleteItemsError } = await supabase
+        .from("financial_expense_items")
+        .delete()
+        .eq("expense_id", id);
+      if (deleteItemsError) throw deleteItemsError;
+
+      if (items.length > 0) {
+        const rows = items.map((item) => ({
+          expense_id: id,
+          product_name: item.product_name,
+          quantity: Number(item.quantity || 0),
+          unit: item.unit || "un",
+          unit_price: Number(item.unit_price || 0),
+          total_price: Number(item.total_price || 0),
+          suggested_category: item.suggested_category || expensePayload.category || updated.category,
+          reviewed: item.reviewed ?? true,
+          matched_product_id: item.matched_product_id || null,
+          matched_confidence: item.matched_confidence || null,
+          raw_product_name: item.raw_product_name || null,
+        }));
+        const { error: insertItemsError } = await supabase
+          .from("financial_expense_items")
+          .insert(rows as any);
+        if (insertItemsError) throw insertItemsError;
+      }
+    }
+
+    return updated;
+  },
+
   async allocateInventoryCost(payload: {
     inventory_id: string;
     quantity: number;
