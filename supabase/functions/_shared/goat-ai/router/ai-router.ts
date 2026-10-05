@@ -15,6 +15,9 @@ import { sanitizeLogText } from "./canonical.ts";
 export const FRIENDLY_EXHAUSTED_MESSAGE =
   "Não consegui processar a resposta com a IA no momento. Sua mensagem foi salva no histórico.";
 
+export const VISION_EXHAUSTED_MESSAGE =
+  "A foto chegou, mas a leitura visual ficou temporariamente indisponível. Tente enviar novamente em alguns instantes.";
+
 export interface AIRouterOptions {
   supabaseAdmin?: any;
   customProviders?: AIProvider[];
@@ -225,7 +228,7 @@ export class AIRouter {
       });
 
       return {
-        text: FRIENDLY_EXHAUSTED_MESSAGE,
+        text: requiresVision ? VISION_EXHAUSTED_MESSAGE : FRIENDLY_EXHAUSTED_MESSAGE,
         providerId: "groq", // fallback default
         modelId: "exhausted",
         durationMs: 0,
@@ -399,7 +402,7 @@ export class AIRouter {
     });
 
     return {
-      text: FRIENDLY_EXHAUSTED_MESSAGE,
+      text: requiresVision ? VISION_EXHAUSTED_MESSAGE : FRIENDLY_EXHAUSTED_MESSAGE,
       providerId: "all_failed",
       modelId: "exhausted",
       durationMs: 0,

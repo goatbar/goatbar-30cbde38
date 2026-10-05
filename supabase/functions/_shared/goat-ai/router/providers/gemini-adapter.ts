@@ -5,6 +5,7 @@ import {
   NormalizedAIRequest,
   NormalizedAIResponse,
   ProviderCapabilities,
+  ProviderError,
 } from "../types.ts";
 import { fromGeminiResponse, toGeminiContents } from "../canonical.ts";
 import { PROVIDER_CONFIGS } from "../config.ts";
@@ -14,6 +15,15 @@ export interface GeminiAdapterOptions {
   apiKey?: string;
   model?: string;
   baseUrl?: string;
+}
+
+const GEMINI_RESILIENCE_FALLBACKS = [
+  "gemini-3.7-flash",
+  "gemini-3.6-flash",
+] as const;
+
+function uniqueModels(models: string[]): string[] {
+  return models.filter((model, index) => Boolean(model) && models.indexOf(model) === index);
 }
 
 export class GeminiRouterAdapter extends BaseAIProvider {
@@ -42,7 +52,10 @@ export class GeminiRouterAdapter extends BaseAIProvider {
       options?.model || PROVIDER_CONFIGS.gemini.defaultModel || CURRENT_GEMINI_MODEL,
     );
     this.defaultModel = this.model;
-    this.baseUrl = options?.baseUrl || PROVIDER_CONFIGS.gemini.defaultBaseUrl || "https://generativelanguage.googleapis.com";
+    this.baseUrl =
+      options?.baseUrl ||
+      PROVIDER_CONFIGS.gemini.defaultBaseUrl ||
+      "https://generativelanguage.googleapis.com";
   }
 
   public getModel(): string {
@@ -54,6 +67,65 @@ export class GeminiRouterAdapter extends BaseAIProvider {
       return { available: false, reason: "GEMINI_API_KEY não configurada no ambiente" };
     }
     return { available: true };
+  }
+
+  private shouldFallbackToAnotherModel(error: ProviderError): boolean {
+    return (
+      error.type === "timeout" ||
+      error.type === "rate_limit" ||
+      error.type === "capacity_exhausted" ||
+      error.type === "model_not_found" ||
+      Boolean(error.status && [429, 502, 503, 504].includes(error.status))
+    );
+  }
+
+  private async generateWithModel(
+    model: string,
+    payload: Record<string, any>,
+  ): Promise<NormalizedAIResponse> {
+    const startTime = Date.now();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+    const url = `${this.baseUrl}/v1beta/models/${model}:generateContent?key=${this.apiKey}`;
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      const durationMs = Date.now() - startTime;
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        const classified = this.classifyError(
+          new Error(`HTTP ${response.status}: ${errorText.slice(0, 300)}`),
+          response.status,
+          errorText,
+          response.headers,
+        );
+        const err = new Error(classified.message);
+        (err as any).providerError = classified;
+        throw err;
+      }
+
+      const resJson = await response.json();
+      return fromGeminiResponse(resJson, model, durationMs);
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+
+      if (err.providerError) {
+        throw err;
+      }
+
+      const classified = this.classifyError(err);
+      const wrapped = new Error(classified.message);
+      (wrapped as any).providerError = classified;
+      throw wrapped;
+    }
   }
 
   public async generate(request: NormalizedAIRequest): Promise<NormalizedAIResponse> {
@@ -68,7 +140,7 @@ export class GeminiRouterAdapter extends BaseAIProvider {
       request.privacyClassification === "FINANCIAL"
     ) {
       const err = new Error(
-        `PRIVACY_VIOLATION: Provedor Gemini Free não está autorizado para dados classificados como ${request.privacyClassification}`
+        `PRIVACY_VIOLATION: Provedor Gemini Free não está autorizado para dados classificados como ${request.privacyClassification}`,
       );
       (err as any).providerError = {
         type: "privacy_violation",
@@ -77,10 +149,6 @@ export class GeminiRouterAdapter extends BaseAIProvider {
       };
       throw err;
     }
-
-    const startTime = Date.now();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
     const contents = toGeminiContents(request.messages);
 
@@ -117,46 +185,45 @@ export class GeminiRouterAdapter extends BaseAIProvider {
       }
     }
 
-    const url = `${this.baseUrl}/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
+    const candidates = uniqueModels([
+      this.model,
+      ...GEMINI_RESILIENCE_FALLBACKS,
+    ]);
 
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
+    let lastError: any = null;
 
-      clearTimeout(timeoutId);
-      const durationMs = Date.now() - startTime;
+    for (let index = 0; index < candidates.length; index += 1) {
+      const candidateModel = candidates[index];
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        const classified = this.classifyError(
-          new Error(`HTTP ${response.status}: ${errorText.slice(0, 300)}`),
-          response.status,
-          errorText,
-          response.headers
+      try {
+        const response = await this.generateWithModel(candidateModel, payload);
+
+        if (candidateModel !== this.model) {
+          console.log(
+            `[GOAT-AI][GEMINI_MODEL_FALLBACK][SUCCESS] primary=${this.model} selected=${candidateModel} attempt=${index + 1}`,
+          );
+        }
+
+        return response;
+      } catch (err: any) {
+        lastError = err;
+        const providerError: ProviderError =
+          err?.providerError || this.classifyError(err);
+        const nextModel = candidates[index + 1];
+
+        if (!nextModel || !this.shouldFallbackToAnotherModel(providerError)) {
+          throw err;
+        }
+
+        console.warn(
+          `[GOAT-AI][GEMINI_MODEL_FALLBACK] from=${candidateModel} to=${nextModel} status=${providerError.status || 0} errorType=${providerError.type}`,
         );
-        const err = new Error(classified.message);
-        (err as any).providerError = classified;
-        throw err;
+
+        // Small jitter-free pause to avoid hammering the same shared capacity pool.
+        await new Promise((resolve) => setTimeout(resolve, 350));
       }
-
-      const resJson = await response.json();
-      return fromGeminiResponse(resJson, this.model, durationMs);
-    } catch (err: any) {
-      clearTimeout(timeoutId);
-      const durationMs = Date.now() - startTime;
-
-      if (err.providerError) {
-        throw err;
-      }
-
-      const classified = this.classifyError(err);
-      const wrapped = new Error(classified.message);
-      (wrapped as any).providerError = classified;
-      throw wrapped;
     }
+
+    throw lastError || new Error("Gemini indisponível após fallback de modelos");
   }
 }
