@@ -1435,7 +1435,7 @@ function ControladoriaPage() {
                         personal_reimbursed: method === "Pessoal" ? p.personal_reimbursed : false,
                         personal_reimbursed_at: method === "Pessoal" ? p.personal_reimbursed_at : null,
                       }));
-                    }
+                    }}
                     className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
                   >
                     <option value="Cartão de crédito Goat">Cartão de crédito Goat</option>
