@@ -897,7 +897,11 @@ export const createEventPurchaseTool: GoatAIToolDefinition = {
     if (!args.event_id) missing.push("event_id");
     if (!args.supplier_name) missing.push("supplier_name");
     if (args.total_amount == null) missing.push("total_amount");
-    if (args.payment_method === "Pessoal" && !String(args.payment_payer_name || "").trim()) {
+    if (
+      args.status !== "Pendente" &&
+      args.payment_method === "Pessoal" &&
+      !String(args.payment_payer_name || "").trim()
+    ) {
       missing.push("payment_payer_name");
     }
 
