@@ -212,6 +212,18 @@ export class AIRouter {
       candidateProviders.push(p);
     }
 
+    // For receipts/images, keep Gemini as the primary visual engine, but use
+    // OpenRouter's independent free multimodal router immediately afterwards.
+    // Text routing keeps the normal provider priority order.
+    if (requiresVision) {
+      const visionOrder = (id: string) =>
+        id === "gemini" ? 0 : id === "openrouter" ? 1 : 10;
+      candidateProviders.sort((a, b) => {
+        const orderDelta = visionOrder(a.id) - visionOrder(b.id);
+        return orderDelta !== 0 ? orderDelta : a.priority - b.priority;
+      });
+    }
+
     if (candidateProviders.length === 0) {
       console.error(
         `[GOAT-AI][ALERT][CRITICAL] all_providers_unavailable correlationId=${correlationId} reason="No eligible providers available" skipped=${JSON.stringify(skippedProviders)}`
