@@ -7,7 +7,7 @@ export type FinancialCategory = "Fornecedor" | "Equipe" | "Insumos" | "Operacion
 export type FinancialStatus = "Pago" | "Pendente";
 export type FinancialClassification = "Direto" | "Indireto";
 export type FinancialEntryType = "Despesa" | "Receita" | "Alocação Interna";
-export type PaymentMethod = "Cartão de crédito Goat" | "PIX Goat" | "Pessoal" | "Interno/Estoque";
+export type PaymentMethod = "Cartão de crédito Goat" | "PIX Goat" | "Pessoal" | "Interno/Estoque" | "Não informado";
 
 export interface FinancialExpense {
   id: string;
@@ -185,7 +185,11 @@ export const financialService = {
       created_by_user_id: expensePayload.created_by_user_id || currentUserId,
       updated_by_user_id: expensePayload.updated_by_user_id || currentUserId,
       source_channel: expensePayload.source_channel || "web",
-      cash_effect: expensePayload.entry_type === "Alocação Interna" ? false : (expensePayload.cash_effect ?? true),
+      cash_effect:
+        expensePayload.entry_type === "Alocação Interna" ||
+        expensePayload.status === "Pendente"
+          ? false
+          : (expensePayload.cash_effect ?? true),
     };
     
     const { data, error } = await supabase
@@ -246,9 +250,22 @@ export const financialService = {
 
   async updateExpense(id: string, payload: Partial<FinancialExpense>) {
     const { data: authData } = await supabase.auth.getUser();
+    const updatePayload: Partial<FinancialExpense> = { ...payload };
+
+    // Keep cash flow consistent with financial status.
+    if (payload.status === "Pendente") {
+      updatePayload.cash_effect = false;
+    } else if (payload.status === "Pago" && payload.entry_type !== "Alocação Interna") {
+      updatePayload.cash_effect = true;
+    }
+
     const { data, error } = await supabase
       .from("financial_expenses")
-      .update({ ...payload, updated_by_user_id: authData.user?.id || payload.updated_by_user_id, updated_at: new Date().toISOString() } as any)
+      .update({
+        ...updatePayload,
+        updated_by_user_id: authData.user?.id || payload.updated_by_user_id,
+        updated_at: new Date().toISOString(),
+      } as any)
       .eq("id", id)
       .select()
       .single();
