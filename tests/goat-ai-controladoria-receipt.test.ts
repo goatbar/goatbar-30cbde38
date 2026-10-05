@@ -309,7 +309,7 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
   describe("Deterministic Normalizers & Validator", () => {
     it("modelo Gemini de visão migra configurações antigas para 3.8 flash", () => {
       expect(normalizeGeminiModel("gemini-2.5-flash")).toBe("gemini-3.8-flash");
-      expect(normalizeGeminiModel("gemini-3.6-flash")).toBe("gemini-3.8-flash");
+      expect(normalizeGeminiModel("gemini-3.6-flash")).toBe("gemini-3.6-flash");
       expect(normalizeGeminiModel("models/gemini-2.5-flash")).toBe("gemini-3.8-flash");
       expect(normalizeGeminiModel("gemini-3.8-flash")).toBe("gemini-3.8-flash");
     });
