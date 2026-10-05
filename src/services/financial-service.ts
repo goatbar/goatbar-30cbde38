@@ -23,7 +23,7 @@ export interface FinancialExpense {
   payment_method: PaymentMethod;
   payment_payer_name?: string;
   personal_reimbursed?: boolean;
-  personal_reimbursed_at?: string;
+  personal_reimbursed_at?: string | null;
   status: FinancialStatus;
   entry_type?: FinancialEntryType;
   cash_effect?: boolean;
