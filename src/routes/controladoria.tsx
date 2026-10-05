@@ -72,6 +72,9 @@ function ControladoriaPage() {
   const [ocrLoading, setOcrLoading] = useState(false);
   const [receiptPreview, setReceiptPreview] = useState("");
   const [showTextImportModal, setShowTextImportModal] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<FinancialExpense | null>(null);
+  const [selectedExpenseItems, setSelectedExpenseItems] = useState<any[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [textImportValue, setTextImportValue] = useState("");
   const [textImportEventId, setTextImportEventId] = useState("");
   const [filters, setFilters] = useState({
@@ -347,6 +350,29 @@ function ControladoriaPage() {
     }
   };
 
+  const openExpenseDetails = async (expense: FinancialExpense) => {
+    setSelectedExpense(expense);
+    setSelectedExpenseItems([]);
+    setDetailLoading(true);
+    try {
+      const detail = await financialService.getExpenseDetails(expense.id);
+      setSelectedExpense(detail.expense);
+      setSelectedExpenseItems(detail.items);
+    } catch (e) {
+      console.error("Erro ao carregar detalhes do lançamento:", e);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const paymentLabel = (expense: FinancialExpense) => {
+    if (expense.status === "Pendente") return "Em aberto";
+    if (expense.payment_method === "Pessoal" && expense.payment_payer_name) {
+      return `Pessoal · ${expense.payment_payer_name}`;
+    }
+    return expense.payment_method || "Não informado";
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
       <PageHeader
@@ -565,11 +591,23 @@ function ControladoriaPage() {
                   <div className="min-w-0">
                     <div className="font-display text-xl font-bold">{fmtBRL(exp.amount)}</div>
                     <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <CreditCard className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{paymentLabel(exp)}</span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
                       <User className="h-3 w-3 shrink-0" />
                       <span className="truncate">{exp.responsible || "Sem responsável"} · {exp.classification}</span>
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      onClick={() => openExpenseDetails(exp)}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-foreground hover:bg-muted"
+                      title="Ver detalhes"
+                      aria-label={`Ver detalhes de ${exp.description}`}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
                     {exp.invoice_url && (
                       <a
                         href={exp.invoice_url}
@@ -628,6 +666,9 @@ function ControladoriaPage() {
                     Status
                   </th>
                   <th className="pb-4 font-display text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Pagamento
+                  </th>
+                  <th className="pb-4 font-display text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                     Anexos
                   </th>
                   <th className="pb-4 font-display text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right">
@@ -638,7 +679,7 @@ function ControladoriaPage() {
               <tbody className="divide-y divide-border/50">
                 {expenses.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-muted-foreground">
+                    <td colSpan={9} className="py-12 text-center text-muted-foreground">
                       Nenhum gasto encontrado no período.
                     </td>
                   </tr>
@@ -674,6 +715,12 @@ function ControladoriaPage() {
                         />
                       </button>
                     </td>
+                    <td className="py-4 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>{paymentLabel(exp)}</span>
+                      </div>
+                    </td>
                     <td className="py-4">
                       <div className="flex gap-1.5">
                         {exp.invoice_url && (
@@ -699,7 +746,15 @@ function ControladoriaPage() {
                       </div>
                     </td>
                     <td className="py-4 text-right">
-                      <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          onClick={() => openExpenseDetails(exp)}
+                          className="h-8 w-8 rounded hover:bg-muted text-foreground flex items-center justify-center"
+                          title="Ver detalhes"
+                          aria-label={`Ver detalhes de ${exp.description}`}
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </button>
                         <button
                           onClick={() => handleDelete(exp.id)}
                           className="h-8 w-8 rounded hover:bg-destructive/10 text-destructive flex items-center justify-center"
@@ -716,7 +771,118 @@ function ControladoriaPage() {
         </SectionCard>
       </div>
 
-      {/* MODAL NOVO GASTO */}
+      {selectedExpense && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+          <div
+            className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+            onClick={() => setSelectedExpense(null)}
+          />
+          <div className="relative max-h-[92dvh] w-full max-w-3xl overflow-y-auto rounded-t-2xl border border-border bg-surface shadow-2xl sm:rounded-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface px-5 py-4">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Detalhes do lançamento</div>
+                <h2 className="font-display text-lg font-bold">{selectedExpense.description}</h2>
+              </div>
+              <button
+                onClick={() => setSelectedExpense(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted"
+                aria-label="Fechar detalhes"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-5 p-5">
+              {detailLoading && (
+                <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                  Carregando detalhes...
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <div className="rounded-xl border border-border p-3">
+                  <div className="label-eyebrow">Data</div>
+                  <div className="mt-1 text-sm font-semibold">{format(parseISO(selectedExpense.date), "dd/MM/yyyy")}</div>
+                </div>
+                <div className="rounded-xl border border-border p-3">
+                  <div className="label-eyebrow">Valor</div>
+                  <div className="mt-1 text-sm font-semibold">{fmtBRL(selectedExpense.amount)}</div>
+                </div>
+                <div className="rounded-xl border border-border p-3">
+                  <div className="label-eyebrow">Status</div>
+                  <div className="mt-1 text-sm font-semibold">{selectedExpense.status === "Pendente" ? "Em aberto" : "Pago"}</div>
+                </div>
+                <div className="rounded-xl border border-border p-3">
+                  <div className="label-eyebrow">Pagamento</div>
+                  <div className="mt-1 text-sm font-semibold">{paymentLabel(selectedExpense)}</div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-xl border border-border p-4">
+                  <div className="label-eyebrow mb-3">Classificação</div>
+                  <div className="space-y-2 text-sm">
+                    <div><span className="text-muted-foreground">Modalidade:</span> {selectedExpense.modality}</div>
+                    <div><span className="text-muted-foreground">Categoria:</span> {selectedExpense.category}</div>
+                    <div><span className="text-muted-foreground">Tipo:</span> {selectedExpense.entry_type || "Despesa"}</div>
+                    <div><span className="text-muted-foreground">Classificação:</span> {selectedExpense.classification}</div>
+                    <div><span className="text-muted-foreground">Responsável:</span> {selectedExpense.responsible || "Não informado"}</div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border p-4">
+                  <div className="label-eyebrow mb-3">Origem e fornecedor</div>
+                  <div className="space-y-2 text-sm">
+                    <div><span className="text-muted-foreground">Fornecedor:</span> {selectedExpense.supplier_name || "Não informado"}</div>
+                    <div><span className="text-muted-foreground">CNPJ:</span> {selectedExpense.supplier_cnpj || "Não informado"}</div>
+                    <div><span className="text-muted-foreground">Origem:</span> {selectedExpense.source_channel === "gia" ? "GIA" : selectedExpense.source_channel || "Sistema"}</div>
+                    <div><span className="text-muted-foreground">Revisão:</span> {selectedExpense.review_status || "Não informado"}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border p-4">
+                <div className="label-eyebrow mb-3">Itens</div>
+                {selectedExpenseItems.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">Nenhum item detalhado vinculado a este lançamento.</div>
+                ) : (
+                  <div className="divide-y divide-border/60">
+                    {selectedExpenseItems.map((item, index) => (
+                      <div key={item.id || index} className="grid grid-cols-[1fr_auto] gap-3 py-3 text-sm">
+                        <div>
+                          <div className="font-medium">{item.product_name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {item.quantity} {item.unit || "un"}
+                            {Number(item.unit_price) > 0 ? ` × ${fmtBRL(Number(item.unit_price))}` : ""}
+                          </div>
+                        </div>
+                        <div className="font-semibold">{fmtBRL(Number(item.total_price || 0))}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {(selectedExpense.invoice_url || selectedExpense.receipt_url) && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedExpense.invoice_url && (
+                    <a href={selectedExpense.invoice_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted">
+                      <FileText className="h-4 w-4" /> Abrir nota fiscal
+                    </a>
+                  )}
+                  {selectedExpense.receipt_url && (
+                    <a href={selectedExpense.receipt_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted">
+                      <Receipt className="h-4 w-4" /> Abrir comprovante
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+            {/* MODAL NOVO GASTO */}
 
       {showTextImportModal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
