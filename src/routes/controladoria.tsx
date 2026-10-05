@@ -373,6 +373,24 @@ function ControladoriaPage() {
     return expense.payment_method || "Não informado";
   };
 
+  const togglePersonalReimbursement = async (expense: FinancialExpense) => {
+    if (expense.payment_method !== "Pessoal") return;
+    const nextReimbursed = !expense.personal_reimbursed;
+    try {
+      const updated = await financialService.updateExpense(expense.id, {
+        personal_reimbursed: nextReimbursed,
+        personal_reimbursed_at: nextReimbursed ? new Date().toISOString() : undefined,
+      });
+      setExpenses((prev) => prev.map((item) => item.id === expense.id ? { ...item, ...updated } : item));
+      if (selectedExpense?.id === expense.id) {
+        setSelectedExpense((prev) => prev ? { ...prev, ...updated } : prev);
+      }
+    } catch (e) {
+      console.error("Erro ao atualizar reembolso:", e);
+      alert("Erro ao atualizar o status do reembolso.");
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
       <PageHeader
@@ -594,6 +612,19 @@ function ControladoriaPage() {
                       <CreditCard className="h-3 w-3 shrink-0" />
                       <span className="truncate">{paymentLabel(exp)}</span>
                     </div>
+                    {exp.payment_method === "Pessoal" && (
+                      <button
+                        type="button"
+                        onClick={() => togglePersonalReimbursement(exp)}
+                        className={`mt-1 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-tight ${
+                          exp.personal_reimbursed
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
+                            : "border-amber-500/30 bg-amber-500/10 text-amber-500"
+                        }`}
+                      >
+                        {exp.personal_reimbursed ? "Reembolsado" : "Reembolso pendente"}
+                      </button>
+                    )}
                     <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
                       <User className="h-3 w-3 shrink-0" />
                       <span className="truncate">{exp.responsible || "Sem responsável"} · {exp.classification}</span>
@@ -716,9 +747,25 @@ function ControladoriaPage() {
                       </button>
                     </td>
                     <td className="py-4 text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span>{paymentLabel(exp)}</span>
+                      <div className="flex flex-col items-start gap-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>{paymentLabel(exp)}</span>
+                        </div>
+                        {exp.payment_method === "Pessoal" && (
+                          <button
+                            type="button"
+                            onClick={() => togglePersonalReimbursement(exp)}
+                            className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-tight transition-colors ${
+                              exp.personal_reimbursed
+                                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
+                                : "border-amber-500/30 bg-amber-500/10 text-amber-500"
+                            }`}
+                            title={exp.personal_reimbursed ? "Clique para marcar como não reembolsado" : "Clique para marcar como reembolsado"}
+                          >
+                            {exp.personal_reimbursed ? "Reembolsado" : "Reembolso pendente"}
+                          </button>
+                        )}
                       </div>
                     </td>
                     <td className="py-4">
@@ -817,6 +864,39 @@ function ControladoriaPage() {
                   <div className="mt-1 text-sm font-semibold">{paymentLabel(selectedExpense)}</div>
                 </div>
               </div>
+
+              {selectedExpense.payment_method === "Pessoal" && (
+                <div className="rounded-xl border border-border p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="label-eyebrow">Reembolso pessoal</div>
+                      <div className="mt-1 text-sm font-semibold">
+                        {selectedExpense.personal_reimbursed ? "Reembolsado" : "Reembolso pendente"}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {selectedExpense.personal_reimbursed
+                          ? selectedExpense.personal_reimbursed_at
+                            ? `Marcado como reembolsado em ${format(new Date(selectedExpense.personal_reimbursed_at), "dd/MM/yyyy 'às' HH:mm")}`
+                            : "Reembolso marcado como realizado."
+                          : `A Goat Bar ainda deve reembolsar ${selectedExpense.payment_payer_name || "a pessoa que realizou o pagamento"}.`}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => togglePersonalReimbursement(selectedExpense)}
+                      className={`rounded-lg border px-4 py-2 text-xs font-bold transition-colors ${
+                        selectedExpense.personal_reimbursed
+                          ? "border-border hover:bg-muted"
+                          : "border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
+                      }`}
+                    >
+                      {selectedExpense.personal_reimbursed
+                        ? "Marcar como não reembolsado"
+                        : "Marcar como reembolsado"}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-xl border border-border p-4">
