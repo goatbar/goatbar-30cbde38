@@ -305,6 +305,76 @@ function looksLikeBarePurchaseStartIntent(value: string): boolean {
   return hasPurchaseIntent && !alreadyContainsFinancialDetails;
 }
 
+function parseStructuredControladoriaBatch(value: string): Array<any> {
+  const lines = String(value || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const datePattern = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/;
+  const batches: Array<any> = [];
+  let current: any = null;
+
+  const toIsoDate = (raw: string) => {
+    const match = raw.match(datePattern);
+    if (!match) return "";
+    const year = match[3].length === 2 ? `20${match[3]}` : match[3];
+    return `${year}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
+  };
+
+  for (const line of lines) {
+    if (datePattern.test(line)) {
+      current = { date: toIsoDate(line), items: [], open_items: [] };
+      batches.push(current);
+      continue;
+    }
+    if (!current) continue;
+
+    const itemMatch = line.match(/^(.+?):\s*(?:R\$\s*)?([0-9.]+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)\s*$/i);
+    if (!itemMatch) continue;
+
+    let name = itemMatch[1].trim();
+    const amount = normalizeCurrencyBRL(itemMatch[2]);
+    if (!(amount > 0)) continue;
+
+    let quantity = 1;
+    const qtyMatch = name.match(/^(\d+)\s+(.+)$/);
+    if (qtyMatch) {
+      quantity = Number(qtyMatch[1]) || 1;
+      name = qtyMatch[2].trim();
+    }
+
+    current.items.push({
+      product_name: name,
+      quantity,
+      total_price: amount,
+    });
+  }
+
+  return batches
+    .filter((batch) => Array.isArray(batch.items) && batch.items.length > 0)
+    .map((batch) => ({
+      ...batch,
+      amount: Math.round(batch.items.reduce((sum: number, item: any) => sum + (Number(item.total_price) || 0), 0) * 100) / 100,
+      category: batch.items.every((item: any) => /m[aã]o\s+de\s+obra|equipe|staff|freelancer/i.test(item.product_name || ""))
+        ? "Equipe"
+        : "Insumos",
+      description: batch.items.map((item: any) => item.product_name).join(", "),
+    }));
+}
+
+function formatControladoriaBatchPreview(args: any): string {
+  const batches = Array.isArray(args?.batches) ? args.batches : [];
+  const lines = ["Vou lançar esta compra separada por data:"];
+  for (const batch of batches) {
+    const paid = Array.isArray(batch.items) ? batch.items.reduce((s: number, i: any) => s + (Number(i.total_price) || 0), 0) : 0;
+    const open = Array.isArray(batch.open_items) ? batch.open_items.reduce((s: number, i: any) => s + (Number(i.total_price) || 0), 0) : 0;
+    lines.push(`• ${String(batch.date || "").split("-").reverse().join("/")}: R$ ${paid.toFixed(2).replace(".", ",")}${open > 0 ? ` pagos + R$ ${open.toFixed(2).replace(".", ",")} em aberto` : ""}`);
+  }
+  lines.push(`Modalidade: ${args.modality || "não informada"}`);
+  if (args.payment_method) {
+    lines.push(`Pagamento: ${args.payment_method}${args.payment_payer_name ? ` — ${args.payment_payer_name}` : ""}`);
+  }
+  lines.push("Confirma o lançamento?");
+  return lines.join("\n");
+}
+
 function looksLikeNegativeSystemClaim(value: string): boolean {
   const normalized = String(value || "")
     .normalize("NFD")
