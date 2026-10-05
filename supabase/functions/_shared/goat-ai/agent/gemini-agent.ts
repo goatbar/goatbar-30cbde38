@@ -1828,7 +1828,7 @@ export class GoatAIGeminiAgent {
     }
 
     // 4. Prepare Canonical Multi-turn Messages
-    const history = await this.conversationManager.getRecentMessages(conversation.id, 10);
+    const history = await this.conversationManager.getRecentMessages(conversation.id, 6);
     const normalizedMessages: NormalizedMessage[] = [];
 
     for (const h of history) {
