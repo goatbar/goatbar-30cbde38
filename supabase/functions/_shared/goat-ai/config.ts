@@ -15,11 +15,7 @@ export const CURRENT_GEMINI_MODEL = "gemini-3.8-flash";
 
 export function normalizeGeminiModel(model?: string | null): string {
   const raw = String(model || "").trim().replace(/^models\//, "");
-  if (
-    !raw ||
-    raw === "gemini-2.5-flash" ||
-    raw === "gemini-3.6-flash"
-  ) {
+  if (!raw || raw === "gemini-2.5-flash") {
     return CURRENT_GEMINI_MODEL;
   }
   return raw;
