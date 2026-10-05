@@ -587,6 +587,10 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
             unit_price: { type: "number" },
             total_price: { type: "number" },
             suggested_category: { type: "string" },
+            status: {
+              type: "string",
+              description: "Situação deste item: 'Pago' ou 'Pendente'. Use Pendente quando o texto disser que este item ainda não foi pago/em aberto.",
+            },
           },
           required: ["product_name", "quantity"],
         },
@@ -618,6 +622,24 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
     }
 
     const norm = validation.normalized;
+    const openItems = Array.isArray(norm.open_items) ? norm.open_items : [];
+    const paidItems = Array.isArray(norm.items) ? norm.items : [];
+    const itemAmount = (items: typeof paidItems) =>
+      Math.round(
+        items.reduce((sum, item) => sum + (Number(item.total_price) || 0), 0) * 100,
+      ) / 100;
+    const openAmount = itemAmount(openItems);
+    const paidAmount = itemAmount(paidItems);
+    const isMixedPaymentStatus = paidItems.length > 0 && openItems.length > 0;
+    const isOnlyOpenItems = paidItems.length === 0 && openItems.length > 0;
+    const primaryItems = isOnlyOpenItems ? openItems : paidItems;
+    const primaryStatus = isOnlyOpenItems ? "Pendente" : norm.status;
+    const primaryAmount =
+      isMixedPaymentStatus && paidAmount > 0
+        ? paidAmount
+        : isOnlyOpenItems && openAmount > 0
+          ? openAmount
+          : norm.amount;
 
     // 2. Idempotency Check by operation_id in ocr_metadata
     if (norm.operation_id) {
@@ -655,25 +677,25 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
       supplier_name:
         norm.supplier_name === "Fornecedor não identificado" ? null : norm.supplier_name,
       supplier_cnpj: norm.supplier_cnpj || null,
-      amount: norm.amount,
+      amount: primaryAmount,
       date: norm.date,
       due_date: norm.due_date || null,
       modality: norm.modality,
       category: norm.category, // 'Fornecedor', 'Equipe', 'Insumos', 'Operacional', 'Outros'
       description: norm.description,
-      payment_method: norm.payment_method,
-      payment_payer_name: norm.payment_payer_name || null,
+      payment_method: primaryStatus === "Pendente" ? "Não informado" : norm.payment_method,
+      payment_payer_name: primaryStatus === "Pendente" ? null : (norm.payment_payer_name || null),
       entry_type: norm.entry_type,
       tasting_id: norm.tasting_id || null,
       cash_effect:
-        norm.entry_type === "Alocação Interna" || norm.status === "Pendente"
+        norm.entry_type === "Alocação Interna" || primaryStatus === "Pendente"
           ? false
           : true,
       created_by_user_id: ctx.userId || null,
       updated_by_user_id: ctx.userId || null,
       source_channel: "gia",
       source_reference: norm.source_message_id || null,
-      status: norm.status,
+      status: primaryStatus,
       classification: norm.classification,
       responsible: norm.responsible,
       event_id: norm.event_id || null,
@@ -684,6 +706,7 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
       ocr_raw_text: norm.ocr_raw_text || null,
       ocr_metadata: {
         operation_id: norm.operation_id,
+        split_payment_status: isMixedPaymentStatus,
         confidence: norm.confidence,
         source: "whatsapp-gia",
         source_message_id: norm.source_message_id || null,
@@ -712,8 +735,8 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
 
     // 4. Insert items if present (financial_expense_items)
     let itemsCount = 0;
-    if (norm.items && norm.items.length > 0) {
-      const itemsToInsert = norm.items.map((it) => ({
+    if (primaryItems.length > 0) {
+      const itemsToInsert = primaryItems.map((it) => ({
         expense_id: expense.id,
         product_name: it.product_name,
         quantity: it.quantity,
@@ -736,6 +759,86 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
         }
       } catch (itemsErr: any) {
         console.warn(`[GOAT-AI][DATABASE][ITEMS_WRITE_WARNING] expenseId=${expense.id} error="${itemsErr?.message}"`);
+      }
+    }
+
+    // 4.1 When a message contains both paid and unpaid items, persist the
+    // unpaid subset as its own expense so Controladoria can show it in Em aberto.
+    let openExpenseId: string | null = null;
+    if (isMixedPaymentStatus) {
+      const allLabor = openItems.every((item) =>
+        /m[aã]o\s+de\s+obra|equipe|freelancer|bartender|gar[cç]om/i.test(
+          item.product_name || "",
+        ),
+      );
+      const openDescription = allLabor
+        ? "Mão de obra - Em aberto"
+        : `Itens em aberto: ${openItems.map((item) => item.product_name).join(", ")}`;
+
+      const openPayload: Record<string, any> = {
+        ...expensePayload,
+        amount: openAmount,
+        category: allLabor ? "Equipe" : norm.category,
+        description: openDescription,
+        payment_method: "Não informado",
+        payment_payer_name: null,
+        status: "Pendente",
+        cash_effect: false,
+        ocr_metadata: {
+          ...(expensePayload.ocr_metadata || {}),
+          operation_id: `${norm.operation_id}:open`,
+          parent_operation_id: norm.operation_id,
+          split_kind: "open",
+        },
+      };
+
+      const { data: openExpense, error: openError } = await ctx.supabaseAdmin
+        .from("financial_expenses")
+        .insert(openPayload)
+        .select()
+        .single();
+
+      if (openError || !openExpense) {
+        try {
+          await ctx.supabaseAdmin.from("financial_expenses").delete().eq("id", expense.id);
+        } catch {
+          // best-effort rollback; idempotency prevents silent duplication on retry.
+        }
+        return {
+          success: false,
+          error: `Erro ao registrar a parte em aberto da compra: ${openError?.message || "Falha desconhecida"}`,
+        };
+      }
+
+      openExpenseId = openExpense.id;
+      const openItemsToInsert = openItems.map((it) => ({
+        expense_id: openExpense.id,
+        product_name: it.product_name,
+        quantity: it.quantity,
+        unit: it.unit || "un",
+        unit_price: it.unit_price || null,
+        total_price: it.total_price || null,
+        suggested_category:
+          it.suggested_category || (allLabor ? "Equipe" : norm.category),
+        reviewed: norm.review_status === "Lido automaticamente",
+      }));
+
+      if (openItemsToInsert.length > 0) {
+        const { error: openItemsError } = await ctx.supabaseAdmin
+          .from("financial_expense_items")
+          .insert(openItemsToInsert);
+        if (openItemsError) {
+          try {
+            await ctx.supabaseAdmin.from("financial_expenses").delete().eq("id", openExpense.id);
+            await ctx.supabaseAdmin.from("financial_expenses").delete().eq("id", expense.id);
+          } catch {
+            // best-effort rollback
+          }
+          return {
+            success: false,
+            error: `Erro ao registrar os itens em aberto: ${openItemsError.message}`,
+          };
+        }
       }
     }
 
@@ -766,7 +869,7 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
     const fmtAmount = `R$ ${norm.amount.toFixed(2).replace(".", ",")}`;
     const isPurchase =
       norm.entry_type === "Despesa" &&
-      (Boolean(norm.invoice_url) || norm.items.length > 0 || norm.description.toLowerCase().includes("compra"));
+      (Boolean(norm.invoice_url) || paidItems.length > 0 || openItems.length > 0 || norm.description.toLowerCase().includes("compra"));
     return {
       success: true,
       data: {
@@ -774,16 +877,21 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
         operation_id: norm.operation_id,
         supplier: norm.supplier_name,
         amount: norm.amount,
+        paid_amount: isMixedPaymentStatus ? primaryAmount : (primaryStatus === "Pago" ? primaryAmount : 0),
+        open_amount: isMixedPaymentStatus ? openAmount : (primaryStatus === "Pendente" ? primaryAmount : 0),
         date: norm.date,
         modality: norm.modality,
         category: norm.category,
         items_count: itemsCount,
         review_status: norm.review_status,
-        status: norm.status,
+        status: isMixedPaymentStatus ? "Misto" : primaryStatus,
+        open_expense_id: openExpenseId,
       },
-      message: isPurchase
-        ? `Pronto. A compra de ${fmtAmount} foi lançada na modalidade ${norm.modality} como ${norm.status === "Pago" ? "paga" : "em aberto"}.`
-        : `Pronto. O lançamento de ${fmtAmount} foi registrado na modalidade ${norm.modality} como ${norm.status === "Pago" ? "pago" : "em aberto"}.`,
+      message: isMixedPaymentStatus
+        ? `Pronto. Registrei R$ ${primaryAmount.toFixed(2).replace(".", ",")} como pago e R$ ${openAmount.toFixed(2).replace(".", ",")} como Em aberto na modalidade ${norm.modality}.`
+        : isPurchase
+          ? `Pronto. A compra de ${fmtAmount} foi lançada na modalidade ${norm.modality} como ${primaryStatus === "Pago" ? "paga" : "em aberto"}.`
+          : `Pronto. O lançamento de ${fmtAmount} foi registrado na modalidade ${norm.modality} como ${primaryStatus === "Pago" ? "pago" : "em aberto"}.`,
     };
   },
 };
