@@ -379,7 +379,7 @@ function ControladoriaPage() {
     try {
       const updated = await financialService.updateExpense(expense.id, {
         personal_reimbursed: nextReimbursed,
-        personal_reimbursed_at: nextReimbursed ? new Date().toISOString() : undefined,
+        personal_reimbursed_at: nextReimbursed ? new Date().toISOString() : null,
       });
       setExpenses((prev) => prev.map((item) => item.id === expense.id ? { ...item, ...updated } : item));
       if (selectedExpense?.id === expense.id) {
