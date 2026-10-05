@@ -515,6 +515,85 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
       expect(savedPendingActions[0].arguments.status).toBe("Pendente");
       expect(savedPendingActions[0].arguments.payment_method).toBe("Não informado");
     });
+    it("follow-up separa itens pagos de mão de obra Em aberto sem desviar para eventos", async () => {
+      savedPendingActions.push({
+        id: "pending-mixed-status",
+        conversation_id: "conv-ctrl-1",
+        tool_name: "create_controladoria_expense",
+        status: "collecting",
+        arguments: {
+          amount: 205.5,
+          date: "2026-10-01",
+          modality: "7 Steak House",
+          category: "Insumos",
+          entry_type: "Despesa",
+          status: "Pago",
+          responsible: "Mari Avelar",
+          description: "Compra de insumos e mão de obra - 01/10/26",
+          items: [
+            { product_name: "Vodka", quantity: 1, total_price: 36.9 },
+            { product_name: "Laranja", quantity: 1, total_price: 5.46 },
+            { product_name: "Siciliano", quantity: 1, total_price: 5.22 },
+            { product_name: "Taiti", quantity: 1, total_price: 33.68 },
+            { product_name: "Água", quantity: 4, total_price: 9.96 },
+            { product_name: "Pote organizadores", quantity: 1, total_price: 14.28 },
+            { product_name: "Mão de obra", quantity: 1, total_price: 100 },
+          ],
+        },
+        missing_fields: ["payment_method"],
+        created_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      });
+
+      const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", toolRegistry);
+      const updated = await agent.processTurn({
+        channel: "whatsapp",
+        message: "pessoal Romulo Chaves\nMão de obra ainda não foi pago",
+        userId: "user-socio-1",
+        userName: "Mari Avelar",
+      });
+
+      expect(updated.reply).not.toContain("Não encontrei com segurança o evento");
+      expect(updated.pendingAction?.status).toBe("ready_for_confirmation");
+      expect(updated.reply).toContain("🟡 *Status:* Parte paga + parte Em aberto");
+      expect(updated.reply).toContain("🟠 *Em aberto (1):*");
+      expect(updated.reply).toContain("Mão de obra");
+      expect(updated.reply).toContain("Pessoal");
+
+      const latestPending = savedPendingActions[0];
+      expect(latestPending.arguments.payment_method).toBe("Pessoal");
+      expect(latestPending.arguments.payment_payer_name).toBe("Romulo Chaves");
+      expect(latestPending.arguments.items).toHaveLength(6);
+      expect(latestPending.arguments.open_items).toHaveLength(1);
+      expect(latestPending.arguments.open_items[0].product_name).toBe("Mão de obra");
+
+      const confirmed = await agent.processTurn({
+        channel: "whatsapp",
+        message: "sim",
+        userId: "user-socio-1",
+        userName: "Mari Avelar",
+      });
+
+      expect(confirmed.reply).toContain("R$ 105,50 como pago");
+      expect(confirmed.reply).toContain("R$ 100,00 como Em aberto");
+      expect(savedExpenses).toHaveLength(2);
+
+      const paid = savedExpenses.find((expense) => expense.status === "Pago");
+      const open = savedExpenses.find((expense) => expense.status === "Pendente");
+
+      expect(paid?.amount).toBe(105.5);
+      expect(paid?.payment_method).toBe("Pessoal");
+      expect(paid?.payment_payer_name).toBe("Romulo Chaves");
+      expect(paid?.cash_effect).toBe(true);
+
+      expect(open?.amount).toBe(100);
+      expect(open?.payment_method).toBe("Não informado");
+      expect(open?.cash_effect).toBe(false);
+      expect(open?.category).toBe("Equipe");
+      expect(open?.description).toContain("Mão de obra");
+      expect(savedExpenseItems).toHaveLength(7);
+    });
+
     it("7. Processa imagem e texto de nota fiscal acionando create_controladoria_expense e pedindo unidade", async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
