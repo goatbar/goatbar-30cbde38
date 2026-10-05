@@ -2541,14 +2541,29 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
               const fiscalAttachment = input.attachments?.find(isFiscalDocumentAttachment);
 
               if (fiscalAttachment) {
-                // Nota fiscal/cupom/comprovante é uma compra. No banco, "Compra" é
-                // representada canonicamente por entry_type = "Despesa".
-                mergedArgs.entry_type = "Despesa";
+                // A imagem pode ser nota/cupom (despesa) OU comprovante de recebimento
+                // (receita). A intenção explícita do usuário tem prioridade sobre o
+                // simples fato de existir um anexo.
+                const normalizedUserText = String(input.message || "")
+                  .normalize("NFD")
+                  .replace(/[\u0300-\u036f]/g, "")
+                  .toLowerCase();
+                const explicitRevenue = /\b(receita|recebimento|recebido|entrada)\b/.test(normalizedUserText);
+                const explicitExpense = /\b(despesa|gasto|compra|reembolso)\b/.test(normalizedUserText);
+                if (explicitRevenue) {
+                  mergedArgs.entry_type = "Receita";
+                  mergedArgs.status = "Pago";
+                } else if (explicitExpense || !mergedArgs.entry_type) {
+                  mergedArgs.entry_type = "Despesa";
+                }
 
-                // Regra de negócio: modalidade de compra por foto NUNCA pode ser
-                // inferida pelo modelo, fornecedor, conteúdo da nota ou contexto
-                // recente da conversa. O usuário precisa escolhê-la explicitamente.
-                delete mergedArgs.modality;
+                // Só compra/despesa por foto exige modalidade explícita. Para receita,
+                // respeite a modalidade já dita pelo usuário (ex.: "Evento Lucia & Sidney").
+                if (mergedArgs.entry_type !== "Receita") {
+                  delete mergedArgs.modality;
+                } else if (/\bevento\b/.test(normalizedUserText)) {
+                  mergedArgs.modality = "Evento";
+                }
 
                 if (fiscalAttachment.mediaId && !mergedArgs.source_media_id) {
                   mergedArgs.source_media_id = fiscalAttachment.mediaId;
