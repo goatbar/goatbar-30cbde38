@@ -10,6 +10,7 @@ import {
   normalizeControladoriaPaymentMethod,
   normalizeCurrencyBRL,
   normalizeControladoriaDate,
+  inferControladoriaPaymentStatusFromText,
 } from "../supabase/functions/_shared/goat-ai/validators/controladoria-expense-validator";
 import { CircuitBreakerManager } from "../supabase/functions/_shared/goat-ai/router/circuit-breaker";
 import { normalizeGeminiModel } from "../supabase/functions/_shared/goat-ai/config";
@@ -307,6 +308,38 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
 
   // 1. Validator & Deterministic Normalizers Unit Tests
   describe("Deterministic Normalizers & Validator", () => {
+    it("lê linguagem natural de pago versus em aberto sem confundir negação", () => {
+      expect(inferControladoriaPaymentStatusFromText("a mão de obra ainda não foi paga")).toBe("Pendente");
+      expect(inferControladoriaPaymentStatusFromText("não paguei a equipe ainda")).toBe("Pendente");
+      expect(inferControladoriaPaymentStatusFromText("deixa em aberto")).toBe("Pendente");
+      expect(inferControladoriaPaymentStatusFromText("essa despesa está a pagar")).toBe("Pendente");
+      expect(inferControladoriaPaymentStatusFromText("já paguei a equipe")).toBe("Pago");
+      expect(inferControladoriaPaymentStatusFromText("pagamento realizado")).toBe("Pago");
+    });
+
+    it("despesa pendente não exige forma de pagamento e aparece Em aberto na prévia", () => {
+      const result = validateControladoriaExpenseDraft(
+        {
+          amount: 800,
+          date: "2026-10-05",
+          modality: "Ativo",
+          category: "Equipe",
+          description: "Mão de obra",
+          entry_type: "Despesa",
+          status: "Pendente",
+        },
+        { fallbackResponsible: "Mari Avelar" },
+      );
+
+      expect(result.isValid).toBe(true);
+      expect(result.normalized?.status).toBe("Pendente");
+      expect(result.normalized?.payment_method).toBe("Não informado");
+      expect(result.missingFields).not.toContain("payment_method");
+
+      const preview = formatControladoriaExpenseWhatsAppPreview(result.normalized!);
+      expect(preview).toContain("🟠 *Status:* Em aberto (Pendente)");
+      expect(preview).not.toContain("*Forma de Pagamento:*");
+    });
     it("modelo Gemini de visão migra configurações antigas para 3.8 flash", () => {
       expect(normalizeGeminiModel("gemini-2.5-flash")).toBe("gemini-3.8-flash");
       expect(normalizeGeminiModel("gemini-3.6-flash")).toBe("gemini-3.6-flash");
@@ -404,6 +437,49 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
 
   // 2. Multi-turn Agent Flow Tests
   describe("GIA Conversational Multi-turn & Tool Interception", () => {
+    it("mão de obra ainda não paga vira Pendente mesmo se a IA omitir o status", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    functionCall: {
+                      name: "create_controladoria_expense",
+                      args: {
+                        amount: 800,
+                        date: "2026-10-05",
+                        modality: "Ativo",
+                        category: "Equipe",
+                        description: "Mão de obra",
+                        entry_type: "Despesa",
+                      },
+                    },
+                  },
+                ],
+              },
+              finishReason: "STOP",
+            },
+          ],
+        }),
+      } as any);
+
+      const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", toolRegistry);
+      const result = await agent.processTurn({
+        channel: "whatsapp",
+        message: "Lança 800 de mão de obra, ainda não foi paga",
+        userId: "user-socio-1",
+        userName: "Mari Avelar",
+      });
+
+      expect(result.pendingAction?.status).toBe("ready_for_confirmation");
+      expect(result.reply).toContain("🟠 *Status:* Em aberto (Pendente)");
+      expect(savedPendingActions[0].arguments.status).toBe("Pendente");
+      expect(savedPendingActions[0].arguments.payment_method).toBe("Não informado");
+    });
     it("7. Processa imagem e texto de nota fiscal acionando create_controladoria_expense e pedindo unidade", async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
