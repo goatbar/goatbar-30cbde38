@@ -27,6 +27,7 @@ import {
   ControladoriaExpenseDraft,
   normalizeControladoriaModality,
   normalizeCurrencyBRL,
+  inferControladoriaPaymentStatusFromText,
 } from "../validators/controladoria-expense-validator.ts";
 import { resolveBusinessUnit } from "../matchers/unit-matcher.ts";
 import {
@@ -1275,6 +1276,17 @@ export class GoatAIGeminiAgent {
         .toLowerCase()
         .trim();
 
+      const paymentStatusIntent =
+        inferControladoriaPaymentStatusFromText(input.message);
+      if (paymentStatusIntent) {
+        draftArgs.status = paymentStatusIntent;
+        if (paymentStatusIntent === "Pendente") {
+          draftArgs.payment_method = "Não informado";
+          delete draftArgs.payment_payer_name;
+        }
+        draftModified = true;
+      }
+
       // Check if user is supplying modality
       const modRes = normalizeControladoriaModality(input.message);
       if (modRes.matched) {
@@ -2071,6 +2083,16 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                   ? activePending.arguments || {}
                   : {};
               const mergedArgs: ControladoriaExpenseDraft = { ...priorArgs, ...args };
+              const statusFromUserText =
+                inferControladoriaPaymentStatusFromText(input.message);
+              if (statusFromUserText) {
+                mergedArgs.status = statusFromUserText;
+                if (statusFromUserText === "Pendente") {
+                  mergedArgs.payment_method = "Não informado";
+                  delete mergedArgs.payment_payer_name;
+                }
+              }
+
               const fiscalAttachment = input.attachments?.find(isFiscalDocumentAttachment);
 
               if (fiscalAttachment) {
