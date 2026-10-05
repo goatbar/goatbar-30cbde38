@@ -253,6 +253,17 @@ async function persistGiaFinancialAttachment(params: {
   }
 }
 
+function detectExplicitControladoriaEntryType(value: string): "Receita" | "Despesa" | undefined {
+  const normalized = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  if (/\b(receita|recebimento|recebido|entrada)\b/.test(normalized)) return "Receita";
+  if (/\b(despesa|gasto|compra|reembolso)\b/.test(normalized)) return "Despesa";
+  return undefined;
+}
+
 function looksLikeControladoriaWriteIntent(value: string): boolean {
   const normalized = String(value || "")
     .normalize("NFD")
@@ -1213,9 +1224,37 @@ export class GoatAIGeminiAgent {
     }
 
     // 2. Deterministic State Machine / Confirmation Resolver against active pending actions
-    const activePending =
+    let activePending =
       preRoutingPending ||
       (await this.conversationManager.getActivePendingAction(conversation.id));
+
+    // Um comando explícito de NOVO lançamento financeiro não pode ser tratado como
+    // edição/confirmação de um rascunho antigo. Isso é especialmente importante no
+    // WhatsApp, onde texto e imagem podem chegar como mensagens separadas.
+    const explicitCurrentEntryType = detectExplicitControladoriaEntryType(input.message);
+    const startsNewControladoriaEntry =
+      Boolean(explicitCurrentEntryType) &&
+      looksLikeControladoriaWriteIntent(input.message) &&
+      !this.conversationManager.isConfirmationIntent(input.message) &&
+      !this.conversationManager.isRejectionIntent(input.message);
+
+    if (
+      startsNewControladoriaEntry &&
+      activePending &&
+      (activePending.tool_name === "create_controladoria_expense" ||
+        activePending.tool_name === "create_controller_entry" ||
+        activePending.tool_name === "create_controladoria_expense_batch")
+    ) {
+      await this.supabaseAdmin
+        .from("ai_pending_actions")
+        .update({ status: "expired", updated_at: new Date().toISOString() })
+        .eq("id", activePending.id);
+      console.log(
+        `[GOAT-AI][CONTROLADORIA_DRAFT][SUPERSEDED] correlationId=${correlationId} oldPendingId=${activePending.id} newEntryType=${explicitCurrentEntryType}`,
+      );
+      activePending = null;
+    }
+
     const maskedSender = maskPhone(input.externalSenderId || conversation.external_conversation_id);
 
     if (activePending && activePending.status === "ready_for_confirmation") {
@@ -2541,28 +2580,54 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
               const fiscalAttachment = input.attachments?.find(isFiscalDocumentAttachment);
 
               if (fiscalAttachment) {
-                // A imagem pode ser nota/cupom (despesa) OU comprovante de recebimento
-                // (receita). A intenção explícita do usuário tem prioridade sobre o
-                // simples fato de existir um anexo.
-                const normalizedUserText = String(input.message || "")
+                // No WhatsApp, a instrução textual e a imagem podem chegar em webhooks
+                // separados. Se a imagem vier sem legenda, herde SOMENTE uma instrução
+                // financeira explícita do usuário imediatamente anterior.
+                const recentMessagesForMedia = await this.conversationManager.getRecentMessages(
+                  conversation.id,
+                  8,
+                );
+                const currentMessageId = userMessage.id;
+                const recentUserInstruction = [...recentMessagesForMedia]
+                  .reverse()
+                  .find((msg: any) =>
+                    msg?.id !== currentMessageId &&
+                    msg?.role === "user" &&
+                    msg?.message_type === "text" &&
+                    detectExplicitControladoriaEntryType(msg?.content) &&
+                    looksLikeControladoriaWriteIntent(msg?.content)
+                  );
+                const inheritedFinancialText =
+                  input.message === "Foto enviada" || input.message === "Documento enviado"
+                    ? String(recentUserInstruction?.content || "")
+                    : "";
+                const effectiveFinancialText = `${inheritedFinancialText}\n${input.message || ""}`.trim();
+                const explicitEntryType = detectExplicitControladoriaEntryType(effectiveFinancialText);
+                const normalizedUserText = effectiveFinancialText
                   .normalize("NFD")
                   .replace(/[\u0300-\u036f]/g, "")
                   .toLowerCase();
-                const explicitRevenue = /\b(receita|recebimento|recebido|entrada)\b/.test(normalizedUserText);
-                const explicitExpense = /\b(despesa|gasto|compra|reembolso)\b/.test(normalizedUserText);
-                if (explicitRevenue) {
+
+                if (explicitEntryType === "Receita") {
                   mergedArgs.entry_type = "Receita";
                   mergedArgs.status = "Pago";
-                } else if (explicitExpense || !mergedArgs.entry_type) {
+                } else if (explicitEntryType === "Despesa" || !mergedArgs.entry_type) {
                   mergedArgs.entry_type = "Despesa";
                 }
 
                 // Só compra/despesa por foto exige modalidade explícita. Para receita,
-                // respeite a modalidade já dita pelo usuário (ex.: "Evento Lucia & Sidney").
+                // respeite a modalidade já dita pelo usuário (inclusive no texto que
+                // chegou alguns segundos antes da imagem).
                 if (mergedArgs.entry_type !== "Receita") {
                   delete mergedArgs.modality;
                 } else if (/\bevento\b/.test(normalizedUserText)) {
                   mergedArgs.modality = "Evento";
+                }
+
+                if (inheritedFinancialText) {
+                  console.log(
+                    `[GOAT-AI][CONTROLADORIA_DRAFT][MEDIA_CONTEXT_INHERITED] correlationId=${correlationId} entryType=${mergedArgs.entry_type} modality=${mergedArgs.modality || "none"}`,
+                  );
                 }
 
                 if (fiscalAttachment.mediaId && !mergedArgs.source_media_id) {
