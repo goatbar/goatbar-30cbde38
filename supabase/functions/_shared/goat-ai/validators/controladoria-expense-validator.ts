@@ -648,10 +648,14 @@ export function formatControladoriaExpenseWhatsAppPreview(
     `📅 *Data:* ${formattedDate}`,
     `💰 *Valor Total:* *${formattedAmount}*`,
   );
+  const hasMixedStatus =
+    expense.items.length > 0 && expense.open_items.length > 0;
   lines.push(
-    expense.status === "Pago"
-      ? "✅ *Status:* Pago"
-      : "🟠 *Status:* Em aberto (Pendente)",
+    hasMixedStatus
+      ? "🟡 *Status:* Parte paga + parte Em aberto"
+      : expense.status === "Pago"
+        ? "✅ *Status:* Pago"
+        : "🟠 *Status:* Em aberto (Pendente)",
   );
   if (expense.payment_method !== "Não informado" && expense.status === "Pago") {
     lines.push(`💳 *Forma de Pagamento:* ${paymentDisplay}`);
