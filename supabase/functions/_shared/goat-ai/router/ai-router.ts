@@ -293,6 +293,34 @@ export class AIRouter {
         }
       }
 
+      const isRequestTooLarge =
+        !response &&
+        providerError &&
+        (providerError.status === 413 ||
+          /request too large|context length|too many tokens|tokens per minute/i.test(
+            providerError.message || "",
+          ));
+
+      if (isRequestTooLarge) {
+        const compactRequest: NormalizedAIRequest = {
+          ...request,
+          messages: request.messages.filter((message) => message.role !== "tool").slice(-3),
+        };
+
+        console.warn(
+          `[GOAT-AI][ROUTER][COMPACT_RETRY] correlationId=${correlationId} provider=${provider.id} originalMessages=${request.messages.length} compactMessages=${compactRequest.messages.length}`,
+        );
+
+        try {
+          response = await provider.generate(compactRequest);
+          providerError = null;
+          retriesExecuted = 1;
+        } catch (compactErr: any) {
+          lastError = compactErr;
+          providerError = compactErr?.providerError || provider.classifyError(compactErr);
+        }
+      }
+
       // 2. Controlled retry ONLY for appropriate transient errors (timeout, empty_response, 502/503/504, or short 429 <= 2s)
       const isTransientRetryable =
         !response &&
