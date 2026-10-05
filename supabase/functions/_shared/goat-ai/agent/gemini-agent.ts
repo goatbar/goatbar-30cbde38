@@ -1875,7 +1875,9 @@ export class GoatAIGeminiAgent {
 
           let reply = "";
           if (validation.missingFields.includes("modality")) {
-            reply = "A qual modalidade essa compra pertence? Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo.";
+            reply = draftArgs.entry_type === "Receita"
+              ? "A qual modalidade essa receita pertence? Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo."
+              : "A qual modalidade essa compra pertence? Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo.";
           } else if (validation.missingFields.includes("amount")) {
             reply = `Qual o valor total da nota/gasto?`;
           } else if (validation.missingFields.includes("payment_method")) {
@@ -2624,8 +2626,9 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                   validation.missingFields.includes("modality") &&
                   !validation.missingFields.includes("amount")
                 ) {
-                  missingQuestion =
-                    "A qual modalidade essa compra pertence? Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo.";
+                  missingQuestion = mergedArgs.entry_type === "Receita"
+                    ? "A qual modalidade essa receita pertence? Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo."
+                    : "A qual modalidade essa compra pertence? Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo.";
                 } else if (isPhotoPurchase) {
                   missingQuestion =
                     "Não consegui ler os itens e valores dessa compra com segurança. Envie uma foto mais nítida e completa.";
