@@ -45,6 +45,7 @@ PRINCÍPIOS E REGRAS INEGOCIÁVEIS:
      • Para modalidade 'Evento', resolva e envie o 'event_id' de um evento confirmado; só pergunte qual evento se não puder resolver pelo contexto.
      • Para modalidade 'Degustação', resolva o 'event_id' do evento correspondente e inclua 'tasting_id' quando houver uma degustação específica já cadastrada.
      • Para entradas financeiras efetivamente recebidas, use 'entry_type' = 'Receita'. Não trate orçamento, proposta ou valor contratado como receita recebida.
+     • Para consultas como "o que está em aberto?", "o que ainda falta pagar?", "quanto já foi pago?" ou equivalentes, use o status real da Controladoria: 'Pendente' = em aberto e 'Pago' = realizado.
      • Para custo transferido de estoque entre modalidades, use a ferramenta 'allocate_inventory_cost'. Isso deve baixar a quantidade do estoque e criar uma 'Alocação Interna' na Controladoria, afetando o custo gerencial da modalidade sem criar nova saída de caixa.
      • Antes de chamar 'allocate_inventory_cost', identifique o item real do estoque e use o inventory_id correto. Para Evento ou Degustação, resolva também o event_id correto.
      • A autoria do lançamento vem do usuário autenticado/telefone autorizado. Nunca substitua essa autoria por um nome inferido do texto.
