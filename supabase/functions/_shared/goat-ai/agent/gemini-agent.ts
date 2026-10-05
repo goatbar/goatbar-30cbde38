@@ -778,8 +778,18 @@ export class GoatAIGeminiAgent {
     // Consultas de dados do evento respondem no chat. Não geram PDF.
     // Comandos de ESCRITA financeira (ex.: "lança 800 de mão de obra, ainda
     // não foi paga") nunca podem ser desviados para uma busca de evento.
+    // A pending Controladoria draft has priority over event-reading intents.
+    // Replies such as "Pessoal Romulo / mão de obra ainda não foi paga" belong
+    // to the financial draft and must never be diverted to event search.
+    const preRoutingPending =
+      await this.conversationManager.getActivePendingAction(conversation.id);
+    const hasControladoriaPending =
+      preRoutingPending &&
+      (preRoutingPending.tool_name === "create_controladoria_expense" ||
+        preRoutingPending.tool_name === "create_controller_entry");
+
     const isControladoriaWriteIntent = looksLikeControladoriaWriteIntent(input.message);
-    const eventReadIntent = isControladoriaWriteIntent
+    const eventReadIntent = isControladoriaWriteIntent || hasControladoriaPending
       ? { matched: false } as ReturnType<typeof resolveEventReadIntent>
       : resolveEventReadIntent(input.message);
     if (eventReadIntent.matched) {
@@ -1082,7 +1092,9 @@ export class GoatAIGeminiAgent {
     }
 
     // 2. Deterministic State Machine / Confirmation Resolver against active pending actions
-    const activePending = await this.conversationManager.getActivePendingAction(conversation.id);
+    const activePending =
+      preRoutingPending ||
+      (await this.conversationManager.getActivePendingAction(conversation.id));
     const maskedSender = maskPhone(input.externalSenderId || conversation.external_conversation_id);
 
     if (activePending && activePending.status === "ready_for_confirmation") {
@@ -1312,7 +1324,65 @@ export class GoatAIGeminiAgent {
 
       const paymentStatusIntent =
         inferControladoriaPaymentStatusFromText(input.message);
-      if (paymentStatusIntent) {
+
+      const normalizedItemText = (value: string) =>
+        value
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, " ")
+          .trim();
+
+      const currentItems = Array.isArray(draftArgs.items)
+        ? [...draftArgs.items]
+        : [];
+      const existingOpenItems = Array.isArray(draftArgs.open_items)
+        ? [...draftArgs.open_items]
+        : [];
+
+      let splitSpecificPendingItems = false;
+      if (paymentStatusIntent === "Pendente" && currentItems.length > 1) {
+        const normalizedMessage = normalizedItemText(input.message);
+        const mentionedIndexes: number[] = [];
+
+        currentItems.forEach((item: any, index: number) => {
+          const itemName = normalizedItemText(String(item?.product_name || ""));
+          if (!itemName) return;
+
+          const significantTokens = itemName
+            .split(" ")
+            .filter((token) => token.length >= 3);
+
+          const matchesItem =
+            normalizedMessage.includes(itemName) ||
+            (significantTokens.length > 0 &&
+              significantTokens.every((token) => normalizedMessage.includes(token))) ||
+            (/mao de obra/.test(itemName) && /mao de obra/.test(normalizedMessage));
+
+          if (matchesItem) mentionedIndexes.push(index);
+        });
+
+        if (
+          mentionedIndexes.length > 0 &&
+          mentionedIndexes.length < currentItems.length
+        ) {
+          const pendingSet = new Set(mentionedIndexes);
+          const newlyOpen = currentItems
+            .filter((_item: any, index: number) => pendingSet.has(index))
+            .map((item: any) => ({ ...item, status: "Pendente" }));
+          const remainingPaid = currentItems
+            .filter((_item: any, index: number) => !pendingSet.has(index))
+            .map((item: any) => ({ ...item, status: "Pago" }));
+
+          draftArgs.items = remainingPaid;
+          draftArgs.open_items = [...existingOpenItems, ...newlyOpen];
+          draftArgs.status = "Pago";
+          splitSpecificPendingItems = true;
+          draftModified = true;
+        }
+      }
+
+      if (paymentStatusIntent && !splitSpecificPendingItems) {
         draftArgs.status = paymentStatusIntent;
         if (paymentStatusIntent === "Pendente") {
           draftArgs.payment_method = "Não informado";
@@ -1365,7 +1435,7 @@ export class GoatAIGeminiAgent {
           draftModified = true;
 
           const payerMatch = input.message.match(
-            /(?:pessoal|pago\s+por|pagou|foi\s+pago\s+por)\s*[:,-]?\s*(?:por\s+)?([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ .'-]{1,60})$/i,
+            /(?:pessoal|pago\s+por|pagou|foi\s+pago\s+por)\s*[:,-]?\s*(?:por\s+)?([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ .'-]{1,60}?)(?=\n|$)/i,
           );
           const candidatePayer = payerMatch?.[1]?.trim();
           if (
