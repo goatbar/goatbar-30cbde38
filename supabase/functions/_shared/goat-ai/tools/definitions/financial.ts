@@ -803,12 +803,13 @@ export const searchControllerEntriesTool: GoatAIToolDefinition = {
     properties: {
       query: { type: "string", description: "Termo de busca (fornecedor, produto ou descrição)." },
       category: { type: "string", description: "Categoria (ex: 'Insumos', 'Fornecedor', 'Equipe')." },
+      status: { type: "string", description: "Filtra por status financeiro: 'Pago' ou 'Pendente'." },
       limit: { type: "number", description: "Limite de resultados (padrão 10)." },
     },
     required: [],
   },
   requiresConfirmation: false,
-  execute: async (ctx: ToolContext, args: { query?: string; category?: string; limit?: number }): Promise<ToolExecutionResult> => {
+  execute: async (ctx: ToolContext, args: { query?: string; category?: string; status?: "Pago" | "Pendente"; limit?: number }): Promise<ToolExecutionResult> => {
     let queryBuilder = ctx.supabaseAdmin
       .from("financial_expenses")
       .select("id, date, supplier_name, amount, category, modality, description, status, payment_method")
@@ -817,6 +818,9 @@ export const searchControllerEntriesTool: GoatAIToolDefinition = {
 
     if (args.category) {
       queryBuilder = queryBuilder.ilike("category", `%${args.category}%`);
+    }
+    if (args.status === "Pago" || args.status === "Pendente") {
+      queryBuilder = queryBuilder.eq("status", args.status);
     }
     if (args.query) {
       queryBuilder = queryBuilder.or(`supplier_name.ilike.%${args.query}%,description.ilike.%${args.query}%`);
@@ -1010,7 +1014,7 @@ export const getFinancialSummaryTool: GoatAIToolDefinition = {
 
     const { data: expenses } = await ctx.supabaseAdmin
       .from("financial_expenses")
-      .select("amount, category, modality, entry_type, cash_effect")
+      .select("amount, category, modality, entry_type, cash_effect, status")
       .gte("date", startDate)
       .lte("date", endDate);
 
@@ -1021,6 +1025,15 @@ export const getFinancialSummaryTool: GoatAIToolDefinition = {
     const totalEventRevenue = allEntries
       .filter((e: any) => e.entry_type === "Receita")
       .reduce((acc: number, e: any) => acc + (Number(e.amount) || 0), 0);
+    const paidExpenses = allEntries
+      .filter((e: any) => e.entry_type === "Despesa" && e.status === "Pago")
+      .reduce((acc: number, e: any) => acc + (Number(e.amount) || 0), 0);
+    const pendingExpenses = allEntries
+      .filter((e: any) => e.entry_type === "Despesa" && e.status === "Pendente")
+      .reduce((acc: number, e: any) => acc + (Number(e.amount) || 0), 0);
+    const cashOut = allEntries
+      .filter((e: any) => e.entry_type === "Despesa" && e.cash_effect !== false)
+      .reduce((acc: number, e: any) => acc + (Number(e.amount) || 0), 0);
 
     return {
       success: true,
@@ -1028,6 +1041,9 @@ export const getFinancialSummaryTool: GoatAIToolDefinition = {
         period: `${targetMonth}/${targetYear}`,
         total_revenue: totalEventRevenue,
         total_expenses: totalExpenses,
+        paid_expenses: paidExpenses,
+        pending_expenses: pendingExpenses,
+        cash_out: cashOut,
         net_profit: totalEventRevenue - totalExpenses,
         expenses_count: (expenses || []).length,
       },
