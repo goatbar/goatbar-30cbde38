@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { AIRouter, FRIENDLY_EXHAUSTED_MESSAGE } from "../supabase/functions/_shared/goat-ai/router/ai-router";
+import { AIRouter, FRIENDLY_EXHAUSTED_MESSAGE, VISION_EXHAUSTED_MESSAGE } from "../supabase/functions/_shared/goat-ai/router/ai-router";
 import { CircuitBreakerManager } from "../supabase/functions/_shared/goat-ai/router/circuit-breaker";
 import { OpenAICompatibleProvider } from "../supabase/functions/_shared/goat-ai/router/providers/openai-compatible-provider";
 import { CloudflareAIProvider } from "../supabase/functions/_shared/goat-ai/router/providers/cloudflare-provider";
@@ -881,6 +881,126 @@ describe("Goat AI - Multi-Provider Router & Zero-Paid Policy", () => {
         privacyClassification: "FINANCIAL",
       })
     ).rejects.toThrow("PRIVACY_VIOLATION");
+  });
+
+  it("Gemini troca 3.8 por 3.7 quando o modelo principal retorna 503 por alta demanda", async () => {
+    const requestedUrls: string[] = [];
+    globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
+      requestedUrls.push(url);
+
+      if (url.includes("/gemini-3.8-flash:generateContent")) {
+        return {
+          ok: false,
+          status: 503,
+          headers: new Headers(),
+          text: async () => JSON.stringify({
+            error: {
+              code: 503,
+              message: "This model is currently experiencing high demand.",
+              status: "UNAVAILABLE",
+            },
+          }),
+        };
+      }
+
+      if (url.includes("/gemini-3.7-flash:generateContent")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      functionCall: {
+                        name: "create_controladoria_expense",
+                        args: {
+                          amount: 71.6,
+                          items: [{ product_name: "Lima Tahiti", quantity: 2.52 }],
+                        },
+                      },
+                    },
+                  ],
+                },
+                finishReason: "STOP",
+              },
+            ],
+          }),
+        };
+      }
+
+      return {
+        ok: false,
+        status: 500,
+        headers: new Headers(),
+        text: async () => "unexpected",
+      };
+    });
+
+    const gemini = new GeminiRouterAdapter({
+      apiKey: "key",
+      model: "gemini-3.8-flash",
+    });
+
+    const result = await gemini.generate({
+      messages: [
+        {
+          role: "user",
+          content: "Leia esta nota",
+          attachments: [
+            { mimeType: "image/jpeg", dataBase64: "dGVzdA==" },
+          ],
+        },
+      ],
+      tools: [
+        {
+          name: "create_controladoria_expense",
+          description: "Cria compra",
+          parameters: { type: "object", properties: {} },
+        },
+      ],
+      requiredCapabilities: { supportsVision: true },
+      privacyClassification: "COMMERCIAL",
+    });
+
+    expect(result.modelId).toBe("gemini-3.7-flash");
+    expect(result.toolCalls?.[0]?.name).toBe("create_controladoria_expense");
+    expect(requestedUrls.some((url) => url.includes("gemini-3.8-flash"))).toBe(true);
+    expect(requestedUrls.some((url) => url.includes("gemini-3.7-flash"))).toBe(true);
+    expect(requestedUrls.some((url) => url.includes("gemini-3.6-flash"))).toBe(false);
+  });
+
+  it("falha total de visão não usa a mensagem genérica de IA", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      headers: new Headers(),
+      text: async () => "high demand",
+    } as any);
+
+    const router = new AIRouter({
+      overrideSecrets: {
+        gemini: { apiKey: "key", model: "gemini-3.8-flash" },
+      },
+    });
+
+    const result = await router.generate({
+      messages: [
+        {
+          role: "user",
+          content: "Foto enviada",
+          attachments: [
+            { mimeType: "image/jpeg", dataBase64: "dGVzdA==" },
+          ],
+        },
+      ],
+      requiredCapabilities: { supportsVision: true },
+      privacyClassification: "COMMERCIAL",
+    });
+
+    expect(result.text).toBe(VISION_EXHAUSTED_MESSAGE);
+    expect(result.text).not.toBe(FRIENDLY_EXHAUSTED_MESSAGE);
   });
 
   // 28. Circuit breaker persiste e continua válido
