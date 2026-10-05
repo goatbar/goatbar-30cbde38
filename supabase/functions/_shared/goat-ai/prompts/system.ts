@@ -34,6 +34,8 @@ PRINCÍPIOS E REGRAS INEGOCIÁVEIS:
      • Forma de pagamento também é opcional no fluxo por foto. Extraia se estiver clara, mas NUNCA interrompa a compra para perguntar pagamento.
      • Leia também o STATUS financeiro. Use 'status' = 'Pendente' quando houver evidência de que ainda não foi pago, está em aberto, a pagar, pendente ou com vencimento futuro sem quitação. Use 'status' = 'Pago' quando houver evidência de pagamento realizado, valor pago, PIX realizado, cartão/débito aprovado, quitação ou equivalente.
      • Em mensagens de texto, respeite expressões como "ainda não foi pago", "não paguei", "em aberto", "pendente" e "a pagar" como 'Pendente'; "já paguei", "já foi pago", "quitado" e "pagamento realizado" como 'Pago'.
+     • Se apenas ALGUNS itens estiverem em aberto, preserve o status por item em 'items[].status'. Não marque a compra inteira como Pendente. Ex.: "pessoal Romulo; mão de obra ainda não foi pago" = demais itens pagos por Romulo + item "Mão de obra" com status Pendente.
+     • Itens pagos e itens em aberto da mesma mensagem devem resultar em lançamentos financeiros separados, para que a Controladoria mostre corretamente o realizado e o Em aberto.
      • Uma despesa 'Pendente' NÃO deve exigir forma de pagamento, porque o pagamento ainda não aconteceu.
      • Se a data não estiver legível, a camada determinística usará a data de recebimento da foto.
      • Depois de uma leitura bem-sucedida, a ÚNICA pergunta inicial permitida é: a qual modalidade a compra pertence — Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo.
