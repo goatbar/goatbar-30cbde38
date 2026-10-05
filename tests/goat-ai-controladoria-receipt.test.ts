@@ -340,6 +340,41 @@ describe("GIA Controladoria Receipt & Expense Integration", () => {
       expect(preview).toContain("🟠 *Status:* Em aberto (Pendente)");
       expect(preview).not.toContain("*Forma de Pagamento:*");
     });
+    it("continuação 'pessoal Romulo Chaves / mão de obra ainda não foi pago' mantém status Em aberto e não exige pagamento", async () => {
+      savedPendingActions.push({
+        id: "pending-payment-status",
+        conversation_id: "conv-ctrl-1",
+        tool_name: "create_controladoria_expense",
+        status: "collecting",
+        arguments: {
+          amount: 100,
+          date: "2026-10-04",
+          modality: "7 Steak House",
+          category: "Equipe",
+          description: "Mão de Obra Semanal",
+          entry_type: "Despesa",
+        },
+        missing_fields: ["payment_method"],
+        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      });
+
+      const agent = new GoatAIGeminiAgent(mockSupabase, "mock-key", toolRegistry);
+      const result = await agent.processTurn({
+        channel: "whatsapp",
+        message: "pessoal Romulo Chaves\nMão de obra ainda não foi pago",
+        userId: "user-socio-1",
+        userName: "Mari Avelar",
+      });
+
+      expect(result.pendingAction?.status).toBe("ready_for_confirmation");
+      expect(result.reply).toContain("🟠 *Status:* Em aberto (Pendente)");
+      expect(result.reply).not.toContain("*Forma de Pagamento:*");
+      expect(result.reply).not.toContain("Não encontrei com segurança o evento");
+      expect(savedPendingActions[0].arguments.status).toBe("Pendente");
+      expect(savedPendingActions[0].arguments.payment_method).toBe("Não informado");
+      expect(savedPendingActions[0].arguments.payment_payer_name).toBeUndefined();
+    });
+
     it("modelo Gemini de visão migra configurações antigas para 3.8 flash", () => {
       expect(normalizeGeminiModel("gemini-2.5-flash")).toBe("gemini-3.8-flash");
       expect(normalizeGeminiModel("gemini-3.6-flash")).toBe("gemini-3.6-flash");
