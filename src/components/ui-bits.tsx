@@ -133,6 +133,18 @@ export function StatusBadge({ status }: { status: string }) {
       label: "Aguardando Retorno",
     },
     em_assinatura: { bg: "bg-primary/10", fg: "text-primary", label: "Em Assinatura" },
+    financeiro_pago: {
+      bg: "bg-[rgba(22,163,74,0.15)]",
+      fg: "text-[#22c55e]",
+      label: "Pago",
+      border: "border-[rgba(34,197,94,0.35)]",
+    },
+    financeiro_em_aberto: {
+      bg: "bg-warning/10",
+      fg: "text-warning",
+      label: "Em aberto",
+      border: "border-warning/30",
+    },
 
     // Legado e Outros
     confirmado: {
