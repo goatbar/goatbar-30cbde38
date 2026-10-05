@@ -423,7 +423,7 @@ export function validateControladoriaExpenseDraft(
 
   // 6. Category: infer primarily from what was purchased, not from supplier.
   const itemNamesHint = (draft.items || []).map((item) => item.product_name || "").join(" ");
-  const category = normalizeControladoriaCategory(
+  const inferredCategory = normalizeControladoriaCategory(
     draft.category,
     `${itemNamesHint} ${draft.description || ""} ${supplierName}`,
   );
@@ -443,9 +443,15 @@ export function validateControladoriaExpenseDraft(
 
   const hasExplicitPaymentMethod =
     typeof draft.payment_method === "string" && draft.payment_method.trim().length > 0;
-  const paymentMethod = entryType === "Alocação Interna"
-    ? "Interno/Estoque"
-    : normalizeControladoriaPaymentMethod(draft.payment_method);
+  const category: ControladoriaCategory =
+    entryType === "Receita" ? "Outros" : inferredCategory;
+
+  const paymentMethod: ControladoriaPaymentMethod =
+    entryType === "Receita"
+      ? "Não informado"
+      : entryType === "Alocação Interna"
+        ? "Interno/Estoque"
+        : normalizeControladoriaPaymentMethod(draft.payment_method);
   const paymentPayerName = (draft.payment_payer_name || "").trim() || undefined;
 
   // Despesa em aberto ainda não tem meio de pagamento realizado; não pergunte
@@ -519,6 +525,11 @@ export function validateControladoriaExpenseDraft(
 
   if (resolvedModality === "7 Steak House" && isLabor) {
     description = "Mão de Obra Semanal";
+  } else if (!description && entryType === "Receita") {
+    description =
+      resolvedModality === "Evento"
+        ? "Receita de evento"
+        : `Receita - ${resolvedModality}`;
   } else if (!description) {
     const allNormalizedItems = [...normalizedItems, ...normalizedOpenItems];
     if (allNormalizedItems.length > 0) {
@@ -633,14 +644,19 @@ export function formatControladoriaExpenseWhatsAppPreview(
 
   const lines: string[] = [
     isRevenue
-      ? `💰 *Receita na Controladoria*`
+      ? `💰 *Lançamento de Receita na Controladoria*`
       : isPurchase
         ? `🧾 *Compra na Controladoria*`
         : `🧾 *Lançamento de Gasto na Controladoria*`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
-    `📍 *Unidade/Destino:* ${modalityDisplay}`,
-    `🏷️ *Categoria/Campo:* ${categoryDisplay}`,
+    isRevenue
+      ? `📍 *Modalidade:* ${modalityDisplay}`
+      : `📍 *Unidade/Destino:* ${modalityDisplay}`,
   ];
+
+  if (!isRevenue) {
+    lines.push(`🏷️ *Categoria/Campo:* ${categoryDisplay}`);
+  }
 
   if (expense.supplier_name && expense.supplier_name !== "Fornecedor não identificado") {
     lines.push(`🏪 *Fornecedor:* ${expense.supplier_name}`);
@@ -662,7 +678,11 @@ export function formatControladoriaExpenseWhatsAppPreview(
         ? "✅ *Status:* Pago"
         : "🟠 *Status:* Em aberto (Pendente)",
   );
-  if (expense.payment_method !== "Não informado" && expense.status === "Pago") {
+  if (
+    !isRevenue &&
+    expense.payment_method !== "Não informado" &&
+    expense.status === "Pago"
+  ) {
     lines.push(`💳 *Forma de Pagamento:* ${paymentDisplay}`);
   }
   lines.push(`📝 *Descrição:* ${expense.description}`);
