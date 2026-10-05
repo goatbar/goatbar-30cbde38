@@ -1497,7 +1497,7 @@ function ControladoriaPage() {
                         personal_reimbursed: status === "Pendente" ? false : p.personal_reimbursed,
                         personal_reimbursed_at: status === "Pendente" ? null : p.personal_reimbursed_at,
                       }));
-                    }
+                    }}
                     className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
                   >
                     <option value="Pendente">Em aberto</option>
