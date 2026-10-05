@@ -57,10 +57,30 @@ export function toOpenAIMessages(
         content: m.content || "",
       });
     } else if (m.role === "user") {
-      let content = m.content || "";
+      let textContent = m.content || "";
       if (m.senderName) {
-        content = `[De: ${m.senderName}]\n${content}`;
+        textContent = `[De: ${m.senderName}]\n${textContent}`;
       }
+
+      const imageAttachments = (m.attachments || []).filter((att) =>
+        Boolean(att?.dataBase64) &&
+        String(att?.mimeType || "").toLowerCase().startsWith("image/")
+      );
+
+      // OpenAI-compatible multimodal format. This is required by OpenRouter
+      // so it can act as an independent vision fallback when Gemini is busy.
+      const content: any = imageAttachments.length > 0
+        ? [
+            { type: "text", text: textContent || "Leia esta imagem e processe os dados visíveis." },
+            ...imageAttachments.map((att) => ({
+              type: "image_url",
+              image_url: {
+                url: `data:${att.mimeType || "image/jpeg"};base64,${att.dataBase64}`,
+              },
+            })),
+          ]
+        : textContent;
+
       result.push({
         role: "user",
         content,
