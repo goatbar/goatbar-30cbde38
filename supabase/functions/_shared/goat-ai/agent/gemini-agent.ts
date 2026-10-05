@@ -1689,6 +1689,28 @@ export class GoatAIGeminiAgent {
         .toLowerCase()
         .trim();
 
+      const explicitEntryTypeCorrection = detectExplicitControladoriaEntryType(input.message);
+      if (explicitEntryTypeCorrection) {
+        draftArgs.entry_type = explicitEntryTypeCorrection;
+        if (explicitEntryTypeCorrection === "Receita") {
+          // Receita recebida nunca deve permanecer semanticamente como gasto/compra.
+          draftArgs.status = "Pago";
+          if (/\bevento\b/i.test(normalizedInput)) {
+            draftArgs.modality = "Evento";
+          }
+          if (
+            !draftArgs.description ||
+            /\b(compra|despesa|gasto)\b/i.test(String(draftArgs.description))
+          ) {
+            draftArgs.description = "Receita";
+          }
+        }
+        draftModified = true;
+        console.log(
+          `[GOAT-AI][CONTROLADORIA_DRAFT][ENTRY_TYPE_CORRECTED] correlationId=${correlationId} entryType=${explicitEntryTypeCorrection}`,
+        );
+      }
+
       const paymentStatusIntent =
         inferControladoriaPaymentStatusFromText(input.message);
 
