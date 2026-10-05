@@ -859,7 +859,55 @@ export class GoatAIGeminiAgent {
     const hasControladoriaPending =
       preRoutingPending &&
       (preRoutingPending.tool_name === "create_controladoria_expense" ||
-        preRoutingPending.tool_name === "create_controller_entry");
+        preRoutingPending.tool_name === "create_controller_entry" ||
+        preRoutingPending.tool_name === "create_controladoria_expense_batch");
+
+    // Lists with one or more date headings and item/value lines are purchases,
+    // not event queries. Parse them before any LLM routing so a provider cannot
+    // reinterpret dates as event-search dates.
+    if (
+      !preRoutingPending &&
+      (!input.attachments || input.attachments.length === 0)
+    ) {
+      const parsedBatches = parseStructuredControladoriaBatch(input.message);
+      if (parsedBatches.length > 0) {
+        const batchArgs = {
+          batches: parsedBatches,
+          responsible: input.userName || "Sócio Goat Bar",
+          source_message_id: input.externalMessageId,
+          operation_id: input.externalMessageId || `batch_${correlationId}`,
+          status: "Pago",
+        };
+        const pending = await this.conversationManager.savePendingAction(
+          conversation.id,
+          "create_controladoria_expense_batch",
+          batchArgs,
+          ["modality", "payment_method"],
+          `${parsedBatches.length} compra(s) separadas por data aguardando modalidade e pagamento`,
+          "collecting",
+        );
+        const reply = "A qual modalidade essa compra pertence? Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo.";
+        const assistantMsg = await this.conversationManager.saveMessage(
+          conversation.id,
+          "assistant",
+          reply,
+          "text",
+        );
+        return {
+          conversationId: conversation.id,
+          messageId: assistantMsg.id,
+          reply,
+          toolCallsExecuted: [],
+          pendingAction: {
+            id: pending.id,
+            toolName: pending.tool_name,
+            status: pending.status,
+            missingFields: pending.missing_fields,
+            summary: pending.summary,
+          },
+        };
+      }
+    }
 
     const isControladoriaWriteIntent = looksLikeControladoriaWriteIntent(input.message);
     const eventReadIntent = isControladoriaWriteIntent || hasControladoriaPending
