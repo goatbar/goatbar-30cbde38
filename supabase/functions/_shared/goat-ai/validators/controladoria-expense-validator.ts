@@ -623,6 +623,7 @@ export function formatControladoriaExpenseWhatsAppPreview(
 
   const categoryDisplay = isSteakLabor ? "Mão de Obra Semanal" : expense.category;
 
+  const isRevenue = expense.entry_type === "Receita";
   const isPurchase =
     expense.entry_type === "Despesa" &&
     (Boolean(expense.invoice_url) ||
@@ -631,7 +632,11 @@ export function formatControladoriaExpenseWhatsAppPreview(
       expense.description.toLowerCase().includes("compra"));
 
   const lines: string[] = [
-    isPurchase ? `🧾 *Compra na Controladoria*` : `🧾 *Lançamento de Gasto na Controladoria*`,
+    isRevenue
+      ? `💰 *Receita na Controladoria*`
+      : isPurchase
+        ? `🧾 *Compra na Controladoria*`
+        : `🧾 *Lançamento de Gasto na Controladoria*`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `📍 *Unidade/Destino:* ${modalityDisplay}`,
     `🏷️ *Categoria/Campo:* ${categoryDisplay}`,
@@ -689,9 +694,11 @@ export function formatControladoriaExpenseWhatsAppPreview(
 
   lines.push(
     `━━━━━━━━━━━━━━━━━━━━━━`,
-    isPurchase
-      ? `Posso confirmar esta compra na Controladoria? *(Responda 'sim' para lançar ou 'cancela' para descartar)*`
-      : `Posso confirmar o lançamento desse gasto na Controladoria? *(Responda 'sim' para lançar ou 'cancela' para descartar)*`
+    isRevenue
+      ? `Posso confirmar esta receita na Controladoria? *(Responda 'sim' para lançar ou 'cancela' para descartar)*`
+      : isPurchase
+        ? `Posso confirmar esta compra na Controladoria? *(Responda 'sim' para lançar ou 'cancela' para descartar)*`
+        : `Posso confirmar o lançamento desse gasto na Controladoria? *(Responda 'sim' para lançar ou 'cancela' para descartar)*`
   );
 
   return lines.join("\n");
