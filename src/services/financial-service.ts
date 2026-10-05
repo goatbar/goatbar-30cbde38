@@ -22,6 +22,8 @@ export interface FinancialExpense {
   responsible: string;
   payment_method: PaymentMethod;
   payment_payer_name?: string;
+  personal_reimbursed?: boolean;
+  personal_reimbursed_at?: string;
   status: FinancialStatus;
   entry_type?: FinancialEntryType;
   cash_effect?: boolean;
