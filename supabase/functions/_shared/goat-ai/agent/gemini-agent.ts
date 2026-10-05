@@ -1428,6 +1428,139 @@ export class GoatAIGeminiAgent {
       }
     }
 
+    // 2.15 Deterministic multi-date Controladoria batch follow-up.
+    if (activePending && activePending.tool_name === "create_controladoria_expense_batch") {
+      const draftArgs = { ...(activePending.arguments || {}) };
+      const batches = Array.isArray(draftArgs.batches)
+        ? draftArgs.batches.map((batch: any) => ({
+            ...batch,
+            items: Array.isArray(batch.items) ? [...batch.items] : [],
+            open_items: Array.isArray(batch.open_items) ? [...batch.open_items] : [],
+          }))
+        : [];
+      draftArgs.batches = batches;
+
+      const normalizedInput = input.message
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
+
+      const modRes = normalizeControladoriaModality(input.message);
+      if (modRes.matched) {
+        draftArgs.modality = modRes.displayName;
+      }
+
+      const paymentStatusIntent = inferControladoriaPaymentStatusFromText(input.message);
+      if (paymentStatusIntent === "Pendente") {
+        const normalizedMessage = normalizedInput.replace(/[^a-z0-9]+/g, " ");
+        for (const batch of batches) {
+          const paid: any[] = [];
+          const open: any[] = Array.isArray(batch.open_items) ? [...batch.open_items] : [];
+          for (const item of batch.items || []) {
+            const itemName = String(item?.product_name || "")
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, " ")
+              .trim();
+            const isLabor =
+              /mao de obra|equipe|staff|freelancer|bartender|barman|garcom/.test(itemName);
+            const specificallyMentioned =
+              itemName && normalizedMessage.includes(itemName);
+            if ((isLabor && /mao de obra|equipe|staff|freelancer/.test(normalizedMessage)) || specificallyMentioned) {
+              open.push({ ...item, status: "Pendente" });
+            } else {
+              paid.push({ ...item, status: "Pago" });
+            }
+          }
+          batch.items = paid;
+          batch.open_items = open;
+        }
+      }
+
+      if (/\bpix\b/i.test(normalizedInput)) {
+        draftArgs.payment_method = "PIX Goat";
+        delete draftArgs.payment_payer_name;
+      } else if (/\b(cartao|credito)\b/i.test(normalizedInput)) {
+        draftArgs.payment_method = "Cartão de crédito Goat";
+        delete draftArgs.payment_payer_name;
+      } else if (/\bpessoal\b/i.test(normalizedInput)) {
+        draftArgs.payment_method = "Pessoal";
+        const payerMatch = input.message.match(
+          /(?:pessoal|pago\s+por|pagou|foi\s+pago\s+por)\s*[:,-]?\s*(?:por\s+)?([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ .'-]{1,60}?)(?=\n|$)/i,
+        );
+        if (payerMatch?.[1]?.trim()) {
+          draftArgs.payment_payer_name = payerMatch[1].trim();
+        }
+      } else if (
+        draftArgs.payment_method === "Pessoal" &&
+        !draftArgs.payment_payer_name &&
+        activePending.missing_fields?.includes("payment_payer_name")
+      ) {
+        const payerOnly = input.message.trim();
+        if (payerOnly.length >= 2 && payerOnly.length <= 80) {
+          draftArgs.payment_payer_name = payerOnly;
+        }
+      }
+
+      const missingFields: string[] = [];
+      if (!draftArgs.modality) missingFields.push("modality");
+      if (!draftArgs.payment_method) missingFields.push("payment_method");
+      if (draftArgs.payment_method === "Pessoal" && !draftArgs.payment_payer_name) {
+        missingFields.push("payment_payer_name");
+      }
+
+      let reply = "";
+      let status: "collecting" | "ready_for_confirmation" = "collecting";
+      let summary = "";
+
+      if (missingFields.includes("modality")) {
+        reply = "A qual modalidade essa compra pertence? Evento, Goat Botequim, 7 Steak House, Degustação ou Ativo.";
+        summary = "Aguardando modalidade da compra em lote";
+      } else if (missingFields.includes("payment_method")) {
+        reply = "Qual foi a forma de pagamento desta compra: Cartão de crédito Goat, PIX Goat ou Pessoal?";
+        summary = "Aguardando forma de pagamento da compra em lote";
+      } else if (missingFields.includes("payment_payer_name")) {
+        reply = "Quem realizou o pagamento pessoal desta compra?";
+        summary = "Aguardando nome de quem realizou o pagamento";
+      } else {
+        reply = formatControladoriaBatchPreview(draftArgs);
+        summary = reply;
+        status = "ready_for_confirmation";
+      }
+
+      const finalPending = await this.conversationManager.savePendingAction(
+        conversation.id,
+        "create_controladoria_expense_batch",
+        draftArgs,
+        missingFields,
+        summary,
+        status,
+      );
+
+      const assistantMsg = await this.conversationManager.saveMessage(
+        conversation.id,
+        "assistant",
+        reply,
+        "text",
+      );
+
+      return {
+        conversationId: conversation.id,
+        messageId: assistantMsg.id,
+        reply,
+        toolCallsExecuted: [],
+        pendingAction: {
+          id: finalPending.id,
+          toolName: finalPending.tool_name,
+          status: finalPending.status,
+          missingFields: finalPending.missing_fields,
+          summary: finalPending.summary,
+        },
+      };
+    }
+
     // 2.2 Check for Controladoria Direct Modifications (unit selection or amount correction on active pending action)
     if (
       activePending &&
