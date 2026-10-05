@@ -2590,13 +2590,18 @@ INSTRUÇÃO OBRIGATÓRIA: Para consultar drinks/cardápio, orçamento, dados ger
                 const currentMessageId = userMessage.id;
                 const recentUserInstruction = [...recentMessagesForMedia]
                   .reverse()
-                  .find((msg: any) =>
-                    msg?.id !== currentMessageId &&
-                    msg?.role === "user" &&
-                    msg?.message_type === "text" &&
-                    detectExplicitControladoriaEntryType(msg?.content) &&
-                    looksLikeControladoriaWriteIntent(msg?.content)
-                  );
+                  .find((msg: any) => {
+                    const createdAtMs = msg?.created_at ? Date.parse(msg.created_at) : 0;
+                    const isRecent = createdAtMs > 0 && Date.now() - createdAtMs <= 120_000;
+                    return (
+                      msg?.id !== currentMessageId &&
+                      msg?.role === "user" &&
+                      msg?.message_type === "text" &&
+                      isRecent &&
+                      detectExplicitControladoriaEntryType(msg?.content) &&
+                      looksLikeControladoriaWriteIntent(msg?.content)
+                    );
+                  });
                 const inheritedFinancialText =
                   input.message === "Foto enviada" || input.message === "Documento enviado"
                     ? String(recentUserInstruction?.content || "")
