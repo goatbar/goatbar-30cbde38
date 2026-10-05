@@ -266,7 +266,6 @@ function looksLikeControladoriaWriteIntent(value: string): boolean {
     /\b(lanca|lancar|registre|registrar|registra|adiciona|adicionar|inclui|incluir|coloca|colocar)\b/.test(
       normalized,
     );
-  if (!hasWriteVerb) return false;
 
   const hasControladoriaSubject =
     /\b(controladoria|despesa|gasto|compra|reembolso|fornecedor|insumo|conta\s+a\s+pagar)\b/.test(
@@ -279,7 +278,12 @@ function looksLikeControladoriaWriteIntent(value: string): boolean {
   const hasFinancialStatus =
     inferControladoriaPaymentStatusFromText(value) !== undefined;
 
-  return hasControladoriaSubject || (hasLaborSubject && hasFinancialStatus);
+  // "Mão de obra ainda não foi paga", "equipe em aberto", etc. are
+  // unambiguously financial updates even without repeating "lançar".
+  if (hasLaborSubject && hasFinancialStatus) return true;
+
+  if (!hasWriteVerb) return false;
+  return hasControladoriaSubject;
 }
 
 function looksLikeBarePurchaseStartIntent(value: string): boolean {
@@ -1351,8 +1355,11 @@ export class GoatAIGeminiAgent {
         activePending.missing_fields?.includes("payment_payer_name");
 
       if (
-        activePending.missing_fields?.includes("payment_method") ||
-        /\b(pix|cartao|credito|pessoal)\b/i.test(normalizedInput)
+        paymentStatusIntent !== "Pendente" &&
+        (
+          activePending.missing_fields?.includes("payment_method") ||
+          /\b(pix|cartao|credito|pessoal)\b/i.test(normalizedInput)
+        )
       ) {
         if (/\bpix\b/i.test(normalizedInput)) {
           draftArgs.payment_method = "PIX Goat";
@@ -1378,6 +1385,7 @@ export class GoatAIGeminiAgent {
       }
 
       if (
+        paymentStatusIntent !== "Pendente" &&
         activePending.missing_fields?.includes("payment_payer_name") &&
         draftArgs.payment_method === "Pessoal" &&
         !draftArgs.payment_payer_name
