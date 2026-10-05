@@ -33,7 +33,7 @@ jobs:
         run: npx vitest run tests/goat-ai-router.test.ts -t "Gemini troca 3.8 por 3.7|falha total de visão"
 
       - name: Testar despesas pagas e em aberto pela GIA
-        run: npx vitest run tests/goat-ai-controladoria-receipt.test.ts -t "lê linguagem natural de pago versus em aberto|despesa pendente não exige forma de pagamento|mão de obra ainda não paga vira Pendente"
+        run: npx vitest run tests/goat-ai-controladoria-receipt.test.ts -t "lê linguagem natural de pago versus em aberto|despesa pendente não exige forma de pagamento|mão de obra ainda não paga vira Pendente|follow-up separa itens pagos de mão de obra Em aberto"
 
       - name: Build do projeto
         run: npm run build
