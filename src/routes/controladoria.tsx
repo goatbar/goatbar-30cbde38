@@ -164,8 +164,24 @@ function ControladoriaPage() {
     const caixaSaida = expenses
       .filter((e) => e.entry_type === "Despesa" && e.cash_effect !== false)
       .reduce((a, b) => a + Number(b.amount), 0);
+    const reembolsosPendentes = expenses
+      .filter(
+        (e) =>
+          e.entry_type === "Despesa" &&
+          e.status === "Pago" &&
+          e.payment_method === "Pessoal" &&
+          !e.personal_reimbursed,
+      )
+      .reduce((a, b) => a + Number(b.amount), 0);
 
-    return { receitas, custos, pendente, caixaSaida, resultado: receitas - custos };
+    return {
+      receitas,
+      custos,
+      pendente,
+      caixaSaida,
+      reembolsosPendentes,
+      resultado: receitas - custos,
+    };
   }, [expenses]);
 
   const chartDataByCategory = useMemo(() => {
@@ -331,10 +347,32 @@ function ControladoriaPage() {
           total_price: totalPrice,
         };
       });
+      const payload =
+        form.entry_type === "Receita"
+          ? {
+              ...form,
+              category: "Outros" as FinancialCategory,
+              payment_method: "Não informado" as PaymentMethod,
+              payment_payer_name: "",
+              personal_reimbursed: false,
+              personal_reimbursed_at: null,
+              due_date: undefined,
+              supplier_name: undefined,
+              supplier_cnpj: undefined,
+              staff_name: undefined,
+              staff_role: undefined,
+              classification: "Direto" as FinancialClassification,
+              items: [],
+            }
+          : {
+              ...form,
+              items: normalizedItems,
+            };
+
       const saved = editingExpenseId
         ? await financialService.updateExpenseWithItems(editingExpenseId, {
-            ...form,
-            items: normalizedItems,
+            ...payload,
+            items: form.entry_type === "Receita" ? [] : normalizedItems,
             manually_edited_fields: manuallyEdited,
             personal_reimbursed:
               form.payment_method === "Pessoal" ? Boolean(form.personal_reimbursed) : false,
@@ -344,8 +382,8 @@ function ControladoriaPage() {
                 : null,
           })
         : await financialService.createExpense({
-            ...form,
-            items: normalizedItems,
+            ...payload,
+            items: form.entry_type === "Receita" ? [] : normalizedItems,
             manually_edited_fields: manuallyEdited,
           });
       if ((form as any).invoice_url) {
@@ -455,6 +493,7 @@ function ControladoriaPage() {
   };
 
   const paymentLabel = (expense: FinancialExpense) => {
+    if (expense.entry_type === "Receita") return expense.status === "Pendente" ? "A receber" : "Recebido";
     if (expense.status === "Pendente") return "Em aberto";
     if (expense.payment_method === "Pessoal" && expense.payment_payer_name) {
       return `Pessoal · ${expense.payment_payer_name}`;
@@ -512,11 +551,12 @@ function ControladoriaPage() {
 
       <div className="page-container mx-auto w-full max-w-[1600px] space-y-5 lg:space-y-7">
         {/* RESUMO */}
-        <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-5">
           <StatCard label="Receitas" value={fmtBRL(totals.receitas)} icon={<CheckCircle2 className="text-emerald-500" />} />
           <StatCard label="Custos Alocados" value={fmtBRL(totals.custos)} />
           <StatCard label="Resultado" value={fmtBRL(totals.resultado)} />
           <StatCard label="Em aberto" value={fmtBRL(totals.pendente)} icon={<AlertCircle className="text-amber-500" />} />
+          <StatCard label="Reembolsos pendentes" value={fmtBRL(totals.reembolsosPendentes)} icon={<User className="text-amber-500" />} />
         </div>
 
         {/* DASHBOARD CHARTS */}
@@ -1220,7 +1260,16 @@ function ControladoriaPage() {
                       setForm((p) => ({
                         ...p,
                         entry_type: entryType,
-                        payment_method: entryType === "Alocação Interna" ? "Interno/Estoque" : (p.payment_method === "Interno/Estoque" ? "PIX Goat" : p.payment_method),
+                        category: entryType === "Receita" ? "Outros" : p.category,
+                        payment_method:
+                          entryType === "Receita"
+                            ? "Não informado"
+                            : entryType === "Alocação Interna"
+                              ? "Interno/Estoque"
+                              : (p.payment_method === "Interno/Estoque" ? "PIX Goat" : p.payment_method),
+                        payment_payer_name: entryType === "Receita" ? "" : p.payment_payer_name,
+                        personal_reimbursed: entryType === "Receita" ? false : p.personal_reimbursed,
+                        personal_reimbursed_at: entryType === "Receita" ? null : p.personal_reimbursed_at,
                         status: entryType === "Receita" || entryType === "Alocação Interna" ? "Pago" : p.status,
                       }));
                     }}
@@ -1243,7 +1292,7 @@ function ControladoriaPage() {
                 </div>
 
                 <div>
-                  <label className="label-eyebrow">Data do Gasto</label>
+                  <label className="label-eyebrow">{form.entry_type === "Receita" ? "Data da Receita" : "Data do Gasto"}</label>
                   <input
                     type="date"
                     value={form.date}
