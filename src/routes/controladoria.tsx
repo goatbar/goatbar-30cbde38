@@ -1384,7 +1384,7 @@ function ControladoriaPage() {
                   </div>
                 )}
 
-                <div>
+                <div className={form.entry_type === "Receita" ? "hidden" : ""}>
                   <label className="label-eyebrow">Tipo de Gasto</label>
                   <select
                     value={form.category}
@@ -1414,7 +1414,7 @@ function ControladoriaPage() {
                   </div>
                 )}
 
-                <div>
+                <div className={form.entry_type === "Receita" ? "hidden" : ""}>
                   <label className="label-eyebrow">CNPJ</label>
                   <input
                     type="text"
@@ -1450,7 +1450,7 @@ function ControladoriaPage() {
                   </>
                 )}
 
-                <div>
+                <div className={form.entry_type === "Receita" ? "hidden" : ""}>
                   <label className="label-eyebrow">Data Prevista Pagto (Vencimento)</label>
                   <input
                     type="date"
@@ -1460,7 +1460,7 @@ function ControladoriaPage() {
                   />
                 </div>
 
-                <div>
+                <div className={form.entry_type === "Receita" ? "hidden" : ""}>
                   <label className="label-eyebrow">Responsável pela Compra</label>
                   <input
                     type="text"
@@ -1471,7 +1471,7 @@ function ControladoriaPage() {
                   />
                 </div>
 
-                <div>
+                <div className={form.entry_type === "Receita" ? "hidden" : ""}>
                   <label className="label-eyebrow">Método Pagto</label>
                   <select
                     value={form.payment_method}
@@ -1554,7 +1554,7 @@ function ControladoriaPage() {
                   </select>
                 </div>
 
-                <div>
+                <div className={form.entry_type === "Receita" ? "hidden" : ""}>
                   <label className="label-eyebrow">Classificação</label>
                   <select
                     value={form.classification}
@@ -1573,7 +1573,7 @@ function ControladoriaPage() {
 
                 {/* FILE UPLOADS */}
                 <div className="md:col-span-2 pt-4 border-t border-border grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
+                  <div className={`space-y-2 ${form.entry_type === "Receita" ? "hidden" : ""}`}>
                     <label className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1.5">
                       <FileText className="h-3 w-3" /> Nota Fiscal (Print)
                     </label>
@@ -1602,7 +1602,7 @@ function ControladoriaPage() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1.5">
-                      <Receipt className="h-3 w-3" /> Comprovante Pagto
+                      <Receipt className="h-3 w-3" /> {form.entry_type === "Receita" ? "Comprovante da Receita" : "Comprovante Pagto"}
                     </label>
                     <div className="relative group">
                       <input
@@ -1631,6 +1631,7 @@ function ControladoriaPage() {
               </div>
 
               {/* Items Table */}
+              {form.entry_type !== "Receita" && (
               <div className="mt-6 border-t border-border pt-6">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-bold">Itens da Compra</h3>
@@ -1749,6 +1750,7 @@ function ControladoriaPage() {
                   })()
                 )}
               </div>
+              )}
 
             </div>
             
