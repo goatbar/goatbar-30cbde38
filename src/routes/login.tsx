@@ -129,7 +129,7 @@ function LoginPage() {
               Primeiro acesso
             </Link>
             <p className="mt-1 text-xs text-muted-foreground">
-              Crie sua senha usando o WhatsApp já autorizado na GIA.
+              Use o código temporário fornecido pelo administrador para criar sua senha.
             </p>
           </div>
         </div>
