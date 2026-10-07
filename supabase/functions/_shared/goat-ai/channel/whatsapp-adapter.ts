@@ -3,11 +3,6 @@ import { ConversationManager } from "../conversation/manager.ts";
 import { AgentAttachment } from "../types.ts";
 import { formatWhatsAppMessage } from "../formatter.ts";
 import {
-  generateFirstAccessRecoveryLink,
-  isFirstAccessCommand,
-  markFirstAccessDelivery,
-} from "../../first-access.ts";
-import {
   getEnv,
   getWhatsAppMessagesUrl,
   getWhatsAppMediaUrl,
@@ -415,42 +410,6 @@ export class WhatsAppChannelAdapter {
       }
     }
 
-    if (message.type === "text" && isFirstAccessCommand(messageText)) {
-      const recovery = await generateFirstAccessRecoveryLink(
-        this.supabaseAdmin,
-        resolvedUser.userId,
-        "whatsapp",
-      );
-
-      if (!recovery.ok) {
-        const reply =
-          recovery.code === "RATE_LIMIT"
-            ? "Já gerei um link de acesso há pouco. Aguarde um minuto antes de pedir outro."
-            : "Não consegui gerar o link de primeiro acesso agora. Tente novamente em alguns instantes.";
-        await this.sendTextMessage(senderPhone, reply, correlationId);
-        return { handled: true, reply, reason: recovery.code || "first_access_failed" };
-      }
-
-      const reply =
-        `Goat Bar — primeiro acesso\n\n` +
-        `Olá, ${recovery.displayName || resolvedUser.name}. Toque no link abaixo para criar sua senha de acesso ao sistema:\n\n` +
-        `${recovery.actionLink}\n\n` +
-        `Este link é pessoal. Não encaminhe para ninguém. Se você não solicitou, ignore esta mensagem.`;
-
-      const sent = await this.sendTextMessage(senderPhone, reply, correlationId);
-      await markFirstAccessDelivery(
-        this.supabaseAdmin,
-        recovery.requestId,
-        sent,
-        sent ? undefined : "whatsapp_reply_failed",
-      );
-
-      return {
-        handled: true,
-        reply: sent ? reply : undefined,
-        reason: sent ? "first_access_link_sent" : "first_access_link_delivery_failed",
-      };
-    }
 
     // 3. Process with Gemini Agent
     const turnId = `wa_turn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
