@@ -11,6 +11,8 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const AUTH_INIT_TIMEOUT_MS = 8_000;
+const AUTH_REQUEST_TIMEOUT_MS = 15_000;
 
 function getAuthErrorMessage(message: string | undefined) {
   if (!message) return null;
@@ -30,20 +32,62 @@ function getAuthErrorMessage(message: string | undefined) {
   return message;
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
+    let authEventSeen = false;
 
-    supabase.auth.getSession().then(({ data }) => {
+    const watchdog = setTimeout(() => {
       if (!mounted) return;
-      setSession(data.session ?? null);
+      console.error("[auth] A leitura da sessão excedeu o tempo limite; liberando a interface.");
       setLoading(false);
-    });
+    }, AUTH_INIT_TIMEOUT_MS);
+
+    void supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (!mounted || authEventSeen) return;
+
+        if (error) {
+          console.error("[auth] Falha ao restaurar a sessão:", error);
+          setSession(null);
+        } else {
+          setSession(data.session ?? null);
+        }
+
+        clearTimeout(watchdog);
+        setLoading(false);
+      })
+      .catch((error) => {
+        if (!mounted || authEventSeen) return;
+        console.error("[auth] Erro inesperado ao restaurar a sessão:", error);
+        clearTimeout(watchdog);
+        setSession(null);
+        setLoading(false);
+      });
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!mounted) return;
+
+      authEventSeen = true;
+      clearTimeout(watchdog);
       setSession(nextSession ?? null);
       setLoading(false);
 
@@ -57,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       mounted = false;
+      clearTimeout(watchdog);
       authListener.subscription.unsubscribe();
     };
   }, []);
@@ -71,10 +116,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const internalAuthEmail = `${username}@goatbar.internal`;
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: internalAuthEmail,
-        password,
-      });
+      const { error } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email: internalAuthEmail,
+          password,
+        }),
+        AUTH_REQUEST_TIMEOUT_MS,
+        "A autenticação demorou mais que o esperado. Recarregue a página e tente novamente.",
+      );
 
       return { error: getAuthErrorMessage(error?.message) };
     } catch (error) {
