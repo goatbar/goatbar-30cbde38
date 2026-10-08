@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { UserAccessSettings } from "@/components/settings/UserAccessSettings";
 import { AppShell, PageHeader } from "@/components/AppShell";
 import { SectionCard, PrimaryButton, GhostButton } from "@/components/ui-bits";
 import { tiposEvento } from "@/lib/mock-data";
@@ -22,6 +23,7 @@ import {
   CheckCircle2,
   AlertCircle,
   LogOut,
+  Users,
 } from "lucide-react";
 
 export const Route = createFileRoute("/configuracoes")({
@@ -39,6 +41,7 @@ const sections = [
   { id: "templates", label: "Templates de contrato", icon: FileText },
   { id: "unidades", label: "Unidades de negócio", icon: Building2 },
   { id: "integracoes", label: "Integrações", icon: Link2 },
+  { id: "usuarios", label: "Usuários e acessos", icon: Users },
 ];
 
 function ConfigPage() {
@@ -242,6 +245,12 @@ function ConfigPage() {
         </aside>
 
         <div className="xl:col-span-9 space-y-5">
+          {activeTab === "usuarios" && (
+            <SectionCard title="Usuários e acessos" subtitle="Primeiro acesso e recuperação de senha">
+              <UserAccessSettings />
+            </SectionCard>
+          )}
+
           {activeTab === "diretrizes" &&
             grupos.map((g) => (
               <SectionCard key={g} title={`Diretrizes · ${g}`} subtitle="Editáveis em tempo real">
