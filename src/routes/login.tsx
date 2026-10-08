@@ -126,10 +126,10 @@ function LoginPage() {
               to="/primeiro-acesso"
               className="text-sm font-medium text-primary hover:underline"
             >
-              Primeiro acesso
+              Primeiro acesso / Esqueci minha senha
             </Link>
             <p className="mt-1 text-xs text-muted-foreground">
-              Use o código temporário fornecido pelo administrador para criar sua senha.
+              Primeiro acesso ou esqueceu a senha? Solicite um código à administração.
             </p>
           </div>
         </div>
