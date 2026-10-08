@@ -44,8 +44,8 @@ serve(async (req) => {
     if (!bearer) return json({ error: "Não autorizado." }, 401);
     const { data: callerData, error: callerError } = await admin.auth.getUser(bearer);
     if (callerError || !callerData.user) return json({ error: "Não autorizado." }, 401);
-    const { data: callerProfile } = await admin.from("goatbar_user_profiles").select("active").eq("user_id", callerData.user.id).maybeSingle();
-    if (!callerProfile?.active) return json({ error: "Não autorizado." }, 403);
+    const { data: callerProfile } = await admin.from("goatbar_user_profiles").select("active, username").eq("user_id", callerData.user.id).maybeSingle();
+    if (!callerProfile?.active || callerProfile.username !== "mariavelar") return json({ error: "Apenas o administrador de acessos pode emitir códigos." }, 403);
 
     const username = normalizeUsername(body?.username);
     const { data: profile } = await admin.from("goatbar_user_profiles").select("user_id, active").eq("username", username).maybeSingle();
