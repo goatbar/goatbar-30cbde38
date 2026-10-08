@@ -1,8 +1,15 @@
-/** Returns a wa.me URL, or null when the value is not a plausible telephone number. */
+/** Returns a WhatsApp URL for a Brazilian phone, or null for invalid formats. */
 export function whatsappHref(phone: string | null | undefined): string | null {
-  const digits = String(phone ?? "").replace(/\D/g, "");
-  if (digits.length < 10 || digits.length > 13) return null;
-  if (digits.length > 11 && !digits.startsWith("55")) return null;
-  const normalized = digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
-  return `https://wa.me/${normalized}`;
+  let digits = String(phone ?? "").replace(/\D/g, "");
+  // Some event registrations include a domestic trunk prefix: 0 + DDD + phone.
+  if (digits.startsWith("0") && (digits.length === 11 || digits.length === 12)) {
+    digits = digits.slice(1);
+  }
+  // International prefix 55 can be provided with or without a +.
+  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
+    digits = digits.slice(2);
+  }
+  if (!/^\d{2}\d{8,9}$/.test(digits)) return null;
+  if (digits.startsWith("0")) return null;
+  return `https://wa.me/55${digits}`;
 }
