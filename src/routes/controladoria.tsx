@@ -8,6 +8,7 @@ import {
   StatusBadge,
 } from "@/components/ui-bits";
 import { fmtBRL } from "@/lib/format";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Plus,
   Search,
@@ -62,6 +63,16 @@ export const Route = createFileRoute("/controladoria")({
     </AppShell>
   ),
 });
+
+function safeExpenseDate(date: string | null | undefined) {
+  if (!date || typeof date !== "string") return "Data não informada";
+  try {
+    const parsed = parseISO(date);
+    return Number.isNaN(parsed.getTime()) ? "Data inválida" : format(parsed, "dd/MM/yy");
+  } catch {
+    return "Data inválida";
+  }
+}
 
 function ControladoriaPage() {
   const [expenses, setExpenses] = useState<FinancialExpense[]>([]);
@@ -135,7 +146,7 @@ function ControladoriaPage() {
       const data = await financialService.listExpenses(filters);
       setExpenses(data);
       
-      const { data: eventsData } = await (window as any).supabase
+      const { data: eventsData } = await supabase
         .from("events")
         .select("id, client_name, event_name, date, status")
         .order("date", { ascending: false });
@@ -704,7 +715,7 @@ function ControladoriaPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      {format(parseISO(exp.date), "dd/MM/yy")} · {exp.modality}
+                      {safeExpenseDate(exp.date)} · {exp.modality}
                     </div>
                     <h3 className="mt-1 line-clamp-2 text-sm font-semibold text-foreground">
                       {exp.description}
@@ -855,7 +866,7 @@ function ControladoriaPage() {
                 {expenses.map((exp) => (
                   <tr key={exp.id} className="group hover:bg-surface/50 transition-colors">
                     <td className="py-4 text-xs font-medium">
-                      {format(parseISO(exp.date), "dd/MM/yy")}
+                      {safeExpenseDate(exp.date)}
                     </td>
                     <td className="py-4">
                       <div className="text-sm font-semibold">{exp.description}</div>
