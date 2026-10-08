@@ -1,5 +1,5 @@
-const SHELL_CACHE = "goatbar-pwa-shell-v4";
-const RUNTIME_CACHE = "goatbar-pwa-runtime-v4";
+const SHELL_CACHE = "goatbar-pwa-shell-v5";
+const RUNTIME_CACHE = "goatbar-pwa-runtime-v5";
 const APP_SHELL = "/";
 
 const PRECACHE = [
@@ -92,6 +92,29 @@ self.addEventListener("fetch", (event) => {
     url.pathname === "/favicon.ico";
 
   if (!isStaticAsset) {
+    return;
+  }
+
+  // Hashed build assets must prefer the network after a new deployment.
+  // A previously cached bundle can otherwise keep running an outdated auth flow.
+  const isBuildAsset = url.pathname.startsWith("/assets/") &&
+    (request.destination === "script" || request.destination === "style" ||
+      /\\.(?:js|css)$/.test(url.pathname));
+
+  if (isBuildAsset) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            void caches.open(RUNTIME_CACHE)
+              .then((cache) => cache.put(request, copy))
+              .catch(() => undefined);
+          }
+          return response;
+        })
+        .catch(async () => (await caches.match(request)) || Response.error()),
+    );
     return;
   }
 
