@@ -35,5 +35,8 @@ jobs:
       - name: Testar despesas pagas e em aberto pela GIA
         run: npx vitest run tests/goat-ai-controladoria-receipt.test.ts -t "lê linguagem natural de pago versus em aberto|despesa pendente não exige forma de pagamento|mão de obra ainda não paga vira Pendente|continuação 'pessoal Romulo Chaves|follow-up separa itens pagos de mão de obra Em aberto"
 
+      - name: Verificar lotes numerados e evitar confusão com drinks
+        run: npx vitest run tests/goat-ai-numbered-controladoria.test.ts
+
       - name: Build do projeto
         run: npm run build
