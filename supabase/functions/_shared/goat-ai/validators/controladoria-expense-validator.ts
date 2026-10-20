@@ -30,6 +30,8 @@ export interface ControladoriaExpenseDraft {
   description?: string;
   payment_method?: string;
   payment_payer_name?: string;
+  staff_name?: string;
+  staff_role?: string;
   entry_type?: string;
   tasting_id?: string;
   status?: string;
@@ -72,6 +74,8 @@ export interface NormalizedControladoriaExpense {
   description: string;
   payment_method: ControladoriaPaymentMethod;
   payment_payer_name?: string;
+  staff_name?: string;
+  staff_role?: string;
   entry_type: ControladoriaEntryType;
   tasting_id?: string;
   status: ControladoriaStatus;
@@ -459,7 +463,7 @@ export function validateControladoriaExpenseDraft(
   if (
     entryType === "Despesa" &&
     status === "Pago" &&
-    !hasExplicitPaymentMethod &&
+    (!hasExplicitPaymentMethod || paymentMethod === "Não informado") &&
     !isReceiptPurchase
   ) {
     missingFields.push("payment_method");
@@ -573,6 +577,8 @@ export function validateControladoriaExpenseDraft(
     description,
     payment_method: paymentMethod,
     payment_payer_name: paymentPayerName,
+    staff_name: category === "Equipe" ? draft.staff_name?.trim() || undefined : undefined,
+    staff_role: category === "Equipe" ? draft.staff_role?.trim() || undefined : undefined,
     entry_type: entryType,
     tasting_id: draft.tasting_id || undefined,
     status,
@@ -663,6 +669,10 @@ export function formatControladoriaExpenseWhatsAppPreview(
   }
   if (expense.supplier_cnpj) {
     lines.push(`📄 *CNPJ:* ${expense.supplier_cnpj}`);
+  }
+  if (expense.category === "Equipe" && expense.staff_name) {
+    lines.push(`👤 *Profissional:* ${expense.staff_name}`);
+    if (expense.staff_role) lines.push(`🧰 *Função:* ${expense.staff_role}`);
   }
 
   lines.push(
