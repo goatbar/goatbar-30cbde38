@@ -567,6 +567,8 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
       description: { type: "string", description: "Descrição dos itens ou finalidade da compra." },
       payment_method: { type: "string", description: "Forma de pagamento quando estiver identificável: 'Cartão de crédito Goat', 'PIX Goat', 'Pessoal', 'Interno/Estoque' ou 'Não informado'." },
       payment_payer_name: { type: "string", description: "Nome de quem pagou quando a forma de pagamento for Pessoal." },
+      staff_name: { type: "string", description: "Nome do profissional a quem se refere a mão de obra. Não confundir com o pagador." },
+      staff_role: { type: "string", description: "Função exercida pelo profissional, se informada." },
       entry_type: { type: "string", description: "Tipo do lançamento: 'Despesa', 'Receita' ou 'Alocação Interna'." },
       tasting_id: { type: "string", description: "ID da degustação quando houver uma degustação específica relacionada." },
       status: {
@@ -685,6 +687,8 @@ export const createControladoriaExpenseTool: GoatAIToolDefinition = {
       description: norm.description,
       payment_method: primaryStatus === "Pendente" ? "Não informado" : norm.payment_method,
       payment_payer_name: primaryStatus === "Pendente" ? null : (norm.payment_payer_name || null),
+      staff_name: norm.staff_name || null,
+      staff_role: norm.staff_role || null,
       entry_type: norm.entry_type,
       tasting_id: norm.tasting_id || null,
       cash_effect:
