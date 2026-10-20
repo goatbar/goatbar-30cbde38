@@ -880,6 +880,21 @@ export class GoatAIGeminiAgent {
         preRoutingPending.tool_name === "create_controller_entry" ||
         preRoutingPending.tool_name === "create_controladoria_expense_batch");
 
+    // "próximo" após um lançamento concluído significa continuar a sequência,
+    // não consultar sessões de vendas nem alegar ausência de registros.
+    if (!preRoutingPending && /^\s*pr[oó]xim[oa]\s*[.!]?\s*$/i.test(input.message)) {
+      const recent = await this.conversationManager.getRecentMessages(conversation.id, 6);
+      const hasRecentExpense = recent.some(m =>
+        m.role === "assistant" &&
+        /(lan[cç]amento|gasto|despesa).*(registrad|lan[cç]ad|controladoria)|controladoria.*(registrad|lan[cç]ad)/i.test(m.content || "")
+      );
+      if (hasRecentExpense) {
+        const reply = "Pode enviar o próximo gasto.";
+        const assistantMsg = await this.conversationManager.saveMessage(conversation.id, "assistant", reply, "text");
+        return { conversationId: conversation.id, messageId: assistantMsg.id, reply, toolCallsExecuted: [], pendingAction: null };
+      }
+    }
+
     // Lists with one or more date headings and item/value lines are purchases,
     // not event queries. Parse them before any LLM routing so a provider cannot
     // reinterpret dates as event-search dates.
