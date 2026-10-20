@@ -120,13 +120,29 @@ export function numberedExpenseMissingFields(entries: NumberedControladoriaExpen
 export function updateNumberedExpenseFromReply(entries: NumberedControladoriaExpense[], reply: string): NumberedControladoriaExpense[] {
   const result = entries.map(entry => ({...entry, items: [...entry.items], open_items: [] as []}));
   const norm = String(reply || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const sharedPayment = /\bpix\b/.test(norm) ? "PIX Goat"
-    : /\bcartao\b|\bcredito\b/.test(norm) ? "Cartão de crédito Goat" : undefined;
-  if (sharedPayment) {
-    // Corrigir somente os pagamentos ainda ambíguos, sem sobrescrever "Pessoal".
+  const hasPix = /\bpix\b/.test(norm);
+  const hasCard = /\bcartao\b|\bcredito\b/.test(norm);
+  const scopedPayments = Array.from(reply.matchAll(
+    /\b(\d{1,2})(?:\s*e\s*(\d{1,2}))?\s*(?:via|foram?|foi|:|-)?\s*(pix|cart[aã]o(?:\s+de\s+cr[eé]dito)?)/gi,
+  ));
+  for (const match of scopedPayments) {
+    const payment = /pix/i.test(match[3]) ? "PIX Goat" : "Cartão de crédito Goat";
+    const entryNumbers = [Number(match[1]), ...(match[2] ? [Number(match[2])] : [])];
+    for (const entry of result) {
+      if (entryNumbers.includes(entry.number) && entry.status === "Pago" && !entry.payment_method) {
+        entry.payment_method = payment;
+        delete entry.payment_hint;
+      }
+    }
+  }
+  // Resposta global "PIX" ou "todos no cartão" corrige os pendentes.
+  // Se houver os dois meios na mesma frase sem destinatário inequívoco,
+  // não atribuir arbitrariamente um deles aos lançamentos restantes.
+  if (scopedPayments.length === 0 && hasPix !== hasCard) {
+    const payment = hasPix ? "PIX Goat" : "Cartão de crédito Goat";
     for (const entry of result) {
       if (entry.status === "Pago" && !entry.payment_method) {
-        entry.payment_method = sharedPayment;
+        entry.payment_method = payment;
         delete entry.payment_hint;
       }
     }
