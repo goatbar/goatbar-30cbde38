@@ -85,6 +85,18 @@ describe("GIA — lançamentos numerados na Controladoria", () => {
     expect(preview).toContain("Confirma");
   });
 
+  it("respeita métodos diferentes no mesmo lote sem sobrescrever pagamentos pessoais", () => {
+    const entries = parseNumberedControladoriaEntries(userMessage);
+    const partiallyUpdated = updateNumberedExpenseFromReply(entries, "3 e 4 via PIX; 7 e 8 via cartão");
+    expect(partiallyUpdated[0].payment_method).toBe("PIX Goat");
+    expect(partiallyUpdated[1].payment_method).toBe("PIX Goat");
+    expect(partiallyUpdated[2].payment_method).toBe("Pessoal");
+    expect(partiallyUpdated[3].payment_method).toBe("Pessoal");
+    expect(partiallyUpdated[4].payment_method).toBe("Cartão de crédito Goat");
+    expect(partiallyUpdated[5].payment_method).toBe("Cartão de crédito Goat");
+    expect(numberedExpenseMissingFields(partiallyUpdated, "7 Steak House")).toEqual(["date:8"]);
+  });
+
   it("nunca interpreta pagamentos financeiros como aliases de drinks", () => {
     expect(parseDrinkMatchInstructions(userMessage)).toEqual([]);
     expect(parseDrinkMatchInstructions("Pagamento: Goat\n* Pagamento: Pessoal (Romulo)")).toEqual([]);
