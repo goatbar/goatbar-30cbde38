@@ -31,6 +31,13 @@ import {
 } from "../validators/controladoria-expense-validator.ts";
 import { resolveBusinessUnit } from "../matchers/unit-matcher.ts";
 import {
+  parseNumberedControladoriaEntries,
+  numberedExpenseMissingFields,
+  numberedExpenseMissingQuestion,
+  updateNumberedExpenseFromReply,
+  formatNumberedControladoriaPreview,
+} from "../validators/numbered-controladoria-expenses.ts";
+import {
   loadDrinkCatalogAndAliases,
   parseDrinkMatchInstructions,
   learnDrinkAlias,
@@ -880,6 +887,51 @@ export class GoatAIGeminiAgent {
       !preRoutingPending &&
       (!input.attachments || input.attachments.length === 0)
     ) {
+      // "Lançamento 3 - Mão de obra João (10/10/26): Valor/Status/Pagamento"
+      // must remain independent financial expenses, never drink aliases.
+      const numberedExpenses = parseNumberedControladoriaEntries(input.message);
+      if (numberedExpenses.length > 0) {
+        const previous = await this.conversationManager.getRecentMessages(conversation.id, 10);
+        const findFinancialModality = (content: string): string | undefined => {
+          const normalized = content.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+          if (/7\s*steak\s*house|7steakhouse/.test(normalized)) return "7 Steak House";
+          if (/goat\s*botequim/.test(normalized)) return "Goat Botequim";
+          const explicit = normalized.match(/(?:modalidade|unidade|destino)\s*:\s*(evento|degustacao|ativo)\b/);
+          if (explicit) return explicit[1] === "evento" ? "Evento" : explicit[1] === "ativo" ? "Ativo" : "Degustação";
+          return undefined;
+        };
+        // A última modalidade explícita da conversa financeira permanece
+        // contexto, mas "Pagamento: Goat" NÃO significa Goat Botequim.
+        const modality = findFinancialModality(input.message) ||
+          [...previous].reverse().find(m => /controladoria|lancamento|lançamento|modalidade|gasto/i.test(m.content || "") &&
+            findFinancialModality(m.content || ""))?.content;
+        const inheritedModality = modality ? findFinancialModality(modality) : undefined;
+        const missing = numberedExpenseMissingFields(numberedExpenses, inheritedModality);
+        const batchArgs = {
+          batch_mode: "numbered",
+          batches: numberedExpenses,
+          modality: inheritedModality,
+          responsible: input.userName || "Sócio Goat Bar",
+          source_message_id: input.externalMessageId,
+          operation_id: input.externalMessageId || `numbered_${correlationId}`,
+        };
+        const ready = missing.length === 0;
+        const reply = ready
+          ? formatNumberedControladoriaPreview(numberedExpenses, inheritedModality!)
+          : numberedExpenseMissingQuestion(numberedExpenses, inheritedModality);
+        const pending = await this.conversationManager.savePendingAction(
+          conversation.id, "create_controladoria_expense_batch", batchArgs, missing, reply,
+          ready ? "ready_for_confirmation" : "collecting",
+        );
+        const assistantMsg = await this.conversationManager.saveMessage(conversation.id, "assistant", reply, "text");
+        return {
+          conversationId: conversation.id, messageId: assistantMsg.id, reply, toolCallsExecuted: [],
+          pendingAction: {
+            id: pending.id, toolName: pending.tool_name, status: pending.status,
+            missingFields: pending.missing_fields, summary: pending.summary,
+          },
+        };
+      }
       const parsedBatches = parseStructuredControladoriaBatch(input.message);
       if (parsedBatches.length > 0) {
         const batchArgs = {
@@ -1282,9 +1334,9 @@ export class GoatAIGeminiAgent {
             const batch = batches[batchIndex] || {};
             const expenseArgs = {
               ...batch,
-              modality: args.modality,
-              payment_method: args.payment_method,
-              payment_payer_name: args.payment_payer_name,
+              modality: batch.modality || args.modality,
+              payment_method: batch.payment_method || args.payment_method,
+              payment_payer_name: batch.payment_payer_name || args.payment_payer_name,
               status: batch.status || args.status || "Pago",
               responsible: args.responsible || input.userName || "Sócio Goat Bar",
               source_message_id: args.source_message_id,
@@ -1552,6 +1604,34 @@ export class GoatAIGeminiAgent {
           }))
         : [];
       draftArgs.batches = batches;
+
+      if (draftArgs.batch_mode === "numbered") {
+        const explicitModality = normalizeControladoriaModality(input.message);
+        // Recognize a modality only when clearly supplied, not the name "Goat"
+        // from a payment field.
+        if (/7\s*steak\s*house|7steakhouse|goat\s*botequim|\bdegusta[cç][aã]o\b|\bativo\b|\bmodalidade\s*:\s*evento\b/i.test(input.message) &&
+            explicitModality.matched) {
+          draftArgs.modality = explicitModality.displayName;
+        }
+        draftArgs.batches = updateNumberedExpenseFromReply(batches, input.message);
+        const missing = numberedExpenseMissingFields(draftArgs.batches, draftArgs.modality);
+        const ready = missing.length === 0;
+        const reply = ready
+          ? formatNumberedControladoriaPreview(draftArgs.batches, draftArgs.modality)
+          : numberedExpenseMissingQuestion(draftArgs.batches, draftArgs.modality);
+        const finalPending = await this.conversationManager.savePendingAction(
+          conversation.id, "create_controladoria_expense_batch", draftArgs, missing, reply,
+          ready ? "ready_for_confirmation" : "collecting",
+        );
+        const assistantMsg = await this.conversationManager.saveMessage(conversation.id, "assistant", reply, "text");
+        return {
+          conversationId: conversation.id, messageId: assistantMsg.id, reply, toolCallsExecuted: [],
+          pendingAction: {
+            id: finalPending.id, toolName: finalPending.tool_name, status: finalPending.status,
+            missingFields: finalPending.missing_fields, summary: finalPending.summary,
+          },
+        };
+      }
 
       const normalizedInput = input.message
         .normalize("NFD")
