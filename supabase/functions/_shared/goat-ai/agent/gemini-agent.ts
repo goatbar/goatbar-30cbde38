@@ -1342,7 +1342,7 @@ export class GoatAIGeminiAgent {
               source_message_id: args.source_message_id,
               operation_id:
                 batch.operation_id ||
-                `${args.operation_id || args.source_message_id || correlationId}:${batch.date || batchIndex}`,
+                `${args.operation_id || args.source_message_id || correlationId}:${args.batch_mode === "numbered" ? `n${batch.number || batchIndex + 1}` : batch.date || batchIndex}`,
               entry_type: "Despesa",
               classification: batch.classification || "Direto",
             };
