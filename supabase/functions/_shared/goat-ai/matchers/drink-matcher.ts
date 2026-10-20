@@ -793,7 +793,10 @@ export function parseDrinkMatchInstructions(text: string): Array<{ alias: string
   const nonDrinkKeywords = [
     "total", "faturamento", "receita", "lucro", "custo", "despesa", "saldo", "repasse",
     "reposicao", "mao de obra", "barman", "barmen", "data", "periodo", "unidade", "evento",
-    "cliente", "pix", "cartao", "dinheiro", "taxa", "desconto", "status", "responsavel"
+    "cliente", "pix", "cartao", "dinheiro", "taxa", "desconto", "status", "responsavel",
+    "pagamento", "forma de pagamento", "metodo pagamento", "valor", "valor total",
+    "lancamento", "insumos", "profissional", "nome", "funcao", "categoria", "fornecedor",
+    "tipo de gasto", "data do gasto", "data do lancamento"
   ];
 
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -804,8 +807,10 @@ export function parseDrinkMatchInstructions(text: string): Array<{ alias: string
     const match = line.match(/^([^=\->:]+?)\s*(?:=|->|=>|:)\s*(.+)$/);
     if (!match) continue;
 
-    const left = match[1].trim();
+    // Marcadores de lista e campos estruturados de gastos NÃO são aliases de drinks.
+    const left = match[1].replace(/^[*•\-\s]+/, "").replace(/[\s*]+$/, "").trim();
     const right = match[2].trim();
+    if (/^(?:lancamento|lançamento)\s+\d+\b/i.test(left)) continue;
 
     if (left.length < 2 || right.length < 2) continue;
 
