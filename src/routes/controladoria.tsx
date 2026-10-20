@@ -321,7 +321,7 @@ function ControladoriaPage() {
       alert("Informe quem realizou o pagamento pessoal.");
       return;
     }
-    if (form.entry_type === "Despesa") {
+    if (form.entry_type === "Despesa" && form.category !== "Equipe") {
       const firstItem = (form.items || [])[0];
       if (!firstItem?.product_name?.trim() || Number(firstItem?.quantity || 0) <= 0) {
         alert("Informe o que foi comprado e a quantidade.");
@@ -334,7 +334,9 @@ function ControladoriaPage() {
         const value = (form as any)[field];
         return value !== undefined && value !== null && String(value).trim() !== "";
       });
-      const sourceItems = form.items || [];
+      const sourceItems = form.category === "Equipe"
+        ? (form.items || []).filter((item: any) => item.product_name?.trim())
+        : (form.items || []);
       const normalizedItems = sourceItems.map((item: any) => {
         const quantity = Number(item.quantity || 0);
         const currentTotal = Number(item.total_price || 0);
@@ -370,13 +372,15 @@ function ControladoriaPage() {
               due_date: undefined,
               supplier_name: undefined,
               supplier_cnpj: undefined,
-              staff_name: undefined,
-              staff_role: undefined,
+              staff_name: "",
+              staff_role: "",
               classification: "Direto" as FinancialClassification,
               items: [],
             }
           : {
               ...form,
+              staff_name: form.category === "Equipe" ? form.staff_name?.trim() || "" : "",
+              staff_role: form.category === "Equipe" ? form.staff_role?.trim() || "" : "",
               items: normalizedItems,
             };
 
@@ -720,6 +724,11 @@ function ControladoriaPage() {
                     <h3 className="mt-1 line-clamp-2 text-sm font-semibold text-foreground">
                       {exp.description}
                     </h3>
+                    {exp.category === "Equipe" && exp.staff_name && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Referente a: {exp.staff_name}{exp.staff_role ? ` · ${exp.staff_role}` : ""}
+                      </p>
+                    )}
                   </div>
                   <button onClick={() => toggleStatus(exp)} className="shrink-0">
                     <StatusBadge
@@ -736,7 +745,7 @@ function ControladoriaPage() {
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-muted px-2 py-1 text-[9px] font-bold uppercase tracking-tight">
-                    {exp.category}
+                    {exp.category === "Equipe" ? "Mão de obra" : exp.category}
                   </span>
                   {exp.entry_type && (
                     <span className="rounded-full border border-border px-2 py-1 text-[9px] font-semibold uppercase tracking-tight text-muted-foreground">
@@ -870,13 +879,18 @@ function ControladoriaPage() {
                     </td>
                     <td className="py-4">
                       <div className="text-sm font-semibold">{exp.description}</div>
+                      {exp.category === "Equipe" && exp.staff_name && (
+                        <div className="text-xs text-muted-foreground">
+                          Referente a: {exp.staff_name}{exp.staff_role ? ` · ${exp.staff_role}` : ""}
+                        </div>
+                      )}
                       <div className="text-[10px] text-muted-foreground flex items-center gap-1">
                         <User className="h-2.5 w-2.5" /> {exp.responsible} · {exp.classification}
                       </div>
                     </td>
                     <td className="py-4">
                       <span className="text-[10px] font-bold bg-muted px-2 py-0.5 rounded-full uppercase tracking-tighter">
-                        {exp.category}
+                        {exp.category === "Equipe" ? "Mão de obra" : exp.category}
                       </span>
                     </td>
                     <td className="py-4 text-xs">{exp.modality}</td>
@@ -1059,7 +1073,13 @@ function ControladoriaPage() {
                   <div className="label-eyebrow mb-3">Classificação</div>
                   <div className="space-y-2 text-sm">
                     <div><span className="text-muted-foreground">Modalidade:</span> {selectedExpense.modality}</div>
-                    <div><span className="text-muted-foreground">Categoria:</span> {selectedExpense.category}</div>
+                    <div><span className="text-muted-foreground">Categoria:</span> {selectedExpense.category === "Equipe" ? "Mão de obra" : selectedExpense.category}</div>
+                    {selectedExpense.category === "Equipe" && (
+                      <>
+                        <div><span className="text-muted-foreground">Referente a:</span> {selectedExpense.staff_name || "Não informado"}</div>
+                        {selectedExpense.staff_role && <div><span className="text-muted-foreground">Função:</span> {selectedExpense.staff_role}</div>}
+                      </>
+                    )}
                     <div><span className="text-muted-foreground">Tipo:</span> {selectedExpense.entry_type || "Despesa"}</div>
                     <div><span className="text-muted-foreground">Classificação:</span> {selectedExpense.classification}</div>
                     <div><span className="text-muted-foreground">Responsável:</span> {selectedExpense.responsible || "Não informado"}</div>
@@ -1292,13 +1312,13 @@ function ControladoriaPage() {
                   </select>
                 </div>
                 <div className="space-y-4">
-                  <label className="label-eyebrow">{form.entry_type === "Receita" ? "Descrição da Receita" : "O que foi comprado / lançado"}</label>
+                  <label className="label-eyebrow">{form.entry_type === "Receita" ? "Descrição da Receita" : form.category === "Equipe" ? "Descrição da mão de obra" : "O que foi comprado / lançado"}</label>
                   <input
                     type="text"
                     value={form.description}
                     onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
                     className="w-full h-12 px-4 rounded-xl bg-input border border-border focus:border-primary outline-none font-medium"
-                    placeholder="Ex: Compra de Limão Cravo (Mercado Municipal)"
+                    placeholder={form.category === "Equipe" ? "Ex: Cachê do bartender" : "Ex: Compra de Limão Cravo (Mercado Municipal)"}
                   />
                 </div>
 
@@ -1328,7 +1348,7 @@ function ControladoriaPage() {
                   />
                 </div>
 
-                {form.entry_type === "Despesa" && (
+                {form.entry_type === "Despesa" && form.category !== "Equipe" && (
                   <>
                     <div>
                       <label className="label-eyebrow">Quantidade</label>
@@ -1400,12 +1420,17 @@ function ControladoriaPage() {
                   <select
                     value={form.category}
                     onChange={(e) =>
-                      setForm((p) => ({ ...p, category: e.target.value as FinancialCategory }))
+                      setForm((p) => ({
+                        ...p,
+                        category: e.target.value as FinancialCategory,
+                        staff_name: e.target.value === "Equipe" ? p.staff_name : "",
+                        staff_role: e.target.value === "Equipe" ? p.staff_role : "",
+                      }))
                     }
                     className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
                   >
                     <option value="Fornecedor">Fornecedor</option>
-                    <option value="Equipe">Equipe / Freelancer</option>
+                    <option value="Equipe">Mão de obra / Equipe</option>
                     <option value="Insumos">Insumos (Bebidas/Frutas)</option>
                     <option value="Operacional">Operacional (Gelo/Transporte)</option>
                     <option value="Outros">Outros</option>
@@ -1436,17 +1461,19 @@ function ControladoriaPage() {
                     />
                   </div>
 
-                {form.category === "Equipe" && (
+                {form.entry_type === "Despesa" && form.category === "Equipe" && (
                   <>
-                    <div className="space-y-4 animate-in slide-in-from-left-2">
-                      <label className="label-eyebrow">Nome do Profissional</label>
+                    <div className="space-y-2 animate-in slide-in-from-left-2">
+                      <label htmlFor="controladoria-staff-name" className="label-eyebrow">A quem se refere a mão de obra?</label>
                       <input
+                        id="controladoria-staff-name"
                         type="text"
                         value={form.staff_name || ""}
                         onChange={(e) => setForm((p) => ({ ...p, staff_name: e.target.value }))}
                         className="w-full h-11 px-4 rounded-xl bg-input border border-border outline-none"
-                        placeholder="Nome Completo"
+                        placeholder="Nome da pessoa / profissional"
                       />
+                      <p className="text-xs text-muted-foreground">Informe quem prestou o serviço, mesmo que o pagamento ainda esteja em aberto.</p>
                     </div>
                     <div className="space-y-4 animate-in slide-in-from-left-2">
                       <label className="label-eyebrow">Função / Cargo</label>
@@ -1472,7 +1499,7 @@ function ControladoriaPage() {
                 </div>
 
                 <div className={form.entry_type === "Receita" ? "hidden" : ""}>
-                  <label className="label-eyebrow">Responsável pela Compra</label>
+                  <label className="label-eyebrow">{form.category === "Equipe" ? "Responsável pelo lançamento" : "Responsável pela Compra"}</label>
                   <input
                     type="text"
                     value={form.responsible}
@@ -1642,10 +1669,10 @@ function ControladoriaPage() {
               </div>
 
               {/* Items Table */}
-              {form.entry_type !== "Receita" && (
+              {form.entry_type !== "Receita" && (form.category !== "Equipe" || (form.items || []).some((item: any) => item.product_name?.trim())) && (
               <div className="mt-6 border-t border-border pt-6">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-bold">Itens da Compra</h3>
+                  <h3 className="font-bold">{form.category === "Equipe" ? "Detalhamento do serviço" : "Itens da Compra"}</h3>
                   <button 
                     onClick={() => {
                       const newItems = [...(form.items || [])];
