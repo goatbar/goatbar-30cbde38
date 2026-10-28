@@ -520,16 +520,18 @@ export const eventContractsService = {
       .single();
     const nextVersion = current ? (current.version || 1) + 1 : 2;
 
-    let budgetVersionId = current?.budget_version_id;
-    if (!budgetVersionId && current?.event_id) {
-      const { data: currentBudget } = await supabase
-        .from("event_budget_versions")
-        .select("id")
-        .eq("event_id", current.event_id)
-        .eq("is_current", true)
-        .maybeSingle();
-      budgetVersionId = currentBudget?.id || null;
+    // Cada regeneração precisa apontar para a versão ATUAL do orçamento,
+    // jamais reaproveitar o vínculo da minuta enviada anteriormente.
+    const { data: currentBudget, error: budgetError } = await supabase
+      .from("event_budget_versions")
+      .select("id")
+      .eq("event_id", current?.event_id)
+      .eq("is_current", true)
+      .maybeSingle();
+    if (budgetError || !currentBudget?.id) {
+      throw budgetError || new Error("Orçamento atual não encontrado para regenerar o contrato.");
     }
+    const budgetVersionId = currentBudget.id;
 
     const { data, error } = await (supabase as any)
       .from("event_contracts")
@@ -538,6 +540,8 @@ export const eventContractsService = {
         signer_id: signerId,
         version: nextVersion,
         budget_version_id: budgetVersionId,
+        // O próximo envio precisa capturar novamente os dados jurídicos atualizados.
+        legal_snapshot: null,
         generated_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
