@@ -116,7 +116,6 @@ import { DegustacaoTab } from "@/components/event-tabs/DegustacaoTab";
 import {
   getSignatureIntegrationState,
   canDeleteOrRegenerateContract,
-  canCancelContract,
 } from "@/lib/contract-state";
 import {
   cancelAssinafySignature,
@@ -3990,7 +3989,12 @@ function EventoInterna() {
                   {realContract && (
                     <SectionCard
                       title="Contrato Gerado"
-                      subtitle={`Status: ${realContract.status.toUpperCase()}`}
+                      subtitle={`Status: ${({
+                        draft: "RASCUNHO",
+                        sent: "ENVIADO",
+                        signed: "ASSINADO",
+                        canceled: "CANCELADO",
+                      } as Record<string, string>)[realContract.status] || realContract.status.toUpperCase()}`}
                     >
                       <div className="p-6 rounded-2xl bg-surface border-2 border-primary/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                         <div className="flex items-center gap-5 min-w-0 w-full md:w-auto">
@@ -4145,16 +4149,20 @@ function EventoInterna() {
                             {
                               label: "Enviado à Assinafy",
                               done:
+                                ["sent", "signed"].includes(realContract.status) ||
                                 ["active", "completed"].includes(integrationState) ||
-                                Boolean(providerDetails?.sent_at) ||
-                                providerDetails?.signers?.some(
-                                  (s: any) => s.notification_status === "sent",
-                                ),
-                              detail: providerDetails?.sent_at
-                                ? new Date(providerDetails.sent_at).toLocaleString("pt-BR")
-                                : integrationState === "sending"
-                                  ? "Envio em andamento"
-                                  : "Ainda não enviado",
+                                (integrationState !== "canceled" &&
+                                  Boolean(providerDetails?.sent_at)),
+                              detail:
+                                realContract.status === "sent" || realContract.status === "signed"
+                                  ? (realContract.sent_for_signature_at
+                                      ? new Date(realContract.sent_for_signature_at).toLocaleString("pt-BR")
+                                      : "Documento enviado")
+                                  : integrationState === "sending"
+                                    ? "Envio em andamento"
+                                    : integrationState === "canceled"
+                                      ? "Envio anterior cancelado"
+                                      : "Ainda não enviado",
                             },
                             {
                               label: "Convite por e-mail",
