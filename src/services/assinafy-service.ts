@@ -351,8 +351,16 @@ export async function cancelAssinafySignature(contractId: string): Promise<boole
     body: { contractId },
   });
 
-  if (error || !data?.success) {
-    throw new Error(data?.error || "Falha ao cancelar assinatura");
+  if (error) {
+    const parsed = await parseInvokeError(error);
+    throw new Error(
+      parsed.body.error ||
+        parsed.body.message ||
+        "A Assinafy não confirmou o cancelamento. Atualize o status antes de tentar novamente.",
+    );
+  }
+  if (!data?.success) {
+    throw new Error(data?.error || "Falha ao cancelar assinatura.");
   }
   return true;
 }
