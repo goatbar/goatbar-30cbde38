@@ -486,13 +486,17 @@ function EventoInterna() {
       }
     }
 
+    // Contratos existentes devem manter o modelo e o representante que já foram
+    // escolhidos para o documento, não substituir silenciosamente pelo padrão.
     if (tps.length > 0) {
-      const defT = tps.find((t) => t.is_default) || tps[0];
-      if (defT) setSelectedTemplate(defT.id);
+      const template = tps.find((t) => t.id === contract?.template_id) ||
+        tps.find((t) => t.is_default) || tps[0];
+      if (template) setSelectedTemplate(template.id);
     }
     if (sigs.length > 0) {
-      const defS = sigs.find((s) => s.is_active) || sigs[0];
-      if (defS) setSelectedSigner(defS.id);
+      const signer = sigs.find((s) => s.id === contract?.signer_id) ||
+        sigs.find((s) => s.is_active) || sigs[0];
+      if (signer) setSelectedSigner(signer.id);
     }
     if (contract?.signed_file_url && !contract?.template_id) {
       setContractMode("upload");
@@ -1487,9 +1491,7 @@ function EventoInterna() {
     setIsCanceling(true);
     try {
       await cancelAssinafySignature(realContract.id);
-      toast.success("Envio cancelado na Assinafy. O contrato foi liberado para atualização.", {
-        description: "Clique em REGENERAR para usar o orçamento atual e depois revise o novo PDF antes de enviar.",
-      });
+      // O cancelamento é confirmado REMOTAMENTE antes de qualquer atualização.
       try {
         await eventBudgetService.addBudgetHistory({
           event_id: eventoId,
@@ -1499,9 +1501,16 @@ function EventoInterna() {
           changed_fields: ["Contrato", "Assinatura"],
         });
       } catch (historyError) {
-        console.warn("Cancelamento confirmado, mas falhou o registro no histórico do orçamento:", historyError);
+        console.warn("Cancelamento confirmado, mas falhou o registro no histórico:", historyError);
       }
+
       await loadContractModule();
+      if (budgetChangedSinceContract) {
+        toast.info("Envio antigo cancelado. Preparando nova versão do contrato...");
+        await regenerateContractFromCurrentBudget(realContract.id);
+      } else {
+        toast.success("Envio cancelado na Assinafy. O contrato voltou para rascunho.");
+      }
     } catch (e: any) {
       toast.error(`Falha ao cancelar: ${e.message}`);
       await loadContractModule();
@@ -1721,70 +1730,74 @@ function EventoInterna() {
     }
   };
 
-  const handleRegenerateContract = async () => {
+  // Uma única rotina atende tanto o botão REGENERAR quanto o fluxo
+  // "Cancelar envio e gerar novo contrato". Nunca altera um envio ativo.
+  const regenerateContractFromCurrentBudget = async (contractId: string): Promise<void> => {
     if (isProcessingContract) return;
-    if (!draft || !realContract || realContract.status !== "draft") return;
-
-    if (!canDeleteOrRegenerateContract(integrationState)) {
-      alert(
-        "Não é possível regenerar um contrato que já foi enviado ou possui integrações ativas com o provedor de assinatura.",
-      );
-      return;
-    }
-
-    const tId =
-      selectedTemplate ||
-      realContract.template_id ||
-      realTemplates.find((t) => t.is_default)?.id ||
-      realTemplates[0]?.id;
-    const sId =
-      selectedSigner ||
-      realContract.signer_id ||
-      realSigners.find((s) => s.is_active)?.id ||
-      realSigners[0]?.id;
-
-    if (!tId || !sId) {
-      alert("Selecione um modelo de contrato e um sócio assinante.");
-      return;
-    }
-
     setIsProcessingContract(true);
     try {
-      const vars = await eventContractsService.compileContractVariables(eventoId, sId);
-      const templateToUse = realTemplates.find((t) => t.id === tId);
-      if (!templateToUse) throw new Error("Template não encontrado.");
-
-      const templateContent = getTemplateContent(templateToUse);
-      const { unfilled } = validateContractPlaceholders(templateContent, vars);
-
-      if (unfilled.length > 0) {
-        const pendings = unfilled.map((u) => u.token).join("\n- ");
-        alert(
-          `Não é possível regenerar o contrato pois ainda faltam informações para os seguintes campos:\n\n- ${pendings}\n\nPor favor, preencha as informações pendentes antes de prosseguir.`,
-        );
-        return;
+      const freshContract = await eventContractsService.getContractByEventId(eventoId);
+      if (!freshContract || freshContract.id !== contractId || freshContract.status !== "draft") {
+        throw new Error("O envio anterior ainda não foi cancelado. Atualize o status antes de regenerar.");
+      }
+      const tId =
+        selectedTemplate ||
+        freshContract.template_id ||
+        realTemplates.find((t) => t.is_default)?.id ||
+        realTemplates[0]?.id;
+      const sId =
+        selectedSigner ||
+        freshContract.signer_id ||
+        realSigners.find((s) => s.is_active)?.id ||
+        realSigners[0]?.id;
+      if (!tId || !sId) {
+        throw new Error("Selecione um modelo de contrato e um sócio assinante.");
       }
 
-      await eventContractsService.updateDraftContract(realContract.id, tId, sId);
+      const vars = await eventContractsService.compileContractVariables(eventoId, sId);
+      const templateToUse = realTemplates.find((t) => t.id === tId);
+      if (!templateToUse) throw new Error("Modelo de contrato não encontrado.");
+      const { unfilled } = validateContractPlaceholders(getTemplateContent(templateToUse), vars);
+      if (unfilled.length > 0) {
+        throw new Error(`Preencha os dados do contrato antes de prosseguir:\n${unfilled.map((u) => u.token).join("\n")}`);
+      }
 
-      await eventBudgetService.addBudgetHistory({
-        event_id: eventoId,
-        action: "Contrato regenerado a partir de dados atualizados",
-        previous_final_value: 0,
-        new_final_value: 0,
-        changed_fields: ["Contrato"],
+      await eventContractsService.updateDraftContract(contractId, tId, sId);
+      try {
+        await eventBudgetService.addBudgetHistory({
+          event_id: eventoId,
+          action: "Nova versão do contrato gerada a partir do orçamento atualizado",
+          previous_final_value: 0,
+          new_final_value: 0,
+          changed_fields: ["Contrato"],
+        });
+      } catch (historyError) {
+        console.warn("Contrato regenerado, mas houve erro ao salvar histórico:", historyError);
+      }
+
+      await loadContractModule();
+      toast.success("Novo contrato gerado com o orçamento atual.", {
+        description: "Revise o PDF e clique em Aprovar e Enviar para Assinatura para realizar o novo envio.",
       });
-
-      toast.success("Nova versão do contrato gerada com o orçamento atual.", {
-        description: "Revise a minuta e confirme o novo envio para assinatura.",
+      await handlePreviewGeneratedContract();
+    } catch (error: any) {
+      toast.error("Não foi possível gerar o novo contrato.", {
+        description: error?.message || "Atualize a página e tente novamente.",
+        duration: 8000,
       });
       await loadContractModule();
-      await handlePreviewGeneratedContract();
-    } catch (e: any) {
-      toast.error(`Erro ao regenerar contrato: ${e.message || "Erro desconhecido"}`);
     } finally {
       setIsProcessingContract(false);
     }
+  };
+
+  const handleRegenerateContract = async () => {
+    if (isProcessingContract || !realContract || realContract.status !== "draft") return;
+    if (!canDeleteOrRegenerateContract(integrationState)) {
+      toast.error("Cancele o envio na Assinafy antes de regenerar este contrato.");
+      return;
+    }
+    await regenerateContractFromCurrentBudget(realContract.id);
   };
 
   const handleRequestClientData = async () => {
@@ -4050,7 +4063,7 @@ function EventoInterna() {
                                       disabled={isProcessingContract}
                                       title="Reconstruir contrato com base nos dados atuais"
                                     >
-                                      REGENERAR
+                                      {budgetChangedSinceContract ? "GERAR CONTRATO ATUALIZADO" : "REGENERAR"}
                                     </GhostButton>
                                     <GhostButton
                                       onClick={() => setShowDeleteContractDialog(true)}
@@ -4063,15 +4076,23 @@ function EventoInterna() {
                                   </>
                                 )}
 
-                              {canCancelContract(integrationState) && (
-                                <GhostButton
-                                  onClick={() => setShowCancelDialog(true)}
-                                  className="h-11 px-4 font-bold border-2 border-destructive text-destructive hover:bg-destructive/10 w-full sm:w-auto flex-1 sm:flex-none justify-center"
-                                  title="Cancelar solicitação de assinatura"
-                                >
-                                  CANCELAR ENVIO
-                                </GhostButton>
-                              )}
+                              {realContract.status === "sent" &&
+                                integrationState !== "completed" &&
+                                integrationState !== "canceling" &&
+                                !realContract.fully_signed_at &&
+                                !realContract.signed_file_url && (
+                                  <GhostButton
+                                    onClick={() => setShowCancelDialog(true)}
+                                    disabled={isCanceling || isProcessingContract}
+                                    className="h-11 px-4 font-bold border-2 border-warning text-warning hover:bg-warning/10 w-full sm:w-auto flex-1 sm:flex-none justify-center"
+                                    title="Cancelar o documento anterior na Assinafy e gerar uma nova minuta para revisão"
+                                  >
+                                    <RefreshCw className="h-4 w-4 mr-2" />
+                                    {budgetChangedSinceContract
+                                      ? "CANCELAR ENVIO E GERAR NOVO CONTRATO"
+                                      : "CANCELAR ENVIO"}
+                                  </GhostButton>
+                                )}
                             </>
                           )}
                         </div>
@@ -4086,12 +4107,12 @@ function EventoInterna() {
                           <p className="mt-2 text-muted-foreground text-xs">
                             O contrato v{realContract.version} está vinculado a uma versão anterior do
                             orçamento. {integrationState === "completed" || realContract.status === "signed"
-                              ? "O documento já está assinado: gere um Termo Aditivo para formalizar as alterações."
-                              : canCancelContract(integrationState)
-                                ? "Cancele o envio atual na Assinafy, depois clique em REGENERAR e revise o novo documento antes de reenviar."
+                              ? "O documento já está assinado. Gere um Termo Aditivo para formalizar as alterações."
+                              : realContract.status === "sent"
+                                ? "Clique em CANCELAR ENVIO E GERAR NOVO CONTRATO. Após a confirmação do cancelamento na Assinafy, a nova minuta será aberta para revisão e reenvio."
                                 : realContract.status === "draft" && canDeleteOrRegenerateContract(integrationState)
-                                  ? "Clique em REGENERAR para atualizar valores, serviços e condições e, em seguida, reenvie para assinatura."
-                                  : "Atualize o status da assinatura antes de prosseguir. Não é permitido reenviar uma minuta desatualizada."}
+                                  ? "Clique em GERAR CONTRATO ATUALIZADO. Depois, na revisão, clique em Aprovar e Enviar para Assinatura."
+                                  : "Sincronize o status antes de prosseguir. O envio de uma minuta desatualizada permanece bloqueado."}
                           </p>
                         </div>
                       )}
@@ -4493,10 +4514,11 @@ function EventoInterna() {
                               Cancelar Solicitação de Assinatura?
                             </AlertDialog.Title>
                             <AlertDialog.Description className="mt-3 text-sm text-muted-foreground">
-                              Esta ação solicitará à Assinafy o cancelamento do documento e dos
-                              links de assinatura anteriores. Só após a confirmação o contrato
-                              voltará a rascunho para que você possa regenerá-lo com o orçamento
-                              atualizado e enviá-lo novamente. O histórico será preservado.
+                              Esta ação cancelará o documento enviado na Assinafy e invalidará seus links
+                              de assinatura. {budgetChangedSinceContract
+                                ? " Após a confirmação, o sistema gerará uma versão atualizada com o orçamento vigente e abrirá a revisão. O novo contrato só será enviado quando você confirmar."
+                                : " Após a confirmação, o contrato voltará a rascunho."}
+                              O histórico anterior será preservado.
                             </AlertDialog.Description>
                             <div className="mt-6 flex justify-end gap-3">
                               <AlertDialog.Cancel asChild>
@@ -4518,7 +4540,7 @@ function EventoInterna() {
                                       Cancelando...
                                     </>
                                   ) : (
-                                    "Sim, Cancelar Envio"
+                                    budgetChangedSinceContract ? "Cancelar e Gerar Novo Contrato" : "Sim, Cancelar Envio"
                                   )}
                                 </PrimaryButton>
                               </AlertDialog.Action>
