@@ -247,8 +247,7 @@ BEGIN
 
   RETURN jsonb_build_object('duplicate', false, 'processed', false, 'reason', 'unsupported_event');
 END;
-$function$
-
+$function$;
 
 REVOKE ALL ON FUNCTION public.process_assinafy_webhook_event(text,text,text,jsonb,uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.process_assinafy_webhook_event(text,text,text,jsonb,uuid) TO service_role;
