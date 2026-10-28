@@ -76,6 +76,31 @@ describe("assinafy-cancel", () => {
     expect((await processCancellation("contract-1", admin)).success).toBe(true);
   });
 
+  it("permite cancelar uma solicitação em reconciliação com documento remoto conhecido", async () => {
+    const pendingReconciliation = {
+      ...request,
+      dispatch_status: "reconciliation_required",
+    };
+    maybeSingle
+      .mockResolvedValueOnce({ data: contract })
+      .mockResolvedValueOnce({ data: pendingReconciliation })
+      .mockResolvedValueOnce({ data: pendingReconciliation })
+      .mockResolvedValueOnce({ data: { id: "contract-1" } });
+    vi.mocked(assinafyClient.cancelDocument).mockResolvedValueOnce({} as any);
+
+    expect((await processCancellation("contract-1", admin)).success).toBe(true);
+    expect(assinafyClient.cancelDocument).toHaveBeenCalledWith("ext-1");
+  });
+
+  it("não tenta cancelar solicitação incerta sem ID externo", async () => {
+    maybeSingle
+      .mockResolvedValueOnce({ data: contract })
+      .mockResolvedValueOnce({ data: { ...request, dispatch_status: "reconciliation_required", external_document_id: null } });
+    const result = await processCancellation("contract-1", admin);
+    expect(result.success).toBe(false);
+    expect(assinafyClient.cancelDocument).not.toHaveBeenCalled();
+  });
+
   it("não libera a regeneração se a Assinafy retornar 404", async () => {
     maybeSingle
       .mockResolvedValueOnce({ data: contract })
