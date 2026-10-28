@@ -1283,6 +1283,20 @@ function EventoInterna() {
       return;
     }
 
+    // Uma minuta vinculada a orçamento antigo jamais pode ser reenviada.
+    // Primeiro é necessário cancelar o envio anterior (se existir) e regenerar.
+    if (
+      currentBudget?.id &&
+      realContract.budget_version_id &&
+      currentBudget.id !== realContract.budget_version_id
+    ) {
+      toast.error("O orçamento foi alterado depois da geração deste contrato.", {
+        description:
+          "Cancele o envio anterior, regenere o contrato com a versão atual e revise antes de reenviar.",
+      });
+      return;
+    }
+
     if (isSignatureDispatchLocked.current) return;
     isSignatureDispatchLocked.current = true;
     setIsDispatchingSignature(true);
@@ -1472,7 +1486,20 @@ function EventoInterna() {
     setIsCanceling(true);
     try {
       await cancelAssinafySignature(realContract.id);
-      toast.success("Envio cancelado com sucesso.");
+      toast.success("Envio cancelado na Assinafy. O contrato foi liberado para atualização.", {
+        description: "Clique em REGENERAR para usar o orçamento atual e depois revise o novo PDF antes de enviar.",
+      });
+      try {
+        await eventBudgetService.addBudgetHistory({
+          event_id: eventoId,
+          action: "Envio do contrato cancelado para atualização",
+          previous_final_value: 0,
+          new_final_value: 0,
+          changed_fields: ["Contrato", "Assinatura"],
+        });
+      } catch (historyError) {
+        console.warn("Cancelamento confirmado, mas falhou o registro no histórico do orçamento:", historyError);
+      }
       await loadContractModule();
     } catch (e: any) {
       toast.error(`Falha ao cancelar: ${e.message}`);
@@ -1486,6 +1513,13 @@ function EventoInterna() {
   const integrationState = realContract
     ? getSignatureIntegrationState(realContract.status, providerDetails)
     : "not_sent";
+
+  // Fonte de verdade: versão persistida do orçamento associada à minuta.
+  const budgetChangedSinceContract = Boolean(
+    realContract?.budget_version_id &&
+      currentBudget?.id &&
+      realContract.budget_version_id !== currentBudget.id,
+  );
 
   const finalSignedContractDoc = contractDocuments.find(
     (doc) =>
@@ -1713,14 +1747,6 @@ function EventoInterna() {
       return;
     }
 
-    if (
-      !confirm(
-        "A regeneração substituirá o contrato atual pelos dados e serviços atualizados do evento. Deseja prosseguir?",
-      )
-    ) {
-      return;
-    }
-
     setIsProcessingContract(true);
     try {
       const vars = await eventContractsService.compileContractVariables(eventoId, sId);
@@ -1748,9 +1774,11 @@ function EventoInterna() {
         changed_fields: ["Contrato"],
       });
 
-      toast.success("Contrato regenerado com sucesso!");
+      toast.success("Nova versão do contrato gerada com o orçamento atual.", {
+        description: "Revise a minuta e confirme o novo envio para assinatura.",
+      });
       await loadContractModule();
-      setShowContractPreviewModal(false);
+      await handlePreviewGeneratedContract();
     } catch (e: any) {
       toast.error(`Erro ao regenerar contrato: ${e.message || "Erro desconhecido"}`);
     } finally {
@@ -4048,6 +4076,25 @@ function EventoInterna() {
                         </div>
                       </div>
 
+                      {budgetChangedSinceContract && (
+                        <div className="mt-4 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm">
+                          <p className="font-bold text-foreground flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-warning" />
+                            Orçamento alterado após a geração do contrato
+                          </p>
+                          <p className="mt-2 text-muted-foreground text-xs">
+                            O contrato v{realContract.version} está vinculado a uma versão anterior do
+                            orçamento. {integrationState === "completed" || realContract.status === "signed"
+                              ? "O documento já está assinado: gere um Termo Aditivo para formalizar as alterações."
+                              : canCancelContract(integrationState)
+                                ? "Cancele o envio atual na Assinafy, depois clique em REGENERAR e revise o novo documento antes de reenviar."
+                                : realContract.status === "draft" && canDeleteOrRegenerateContract(integrationState)
+                                  ? "Clique em REGENERAR para atualizar valores, serviços e condições e, em seguida, reenvie para assinatura."
+                                  : "Atualize o status da assinatura antes de prosseguir. Não é permitido reenviar uma minuta desatualizada."}
+                          </p>
+                        </div>
+                      )}
+
                       <div className="mt-4 rounded-2xl border border-border bg-surface p-5">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                           <div>
@@ -4445,8 +4492,10 @@ function EventoInterna() {
                               Cancelar Solicitação de Assinatura?
                             </AlertDialog.Title>
                             <AlertDialog.Description className="mt-3 text-sm text-muted-foreground">
-                              Esta ação irá cancelar o envio atual do contrato na plataforma de
-                              assinatura. O status retornará para rascunho.
+                              Esta ação solicitará à Assinafy o cancelamento do documento e dos
+                              links de assinatura anteriores. Só após a confirmação o contrato
+                              voltará a rascunho para que você possa regenerá-lo com o orçamento
+                              atualizado e enviá-lo novamente. O histórico será preservado.
                             </AlertDialog.Description>
                             <div className="mt-6 flex justify-end gap-3">
                               <AlertDialog.Cancel asChild>
