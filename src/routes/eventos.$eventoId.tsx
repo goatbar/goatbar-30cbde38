@@ -4056,7 +4056,11 @@ function EventoInterna() {
                                 onClick={handlePreviewGeneratedContract}
                                 className="h-11 px-6 font-bold w-full sm:w-auto flex-1 sm:flex-none justify-center"
                               >
-                                VER / IMPRIMIR PDF
+                                {realContract.status === "draft" &&
+                                !budgetChangedSinceContract &&
+                                canDeleteOrRegenerateContract(integrationState)
+                                  ? "REVISAR E ENVIAR PARA ASSINATURA"
+                                  : "VER / IMPRIMIR PDF"}
                               </PrimaryButton>
                               {realContract.status === "draft" &&
                                 canDeleteOrRegenerateContract(integrationState) && (
