@@ -86,7 +86,14 @@ export async function processCancellation(
       : { success: true, status: "canceled" };
   }
 
-  if (!CANCELABLE_STATUSES.includes(currentReq.dispatch_status)) {
+  // O provedor pode marcar uma solicitação como "reconciliation_required" mesmo
+  // quando o documento já existe e tem um ID conhecido. Ainda assim deve ser
+  // possível CANCELAR explicitamente — nunca reenviar por conta própria.
+  // A liberação para rascunho depende de sucesso confirmado na Assinafy.
+  const allowedStatuses = currentReq.external_document_id
+    ? [...CANCELABLE_STATUSES, "reconciliation_required"]
+    : CANCELABLE_STATUSES;
+  if (!allowedStatuses.includes(currentReq.dispatch_status)) {
     return {
       success: false,
       error: "Não é possível cancelar um envio concluído ou com outra operação em andamento.",
@@ -98,7 +105,7 @@ export async function processCancellation(
     .from("contract_signature_requests")
     .update({ dispatch_status: "canceling", updated_at: new Date().toISOString() })
     .eq("id", currentReq.id)
-    .in("dispatch_status", CANCELABLE_STATUSES)
+    .in("dispatch_status", allowedStatuses)
     .select("*")
     .maybeSingle();
 
