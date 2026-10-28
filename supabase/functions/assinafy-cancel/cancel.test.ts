@@ -7,114 +7,123 @@ vi.mock("../_shared/assinafy-client", () => ({
 }));
 
 describe("assinafy-cancel", () => {
-  let supabaseAdminMock: any;
-  let updateMock: ReturnType<typeof vi.fn>;
-  let eqMock: ReturnType<typeof vi.fn>;
-  let inMock: ReturnType<typeof vi.fn>;
-  let selectMock: ReturnType<typeof vi.fn>;
-  let orderMock: ReturnType<typeof vi.fn>;
-  let limitMock: ReturnType<typeof vi.fn>;
-  let maybeSingleMock: ReturnType<typeof vi.fn>;
+  let admin: any;
+  let maybeSingle: ReturnType<typeof vi.fn>;
+  let updates: Array<{ table: string; payload: any }>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-
-    maybeSingleMock = vi.fn();
-    const chainable = {
-      eq: vi.fn().mockReturnThis(),
-      in: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      update: vi.fn().mockReturnThis(),
-      maybeSingle: maybeSingleMock,
-    };
-    
-    // Alias explicitly so they can be spied on if needed, but we mainly care about `maybeSingle` and `update`
-    eqMock = chainable.eq;
-    inMock = chainable.in;
-    selectMock = chainable.select;
-    orderMock = chainable.order;
-    limitMock = chainable.limit;
-    updateMock = chainable.update;
-
-    supabaseAdminMock = {
-      from: vi.fn().mockReturnValue(chainable),
+    updates = [];
+    maybeSingle = vi.fn();
+    admin = {
+      from: vi.fn((table: string) => {
+        const chain: any = {
+          eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          select: vi.fn().mockReturnThis(),
+          maybeSingle: () => maybeSingle(),
+          update: vi.fn((payload: any) => {
+            updates.push({ table, payload });
+            return chain;
+          }),
+        };
+        return chain;
+      }),
     };
   });
 
-  it("deve retornar reconciliation_required em caso de 404 da API", async () => {
-    // 1. Simula o lock bem-sucedido
-    maybeSingleMock.mockResolvedValueOnce({
-      data: { id: "req-1", external_document_id: "ext-1" },
-      error: null,
-    });
+  const contract = { id: "contract-1", status: "sent", signed_file_url: null, fully_signed_at: null };
+  const request = {
+    id: "req-1",
+    dispatch_status: "pending_signature",
+    external_document_id: "ext-1",
+  };
 
-    // 2. Simula falha 404 na API externa
-    vi.mocked(assinafyClient.cancelDocument).mockRejectedValueOnce(new Error("API falhou com HTTP status (404)"));
-
-    const result = await processCancellation("contract-1", supabaseAdminMock);
-
-    // O status final deve ser reconciliation_required
-    expect(result.success).toBe(false);
-    expect(result.error).toContain("404");
-    expect(result.status).toBe("reconciliation_required");
-
-    // Verifica se salvou reconciliation_required no banco
-    expect(updateMock).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      dispatch_status: "reconciliation_required",
-      last_error: expect.stringContaining("404"),
-    }));
-  });
-
-  it("deve cancelar com sucesso quando a API retornar 200", async () => {
-    maybeSingleMock.mockResolvedValueOnce({
-      data: { id: "req-1", external_document_id: "ext-1" },
-      error: null,
-    });
-
+  it("cancela na Assinafy e libera o rascunho após confirmação", async () => {
+    maybeSingle
+      .mockResolvedValueOnce({ data: contract, error: null })
+      .mockResolvedValueOnce({ data: request, error: null })
+      .mockResolvedValueOnce({ data: request, error: null })
+      .mockResolvedValueOnce({ data: { id: "contract-1" }, error: null });
     vi.mocked(assinafyClient.cancelDocument).mockResolvedValueOnce({} as any);
 
-    const result = await processCancellation("contract-1", supabaseAdminMock);
+    const result = await processCancellation("contract-1", admin);
 
-    expect(result.success).toBe(true);
-    expect(result.status).toBe("canceled");
-
-    expect(updateMock).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      dispatch_status: "canceled",
-      internal_status: "cancelled",
+    expect(result).toEqual({ success: true, status: "canceled" });
+    expect(assinafyClient.cancelDocument).toHaveBeenCalledWith("ext-1");
+    expect(updates).toContainEqual(expect.objectContaining({
+      table: "contract_signature_requests",
+      payload: expect.objectContaining({ dispatch_status: "canceled", internal_status: "cancelled" }),
+    }));
+    expect(updates).toContainEqual(expect.objectContaining({
+      table: "event_contracts",
+      payload: expect.objectContaining({ status: "draft", legal_snapshot: null, sent_for_signature_at: null }),
     }));
   });
 
-  it("deve bloquear se não houver requests pendentes/ativos", async () => {
-    // 1. Lock falha
-    maybeSingleMock.mockResolvedValueOnce({ data: null, error: null });
-    // 2. Busca o request atual que está completado (não pode cancelar)
-    maybeSingleMock.mockResolvedValueOnce({
-      data: { dispatch_status: "completed" },
-      error: null,
-    });
+  it("suporta cancelamento após assinatura parcial sem apagar histórico", async () => {
+    const partial = { ...request, dispatch_status: "partially_signed" };
+    maybeSingle
+      .mockResolvedValueOnce({ data: contract })
+      .mockResolvedValueOnce({ data: partial })
+      .mockResolvedValueOnce({ data: partial })
+      .mockResolvedValueOnce({ data: { id: "contract-1" } });
+    vi.mocked(assinafyClient.cancelDocument).mockResolvedValueOnce({} as any);
 
-    const result = await processCancellation("contract-1", supabaseAdminMock);
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain("Não foi possível iniciar o cancelamento");
+    expect((await processCancellation("contract-1", admin)).success).toBe(true);
   });
 
-  it("deve retornar imediatamente se já estiver cancelado", async () => {
-    // 1. Lock falha (pois dispatch_status não é active/pending/idle)
-    maybeSingleMock.mockResolvedValueOnce({ data: null, error: null });
-    // 2. Busca o request atual e vê que está 'canceled'
-    maybeSingleMock.mockResolvedValueOnce({
-      data: { dispatch_status: "canceled" },
-      error: null,
-    });
+  it("não libera a regeneração se a Assinafy retornar 404", async () => {
+    maybeSingle
+      .mockResolvedValueOnce({ data: contract })
+      .mockResolvedValueOnce({ data: request })
+      .mockResolvedValueOnce({ data: request });
+    vi.mocked(assinafyClient.cancelDocument).mockRejectedValueOnce(new Error("API (404)"));
 
-    const result = await processCancellation("contract-1", supabaseAdminMock);
+    const result = await processCancellation("contract-1", admin);
 
-    expect(result.success).toBe(true);
-    expect(result.status).toBe("canceled");
-    // Não deve chamar a API de cancelamento
+    expect(result.success).toBe(false);
+    expect(result.status).toBe("reconciliation_required");
+    expect(updates.some((u) => u.table === "event_contracts")).toBe(false);
+    expect(updates).toContainEqual(expect.objectContaining({
+      table: "contract_signature_requests",
+      payload: expect.objectContaining({ dispatch_status: "reconciliation_required" }),
+    }));
+  });
+
+  it("não cancela contrato totalmente assinado", async () => {
+    maybeSingle.mockResolvedValueOnce({ data: { ...contract, status: "signed" } });
+
+    const result = await processCancellation("contract-1", admin);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Termo Aditivo");
+    expect(assinafyClient.cancelDocument).not.toHaveBeenCalled();
+  });
+
+  it("bloqueia solicitação já concluída", async () => {
+    maybeSingle
+      .mockResolvedValueOnce({ data: contract })
+      .mockResolvedValueOnce({ data: { ...request, dispatch_status: "completed" } });
+
+    const result = await processCancellation("contract-1", admin);
+
+    expect(result.success).toBe(false);
+    expect(assinafyClient.cancelDocument).not.toHaveBeenCalled();
+  });
+
+  it("reconcilia o rascunho se o envio já foi cancelado anteriormente", async () => {
+    maybeSingle
+      .mockResolvedValueOnce({ data: contract })
+      .mockResolvedValueOnce({ data: { ...request, dispatch_status: "canceled" } })
+      .mockResolvedValueOnce({ data: { id: "contract-1" } });
+
+    const result = await processCancellation("contract-1", admin);
+
+    expect(result).toEqual({ success: true, status: "canceled" });
     expect(assinafyClient.cancelDocument).not.toHaveBeenCalled();
   });
 });
