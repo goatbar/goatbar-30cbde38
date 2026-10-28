@@ -196,7 +196,10 @@ serve(async (req) => {
         .eq("contract_id", contractId)
         .eq("signature_provider", "assinafy")
         .eq("document_kind", documentKind)
-        .neq("dispatch_status", "obsolete");
+        .neq("dispatch_status", "obsolete")
+        // Um envio cancelado é histórico imutável, nunca reutilizável.
+        // O próximo documento deve criar uma solicitação nova com seu próprio PDF/hash.
+        .neq("dispatch_status", "canceled");
       query =
         documentKind === "addendum"
           ? query.eq("addendum_id", addendumId!)
