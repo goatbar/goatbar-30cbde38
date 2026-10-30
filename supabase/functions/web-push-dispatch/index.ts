@@ -162,14 +162,39 @@ Deno.serve(async (req) => {
         const eventId = structured.event_id || record.matched_event_id;
         const eventName = String(structured.event_name || "Evento");
         const clientName = String(structured.client_name || "Cliente");
-        const result = await sendToSubscriptions({
+        const payload = {
           title: contractTitles[kind],
           body: `${eventName} · ${clientName}`,
           url: eventId ? `/eventos/${eventId}` : "/gia",
           tag: `${kind}-${record.source_message_id}`,
           icon: "/icons/goatbar-192.png",
-        });
-        return json({ success: true, ...result });
+        };
+
+        // Respeita os destinatários internos habilitados para notificações.
+        // Não envia o alerta indiscriminadamente a todos os usuários do PWA.
+        const { data: recipients, error: recipientsError } = await admin
+          .from("user_messaging_accounts")
+          .select("user_id")
+          .eq("provider", "whatsapp")
+          .eq("verified", true)
+          .eq("receive_new_budget_notifications", true);
+        if (recipientsError) throw recipientsError;
+
+        const userIds = [...new Set(
+          (recipients || []).map((recipient) => recipient.user_id).filter(Boolean),
+        )];
+        const deliveryResults = await Promise.all(
+          userIds.map((userId) => sendToSubscriptions(payload, userId)),
+        );
+        const totals = deliveryResults.reduce(
+          (sum, result) => ({
+            sent: sum.sent + result.sent,
+            failed: sum.failed + result.failed,
+            total: sum.total + result.total,
+          }),
+          { sent: 0, failed: 0, total: 0 },
+        );
+        return json({ success: true, ...totals });
       }
 
       if (structured?.type !== "new_budget_request") {
