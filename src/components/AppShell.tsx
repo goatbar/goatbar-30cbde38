@@ -344,7 +344,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
                       ? "Adicione o Goat Bar à Tela de Início pelo Safari para receber alertas push."
                       : pushState === "denied"
                         ? "As notificações estão bloqueadas. Libere a permissão nos Ajustes do iPhone para o Goat Bar."
-                        : "Ative para receber novos pedidos de orçamento mesmo com o app fechado."}
+                        : "Ative para receber alertas de orçamentos e contratos mesmo com o app fechado."}
                   </p>
                   {pushMessage && (
                     <p className="mt-2 text-xs text-destructive">{pushMessage}</p>
@@ -536,10 +536,19 @@ function NotificationsDropdown() {
                   const data = item.structured_data || {};
                   const eventId = item.matched_event_id || data.event_id;
                   const clientName = data.client_name || item.source_sender_name || "Cliente";
-                  const eventType = data.event_type || data.event_name || "Orçamento";
-                  const guests = data.guests;
-                  const date = data.date;
-                  const phone = data.phone || item.source_sender_id;
+                  const kind = data.type;
+                  const isBudget = kind === "new_budget_request";
+                  const notificationTitles: Record<string, string> = {
+                    new_budget_request: "Novo orçamento recebido",
+                    contract_data_received: "Dados do contrato recebidos",
+                    contract_client_signed: "Cliente assinou o contrato",
+                    contract_fully_signed: "Contrato totalmente assinado",
+                  };
+                  const notificationTitle = notificationTitles[kind] || "Notificação do evento";
+                  const eventName = data.event_name || data.event_type || item.events?.event_name || "Evento";
+                  const guests = isBudget ? data.guests : null;
+                  const date = isBudget ? data.date : null;
+                  const phone = isBudget ? data.phone || item.source_sender_id : null;
 
                   return (
                     <div
@@ -554,14 +563,15 @@ function NotificationsDropdown() {
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-bold text-foreground truncate flex items-center gap-1.5">
                           {!item.is_read && <span className="h-2 w-2 rounded-full bg-primary shrink-0" />}
-                          {clientName}
+                          {notificationTitle}
                         </span>
                         <span className="text-[10px] text-muted-foreground shrink-0 font-medium">
-                          {eventType}
+                          {eventName}
                         </span>
                       </div>
 
                       <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                        <span>👤 {clientName}</span>
                         {date && <span>📅 {date}</span>}
                         {guests && <span>👥 {guests} pax</span>}
                         {phone && <span>📞 {phone}</span>}
@@ -577,7 +587,7 @@ function NotificationsDropdown() {
                           }}
                           className="mt-1 text-[11px] font-semibold text-primary hover:underline flex items-center gap-1 w-fit"
                         >
-                          Abrir solicitação no sistema →
+                          Abrir evento no sistema →
                         </Link>
                       )}
                     </div>
