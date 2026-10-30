@@ -65,7 +65,12 @@ export const goatAIService = {
         ),
         ai_notification_reads (read_at)
       `)
-      .contains("structured_data", { type: "new_budget_request" })
+      .in("structured_data->>type", [
+        "new_budget_request",
+        "contract_data_received",
+        "contract_client_signed",
+        "contract_fully_signed",
+      ])
       .order("created_at", { ascending: false })
       .limit(50);
 
