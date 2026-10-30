@@ -143,6 +143,35 @@ Deno.serve(async (req) => {
       const record = body?.record || {};
       const structured = record?.structured_data || {};
 
+      const contractTitles: Record<string, string> = {
+        contract_data_received: "Dados do contrato recebidos",
+        contract_client_signed: "Cliente assinou o contrato",
+        contract_fully_signed: "Contrato totalmente assinado",
+      };
+      const kind = String(structured?.type || "");
+      if (Object.prototype.hasOwnProperty.call(contractTitles, kind)) {
+        // Só aceita notificações internas emitidas pelo fluxo de contrato.
+        if (
+          record.source !== "api" ||
+          typeof record.source_message_id !== "string" ||
+          !record.source_message_id.startsWith(kind + ":")
+        ) {
+          return json({ success: true, skipped: true });
+        }
+
+        const eventId = structured.event_id || record.matched_event_id;
+        const eventName = String(structured.event_name || "Evento");
+        const clientName = String(structured.client_name || "Cliente");
+        const result = await sendToSubscriptions({
+          title: contractTitles[kind],
+          body: `${eventName} · ${clientName}`,
+          url: eventId ? `/eventos/${eventId}` : "/gia",
+          tag: `${kind}-${record.source_message_id}`,
+          icon: "/icons/goatbar-192.png",
+        });
+        return json({ success: true, ...result });
+      }
+
       if (structured?.type !== "new_budget_request") {
         return json({ success: true, skipped: true });
       }
