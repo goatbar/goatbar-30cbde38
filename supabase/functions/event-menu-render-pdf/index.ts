@@ -382,8 +382,12 @@ html, body {
   justify-content: center;
 }
 .birthday-artwork {
+  /* Preserve the canonical PNG aspect ratio in the PDF renderer.
+     A missing explicit height can collapse the embedded image in print layouts. */
+  display: block;
   width: 215pt;
-  max-width: 49%;
+  height: auto;
+  max-width: 100%;
   max-height: 100pt;
   object-fit: contain;
 }
